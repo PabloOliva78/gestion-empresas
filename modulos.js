@@ -474,7 +474,7 @@ export function crearModulos(c) {
       const a = (op, t) => `<button class="pill" data-act="m-fc" data-op="${op}" data-s="${s}" data-k="${esc(claveL(l))}">${t}</button>`;
       return `${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}`;
     };
-    const filas = f.slice(0, TOPE).map((l) => {
+    const filas = f.map((l) => { // todas las líneas del periodo, sin límite
       const p = paisDe(l.nif);
       return `<tr class="fc"><td>${fmt(s === 'E' ? l.ff : l.fecha)}</td><td>${esc(l.factura)}</td><td class="${p !== 'ES' ? 'nif-ext' : ''}">${esc(l.nif)}</td><td>${esc(l.nombre)}</td>
         <td>${p}</td><td>${esc(l.codigo)}</td>${celdasNum(l.base)}<td class="num">${Number(l.pct).toFixed(2).replace('.', ',')}</td>${celdasNum(l.cuota)}
@@ -482,7 +482,7 @@ export function crearModulos(c) {
     }).join('');
     const tot = `<tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td colspan="3"></td></tr>`;
     return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
-      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${filas}${f.length ? tot : ''}</tbody></table></div>${tope(f.length)}` };
+      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${filas}${f.length ? tot : ''}</tbody></table></div>` };
   }
 
   function vistaFacturas(s) {
@@ -572,9 +572,9 @@ export function crearModulos(c) {
     return `<div class="bar"><span class="space"></span><span class="chip">${f.length} facturas</span></div>
       <div class="wrap"><table class="tabla"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join('')}<th class="num">Base total</th><th class="num">${SENT[s].cuota}</th>
       ${s === 'R' ? '<th class="num">Cuota deducible</th>' : ''}</tr></thead><tbody>
-      ${f.slice(0, TOPE).map((x) => `<tr><td>${esc(x.factura)}</td><td>${fmt(x.fecha)}</td><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td><td>${esc(x.tipo)}</td><td>${esc(x.estado)}</td>
+      ${f.map((x) => `<tr><td>${esc(x.factura)}</td><td>${fmt(x.fecha)}</td><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td><td>${esc(x.tipo)}</td><td>${esc(x.estado)}</td>
         ${celdasNum(x.base)}${celdasNum(x.cuota)}${s === 'R' ? celdasNum(x.deducible) : ''}</tr>`).join('')}
-      <tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}${celdasNum(suma(f, 'cuota'))}${s === 'R' ? celdasNum(suma(f, 'deducible')) : ''}</tr></tbody></table></div>${tope(f.length)}`;
+      <tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}${celdasNum(suma(f, 'cuota'))}${s === 'R' ? celdasNum(suma(f, 'deducible')) : ''}</tr></tbody></table></div>`;
   }
 
   function vistaConcSII(s) {

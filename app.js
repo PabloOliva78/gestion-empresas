@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=24';
+import { crearModulos } from './modulos.js?v=25';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -642,7 +642,13 @@ root.addEventListener('change', (ev) => {
 });
 
 // Buscador de facturas: filtra mientras se escribe
-root.addEventListener('input', (ev) => { if (ev.target.dataset.fq !== undefined) M.buscarFc(ev.target.value); });
+let tFq;
+root.addEventListener('input', (ev) => {
+  if (ev.target.dataset.fq === undefined) return;
+  const v = ev.target.value;
+  clearTimeout(tFq);
+  tFq = setTimeout(() => M.buscarFc(v), 200); // con miles de filas, se espera a que pares de escribir
+});
 
 // Soltar PDF sobre la franja punteada de datos censales
 root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });
