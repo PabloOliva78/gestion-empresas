@@ -247,7 +247,7 @@ function render() {
 // El panel de pestañas se abre justo debajo de la pastilla de su grupo (sin salirse por la derecha)
 function alinearPanel() {
   const p = root.querySelector('.gpanel'), pill = root.querySelector('.gpill.abierto'), wrap = root.querySelector('.tabs-wrap');
-  if (!p || !pill || !wrap) return;
+  if (!p?.style || !pill || !wrap) return;
   const ancho = Math.min(wrap.clientWidth - 48, 1100);
   p.style.width = `${ancho}px`;
   p.style.marginRight = '0';
