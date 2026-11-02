@@ -35,3 +35,8 @@ create policy conc_update on public.conciliaciones for update
   using (public.puede_editar_empresa(empresa_id)) with check (public.puede_editar_empresa(empresa_id));
 create policy conc_delete on public.conciliaciones for delete
   using (public.puede_editar_empresa(empresa_id));
+
+-- Permisos de la API para usuarios con sesión (RLS sigue filtrando por rol/empresa)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant execute on all functions in schema public to authenticated;
