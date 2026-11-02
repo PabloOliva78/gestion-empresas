@@ -42,15 +42,32 @@ export function clasificar(t) {
   return null;
 }
 
+const PROVINCIAS = ['A CORUÑA', 'ALBACETE', 'ALICANTE', 'ALMERÍA', 'ARABA', 'ÁLAVA', 'ASTURIAS', 'ÁVILA', 'BADAJOZ', 'BALEARES', 'ILLES BALEARS', 'BARCELONA',
+  'BIZKAIA', 'VIZCAYA', 'BURGOS', 'CÁCERES', 'CÁDIZ', 'CANTABRIA', 'CASTELLÓN', 'CEUTA', 'CIUDAD REAL', 'CÓRDOBA', 'CUENCA', 'GIPUZKOA', 'GUIPÚZCOA',
+  'GIRONA', 'GRANADA', 'GUADALAJARA', 'HUELVA', 'HUESCA', 'JAÉN', 'LA RIOJA', 'LAS PALMAS', 'LEÓN', 'LLEIDA', 'LUGO', 'MADRID', 'MÁLAGA', 'MELILLA', 'MURCIA',
+  'NAVARRA', 'OURENSE', 'PALENCIA', 'PONTEVEDRA', 'SALAMANCA', 'SANTA CRUZ DE TENERIFE', 'SEGOVIA', 'SEVILLA', 'SORIA', 'TARRAGONA', 'TERUEL', 'TOLEDO',
+  'VALENCIA', 'VALLADOLID', 'ZAMORA', 'ZARAGOZA'];
+
 function domicilio(L, desde, hasta) {
   const B = L.slice(desde, hasta);
   const via = tras(B, 0, /^Tipo Vía Nombre Vía/);
-  const compl = tras(B, 0, /^Complemento domicilio/);
+  const cab = /^(Referencia|Código|Tipo|Calificación|Domicilio)/;
+  const compl0 = tras(B, 0, /^Complemento domicilio/);
+  const compl = cab.test(compl0) ? '' : compl0;
   const cpl = tras(B, 0, /^Código Postal Municipio Provincia/); // "18220 18003 - ALBOLOTE GRANADA"
-  const m = /^(\d{5})\s+\d+\s*-\s*(.+?)\s+([A-ZÁÉÍÓÚÑ ]+)$/.exec(cpl);
-  const rc = (/^(\w{14,20})\s/.exec(tras(B, 0, /^Referencia Catastral/)) || [])[1] ?? '';
+  const rcl = tras(B, 0, /^Referencia Catastral/);
+  const rc = (/^(\w{14,20})\s/.exec(rcl) || [])[1] ?? '';
+  const vm = /^(\S+)\s+(.+)\s+(\S+)\s+(\S+)$/.exec(via) || [];
+  const cm = /^(\d{5})\s+(.+)$/.exec(cpl) || [];
+  let resto = cm[2] ?? '', prov = '';
+  const p = PROVINCIAS.find((x) => resto.toUpperCase().endsWith(' ' + x));
+  if (p) { prov = p; resto = resto.slice(0, resto.length - p.length).trim(); }
+  const mun = resto.replace(/^\d+\s*-\s*/, '');
+  const dir = `${[vm[1], vm[2], vm[4]].filter(Boolean).join(' ')}, ${cm[1] ?? ''} ${mun} (${prov})`;
   const via2 = via.replace(/\s0$/, '');
-  return { texto: [via2, compl, m ? `${m[1]} ${m[2]} (${m[3].trim()})` : cpl].filter(Boolean).join(', '), rc };
+  return { texto: [via2, compl, cm[1] ? `${cm[1]} ${mun} (${prov})` : cpl].filter(Boolean).join(', '), rc,
+    d: { direccion: dir, tipoVia: vm[1] ?? '', nombreVia: vm[2] ?? '', tipoNumero: vm[3] ?? '', numero: vm[4] ?? '', complemento: compl,
+      refCatastral: rc, indicadorRc: rcl.replace(/^\w{14,20}\s*/, ''), cp: cm[1] ?? '', municipio: resto, provincia: prov } };
 }
 
 export function leerCenso(t) {
@@ -58,9 +75,13 @@ export function leerCenso(t) {
   const iFis = L.findIndex((l) => l === 'Domicilio Fiscal');
   const iSoc = L.findIndex((l) => l === 'Domicilio Social');
   const sii = (/^(\S+)\s+(\d\d\/\d\d\/\d{4})/.exec(tras(L, 0, /^Situación Fecha de Situación/)) || []);
-  const fis = iFis >= 0 ? domicilio(L, iFis, iSoc > iFis ? iSoc : L.length) : { texto: '', rc: '' };
-  const soc = iSoc >= 0 ? domicilio(L, iSoc, L.length) : { texto: '' };
+  const st = /^(\S+)\s+(\d\d\/\d\d\/\d{4})\s+(\S+)\s+(\d\d\/\d\d\/\d{4})(?:\s+(\d\d\/\d\d\/\d{4}))?/.exec(tras(L, 0, /^Situación Fecha de Situación/)) || [];
+  const fis = iFis >= 0 ? domicilio(L, iFis, iSoc > iFis ? iSoc : L.length) : { texto: '', rc: '', d: {} };
+  const soc = iSoc >= 0 ? domicilio(L, iSoc, L.length) : { texto: '', d: {} };
   return {
+    anagrama: val(t, /Anagrama comercial[ \t]*(.*)$/m), forma_juridica: '', suscrito: val(t, /Suscrito voluntariamente a\s+(\S+)/),
+    sii_tabla: { situacion: st[1] ?? '', fecha: st[2] ?? '', obligacion: st[3] ?? '', alta: st[4] ?? '', baja: st[5] ?? '' },
+    fiscal: fis.d, social: soc.d,
     nif: val(t, /^NIF\s+(\S+)/m), razon: val(t, /Razón Social\s+(.+)$/m),
     delegacion: val(t, /Administración de su domicilio fiscal\s+(.+)$/m),
     constitucion: iso(val(t, /Fecha de Constitución\s+(.+)$/m)),
@@ -79,15 +100,20 @@ export function leerActividades(t) {
     if (!m) continue;
     let den = m[3];
     if (L[i + 1] && !corte.test(L[i + 1]) && !/\d{2}-\d{2}-\d{4}/.test(L[i + 1])) den += ' ' + L[i + 1];
-    out.push({ epigrafe: m[2], denominacion: den, estado: m[4], desde: iso(m[5]) });
+    out.push({ seccion: m[1], epigrafe: m[2], denominacion: den, estado: m[4], desde: iso(m[5]) });
   }
   return out;
 }
 
 export function leerObligaciones(t) {
   const out = [];
-  const re = /^(.+?)\s+(MENSUAL|TRIMESTRAL|ANUAL)\s+(\d\d\/\d\d\/\d{4})(?:\s+\d\d\/\d\d\/\d{4}){0,2}\s+(ALTA|BAJA)$/;
-  for (const l of filas(t)) { const m = re.exec(l); if (m) out.push({ descripcion: m[1], periodicidad: m[2], alta: iso(m[3]), estado: m[4] }); }
+  const re = /^(.+?)\s+(MENSUAL|TRIMESTRAL|ANUAL)\s+((?:\d\d\/\d\d\/\d{4}\s+){1,3})(ALTA|BAJA)$/;
+  for (const l of filas(t)) {
+    const m = re.exec(l);
+    if (!m) continue;
+    const f = m[3].trim().split(/\s+/).map(iso); // 1: alta · 2: alta y última modificación · 3: alta, baja y modificación
+    out.push({ descripcion: m[1], periodicidad: m[2], alta: f[0], baja: f.length === 3 ? f[1] : '', modif: f.length > 1 ? f[f.length - 1] : '', estado: m[4] });
+  }
   return out;
 }
 
@@ -110,7 +136,7 @@ export function leerRepresentantes(t) {
 export function leerParticipes(t) {
   const re = /^\d+\s+([A-Z0-9]{9})\s+(.+?)\s+(Alta|Baja)\s+(\d+,\d+)\s+(\d+,\d+)\s+(\S+)/;
   return filas(t).map((l) => re.exec(l)).filter(Boolean)
-    .map((m) => ({ nif: m[1], nombre: m[2], estado: m[3], pct: aNum(m[4]), tipo: m[6] }));
+    .map((m) => ({ nif: m[1], nombre: m[2], estado: m[3], pct: aNum(m[4]), atrib: aNum(m[5]), tipo: m[6] }));
 }
 
 const IMPUESTOS = [[/IBI/, 'IBI'], [/ACTIVIDADES|IAE/, 'IAE'], [/IVTM|VEH[IÍ]CULOS/, 'IVTM'], [/VADO/, 'Vados'], [/BASURA|RESIDUOS/, 'Basura']];

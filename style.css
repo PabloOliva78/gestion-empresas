@@ -69,6 +69,15 @@ img.logo-ficha, span.logo-ficha { display: block; max-width: 220px; max-height: 
 .doc-emp { font-weight: 600; }
 .doc-r { text-align: right; font-size: .85rem; color: var(--muted); display: grid; }
 .tabs { display: flex; flex-wrap: wrap; gap: .4rem; padding: .75rem 1.5rem 0; }
+/* Datos censales: subpestañas y tablas campo/valor como la consulta de la AEAT */
+.it-tit { margin: 0 0 .5rem; }
+.it-sec { margin: 1.3rem 0 .4rem; font-size: .95rem; }
+.subtabs { display: flex; flex-wrap: wrap; gap: .3rem; border-bottom: 1px solid var(--line); margin: .4rem 0 1rem; }
+.subtabs button { border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; background: var(--card); padding: .4rem .9rem; font-size: .8rem; }
+.subtabs button.on { border-bottom: 3px solid var(--ink-2); font-weight: 600; }
+.kv { border-collapse: collapse; min-width: min(100%, 640px); margin-bottom: .6rem; }
+.kv th { text-align: left; font-weight: 600; padding: .32rem 1.5rem .32rem .2rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.kv td { padding: .32rem .2rem; border-bottom: 1px solid var(--line); color: var(--ink-2); }
 /* Menú de grupos: pastillas con logo y panel azul de fichas */
 .tabs-wrap { position: relative; }
 .gpill { display: flex; align-items: center; gap: .5rem; text-align: left; background: var(--card); border: 1px solid var(--line);

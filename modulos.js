@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal } from './lectores.js?v=8';
+  leerRepresentantes, leerParticipes, leerLocal } from './lectores.js?v=12';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -266,7 +266,7 @@ export function crearModulos(c) {
   const D = (id) => () => vistaDocs(id);
   const tabs = {
     cmg: ['Cuadro de mando del grupo', 'Empresa × modelo × periodo', vistaCmg],
-    it: ['Datos Identificativos Censales', 'Censo AEAT', () => vistaFichaDatos('it')],
+    it: ['Datos Identificativos Censales', 'Censo AEAT', () => vistaIT()],
     r111: ['Retenciones Modelo 111', 'Nóminas y profesionales', L('r111')],
     r115: ['Retenciones Modelo 115', 'Arrendamientos', L('r115')],
     r123: ['Retenciones Modelo 123', 'Capital mobiliario', L('r123')],
@@ -292,6 +292,54 @@ export function crearModulos(c) {
     rmsocios: ['Socios', 'Libro registro de socios', D('rmsocios')],
     rmlibros: ['Libros', 'Libros contables', D('rmlibros')],
   };
+
+  // ---------- Datos censales de la AEAT, con las mismas subpestañas que la consulta ----------
+  let subIT = 'censo';
+  const kv = (tit, filas) => `<h4 class="it-sec">${esc(tit)}</h4><table class="kv"><tbody>${filas
+    .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table>`;
+  const tb = (cols, filas) => `<div class="wrap"><table class="tabla"><thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead>
+    <tbody>${filas.map((f) => `<tr>${f.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const coma = (n) => (n == null ? '' : String(n).replace('.', ','));
+
+  function vistaIT() {
+    const e = empresa();
+    if (!e) return sinEmpresa;
+    const A = e.datos?.aeat;
+    if (!A) return `<p class="hint">Aún no hay consulta de la AEAT cargada: usa «Cargar carpeta…» con los PDF.</p>${vistaFichaDatos('it')}`;
+    const subs = [['censo', 'Datos censales'], ['act', 'Relación de actividades'], ['sit', 'Situación tributaria'],
+      ['soc', 'Socios / partícipes'], ['obl', 'Mis obligaciones'], ['rep', 'Mis representantes']];
+    const dom = (d = {}, conRc) => [['Dirección', d.direccion], ['Tipo Vía', d.tipoVia], ['Nombre Vía', d.nombreVia], ['Tipo de Número', d.tipoNumero],
+      ['Número de Casa', d.numero], ['Complemento domicilio', d.complemento],
+      ...(conRc ? [['Referencia Catastral', d.refCatastral], ['Indicador de referencia catastral', d.indicadorRc]] : []),
+      ['Código Postal', d.cp], ['Municipio', d.municipio], ['Provincia', d.provincia]];
+    const sinDatos = '<p class="vacio">Sin datos: carga el PDF correspondiente.</p>';
+    const c = A.censo, s = A.situacion;
+    const cuerpo = {
+      censo: () => (c ? kv('Datos identificativos del contribuyente', [['NIF', c.nif], ['Razón Social', c.razon], ['Anagrama comercial', c.anagrama],
+        ['Administración de su domicilio fiscal', c.delegacion], ['Forma Jurídica', c.forma_juridica], ['Fecha de Constitución', fmt(c.constitucion)],
+        ['Obligado a notificaciones electrónicas', c.notificaciones], ['Suscrito voluntariamente a notificaciones electrónicas', c.suscrito]])
+        + '<h4 class="it-sec">Suministro Inmediato de Información · situación en el censo</h4>'
+        + tb(['Situación', 'Fecha de Situación', 'Obligación Mensual IVA', 'Fecha Alta Efectiva', 'Fecha Baja Efectiva', 'Referencia'],
+          [[c.sii_tabla?.situacion, c.sii_tabla?.fecha, c.sii_tabla?.obligacion, c.sii_tabla?.alta, c.sii_tabla?.baja, '']])
+        + kv('Domicilio fiscal', dom(c.fiscal, true)) + kv('Domicilio social', dom(c.social, false)) : sinDatos),
+      act: () => (A.actividades ? tb(['Sección', 'Epígrafe', 'Denominación', 'Estado', 'F.Inicio', 'F.Baja', 'Locales', 'Num.Ref.'],
+        A.actividades.map((a) => [a.seccion, a.epigrafe, a.denominacion, a.estado, fmt(a.desde), '', '', ''])) : sinDatos),
+      sit: () => (s ? kv('Situación tributaria', [['Régimen de IVA', s.regimen_iva], ['% provisional de deducción', s.deduccion],
+        ['Cierre del ejercicio (IS)', s.cierre], ['Pagos fraccionados IS (art. 40.3)', s.pagos_frac], ['Retenciones (modelos)', s.retenciones]]) : sinDatos),
+      soc: () => (A.participes ? tb(['NIF', 'Apellidos y Nombre', 'Estado', '% Part.', '% Atrib.', 'Tipo'],
+        A.participes.map((p) => [p.nif, p.nombre, p.estado, coma(p.pct), coma(p.atrib), p.tipo])) : sinDatos),
+      obl: () => (A.obligaciones ? tb(['Descripción de la obligación', 'Periodicidad', 'F. Alta Efec.', 'F. Baja Efec.', 'F. Ult. Modif.', 'Estado'],
+        A.obligaciones.map((o) => [o.descripcion, o.periodicidad, fmt(o.alta), fmt(o.baja), fmt(o.modif), o.estado])) : sinDatos),
+      rep: () => {
+        const cols = ['NIF', 'Apellidos y Nombre', 'Situación', 'Tipo de representación', 'Fecha última modificación'];
+        const f = (l) => l.map((x) => [x.nif, x.nombre, x.situacion, x.tipo, fmt(x.fecha)]);
+        return `<h4 class="it-sec">Mis representantes</h4>${A.representantes ? tb(cols, f(A.representantes)) : sinDatos}
+          <h4 class="it-sec">Mis representados</h4>${A.representados ? tb(cols, f(A.representados)) : sinDatos}`;
+      },
+    }[subIT]();
+    return `<h4 class="it-tit">Información tributaria · ${esc(e.nombre)}</h4>
+      <nav class="subtabs">${subs.map(([k, l]) => `<button class="${k === subIT ? 'on' : ''}" data-act="m-sub" data-sub="${k}">${l}</button>`).join('')}</nav>${cuerpo}`;
+  }
 
   // ---------- Carga de PDF (AEAT y tributos locales) ----------
   async function textoPdf(file) {
@@ -344,36 +392,36 @@ export function crearModulos(c) {
           informe.push(`📎 ${nom}: ${f.name} (guardado sin clasificar)`);
           continue;
         }
-        const F_ = (ficha[e.id] ??= { e, it: { ...(e.datos?.it ?? {}) }, dreg: { ...(e.datos?.dreg ?? {}) }, tocado: false });
+        const F_ = (ficha[e.id] ??= { e, it: { ...(e.datos?.it ?? {}) }, dreg: { ...(e.datos?.dreg ?? {}) }, aeat: { ...(e.datos?.aeat ?? {}) }, tocado: false });
         if (tipo === 'censo') {
           const r = leerCenso(t);
           Object.assign(F_.it, { nif: r.nif, razon: r.razon, domicilio: r.domicilio_fiscal, ref_catastral: r.ref_catastral,
             delegacion: r.delegacion, sii: r.sii, notificaciones: r.notificaciones });
           Object.assign(F_.dreg, { nif: r.nif, constitucion: r.constitucion, domicilio: r.domicilio_social });
-          F_.tocado = true; informe.push(`✔ ${nom}: datos censales`);
+          F_.tocado = true; F_.aeat.censo = r; informe.push(`✔ ${nom}: datos censales`);
         } else if (tipo === 'actividades') {
           const r = leerActividades(t);
           F_.it.iae = r.map((a) => a.epigrafe).join(', ');
           F_.it.actividades = r.map((a) => `${a.epigrafe} ${a.denominacion} (${a.estado} desde ${fmt(a.desde)})`).join('\n');
-          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} actividades`);
+          F_.tocado = true; F_.aeat.actividades = r; informe.push(`✔ ${nom}: ${r.length} actividades`);
         } else if (tipo === 'obligaciones') {
           const r = leerObligaciones(t);
           F_.it.obligaciones = r.map((o) => `${o.descripcion} · ${o.periodicidad.toLowerCase()} · ${o.estado.toLowerCase()} desde ${fmt(o.alta)}`).join('\n');
           const iva = r.find((o) => /VALOR AÑADIDO/.test(o.descripcion));
           if (iva) F_.it.periodicidad = iva.periodicidad === 'MENSUAL' ? 'Mensual' : 'Trimestral';
-          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} obligaciones censales`);
+          F_.tocado = true; F_.aeat.obligaciones = r; informe.push(`✔ ${nom}: ${r.length} obligaciones censales`);
         } else if (tipo === 'situacion') {
           const r = leerSituacion(t);
           Object.assign(F_.it, { regimen: r.regimen_iva, deduccion: r.deduccion, cierre: r.cierre, pagos_frac: r.pagos_frac, retenciones: r.retenciones });
-          F_.tocado = true; informe.push(`✔ ${nom}: situación tributaria`);
+          F_.tocado = true; F_.aeat.situacion = r; informe.push(`✔ ${nom}: situación tributaria`);
         } else if (tipo === 'representantes') {
           const r = leerRepresentantes(t);
           F_.it.representante = r.map((x) => `${x.nombre} (${x.nif})`).join('; ');
-          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} representantes`);
+          F_.tocado = true; F_.aeat.representantes = r; informe.push(`✔ ${nom}: ${r.length} representantes`);
         } else if (tipo === 'representados') {
           const r = leerRepresentantes(t);
           F_.it.representados = r.map((x) => `${x.nombre} (${x.nif}) · ${x.situacion.toLowerCase()} ${x.tipo.toLowerCase()} desde ${fmt(x.fecha)}`).join('\n');
-          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} representados`);
+          F_.tocado = true; F_.aeat.representados = r; informe.push(`✔ ${nom}: ${r.length} representados`);
         } else if (tipo === 'participes') {
           const r = leerParticipes(t);
           for (const p of r) {
@@ -382,7 +430,7 @@ export function crearModulos(c) {
               datos: { relacion: p.tipo === 'Socio' ? 'Socio' : 'Participada', nombre: p.nombre, nif: p.nif, pct: p.pct, notas: `AEAT: ${p.estado}` } });
             if (err) throw new Error(err);
           }
-          informe.push(`✔ ${nom}: ${r.length} socios/partícipes`);
+          F_.aeat.participes = r; F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} socios/partícipes`);
         } else if (tipo === 'local') {
           const r = leerLocal(t);
           const clave = `${e.id}|${r.ref}`;
@@ -404,7 +452,7 @@ export function crearModulos(c) {
     }
     for (const F_ of Object.values(ficha)) {
       if (!F_.tocado) continue;
-      const { error } = await db.from('empresas').update({ datos: { ...(F_.e.datos ?? {}), it: F_.it, dreg: F_.dreg } }).eq('id', F_.e.id);
+      const { error } = await db.from('empresas').update({ datos: { ...(F_.e.datos ?? {}), it: F_.it, dreg: F_.dreg, aeat: F_.aeat } }).eq('id', F_.e.id);
       if (error) informe.push(`✖ ${F_.e.nombre}: ${error.message}`);
     }
     await cargar(); render();
@@ -425,6 +473,7 @@ export function crearModulos(c) {
       'm-ficha': () => formFicha(d.m),
       'm-doc-edit': () => formDoc(d.m, d.slot),
       'm-doc-del': () => quitarDoc(d.m, d.slot),
+      'm-sub': () => { subIT = d.sub; render(); },
       'm-pdf': () => document.getElementById('pdfIn')?.click(),
       'm-carpeta': () => document.getElementById('carpetaIn')?.click(),
     })[d.act]?.();
