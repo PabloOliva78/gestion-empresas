@@ -260,13 +260,18 @@ const numero = (v) => {
 const r2n = (x) => Math.round(x * 100) / 100 + 0;
 
 // «impuestos repercutidos / soportados registrados» (listado del ERP): asiento, factura, fecha, fecha factura, nif-cif, nombre, base, %, cuota, código, tipo libro
+// Acepta las dos variantes de cabeceras: la del listado pegado en el Excel de trabajo y la exportación directa del ERP
+//   Excel de trabajo: asiento · factura · fecha · fecha factura · nif-cif · nombre · base Imponible · % · cuota impuesto · codigo impuestos · tipo libro
+//   Exportación ERP:  Asiento · Documento · Fecha · Fecha de la factura · NIF · Nombre · Origen (base) · Valor (%) · Importe de impuestos · Código de impuestos · Tipo de libro
+const sinTildes = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 export function leerLibroIVA(filas) {
-  const h = filas.findIndex((f) => f && f.some((c) => /^factura$/i.test(String(c ?? '').trim())) && f.some((c) => /codigo impuestos/i.test(String(c ?? ''))));
+  const h = filas.findIndex((f) => f && Array.from(f, sinTildes).some((c) => /^(factura|documento)$/.test(c))
+    && Array.from(f, sinTildes).some((c) => /^codigo (de )?impuestos?$/.test(c)));
   if (h < 0) return null;
-  const cab = Array.from(filas[h], (c) => String(c ?? '').trim().toLowerCase());
+  const cab = Array.from(filas[h], sinTildes);
   const ix = (re) => cab.findIndex((c) => re.test(c));
-  const c = { as: ix(/^asiento/), fa: ix(/^factura$/), fe: ix(/^fecha$/), ff: ix(/fecha factura/), nif: ix(/^nif/), nom: ix(/^nombre/),
-    ba: ix(/^base/), pc: ix(/^%/), cu: ix(/^cuota/), co: ix(/codigo impuestos/), tl: ix(/tipo libro/) };
+  const c = { as: ix(/^asiento/), fa: ix(/^(factura|documento)$/), fe: ix(/^fecha$/), ff: ix(/^fecha (de la )?factura/), nif: ix(/^nif/), nom: ix(/^nombre/),
+    ba: ix(/^(base|origen)/), pc: ix(/^(%|valor)$/), cu: ix(/^(cuota|importe de impuestos)/), co: ix(/^codigo (de )?impuestos?$/), tl: ix(/^tipo (de )?libro/) };
   const out = [];
   for (const f of filas.slice(h + 1)) {
     const factura = String(f?.[c.fa] ?? '').trim();
