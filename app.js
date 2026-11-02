@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=23';
+import { crearModulos } from './modulos.js?v=24';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -627,6 +627,7 @@ root.addEventListener('click', (ev) => {
 root.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.dzkind) { const fs = [...t.files]; t.value = ''; return void M.subirComo(t.dataset.dzkind, fs); }
   if (t.id === 'aeatIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void M.subirArchivos(fs); }
@@ -639,6 +640,9 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.rol) return void run(db.from('profiles').update({ rol: t.value }).eq('id', t.dataset.rol));
   if (t.dataset.activo) return void run(db.from('profiles').update({ activo: t.checked }).eq('id', t.dataset.activo));
 });
+
+// Buscador de facturas: filtra mientras se escribe
+root.addEventListener('input', (ev) => { if (ev.target.dataset.fq !== undefined) M.buscarFc(ev.target.value); });
 
 // Soltar PDF sobre la franja punteada de datos censales
 root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });

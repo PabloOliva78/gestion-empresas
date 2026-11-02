@@ -431,11 +431,122 @@ export function crearModulos(c) {
   const dz = (kind, titulo, sub) => `<div class="dropzone" data-kind="${kind}" tabindex="0" role="button"><b>${titulo}</b> ${sub}
     <input type="file" data-dzkind="${kind}" accept=".xlsx,.xls,.csv" multiple hidden></div>`;
   const suma = (a, k) => a.reduce((t, x) => t + x[k], 0);
-  const TOPE = 400;
+  const TOPE = 1000;
   const tope = (n) => (n > TOPE ? `<p class="hint">Se muestran las ${TOPE} primeras de ${n}; el resto está cargado y cuenta en los totales.</p>` : '');
   const celdasNum = (v) => `<td class="num">${eur(v)}</td>`;
 
+  // ---------- Facturas emitidas / recibidas: cabecera de filtros, columnas y acciones por línea ----------
+  let fcCod = '', fcPais = '', fcQ = '';
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const PREFIJOS = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'GB', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'XI', 'CH', 'NO', 'US', 'AD', 'MA']);
+  const paisDe = (nif) => {
+    const n = String(nif ?? '').toUpperCase();
+    if (/^[A-HJ-NP-SUVW]\d{7}[0-9A-J]$/.test(n) || /^[XYZ]\d{7}[A-Z]$/.test(n) || /^\d{8}[A-Z]$/.test(n)) return 'ES';
+    const p = n.slice(0, 2);
+    return /^[A-Z]{2}/.test(n) && PREFIJOS.has(p) ? (p === 'EL' ? 'GR' : p) : 'ES';
+  };
+  const CLASIF = [[/^R\.NC\.EX$/, 'Operación interior exenta (art. 20)'], [/^R\.NC\./, 'Operación interior sujeta'], [/^R\.UE\.S$/, 'Prestación intracomunitaria de servicios'],
+    [/^R\.UE$/, 'Entrega intracomunitaria de bienes'], [/^R\.UE\./, 'Adquisición intracomunitaria (autorrepercusión)'], [/^R\.EX/, 'Exportación'],
+    [/^R\.NAC\.NS/, 'Operación no sujeta'], [/^R\.RC\./, 'Recargo de equivalencia'], [/^(R\.ISP|S\.NC\.ISP\.A)/, 'Inversión del sujeto pasivo'],
+    [/^S\.NC\.EX/, 'Compra exenta (art. 20)'], [/^(S\.NC\.ISP|S\.ISP)/, 'Inversión del sujeto pasivo'], [/^S\.NC\./, 'Operación interior soportada'],
+    [/^S\.UE\./, 'Adquisición intracomunitaria'], [/^S\.NAC\.NS/, 'Compra no sujeta'], [/^S\.EX\./, 'Importación exenta (art. 21)'], [/^IN\./, 'Bien de inversión'],
+    [/^DUA/, 'Importación (DUA)'], [/^I\.PR/, 'Retención · profesionales'], [/^I\.ALQ/, 'Retención · alquiler'], [/^I\.INT/, 'Retención · intereses'], [/^I\.DV/, 'Retención · dividendos']];
+  const clasif = (c) => (CLASIF.find(([re]) => re.test(c)) || [0, c])[1];
+  const claveL = (l) => [l.asiento, l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo].join('|');
+  const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const sentidoTab = () => (S.tab === 'fr' ? 'R' : 'E');
+
+  function lineasFc(s, datos) {
+    const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
+    let f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
+    if (fcCod) f = f.filter((l) => l.codigo === fcCod);
+    if (fcPais) f = f.filter((l) => paisDe(l.nif) === fcPais);
+    if (fcQ) { const q = sinAc(fcQ); f = f.filter((l) => sinAc(`${l.nif} ${l.nombre} ${l.factura}`).includes(q)); }
+    return f;
+  }
+
+  function cuerpoFc(s, datos) {
+    const f = lineasFc(s, datos);
+    const n = new Set(f.map((l) => l.factura)).size;
+    const otro = s === 'E' ? 'Recibidas' : 'Emitidas';
+    const acc = (l) => {
+      if (!puede()) return '';
+      const a = (op, t) => `<button class="pill" data-act="m-fc" data-op="${op}" data-s="${s}" data-k="${esc(claveL(l))}">${t}</button>`;
+      return `${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}`;
+    };
+    const filas = f.slice(0, TOPE).map((l) => {
+      const p = paisDe(l.nif);
+      return `<tr class="fc"><td>${fmt(s === 'E' ? l.ff : l.fecha)}</td><td>${esc(l.factura)}</td><td class="${p !== 'ES' ? 'nif-ext' : ''}">${esc(l.nif)}</td><td>${esc(l.nombre)}</td>
+        <td>${p}</td><td>${esc(l.codigo)}</td>${celdasNum(l.base)}<td class="num">${Number(l.pct).toFixed(2).replace('.', ',')}</td>${celdasNum(l.cuota)}
+        <td class="num">${/^R\.RC\./.test(l.codigo) ? eur(l.cuota) : ''}</td><td>${esc(clasif(l.codigo))}</td><td class="acc">${acc(l)}</td></tr>`;
+    }).join('');
+    const tot = `<tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td colspan="3"></td></tr>`;
+    return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
+      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${filas}${f.length ? tot : ''}</tbody></table></div>${tope(f.length)}` };
+  }
+
   function vistaFacturas(s) {
+    if (!S.sel) return sinEmpresa;
+    const datos = grande('fact-' + s);
+    if (!datos) return cargandoTxt;
+    if (!datos.length) return `<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>`;
+    const ej = Number(S.ejercicio);
+    const per = [`<option value="">Todo el ejercicio ${ej}</option>`,
+      ...MESES.map((m, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}"${S.periodo === v ? ' selected' : ''}>Periodo ${v} (${m}) ${ej}</option>`; }),
+      ...['1T', '2T', '3T', '4T'].map((q) => `<option value="${q}"${S.periodo === q ? ' selected' : ''}>Trimestre ${q} ${ej}</option>`)].join('');
+    const sel = (campo, valor, lista) => `<select data-fc="${campo}"><option value="">Todos</option>${lista.map((x) => `<option${x === valor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+    const c = cuerpoFc(s, datos);
+    return `<div class="fc-cab"><label>Ver <select data-glob="periodo">${per}</select></label>
+      <label>Código ${sel('cod', fcCod, [...new Set(datos.map((l) => l.codigo))].sort())}</label>
+      <label>País ${sel('pais', fcPais, [...new Set(datos.map((l) => paisDe(l.nif)))].sort())}</label>
+      <input data-fq type="search" placeholder="Buscar NIF, nombre, factura…" value="${esc(fcQ)}"><span id="fcCuenta" class="hint">${c.n} facturas</span></div>
+      <div id="fcTabla">${c.html}</div>`;
+  }
+
+  // La búsqueda actualiza solo la tabla, para no perder el cursor al escribir
+  function buscarFc(v) {
+    fcQ = v;
+    const s = sentidoTab(), datos = GR.get(`fact-${s}|${S.sel}`);
+    if (!datos) return;
+    const c = cuerpoFc(s, datos);
+    const t = document.getElementById('fcTabla'), n = document.getElementById('fcCuenta');
+    if (t) t.innerHTML = c.html;
+    if (n) n.textContent = `${c.n} facturas`;
+  }
+  function setFc(campo, valor) { if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
+
+  async function reemplazarGrande(tipo, empresaId, filas, existente) {
+    const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
+    const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
+    if (err) return void alert(err);
+    GR.set(`${tipo}|${empresaId}`, filas);
+  }
+
+  // ± signo · → pasar al otro libro · ✕ línea · ✕ factura
+  async function opFc(s, op, key) {
+    const tipo = 'fact-' + s;
+    const arr = GR.get(`${tipo}|${S.sel}`);
+    const i = arr ? arr.findIndex((l) => claveL(l) === key) : -1;
+    if (i < 0) return;
+    const l = arr[i];
+    let nuevo = arr;
+    if (op === 'signo') nuevo = arr.map((x, j) => (j === i ? { ...x, base: -x.base, cuota: -x.cuota } : x));
+    else if (op === 'linea') { if (!confirm('¿Borrar esta línea del libro?')) return; nuevo = arr.filter((_, j) => j !== i); }
+    else if (op === 'factura') {
+      if (!confirm(`¿Borrar todas las líneas de la factura ${l.factura}?`)) return;
+      nuevo = arr.filter((x) => !(x.factura === l.factura && x.nif === l.nif));
+    } else if (op === 'mover') {
+      const otro = s === 'E' ? 'R' : 'E';
+      if (!confirm(`¿Pasar esta línea al libro de ${otro === 'R' ? 'recibidas' : 'emitidas'}?`)) return;
+      const { data } = await db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', 'fact-' + otro).maybeSingle();
+      await reemplazarGrande('fact-' + otro, S.sel, [...(data?.datos?.filas ?? []), { ...l, sentido: otro }], data);
+      nuevo = arr.filter((_, j) => j !== i);
+    }
+    await reemplazarGrande(tipo, S.sel, nuevo);
+    render();
+  }
+
+  function vistaFacturasViejo(s) {
     if (!S.sel) return sinEmpresa;
     const datos = grande('fact-' + s);
     if (!datos) return cargandoTxt;
@@ -996,6 +1107,7 @@ export function crearModulos(c) {
       'm-sub': () => { subIT = d.sub; render(); },
       'm-bss': () => { bssFiltro = d.f; render(); },
       'm-man303': () => formMan303(),
+      'm-fc': () => opFc(d.s, d.op, d.k),
       'm-manret': () => formManRet(d.m),
       'm-sube': () => {
         archKind = d.kind;
@@ -1070,5 +1182,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos };
+  return { tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc };
 }
