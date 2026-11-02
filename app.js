@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { crearModulos } from './modulos.js?v=7';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -8,8 +9,8 @@ const ESTADOS = { pendiente: 'Pendiente', en_curso: 'En curso', presentado: 'Pre
 const ROLES = { admin: 'Administrador', gestor: 'Gestor', consulta: 'Consulta' };
 
 const S = {
-  perfil: null, empresas: [], obligaciones: [], conciliaciones: [], usuarios: [], asign: [],
-  tab: 'oblfis', filtro: { area: '', estado: '' },
+  perfil: null, empresas: [], obligaciones: [], conciliaciones: [], registros: [], usuarios: [], asign: [],
+  tab: 'cmg', filtro: { area: '', estado: '' },
   ejercicio: new Date().getFullYear(), periodo: '', // periodo '' = todo el ejercicio
   sel: '', menu: false, grp: -1, // empresa elegida ('' = todas) y grupo de pestañas abierto
 };
@@ -41,14 +42,16 @@ const opts = (obj, sel) => Object.entries(obj)
 
 // ---------- Datos ----------
 async function cargar() {
-  const [e, o, c] = await Promise.all([
+  const [e, o, c, r] = await Promise.all([
     db.from('empresas').select('*').order('nombre'),
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
+    db.from('registros').select('*'),
   ]);
   S.empresas = e.data ?? [];
   S.obligaciones = o.data ?? [];
   S.conciliaciones = c.data ?? [];
+  S.registros = r.data ?? [];
   if (!S.empresas.some((x) => x.id === S.sel)) S.sel = '';
   if (esAdmin()) {
     const [u, a] = await Promise.all([
@@ -120,8 +123,8 @@ function renderPendiente() {
 
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
-  ['1.- INFORMACIÓN TRIBUTARIA', ['oblfis', 'venc']],
-  ['2.- REGISTRO MERCANTIL', ['rm']],
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf']],
+  ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmcert', 'rmaud', 'rmig', 'rmmem', 'rmacu', 'rmnota', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl']],
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas']],
   ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200']],
   ['5.- CUENTAS CONTABLES', ['c47', 'c465', 'c640', 'c642']],
@@ -130,9 +133,9 @@ const GRUPOS = [
   ['8.- ADMINISTRACIÓN', ['usuarios']],
 ];
 const TABS = {
-  oblfis: ['Obligaciones fiscales', 'Modelos y plazos', () => vistaObligaciones({ area: 'fiscal' })],
-  venc: ['Todos los vencimientos', 'Todas las áreas', () => vistaObligaciones()],
-  rm: ['Registro Mercantil', 'Libros y depósito de cuentas', () => vistaObligaciones({ area: 'mercantil' })],
+  calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
+  chkf: ['Checking Fiscal', 'Obligaciones, plazos y límites', () => vistaObligaciones({ area: 'fiscal' })],
+  rmobl: ['Plazos registrales', 'Libros y depósito de cuentas', () => vistaObligaciones({ area: 'mercantil' })],
   ficha: ['Ficha de la empresa', 'Datos y resumen', () => vistaFicha()],
   empresas: ['Empresas', 'Listado y logos', () => vistaEmpresas()],
   m303: ['303 IVA', '4700 · 4750 · 472 · 477', () => vistaConciliaciones(['4700', '4750', '472', '477'])],
@@ -147,7 +150,7 @@ const TABS = {
   conc: ['Todas las conciliaciones', 'Todas las cuentas', () => vistaConciliaciones()],
   usuarios: ['Usuarios y roles', 'Accesos y empresas', () => vistaUsuarios(), true],
 };
-const AREA_TAB = { oblfis: 'fiscal', rm: 'mercantil', ssobl: 'laboral' };
+const AREA_TAB = { chkf: 'fiscal', rmobl: 'mercantil', ssobl: 'laboral' };
 
 function tabsNav() {
   const grupos = GRUPOS.map(([tit, ids]) => [tit, ids.filter((id) => !TABS[id][3] || esAdmin())]).filter(([, ids]) => ids.length);
@@ -161,7 +164,7 @@ function tabsNav() {
 }
 
 function render() {
-  if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'oblfis';
+  if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'cmg';
   const e = S.empresas.find((x) => x.id === S.sel);
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   root.innerHTML = `<div class="layout">
@@ -268,6 +271,7 @@ function fieldHtml(f) {
   const v = esc(f.value ?? '');
   if (f.type === 'select') return `<label>${f.label}<select name="${f.name}">${opts(f.options, f.value)}</select></label>`;
   if (f.type === 'textarea') return `<label>${f.label}<textarea name="${f.name}" rows="3">${v}</textarea></label>`;
+  if (f.type === 'file') return `<label>${f.label}<input name="${f.name}" type="file"></label>`;
   if (f.type === 'checks') return `<div><b>${f.label}</b><div class="checks">${f.options.map(([id, l]) =>
     `<label><input type="checkbox" name="${f.name}" value="${id}"${(f.value || []).includes(id) ? ' checked' : ''}>${esc(l)}</label>`).join('')}</div></div>`;
   return `<label>${f.label}<input name="${f.name}" type="${f.type || 'text'}" value="${v}"${f.required ? ' required' : ''}${f.minlength ? ` minlength="${f.minlength}"` : ''}${f.step ? ` step="${f.step}"` : ''}></label>`;
@@ -286,7 +290,8 @@ function openForm(title, fields, onSubmit) {
     ev.preventDefault();
     const fd = new FormData(form);
     const v = {};
-    fields.forEach((f) => { v[f.name] = f.type === 'checks' ? fd.getAll(f.name) : (fd.get(f.name) ?? '').toString().trim(); });
+    fields.forEach((f) => { v[f.name] = f.type === 'checks' ? fd.getAll(f.name)
+      : f.type === 'file' ? fd.get(f.name) : (fd.get(f.name) ?? '').toString().trim(); });
     err.textContent = '';
     const msg = await onSubmit(v);
     if (msg) err.textContent = msg; else d.close();
@@ -501,6 +506,10 @@ function formCalendario() {
   });
 }
 
+// Bloques 1 y 2 (ver modulos.js): se añaden a las pestañas ya definidas.
+const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml });
+Object.assign(TABS, M.tabs);
+
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
   const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabgrp'));
@@ -512,6 +521,7 @@ root.addEventListener('click', (ev) => {
   if (t.dataset.grp !== undefined) { const i = Number(t.dataset.grp); S.grp = S.grp === i ? -1 : i; return render(); }
   if (t.id === 'out') return void db.auth.signOut();
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.grp = -1; return render(); }
+  if (t.dataset.act?.startsWith('m-')) return void M.accion(t.dataset);
   const id = t.dataset.id;
   const acciones = {
     'new-emp': () => formEmpresa(),
