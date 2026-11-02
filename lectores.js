@@ -400,6 +400,32 @@ export function calcular303(libroE, libroR, ej, periodo, man = {}) {
   return { periodo: r, G, detalle, man, devengado, deducir, c46, pct, c66, c77, suma, c110: comp, c78: aplic, c87: r2n(comp - aplic), c69, c70: m('c70'), c71: r2n(c69 - m('c70')) };
 }
 
+// ---------- Retenciones (111 profesionales, 115, 123): libro soportado por código de impuesto, cuotas en positivo ----------
+export const RET = {
+  111: [['I.PR.GN', 'Actividades profesionales - tipo general'], ['I.PR.PRA', 'Profesionales - inicio de actividad'], ['I.PR.SR', 'Actividades profesionales - tipo reducido']],
+  115: [['I.ALQ', 'Arrendamiento de inmuebles urbanos']],
+  123: [['I.INT', 'Intereses de préstamos y cuentas'], ['I.DV', 'Dividendos'], ['I.DV.E', 'Dividendos exentos']],
+};
+export function calcularRet(modelo, libroR, ej, periodo) {
+  const r = rangoPeriodo(ej, periodo);
+  const cods = RET[modelo].map((x) => x[0]);
+  const lineas = libroR.filter((l) => l.fecha >= r.desde && l.fecha <= r.hasta && cods.includes(l.codigo))
+    .sort((a, b) => a.nif.localeCompare(b.nif) || a.fecha.localeCompare(b.fecha));
+  const suma = (a, k) => a.reduce((t, l) => t + l[k], 0);
+  const porCodigo = RET[modelo].map(([codigo, concepto]) => {
+    const x = lineas.filter((l) => l.codigo === codigo);
+    return { codigo, concepto, base: suma(x, 'base'), ret: -suma(x, 'cuota') };
+  });
+  const m = new Map();
+  for (const l of lineas) {
+    const a = m.get(l.nif) ?? { nif: l.nif, nombre: l.nombre, base: 0, ret: 0 };
+    a.base += l.base; a.ret -= l.cuota;
+    m.set(l.nif, a);
+  }
+  return { periodo: r, lineas, porCodigo, base: suma(lineas, 'base'), ret: -suma(lineas, 'cuota') + 0, perceptores: new Set(lineas.map((l) => l.nif).filter(Boolean)).size,
+    porNif: [...m.values()] };
+}
+
 const IMPUESTOS = [[/IBI/, 'IBI'], [/ACTIVIDADES|IAE/, 'IAE'], [/IVTM|VEH[IÍ]CULOS/, 'IVTM'], [/VADO/, 'Vados'], [/BASURA|RESIDUOS/, 'Basura']];
 const impuestoDe = (s) => (IMPUESTOS.find(([re]) => re.test(s)) || [0, 'Otros'])[1];
 

@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303 } from './lectores.js?v=18';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet } from './lectores.js?v=20';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -278,9 +278,9 @@ export function crearModulos(c) {
     dua: ['DUA-H1', 'Importaciones · IVA diferido', L('dua')],
     otros: ['Otros documentos', 'PDF de la empresa sin clasificar', L('otros')],
     bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', () => vistaBss()],
-    mod111: ['Modelo 111', 'Retenciones trabajo y profesionales', pendienteMod('Mod111')],
-    mod115: ['Modelo 115', 'Retenciones alquileres', pendienteMod('Mod115')],
-    mod123: ['Modelo 123', 'Retenciones capital mobiliario', pendienteMod('Mod123')],
+    mod111: ['Modelo 111', 'Retenciones trabajo y profesionales', () => vistaRet('111')],
+    mod115: ['Modelo 115', 'Retenciones alquileres', () => vistaRet('115')],
+    mod123: ['Modelo 123', 'Retenciones capital mobiliario', () => vistaRet('123')],
     mod200: ['Modelo 200', 'Impuesto sobre Sociedades', pendienteMod('Mod200')],
     mod202: ['Modelo 202', 'Pago fraccionado Sociedades', pendienteMod('Mod202')],
     mod303: ['Modelo 303', 'IVA · autoliquidación (borrador)', () => vistaMod303()],
@@ -288,11 +288,11 @@ export function crearModulos(c) {
     mod583: ['Modelo 583', 'Impuesto sobre el valor de la producción de energía eléctrica', pendienteMod('Mod583')],
     mod592: ['Modelo 592', 'Envases de plástico no reutilizables', pendienteMod('Mod592')],
     moda22: ['Modelo A22', 'Según tu aplicación', pendienteMod('(sin hoja propia en el Excel)')],
-    mod180: ['Modelo 180', 'Resumen anual alquileres', pendienteMod('Audi115 / Mod115')],
-    mod190: ['Modelo 190', 'Resumen anual retenciones', pendienteMod('Audi111 / Mod111')],
-    mod193: ['Modelo 193', 'Resumen anual capital mobiliario', pendienteMod('Audi123 / Mod123')],
+    mod180: ['Modelo 180', 'Resumen anual alquileres', () => vistaRetAnual('115')],
+    mod190: ['Modelo 190', 'Resumen anual retenciones', () => vistaRetAnual('111')],
+    mod193: ['Modelo 193', 'Resumen anual capital mobiliario', () => vistaRetAnual('123')],
     mod232: ['Modelo 232', 'Operaciones vinculadas', pendienteMod('(sin hoja propia en el Excel)')],
-    mod390: ['Modelo 390', 'Resumen anual IVA', pendienteMod('Mod303 (suma de periodos)')],
+    mod390: ['Modelo 390', 'Resumen anual IVA', () => vistaMod390()],
     modintra: ['Intrastat', 'Declaración de expediciones e introducciones', pendienteMod('Intrastat / Export Intrastat')],
     siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas emitidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('E')],
     siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas recibidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('R')],
@@ -578,6 +578,106 @@ export function crearModulos(c) {
       <h4 class="it-sec">Detalle por código de impuesto del periodo</h4>
       ${det ? `<div class="wrap"><table class="tabla"><thead><tr><th>Grupo</th><th>Código</th><th>Libro</th><th class="num">Líneas</th><th class="num">Base imponible</th><th class="num">Cuota IVA</th></tr></thead><tbody>${det}</tbody></table></div>` : '<p class="hint">Sin operaciones en el periodo.</p>'}
       <p class="hint">Borrador de trabajo: los importes salen del libro de IVA por código de impuesto y fecha (igual que la hoja Mod303 de tu Excel). Las casillas de los tipos 5 % y 2 % varían según el ejercicio: verifica en el modelo oficial. Los ajustes manuales (modificaciones, regularizaciones y complementaria) se guardan por periodo.</p>`;
+  }
+
+  // Retenciones: 111 (profesionales; la parte de nóminas se introduce a mano), 115 y 123, desde el libro de IVA soportado
+  const manDe = (tipo) => S.registros.find((r) => r.tipo === tipo && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
+  const manPer = (tipo) => manDe(tipo)?.datos?.[S.periodo || 'anual'] ?? {};
+  const CAMPOS_RET = {
+    111: [['t1', 'Casilla 01 · Nº de perceptores de nómina'], ['t2', 'Casilla 02 · Percepciones de nómina (€)'], ['t3', 'Casilla 03 · Retenciones de nómina (€)'],
+      ['c29', 'Casilla 29 · Resultado de la anterior autoliquidación (complementaria)']],
+    115: [['c4', 'Casilla 04 · Resultado de la anterior autoliquidación (complementaria)']],
+    123: [['c4', 'Casilla 04 · Resultado de la anterior autoliquidación (complementaria)']],
+  };
+  function formManRet(modelo) {
+    const tipo = 'm' + modelo, d = manPer(tipo);
+    openForm(`Ajustes manuales del ${modelo} · ${S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'ejercicio'} ${S.ejercicio}`,
+      CAMPOS_RET[modelo].map(([k, l]) => ({ name: k, label: l, type: 'number', step: '0.01', value: d[k] ?? 0 })), async (v) => {
+        const reg = manDe(tipo);
+        const datos = { ...(reg?.datos ?? {}), [S.periodo || 'anual']: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x === '' ? 0 : parseFloat(x)])) };
+        const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo, ejercicio: Number(S.ejercicio), datos });
+        if (err) return err;
+        await cargar(); render();
+      });
+  }
+  const nom = (n) => (n == null ? '' : eur(n));
+  const cabRet = (c) => `<div class="bar"><span class="chip">${c.periodo.desde.split('-').reverse().join('/')} – ${c.periodo.hasta.split('-').reverse().join('/')}</span>
+    ${S.periodo ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral.</span>'}<span class="space"></span></div>`;
+
+  function vistaRet(modelo) {
+    if (!S.sel) return sinEmpresa;
+    const R = grande('fact-R');
+    if (!R) return cargandoTxt;
+    if (!R.length) return '<p class="vacio">Sin datos: carga el libro de IVA soportado con el botón RECIBIDAS.</p>';
+    const c = calcularRet(modelo, R, Number(S.ejercicio), S.periodo);
+    const m = manPer('m' + modelo);
+    const num = (k) => Number(m[k]) || 0;
+    let tabla;
+    if (modelo === '111') {
+      const f = (ap, con, c1, n, c2, p, c3, r, cls = '') => `<tr class="${cls}"><td>${ap}</td><td>${con}</td><td class="cas">${c1}</td><td class="num">${n}</td><td class="cas">${c2}</td>
+        <td class="num">${nom(p)}</td><td class="cas">${c3}</td><td class="num">${nom(r)}</td></tr>`;
+      const z = (ap, con, a) => f(ap, con, a, 0, a + 1, 0, a + 2, 0);
+      const sumaRet = num('t3') + c.ret;
+      tabla = `<thead><tr><th>Apartado</th><th>Concepto</th><th>Cas.</th><th>Nº perceptores</th><th>Cas.</th><th>Percepciones (€)</th><th>Cas.</th><th>Retenciones (€)</th></tr></thead><tbody>
+        ${f('I. Rendimientos del trabajo', 'Dinerarios', 1, num('t1'), 2, num('t2'), 3, num('t3'))}${z('I. Rendimientos del trabajo', 'En especie', 4)}
+        ${f('II. Rendimientos de actividades económicas', 'Dinerarios', 7, c.perceptores, 8, c.base, 9, c.ret)}${z('II. Rendimientos de actividades económicas', 'En especie', 10)}
+        ${z('III. Premios por juegos, concursos, rifas…', 'Dinerarios', 13)}${z('III. Premios por juegos, concursos, rifas…', 'En especie', 16)}
+        ${z('IV. Ganancias patrimoniales - aprovechamientos forestales', 'Dinerarias', 19)}${z('IV. Ganancias patrimoniales - aprovechamientos forestales', 'En especie', 22)}
+        ${z('V. Contraprestaciones por cesión de derechos de imagen', 'Ingresos a cuenta', 25)}
+        <tr class="sec"><td colspan="8"><b>LIQUIDACIÓN</b></td></tr>
+        ${f('', 'Suma de retenciones e ingresos a cuenta', 28, '', '', '', '', sumaRet, 'tot').replace('<td class="cas"></td><td class="num"></td><td class="cas"></td>', '<td class="cas">28</td><td class="num"></td><td class="cas"></td>')}
+        ${f('', 'A deducir: resultados a ingresar de anteriores autoliquidaciones (complementaria)', 29, '', '', '', '', num('c29'))}
+        ${f('', '<b>RESULTADO A INGRESAR</b>', 30, '', '', '', '', sumaRet - num('c29'), 'tot final')}</tbody>`;
+    } else {
+      const f = (t, cas, v, cls = '') => `<tr class="${cls}"><td>${t}</td><td class="cas">${cas}</td><td class="num">${v}</td></tr>`;
+      tabla = `<thead><tr><th>Concepto</th><th>Cas.</th><th>Importe (€)</th></tr></thead><tbody>
+        ${f('Nº de perceptores', 1, c.perceptores)}${f('Base de las retenciones e ingresos a cuenta', 2, nom(c.base))}${f('Retenciones e ingresos a cuenta', 3, nom(c.ret))}
+        ${f('A deducir: resultados a ingresar de anteriores autoliquidaciones (complementaria)', 4, nom(num('c4')))}${f('<b>RESULTADO A INGRESAR</b>', 5, nom(c.ret - num('c4')), 'tot final')}</tbody>`;
+    }
+    const lin = c.lineas.slice(0, 200).map((l) => `<tr><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td><td>${esc(l.factura)}</td><td>${fmt(l.fecha)}</td>${celdasNum(l.base)}<td class="num">${esc(l.pct)}</td>${celdasNum(l.cuota)}</tr>`).join('');
+    return `${cabRet(c)}<div class="bar"><span class="space"></span>${puede() ? `<button data-act="m-manret" data-m="${modelo}">Ajustes manuales</button>` : ''}</div>
+      <div class="wrap"><table class="tabla tabla-it m303">${tabla}</table></div>
+      <h4 class="it-sec">Detalle de origen (trazabilidad)</h4>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Código</th><th>Concepto</th><th>Hoja origen</th><th class="num">Base</th><th class="num">Retención</th></tr></thead><tbody>
+        ${c.porCodigo.map((x) => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.concepto)}</td><td>Libro de IVA soportado</td>${celdasNum(x.base)}${celdasNum(x.ret)}</tr>`).join('')}
+        <tr><td colspan="3"><b>TOTAL</b></td>${celdasNum(c.base)}${celdasNum(c.ret)}</tr></tbody></table></div>
+      <h4 class="it-sec">Detalle de retenciones del periodo</h4>
+      ${lin ? `<div class="wrap"><table class="tabla"><thead><tr><th>NIF-CIF</th><th>Nombre</th><th>Factura</th><th>Fecha</th><th class="num">Base imponible</th><th class="num">%</th><th class="num">Cuota</th></tr></thead><tbody>${lin}</tbody></table></div>${tope(c.lineas.length)}`
+        : '<p class="hint">Sin retenciones en el periodo.</p>'}
+      <p class="hint">Borrador de trabajo. Las cuotas conservan el signo negativo del libro registro y en las casillas figuran en positivo. ${modelo === '111' ? 'La parte de nóminas (casillas 1 a 3) se introduce a mano hasta que se carguen las nóminas.' : ''}</p>`;
+  }
+
+  // Resúmenes anuales por perceptor: 180 (115), 193 (123) y 190 (111, actividades económicas)
+  function vistaRetAnual(modelo) {
+    if (!S.sel) return sinEmpresa;
+    const R = grande('fact-R');
+    if (!R) return cargandoTxt;
+    if (!R.length) return '<p class="vacio">Sin datos: carga el libro de IVA soportado con el botón RECIBIDAS.</p>';
+    const c = calcularRet(modelo, R, Number(S.ejercicio), '');
+    return `<div class="bar"><span class="chip">Ejercicio ${esc(S.ejercicio)} · ${c.perceptores} perceptores</span></div>
+      ${c.porNif.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>NIF-CIF</th><th>Perceptor</th><th class="num">Base / percepciones</th><th class="num">Retenciones</th></tr></thead><tbody>
+      ${c.porNif.map((x) => `<tr><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td>${celdasNum(x.base)}${celdasNum(x.ret)}</tr>`).join('')}
+      <tr><td colspan="2"><b>Total</b></td>${celdasNum(c.base)}${celdasNum(c.ret)}</tr></tbody></table></div>` : '<p class="hint">Sin retenciones en el ejercicio.</p>'}
+      <p class="hint">${modelo === '111' ? 'Solo actividades económicas (libro de IVA soportado). Los rendimientos del trabajo por perceptor salen de las nóminas, que aún no están cargadas.' : 'Suma de los doce meses del libro de IVA soportado, por perceptor.'}</p>`;
+  }
+
+  // 390: el 303 de cada periodo (mensual para gran empresa, trimestral para el resto) y el total del ejercicio
+  function vistaMod390() {
+    if (!S.sel) return sinEmpresa;
+    const E = grande('fact-E'), R = grande('fact-R');
+    if (!E || !R) return cargandoTxt;
+    if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
+    const mensual = empresa()?.tipo === 'GE';
+    const periodos = mensual ? Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')) : ['1T', '2T', '3T', '4T'];
+    const man = regMan()?.datos ?? {};
+    const filas = periodos.map((p) => ({ p, c: calcular303(E, R, Number(S.ejercicio), p, man[p] ?? {}) }));
+    const tot = (k) => filas.reduce((a, x) => a + x.c[k], 0);
+    return `<div class="bar"><span class="chip">${mensual ? 'Gran empresa · liquidación mensual' : 'Liquidación trimestral'} · ejercicio ${esc(S.ejercicio)}</span></div>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Periodo</th><th class="num">Cuota devengada (27)</th><th class="num">Total a deducir (45)</th><th class="num">Resultado RG (46)</th>
+      <th class="num">IVA diferido aduana (77)</th><th class="num">Resultado liquidación (71)</th></tr></thead><tbody>
+      ${filas.map((x) => `<tr><td><b>${esc(PERIODOS[x.p] ?? x.p)}</b></td>${celdasNum(x.c.devengado)}${celdasNum(x.c.deducir)}${celdasNum(x.c.c46)}${celdasNum(x.c.c77)}${celdasNum(x.c.c71)}</tr>`).join('')}
+      <tr class="fila-ok"><td><b>TOTAL EJERCICIO</b></td>${celdasNum(tot('devengado'))}${celdasNum(tot('deducir'))}${celdasNum(tot('c46'))}${celdasNum(tot('c77'))}${celdasNum(tot('c71'))}</tr></tbody></table></div>
+      <p class="hint">Suma de los 303 de cada periodo, con sus ajustes manuales. Resumen de trabajo: compáralo con el 390 oficial antes de presentarlo.</p>`;
   }
 
   const pendienteMod = (hoja) => () => `<p class="vacio">Este modelo todavía no está migrado. En tu Excel se calcula en la hoja «${hoja}».</p>`;
@@ -893,6 +993,7 @@ export function crearModulos(c) {
       'm-sub': () => { subIT = d.sub; render(); },
       'm-bss': () => { bssFiltro = d.f; render(); },
       'm-man303': () => formMan303(),
+      'm-manret': () => formManRet(d.m),
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
