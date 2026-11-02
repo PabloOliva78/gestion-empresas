@@ -73,14 +73,20 @@ export function crearModulos(c) {
     return `<td>${esc(v)}</td>`;
   };
 
-  function vistaLista(id) {
+  function filasDe(id) {
     const cfg = LISTAS[id];
-    if (!cfg.todas && !S.sel) return sinEmpresa;
     let filas = S.registros.filter((r) => r.tipo === id && (cfg.todas ? (!S.sel || r.empresa_id === S.sel) : r.empresa_id === S.sel));
     if (cfg.ej !== false) filas = filas.filter((r) => r.ejercicio === Number(S.ejercicio));
     if (S.periodo && cfg.cols.some((x) => x.k === 'periodo')) {
       filas = filas.filter((r) => !r.datos.periodo || r.datos.periodo === S.periodo || r.datos.periodo === 'Anual');
     }
+    return filas;
+  }
+
+  function vistaLista(id) {
+    const cfg = LISTAS[id];
+    if (!cfg.todas && !S.sel) return sinEmpresa;
+    const filas = filasDe(id);
     const clave = (r) => r.datos.fecha || r.datos.vencimiento || r.datos.periodo || '';
     filas.sort((a, b) => clave(a).localeCompare(clave(b)));
     const edit = puede();
@@ -189,7 +195,7 @@ export function crearModulos(c) {
   function vistaDocs(id) {
     if (!S.sel) return sinEmpresa;
     const D = regDoc(id)?.datos ?? {};
-    const hecho = DOCS[id].filter(([k]) => D[k]?.path || D[k]?.fecha || D[k]?.ref).length;
+    const hecho = DOCS[id].filter(([k]) => D[k] && (D[k].fecha || D[k].ref || D[k].archivo)).length;
     const filas = DOCS[id].map(([k, l]) => `<tr><td>${esc(l)}</td><td>${fmt(D[k]?.fecha)}</td><td>${esc(D[k]?.ref)}</td>
       <td>${verArchivo(D[k]?.archivo)}</td><td class="acciones">${puede()
     ? `<button class="small" data-act="m-doc-edit" data-m="${id}" data-slot="${k}">${D[k] ? 'Editar' : 'Añadir'}</button>
@@ -424,5 +430,34 @@ export function crearModulos(c) {
     })[d.act]?.();
   }
 
-  return { tabs, accion, cargarPdfs };
+  // Insignias de las fichas del menú (texto y color)
+  const unidad = { pres: 'declaraciones', iloc: 'recibos', notif: 'notificaciones', otros: 'documentos', acc: 'socios y participadas', trl: 'titulares', rmesc: 'escrituras' };
+  const badges = {};
+  Object.keys(LISTAS).forEach((id) => {
+    badges[id] = () => {
+      if (!LISTAS[id].todas && !S.sel) return { t: 'Por empresa' };
+      const fs = filasDe(id);
+      const pend = fs.filter((r) => r.datos.estado === 'Pendiente').length;
+      if (pend) return { t: `${pend} pendientes`, c: 'rojo' };
+      return fs.length ? { t: `${fs.length} ${unidad[id] ?? 'registros'}`, c: fs.some((r) => HECHO.includes(r.datos.estado)) ? 'verde' : '' } : { t: 'Sin datos' };
+    };
+  });
+  Object.keys(DOCS).forEach((id) => {
+    badges[id] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const D = regDoc(id)?.datos ?? {};
+      const n = DOCS[id].filter(([k]) => D[k] && (D[k].fecha || D[k].ref || D[k].archivo)).length;
+      return { t: `${n} de ${DOCS[id].length}`, c: n === DOCS[id].length ? 'verde' : '' };
+    };
+  });
+  Object.keys(FICHAS).forEach((id) => {
+    badges[id] = () => {
+      const e = empresa();
+      if (!e) return { t: 'Por empresa' };
+      const n = FICHAS[id].filter((x) => e.datos?.[id]?.[x.k]).length;
+      return { t: `${n} de ${FICHAS[id].length} datos`, c: n === FICHAS[id].length ? 'verde' : '' };
+    };
+  });
+
+  return { tabs, accion, cargarPdfs, badges };
 }

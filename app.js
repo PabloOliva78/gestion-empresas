@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=10';
+import { crearModulos } from './modulos.js?v=11';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -123,14 +123,17 @@ function renderPendiente() {
 
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'otros']],
-  ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmcert', 'rmaud', 'rmig', 'rmmem', 'rmacu', 'rmnota', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl']],
-  ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas']],
-  ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200']],
-  ['5.- CUENTAS CONTABLES', ['c47', 'c465', 'c640', 'c642']],
-  ['6.- SEGURIDAD SOCIAL', ['ssconc', 'ssobl']],
-  ['7.- CONCILIACIONES', ['conc']],
-  ['8.- ADMINISTRACIÓN', ['usuarios']],
+  // [título, pestañas, logo, subtítulo del panel]
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'otros'],
+    'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
+  ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmcert', 'rmaud', 'rmig', 'rmmem', 'rmacu', 'rmnota', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
+    'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
+  ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
+  ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200'], 'aeat', 'Conciliación de cada modelo con la contabilidad.'],
+  ['5.- CUENTAS CONTABLES', ['c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
+  ['6.- SEGURIDAD SOCIAL', ['ssconc', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
+  ['7.- CONCILIACIONES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
+  ['8.- ADMINISTRACIÓN', ['usuarios'], '', 'Usuarios, roles y acceso a las empresas.'],
 ];
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
@@ -152,15 +155,45 @@ const TABS = {
 };
 const AREA_TAB = { chkf: 'fiscal', rmobl: 'mercantil', ssobl: 'laboral' };
 
+// Insignias de las fichas del menú: pendientes en rojo, al día en verde.
+const pendObl = (area) => {
+  const n = S.obligaciones.filter((o) => (!S.sel || o.empresa_id === S.sel) && (!area || o.area === area)
+    && o.estado !== 'presentado' && delPeriodo(o)).length;
+  return n ? { t: `${n} pendientes`, c: 'rojo' } : { t: 'Al día', c: 'verde' };
+};
+const badgeConc = (cuentas) => {
+  if (!S.sel) return { t: 'Por empresa' };
+  const l = S.conciliaciones.filter((c) => c.empresa_id === S.sel && c.ejercicio === Number(S.ejercicio)
+    && (!cuentas || cuentas.some((p) => c.cuenta.startsWith(p))));
+  const n = l.filter((c) => estadoConc(c) === 'Descuadre').length;
+  return n ? { t: `${n} descuadres`, c: 'rojo' } : l.length ? { t: 'Todo cuadra', c: 'verde' } : { t: 'Sin datos' };
+};
+const BADGES_APP = {
+  calf: () => pendObl(''), chkf: () => pendObl('fiscal'), rmobl: () => pendObl('mercantil'), ssobl: () => pendObl('laboral'),
+  ficha: () => ({ t: 'Por empresa' }), empresas: () => ({ t: `${S.empresas.length} empresas` }),
+  m303: () => badgeConc(['4700', '4750', '472', '477']), m111: () => badgeConc(['4751']), m200: () => badgeConc(['4752', '473', '474']),
+  c47: () => badgeConc(['47']), c465: () => badgeConc(['465']), c640: () => badgeConc(['640']), c642: () => badgeConc(['642']),
+  ssconc: () => badgeConc(['476', '465', '640', '642']), conc: () => badgeConc(null),
+  usuarios: () => ({ t: `${S.usuarios.length} usuarios` }),
+};
+const insignia = (id) => {
+  const b = (BADGES_APP[id] ?? M.badges[id])?.();
+  return b ? `<span class="badge ${b.c ?? ''}">${esc(b.t)}</span>` : '';
+};
+const ICONOS = { aeat: 'png', rm: 'png', pgc: 'jpg', sii: 'png', tgss: 'png' };
+const iconoGrupo = (k) => (k ? `<img class="gico" src="logos/grupo-${k}.${ICONOS[k]}?v=11" alt="" onerror="this.remove()">` : '');
+
 function tabsNav() {
-  const grupos = GRUPOS.map(([tit, ids]) => [tit, ids.filter((id) => !TABS[id][3] || esAdmin())]).filter(([, ids]) => ids.length);
-  return `<nav class="tabs">${grupos.map(([tit, ids], i) => {
-    const act = ids.includes(S.tab);
-    return `<div class="tabgrp${act ? ' act' : ''}"><button class="tabgrp-t" data-grp="${i}">${esc(tit)} ▾
-      ${act ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</button>
-      ${S.grp === i ? `<div class="tabgrp-b">${ids.map((id) => `<button class="tab${id === S.tab ? ' on' : ''}" data-tab="${id}">
-        <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small></button>`).join('')}</div>` : ''}</div>`;
-  }).join('')}</nav>`;
+  const grupos = GRUPOS.map(([tit, ids, ico, sub], i) => ({ i, tit, ico, sub, ids: ids.filter((id) => !TABS[id][3] || esAdmin()) }))
+    .filter((g) => g.ids.length);
+  const abierto = grupos.find((g) => g.i === S.grp);
+  const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
+  return `<div class="tabs-wrap"><nav class="tabs">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
+      ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)} ▾</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</nav>
+    ${abierto ? `<div class="gpanel"><div class="gpanel-h"><span class="gpanel-ico">${iconoGrupo(abierto.ico)}</span>
+      <div><b>${esc(nombre(abierto.tit))}</b><small>${esc(abierto.sub)}</small></div></div>
+      <div class="tiles">${abierto.ids.map((id) => `<button class="tile${id === S.tab ? ' on' : ''}" data-tab="${id}">
+        <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div></div>` : ''}</div>`;
 }
 
 // Años del desplegable de ejercicio: el actual más 1 y los 7 anteriores (y el elegido, si queda fuera).
@@ -526,8 +559,8 @@ Object.assign(TABS, M.tabs);
 
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
-  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabgrp'));
-  if (fuera) { S.menu = false; if (!ev.target.closest('.tabgrp')) S.grp = -1; render(); }
+  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap'));
+  if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap')) S.grp = -1; render(); }
   const t = ev.target.closest('button');
   if (!t) return;
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
