@@ -276,3 +276,22 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .row { display: flex; justify-content: flex-end; gap: .5rem; }
 .checks { display: grid; gap: .3rem; max-height: 260px; overflow: auto; }
 .checks label { display: flex; gap: .5rem; align-items: center; color: var(--text); font-size: .95rem; }
+
+/* ---- Panel de pestañas bajo su pastilla. Va al final del archivo para ganar a las reglas anteriores ---- */
+.tabs-wrap { position: relative; }
+.gpill.abierto { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; border-color: #1d4ed8; }
+.gpill.abierto small { color: #e3ecff; }
+.gpanel { position: relative; top: auto; left: auto; width: auto; max-width: 100%; margin: .6rem 1.5rem 0; padding: 1rem; border-radius: 18px;
+  background: #14286a; box-shadow: 0 6px 18px rgba(10, 20, 60, .25); z-index: 5; }
+.gpanel-h { background: linear-gradient(90deg, #5b3fd6, #1b2a78); border-radius: 14px; padding: .9rem 1.2rem; color: #fff; margin-bottom: .8rem; }
+.gpanel-h b { font-size: 1.1rem; }
+.gpanel-h small { color: #d9ddff; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: .65rem; }
+.tile { border-radius: 14px; padding: .8rem .9rem; min-height: 112px; border: 2px solid transparent; }
+.tile:hover, .tile.on { border-color: #3b82f6; }
+.tile b { font-size: .98rem; }
+.tile small { font-size: .82rem; }
+.badge { font-size: .8rem; padding: .22rem .6rem; border-radius: 6px; font-weight: 700; align-self: stretch; }
+.badge.amar { background: #fff0a8; color: #6b4e00; align-self: flex-start; }
+.badge.rojo { background: #fde2e2; color: #b42318; }
+.badge.verde { background: #dcf3e4; color: #1b7f3b; }

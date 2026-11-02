@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=28';
+import { crearModulos } from './modulos.js?v=29';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -241,6 +241,17 @@ function render() {
       ${tabsNav()}
       <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
+  alinearPanel();
+}
+
+// El panel de pestañas se abre justo debajo de la pastilla de su grupo (sin salirse por la derecha)
+function alinearPanel() {
+  const p = root.querySelector('.gpanel'), pill = root.querySelector('.gpill.abierto'), wrap = root.querySelector('.tabs-wrap');
+  if (!p || !pill || !wrap) return;
+  const ancho = Math.min(wrap.clientWidth - 48, 1100);
+  p.style.width = `${ancho}px`;
+  p.style.marginRight = '0';
+  p.style.marginLeft = `${Math.min(Math.max(pill.offsetLeft - 8, 24), Math.max(24, wrap.clientWidth - ancho - 24))}px`;
 }
 
 function vistaFicha() {
