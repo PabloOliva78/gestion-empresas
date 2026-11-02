@@ -9,9 +9,9 @@ const ROLES = { admin: 'Administrador', gestor: 'Gestor', consulta: 'Consulta' }
 
 const S = {
   perfil: null, empresas: [], obligaciones: [], conciliaciones: [], usuarios: [], asign: [],
-  tab: 'obligaciones', filtro: { empresa: '', area: '', estado: '' },
-  cfiltro: { ejercicio: new Date().getFullYear() },
-  sel: '', menu: false, // empresa elegida en el desplegable de la cabecera ('' = todas)
+  tab: 'oblfis', filtro: { area: '', estado: '' },
+  ejercicio: new Date().getFullYear(), periodo: '', // periodo '' = todo el ejercicio
+  sel: '', menu: false, grp: -1, // empresa elegida ('' = todas) y grupo de pestañas abierto
 };
 let uidActual = null;
 
@@ -23,8 +23,8 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '');
 const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? '—';
 // Logos en logos/<CIF>.jpg; si no existe el archivo, la imagen se oculta.
-const logoHtml = (e) => (e?.cif
-  ? `<img class="logo" src="logos/${esc(e.cif)}.jpg?v=5" alt="" onerror="this.style.visibility='hidden'">` : '<span class="logo"></span>');
+const logoHtml = (e, cls = 'logo') => (e?.cif
+  ? `<img class="${cls}" src="logos/${esc(e.cif)}.jpg?v=6" alt="" onerror="this.style.visibility='hidden'">` : `<span class="${cls}"></span>`);
 
 function empresaSelector() {
   const e = S.empresas.find((x) => x.id === S.sel);
@@ -118,21 +118,101 @@ function renderPendiente() {
   root.querySelector('#out').onclick = () => db.auth.signOut();
 }
 
-function render() {
-  const tabs = [['obligaciones', 'Obligaciones'], ['conciliaciones', 'Conciliaciones'], ['empresas', 'Empresas']];
-  if (esAdmin()) tabs.push(['usuarios', 'Usuarios']);
-  if (!tabs.some(([k]) => k === S.tab)) S.tab = 'obligaciones';
-  root.innerHTML = `<header class="top"><h1>Gestión fiscal, contable y laboral</h1>
-      ${empresaSelector()}
-      <div>${esc(S.perfil.nombre || S.perfil.email)} · <span class="chip">${ROLES[S.perfil.rol]}</span>
-      <button id="out" class="small">Salir</button></div></header>
-    <nav>${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === S.tab ? 'on' : ''}">${l}</button>`).join('')}</nav>
-    <main class="vista">${{ obligaciones: vistaObligaciones, conciliaciones: vistaConciliaciones, empresas: vistaEmpresas, usuarios: vistaUsuarios }[S.tab]()}</main>`;
+// Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
+const GRUPOS = [
+  ['1.- INFORMACIÓN TRIBUTARIA', ['oblfis', 'venc']],
+  ['2.- REGISTRO MERCANTIL', ['rm']],
+  ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas']],
+  ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200']],
+  ['5.- CUENTAS CONTABLES', ['c47', 'c465', 'c640', 'c642']],
+  ['6.- SEGURIDAD SOCIAL', ['ssconc', 'ssobl']],
+  ['7.- CONCILIACIONES', ['conc']],
+  ['8.- ADMINISTRACIÓN', ['usuarios']],
+];
+const TABS = {
+  oblfis: ['Obligaciones fiscales', 'Modelos y plazos', () => vistaObligaciones({ area: 'fiscal' })],
+  venc: ['Todos los vencimientos', 'Todas las áreas', () => vistaObligaciones()],
+  rm: ['Registro Mercantil', 'Libros y depósito de cuentas', () => vistaObligaciones({ area: 'mercantil' })],
+  ficha: ['Ficha de la empresa', 'Datos y resumen', () => vistaFicha()],
+  empresas: ['Empresas', 'Listado y logos', () => vistaEmpresas()],
+  m303: ['303 IVA', '4700 · 4750 · 472 · 477', () => vistaConciliaciones(['4700', '4750', '472', '477'])],
+  m111: ['111 · 115 · 123', 'Retenciones · 4751', () => vistaConciliaciones(['4751'])],
+  m200: ['200 · 202 Sociedades', '4752 · 473 · 474', () => vistaConciliaciones(['4752', '473', '474'])],
+  c47: ['Grupo 47', 'Administraciones Públicas', () => vistaConciliaciones(['47'])],
+  c465: ['465', 'Remuneraciones pendientes de pago', () => vistaConciliaciones(['465'])],
+  c640: ['640', 'Sueldos y salarios', () => vistaConciliaciones(['640'])],
+  c642: ['642', 'Seguridad Social a cargo de la empresa', () => vistaConciliaciones(['642'])],
+  ssconc: ['Nóminas y Seguridad Social', '476 · 465 · 640 · 642', () => vistaConciliaciones(['476', '465', '640', '642'])],
+  ssobl: ['Obligaciones laborales', 'RLC/RNT y nóminas', () => vistaObligaciones({ area: 'laboral' })],
+  conc: ['Todas las conciliaciones', 'Todas las cuentas', () => vistaConciliaciones()],
+  usuarios: ['Usuarios y roles', 'Accesos y empresas', () => vistaUsuarios(), true],
+};
+const AREA_TAB = { oblfis: 'fiscal', rm: 'mercantil', ssobl: 'laboral' };
+
+function tabsNav() {
+  const grupos = GRUPOS.map(([tit, ids]) => [tit, ids.filter((id) => !TABS[id][3] || esAdmin())]).filter(([, ids]) => ids.length);
+  return `<nav class="tabs">${grupos.map(([tit, ids], i) => {
+    const act = ids.includes(S.tab);
+    return `<div class="tabgrp${act ? ' act' : ''}"><button class="tabgrp-t" data-grp="${i}">${esc(tit)} ▾
+      ${act ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</button>
+      ${S.grp === i ? `<div class="tabgrp-b">${ids.map((id) => `<button class="tab${id === S.tab ? ' on' : ''}" data-tab="${id}">
+        <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small></button>`).join('')}</div>` : ''}</div>`;
+  }).join('')}</nav>`;
 }
 
-function vistaObligaciones() {
-  const f = { ...S.filtro, empresa: S.sel };
-  const lista = S.obligaciones.filter((o) =>
+function render() {
+  if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'oblfis';
+  const e = S.empresas.find((x) => x.id === S.sel);
+  const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
+  root.innerHTML = `<div class="layout">
+    <aside class="lat">
+      <div>${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1></div>
+      <div class="two">
+        <label>Ejercicio<input type="number" data-glob="ejercicio" value="${esc(S.ejercicio)}" min="2000" max="2100"></label>
+        <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
+      </div>
+      <div class="lbl">Empresa${empresaSelector()}</div>
+      <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
+        <button id="out" class="small">Salir</button></div>
+    </aside>
+    <main class="princ">
+      <header class="doc"><div><h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
+        <p class="doc-emp">${e ? `${esc(e.nombre)} · ${esc(e.cif)}` : 'Todas las empresas'}</p>
+        <p><b>Ejercicio ${esc(S.ejercicio)} · ${esc(per)}</b></p></div>
+        <div class="doc-r"><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></header>
+      ${tabsNav()}
+      <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+    </main></div>`;
+}
+
+function vistaFicha() {
+  const e = S.empresas.find((x) => x.id === S.sel);
+  if (!e) return '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
+  const obl = S.obligaciones.filter((o) => o.empresa_id === e.id);
+  const pend = obl.filter((o) => o.estado !== 'presentado').length;
+  const venc = obl.filter((o) => o.vencimiento && o.vencimiento < hoy() && o.estado !== 'presentado').length;
+  const conc = S.conciliaciones.filter((c) => c.empresa_id === e.id && c.ejercicio === Number(S.ejercicio));
+  const desc = conc.filter((c) => estadoConc(c) === 'Descuadre').length;
+  return `<div class="ficha"><div>${logoHtml(e, 'logo-ficha')}</div><dl>
+    <dt>Razón social</dt><dd>${esc(e.nombre)}</dd><dt>CIF</dt><dd>${esc(e.cif)}</dd>
+    <dt>Siglas</dt><dd>${esc(e.siglas)}</dd><dt>Tipo</dt><dd>${esc(e.tipo)}</dd>
+    <dt>Obligaciones pendientes</dt><dd>${pend}${venc ? ` · <span class="rojo">${venc} vencidas</span>` : ''}</dd>
+    <dt>Conciliaciones ${esc(S.ejercicio)}</dt><dd>${conc.length}${desc ? ` · <span class="rojo">${desc} con descuadre</span>` : ''}</dd>
+    <dt>Notas</dt><dd>${esc(e.notas)}</dd></dl>
+    ${puedeEditar() ? `<button class="primary" data-act="edit-emp" data-id="${e.id}">Editar ficha</button>` : ''}</div>`;
+}
+
+// Las obligaciones con periodo "AAAA" o "AAAA-xx" se filtran por ejercicio y periodo; el resto siempre se ve.
+function delPeriodo(o) {
+  const m = /^(\d{4})(?:-(.+))?$/.exec(o.periodo ?? '');
+  if (!m) return true;
+  if (m[1] !== String(S.ejercicio)) return false;
+  return !S.periodo || !m[2] || m[2] === S.periodo;
+}
+
+function vistaObligaciones({ area = '' } = {}) {
+  const f = { ...S.filtro, empresa: S.sel, area: area || S.filtro.area };
+  const lista = S.obligaciones.filter((o) => delPeriodo(o) &&
     (!f.empresa || o.empresa_id === f.empresa) && (!f.area || o.area === f.area) && (!f.estado || o.estado === f.estado));
   const filas = lista.map((o) => {
     const vencida = o.vencimiento && o.vencimiento < hoy() && o.estado !== 'presentado';
@@ -148,7 +228,7 @@ function vistaObligaciones() {
            <button class="small danger" data-act="del-obl" data-id="${o.id}">Borrar</button>` : ''}</td></tr>`;
   }).join('');
   return `<div class="bar">
-    <label>Área<select data-filtro="area"><option value="">Todas</option>${opts(AREAS, f.area)}</select></label>
+    ${area ? '' : `<label>Área<select data-filtro="area"><option value="">Todas</option>${opts(AREAS, f.area)}</select></label>`}
     <label>Estado<select data-filtro="estado"><option value="">Todos</option>${opts(ESTADOS, f.estado)}</select></label>
     <span class="space"></span>
     ${puedeEditar() && S.empresas.length ? `<button data-act="calendario">Calendario estándar</button>
@@ -314,11 +394,14 @@ const eur = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency:
 const estadoConc = (c) => (Math.abs(c.diferencia) < 0.005 ? 'Cuadra' : c.justificada ? 'Justificada' : 'Descuadre');
 const pad = (n) => String(n).padStart(2, '0');
 
-function vistaConciliaciones() {
-  const f = { ...S.cfiltro, empresa: S.sel };
-  if (!f.empresa) return '<p class="vacio">Elija una empresa en el desplegable de arriba para ver sus conciliaciones.</p>';
+// cuentas: prefijos de cuenta a mostrar (p. ej. ['4751']); sin argumento, todas.
+function vistaConciliaciones(cuentas) {
+  const f = { empresa: S.sel };
+  if (!f.empresa) return '<p class="vacio">Elija una empresa en el desplegable de la izquierda para ver sus conciliaciones.</p>';
   const lista = S.conciliaciones
-    .filter((c) => c.empresa_id === f.empresa && c.ejercicio === Number(f.ejercicio))
+    .filter((c) => c.empresa_id === f.empresa && c.ejercicio === Number(S.ejercicio)
+      && (!S.periodo || c.periodo === S.periodo || c.periodo === 'Anual')
+      && (!cuentas || cuentas.some((p) => c.cuenta.startsWith(p))))
     .sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.periodo.localeCompare(b.periodo));
   const desc = lista.filter((c) => estadoConc(c) === 'Descuadre').length;
   const filas = lista.map((c) => {
@@ -334,7 +417,6 @@ function vistaConciliaciones() {
            <button class="small danger" data-act="del-conc" data-id="${c.id}">Borrar</button>` : ''}</td></tr>`;
   }).join('');
   return `<div class="bar">
-    <label>Ejercicio<input type="number" data-cfiltro="ejercicio" value="${esc(f.ejercicio)}" min="2000" max="2100"></label>
     <span class="space"></span>
     ${lista.length ? `<span class="chip">${desc ? desc + ' con descuadre' : 'Todo cuadra'}</span>` : ''}
     ${puedeEditar() && f.empresa ? '<button class="primary" data-act="new-conc">Nueva conciliación</button>' : ''}</div>
@@ -364,7 +446,7 @@ function formConciliacion(c = {}) {
     const concepto = v.concepto || p?.[1];
     if (!cuenta || !concepto) return 'Elija una plantilla o indique cuenta y concepto.';
     const datos = {
-      empresa_id: c.empresa_id || S.sel, ejercicio: Number(S.cfiltro.ejercicio), periodo: v.periodo,
+      empresa_id: c.empresa_id || S.sel, ejercicio: c.ejercicio ?? Number(S.ejercicio), periodo: v.periodo,
       cuenta, concepto, fuente: nul(v.fuente || p?.[2] || ''),
       saldo_contable: parseFloat(v.saldo) || 0, importe_oficial: parseFloat(v.oficial) || 0,
       justificada: v.justificada === 'si', notas: nul(v.notas),
@@ -404,7 +486,7 @@ function calendarioEstandar(ej) {
 function formCalendario() {
   openForm('Calendario estándar de obligaciones', [
     { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: S.sel },
-    { name: 'ejercicio', label: 'Ejercicio (año natural)', type: 'number', value: new Date().getFullYear(), required: true },
+    { name: 'ejercicio', label: 'Ejercicio (año natural)', type: 'number', value: S.ejercicio, required: true },
   ], async (v) => {
     const ej = parseInt(v.ejercicio, 10);
     if (!ej) return 'Ejercicio no válido.';
@@ -421,23 +503,25 @@ function formCalendario() {
 
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
-  if (S.menu && !ev.target.closest('.sel')) { S.menu = false; render(); }
+  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabgrp'));
+  if (fuera) { S.menu = false; if (!ev.target.closest('.tabgrp')) S.grp = -1; render(); }
   const t = ev.target.closest('button');
   if (!t) return;
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
   if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
+  if (t.dataset.grp !== undefined) { const i = Number(t.dataset.grp); S.grp = S.grp === i ? -1 : i; return render(); }
   if (t.id === 'out') return void db.auth.signOut();
-  if (t.dataset.tab) { S.tab = t.dataset.tab; return render(); }
+  if (t.dataset.tab) { S.tab = t.dataset.tab; S.grp = -1; return render(); }
   const id = t.dataset.id;
   const acciones = {
     'new-emp': () => formEmpresa(),
     'edit-emp': () => formEmpresa(S.empresas.find((e) => e.id === id)),
     'del-emp': () => confirm('¿Borrar la empresa y TODAS sus obligaciones?') && run(db.from('empresas').delete().eq('id', id)),
-    'new-obl': () => formObligacion(),
+    'new-obl': () => formObligacion({ area: AREA_TAB[S.tab] }),
     'edit-obl': () => formObligacion(S.obligaciones.find((o) => o.id === id)),
     'del-obl': () => confirm('¿Borrar la obligación?') && run(db.from('obligaciones').delete().eq('id', id)),
     calendario: () => formCalendario(),
-    'new-conc': () => formConciliacion(),
+    'new-conc': () => formConciliacion({ periodo: S.periodo || '1T' }),
     'edit-conc': () => formConciliacion(S.conciliaciones.find((c) => c.id === id)),
     'del-conc': () => confirm('¿Borrar la conciliación?') && run(db.from('conciliaciones').delete().eq('id', id)),
     'new-user': () => formUsuario(),
@@ -448,7 +532,10 @@ root.addEventListener('click', (ev) => {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.dataset.cfiltro) { S.cfiltro[t.dataset.cfiltro] = t.value; return render(); }
+  if (t.dataset.glob) {
+    S[t.dataset.glob] = t.dataset.glob === 'ejercicio' ? (parseInt(t.value, 10) || S.ejercicio) : t.value;
+    return render();
+  }
   if (t.dataset.filtro) { S.filtro[t.dataset.filtro] = t.value; return render(); }
   if (t.dataset.estado) return void run(db.from('obligaciones').update({ estado: t.value }).eq('id', t.dataset.estado));
   if (t.dataset.rol) return void run(db.from('profiles').update({ rol: t.value }).eq('id', t.dataset.rol));

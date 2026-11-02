@@ -39,6 +39,53 @@ button.small { padding: .2rem .55rem; font-size: .85rem; }
 .wrap { overflow-x: auto; }
 .chip { display: inline-block; padding: .05rem .5rem; border-radius: 99px; border: 1px solid var(--line); font-size: .78rem; }
 .ok { color: var(--ok); }
+.rojo { color: var(--danger); font-weight: 600; }
+
+/* Estructura tipo aplicación de impuestos: barra lateral + documento + pestañas agrupadas */
+:root { --ink: #1f3864; --ink-2: #33507f; }
+.layout { display: grid; grid-template-columns: 275px 1fr; min-height: 100vh; }
+.lat { background: var(--ink); color: #e9edf5; padding: 22px; display: flex; flex-direction: column; gap: 18px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.lat h1 { font-size: 17px; font-weight: 600; margin: 10px 0 0; letter-spacing: .02em; }
+.lat label, .lat .lbl { color: #b9c4dc; display: grid; gap: .3rem; font-size: .8rem; }
+.lat input, .lat select { background: #fff; color: #1d2330; border-color: transparent; }
+.lat .two { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.lat .sel-btn { background: #fff; color: #1d2330; width: 100%; min-width: 0; }
+.lat .sel-menu { color: var(--text); min-width: 100%; }
+.lat-pie { margin-top: auto; font-size: .85rem; display: grid; gap: .4rem; justify-items: start; }
+.lat .chip { color: #e9edf5; border-color: #5a74a6; }
+img.logo-aside, span.logo-aside { display: block; max-width: 100%; max-height: 90px; background: #fff; border-radius: 6px; padding: 4px; }
+img.logo-ficha, span.logo-ficha { display: block; max-width: 220px; max-height: 120px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.princ { min-width: 0; padding: 0 0 2rem; }
+.doc { display: flex; justify-content: space-between; gap: 1rem; padding: 1.1rem 1.5rem; background: var(--card); border-bottom: 3px solid var(--ink); }
+.doc h2 { margin: 0; font-size: 1.05rem; color: var(--ink); letter-spacing: .02em; }
+.doc p { margin: .15rem 0 0; }
+.doc-emp { font-weight: 600; }
+.doc-r { text-align: right; font-size: .85rem; color: var(--muted); display: grid; }
+.tabs { display: flex; flex-wrap: wrap; gap: .4rem; padding: .75rem 1.5rem 0; }
+.tabgrp { position: relative; }
+.tabgrp-t { display: grid; text-align: left; font-size: .72rem; font-weight: 600; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .7rem; }
+.tabgrp.act > .tabgrp-t { background: var(--ink); color: #fff; border-color: var(--ink); }
+.tabgrp-t small { font-weight: 400; font-size: .72rem; opacity: .85; }
+.tabgrp-b { position: absolute; z-index: 15; top: calc(100% + 4px); left: 0; min-width: 260px; display: grid; gap: 2px; padding: .3rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.tab { display: grid; text-align: left; border: 0; background: none; padding: .45rem .6rem; border-radius: 6px; }
+.tab:hover, .tab.on { background: var(--bg); }
+.tab small { color: var(--muted); font-size: .76rem; }
+.vista { padding: 1rem 1.5rem; max-width: none; margin: 0; }
+.tab-tit { margin: 0 0 .8rem; color: var(--ink); }
+.tab-tit small { color: var(--muted); font-weight: 400; margin-left: .5rem; }
+.ficha { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; }
+.ficha dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.2rem; margin: 0; }
+.ficha dt { color: var(--muted); }
+.ficha dd { margin: 0; font-weight: 500; }
+.ficha button { align-self: end; }
+@media (prefers-color-scheme: dark) { .doc h2, .tab-tit { color: #9fb7e8; } }
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+  .lat { position: static; height: auto; }
+  .tabgrp-b { position: static; box-shadow: none; }
+}
 img.logo, span.logo { display: inline-block; height: 28px; width: 56px; object-fit: contain; vertical-align: middle; flex: none; background: #fff; border-radius: 4px; }
 .emp { display: flex; align-items: center; gap: .6rem; }
 .sel { position: relative; }
