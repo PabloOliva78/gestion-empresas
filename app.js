@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=8';
+import { crearModulos } from './modulos.js?v=9';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -123,7 +123,7 @@ function renderPendiente() {
 
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf']],
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'otros']],
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmcert', 'rmaud', 'rmig', 'rmmem', 'rmacu', 'rmnota', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl']],
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas']],
   ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200']],
@@ -175,8 +175,11 @@ function render() {
         <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
-      ${puedeEditar() ? `<button data-act="m-pdf">📂 Cargar PDF (AEAT / tributos locales)…</button>
-        <input type="file" id="pdfIn" accept=".pdf" multiple hidden>` : ''}
+      ${puedeEditar() ? `<button data-act="m-carpeta">📂 Cargar carpeta…</button>
+        <button data-act="m-pdf">📄 Cargar PDF…</button>
+        <input type="file" id="pdfIn" accept=".pdf" multiple hidden>
+        <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
+        <span class="hint" id="pdfEstado"></span>` : ''}
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -544,7 +547,7 @@ root.addEventListener('click', (ev) => {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.id === 'pdfIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.id === 'pdfIn' || t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.dataset.glob) {
     S[t.dataset.glob] = t.dataset.glob === 'ejercicio' ? (parseInt(t.value, 10) || S.ejercicio) : t.value;
     return render();

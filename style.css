@@ -82,6 +82,7 @@ img.logo-ficha, span.logo-ficha { display: block; max-width: 220px; max-height: 
 .ficha dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.2rem; margin: 0; }
 .ficha dt { color: var(--muted); }
 .ficha dd { margin: 0; font-weight: 500; white-space: pre-line; }
+.lat > .hint { color: #b9c4dc; }
 .lat > button { background: #2b4a82; color: #fff; border-color: #5a74a6; text-align: left; }
 .ficha button { align-self: end; }
 @media (prefers-color-scheme: dark) { .doc h2, .tab-tit { color: #9fb7e8; } }

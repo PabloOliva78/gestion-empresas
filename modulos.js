@@ -57,6 +57,7 @@ export function crearModulos(c) {
     dua: { cols: [F('fecha', 'Fecha'), T('dua', 'Nº DUA'), T('proveedor', 'Proveedor'), E('base', 'Base'), E('iva', 'IVA diferido'), S_('estado', 'Estado', { Pendiente: 'Pendiente', Aplicado: 'Aplicado' }), A('archivo')] },
     trl: { ej: false, cols: [T('nombre', 'Titular real'), T('nif', 'NIF'), N('pct', '% titularidad'), S_('tipo', 'Tipo', { Directa: 'Directa', Indirecta: 'Indirecta', Control: 'Control' }), F('fecha', 'Desde')] },
     acc: { ej: false, cols: [S_('relacion', 'Relación', { Socio: 'Socio', Participada: 'Participada' }), T('nombre', 'Nombre'), T('nif', 'NIF'), N('pct', '% capital'), T('notas', 'Notas')] },
+    otros: { ej: false, cols: [T('nombre', 'Documento'), F('cargado', 'Cargado el'), A('archivo', 'Archivo')] },
     rmesc: { ej: false, cols: [F('fecha', 'Fecha'), T('notario', 'Notario'), T('protocolo', 'Nº protocolo'), T('tipo', 'Tipo'), T('desc', 'Descripción'), A('archivo')] },
   };
 
@@ -265,6 +266,7 @@ export function crearModulos(c) {
     notif: ['Notificaciones y requerimientos', 'Plazos de respuesta', L('notif')],
     iloc: ['Impuestos Locales', 'IBI · IAE · IVTM', L('iloc')],
     dua: ['DUA-H1', 'Importaciones · IVA diferido', L('dua')],
+    otros: ['Otros documentos', 'PDF de la empresa sin clasificar', L('otros')],
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', () => vistaFichaDatos('dreg')],
     trl: ['Titularidad Real', 'Titulares reales', L('trl')],
     acc: ['Organigrama', 'Socios y participadas', L('acc')],
@@ -306,15 +308,32 @@ export function crearModulos(c) {
     const informe = [];
     const vistos = new Set();
     const ficha = {};
-    for (const f of files) {
+    const estado = (m) => { const el = document.getElementById('pdfEstado'); if (el) el.textContent = m; };
+    for (const [i, f] of files.entries()) {
       try {
+        if (!/\.pdf$/i.test(f.name)) { informe.push(`↷ ${f.name}: no es PDF`); continue; }
+        estado(`Leyendo ${i + 1} de ${files.length}…`);
         const t = await textoPdf(f);
         const tipo = clasificar(t);
-        if (!tipo) { informe.push(`❔ ${f.name}: no reconocido`); continue; }
-        const nif = nifDe(t);
+        const nif = nifDe(t) || nifDe(f.webkitRelativePath || '');
         const e = S.empresas.find((x) => x.cif === nif);
-        if (!e) { informe.push(`⚠ ${f.name}: el NIF ${nif || '?'} no coincide con ninguna empresa`); continue; }
+        if (!e) { informe.push(`⚠ ${f.name}: ${nif ? `el NIF ${nif} no coincide con ninguna empresa` : 'no se encontró el NIF'}`); continue; }
         const nom = e.siglas || e.nombre;
+        if (!tipo) { // PDF de la empresa que aún no sabemos leer: se guarda en «Otros documentos»
+          const ref = `${f.name}|${f.size}`;
+          if (vistos.has(e.id + ref) || S.registros.some((x) => x.tipo === 'otros' && x.empresa_id === e.id && x.datos.ref === ref)) {
+            informe.push(`↩ ${f.name}: repetido`); continue;
+          }
+          vistos.add(e.id + ref);
+          const id = crypto.randomUUID();
+          const sub = await subir(e.id, 'otros', id, 'archivo', f);
+          if (sub.error) throw new Error(sub.error);
+          const err = await guardarRegistro(null, { id, empresa_id: e.id, tipo: 'otros', ejercicio: null,
+            datos: { nombre: f.name, cargado: new Date().toISOString().slice(0, 10), ref, archivo: sub.val } });
+          if (err) throw new Error(err);
+          informe.push(`📎 ${nom}: ${f.name} (guardado sin clasificar)`);
+          continue;
+        }
         const F_ = (ficha[e.id] ??= { e, it: { ...(e.datos?.it ?? {}) }, dreg: { ...(e.datos?.dreg ?? {}) }, tocado: false });
         if (tipo === 'censo') {
           const r = leerCenso(t);
@@ -379,7 +398,11 @@ export function crearModulos(c) {
       if (error) informe.push(`✖ ${F_.e.nombre}: ${error.message}`);
     }
     await cargar(); render();
-    alert(informe.join('\n') || 'No se leyó ningún archivo.');
+    estado('');
+    const ok = informe.filter((l) => l.startsWith('✔'));
+    const resto = informe.filter((l) => !l.startsWith('✔'));
+    alert([`${ok.length} de ${files.length} archivos leídos y asignados a su empresa.`, ...(ok.length <= 12 ? ok : []),
+      ...resto.slice(0, 30), resto.length > 30 ? `… y ${resto.length - 30} avisos más` : ''].filter(Boolean).join('\n'));
   }
 
   function accion(d) {
@@ -393,6 +416,7 @@ export function crearModulos(c) {
       'm-doc-edit': () => formDoc(d.m, d.slot),
       'm-doc-del': () => quitarDoc(d.m, d.slot),
       'm-pdf': () => document.getElementById('pdfIn')?.click(),
+      'm-carpeta': () => document.getElementById('carpetaIn')?.click(),
     })[d.act]?.();
   }
 
