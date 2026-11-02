@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=7';
+import { crearModulos } from './modulos.js?v=8';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -175,6 +175,8 @@ function render() {
         <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
+      ${puedeEditar() ? `<button data-act="m-pdf">📂 Cargar PDF (AEAT / tributos locales)…</button>
+        <input type="file" id="pdfIn" accept=".pdf" multiple hidden>` : ''}
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -542,6 +544,7 @@ root.addEventListener('click', (ev) => {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
+  if (t.id === 'pdfIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.dataset.glob) {
     S[t.dataset.glob] = t.dataset.glob === 'ejercicio' ? (parseInt(t.value, 10) || S.ejercicio) : t.value;
     return render();

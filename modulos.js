@@ -1,6 +1,9 @@
 // Bloques 1 y 2 (información tributaria y registral), todo declarativo.
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
+import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
+  leerRepresentantes, leerParticipes, leerLocal } from './lectores.js?v=8';
+
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
 
@@ -38,6 +41,7 @@ export function crearModulos(c) {
   const N = (k, l) => ({ k, l, t: 'num' });
   const S_ = (k, l, o) => ({ k, l, t: 'sel', o });
   const A = (k, l = 'Archivo') => ({ k, l, t: 'archivo' });
+  const AR = (k, l) => ({ k, l, t: 'area' });
 
   const LISTAS = {
     r111: { cols: [P, N('perceptores', 'Perceptores'), E('base', 'Base'), E('ret', 'Retenciones'), F('fecha', 'Presentado el'), S_('estado', 'Estado', ESTADO)] },
@@ -47,7 +51,9 @@ export function crearModulos(c) {
     liq: { todas: true, cols: [S_('modelo', 'Modelo', MODELOS), P, E('importe', 'Importe'), F('vencimiento', 'Vencimiento'), S_('estado', 'Estado', ESTADO)] },
     venc: { todas: true, cols: [S_('modelo', 'Modelo', MODELOS), P, E('importe', 'Importe'), F('fecha', 'Fecha de cargo'), T('banco', 'Banco / cuenta'), S_('estado', 'Estado', { Pendiente: 'Pendiente', Cargado: 'Cargado' })] },
     notif: { ej: false, cols: [F('fecha', 'Recibida'), T('organismo', 'Organismo'), T('asunto', 'Asunto'), F('plazo', 'Plazo de respuesta'), S_('estado', 'Estado', { Pendiente: 'Pendiente', Respondida: 'Respondida', Cerrada: 'Cerrada' }), A('archivo')] },
-    iloc: { cols: [S_('impuesto', 'Impuesto', { IBI: 'IBI', IAE: 'IAE', IVTM: 'IVTM', Otros: 'Otros' }), T('objeto', 'Inmueble / matrícula'), E('importe', 'Importe'), F('vencimiento', 'Vencimiento'), S_('domiciliado', 'Domiciliado', SINO), S_('estado', 'Estado', { Pendiente: 'Pendiente', Pagado: 'Pagado' })] },
+    iloc: { ej: false, cols: [S_('impuesto', 'Impuesto', { IBI: 'IBI', IAE: 'IAE', IVTM: 'IVTM', Vados: 'Vados', Basura: 'Basura', Otros: 'Otros' }),
+      T('municipio', 'Municipio'), T('per', 'Periodo'), T('objeto', 'Objeto tributario'), E('importe', 'Importe'), F('vencimiento', 'Fecha límite'),
+      F('fecha_pago', 'Fecha de pago'), S_('estado', 'Estado', { Pendiente: 'Pendiente', Pagado: 'Pagado' }), T('ref', 'Id. recibo'), A('archivo', 'PDF')] },
     dua: { cols: [F('fecha', 'Fecha'), T('dua', 'Nº DUA'), T('proveedor', 'Proveedor'), E('base', 'Base'), E('iva', 'IVA diferido'), S_('estado', 'Estado', { Pendiente: 'Pendiente', Aplicado: 'Aplicado' }), A('archivo')] },
     trl: { ej: false, cols: [T('nombre', 'Titular real'), T('nif', 'NIF'), N('pct', '% titularidad'), S_('tipo', 'Tipo', { Directa: 'Directa', Indirecta: 'Indirecta', Control: 'Control' }), F('fecha', 'Desde')] },
     acc: { ej: false, cols: [S_('relacion', 'Relación', { Socio: 'Socio', Participada: 'Participada' }), T('nombre', 'Nombre'), T('nif', 'NIF'), N('pct', '% capital'), T('notas', 'Notas')] },
@@ -126,10 +132,13 @@ export function crearModulos(c) {
 
   // ---------- Fichas (datos censales y registrales) ----------
   const FICHAS = {
-    it: [T('nif', 'NIF'), T('razon', 'Razón social'), T('domicilio', 'Domicilio fiscal'), T('delegacion', 'Delegación AEAT'),
-      T('iae', 'Epígrafe IAE'), S_('periodicidad', 'Periodicidad IVA', { Mensual: 'Mensual', Trimestral: 'Trimestral' }),
-      T('regimen', 'Régimen de IVA'), S_('sii', 'SII', SINO), S_('redeme', 'REDEME', SINO), S_('grupo_iva', 'Grupo IVA', SINO),
-      F('alta', 'Fecha de alta censal'), T('representante', 'Representante / apoderado'), F('cert_cad', 'Caducidad certificado digital')],
+    it: [T('nif', 'NIF'), T('razon', 'Razón social'), T('domicilio', 'Domicilio fiscal'), T('ref_catastral', 'Referencia catastral'),
+      T('delegacion', 'Administración AEAT'), T('iae', 'Epígrafes IAE'), AR('actividades', 'Actividades (censo)'),
+      S_('periodicidad', 'Periodicidad IVA', { Mensual: 'Mensual', Trimestral: 'Trimestral' }), T('regimen', 'Régimen de IVA'),
+      T('deduccion', '% provisional de deducción'), T('cierre', 'Cierre del ejercicio'), T('pagos_frac', 'Pagos fraccionados IS'),
+      T('retenciones', 'Retenciones (modelos)'), T('sii', 'SII'), T('notificaciones', 'Notificaciones electrónicas'),
+      AR('obligaciones', 'Obligaciones tributarias (censo)'), T('representante', 'Representantes'), AR('representados', 'Representados'),
+      F('cert_cad', 'Caducidad certificado digital')],
     dreg: [T('nif', 'NIF'), T('irus', 'IRUS'), T('cnae', 'CNAE'), T('registro', 'Registro Mercantil de'), T('tomo', 'Tomo'),
       T('folio', 'Folio'), T('hoja', 'Hoja'), T('inscripcion', 'Inscripción'), F('constitucion', 'Fecha de constitución'),
       T('capital', 'Capital social'), T('ejercicio_social', 'Ejercicio social'), T('domicilio', 'Domicilio social'), T('objeto', 'Objeto social')],
@@ -148,7 +157,7 @@ export function crearModulos(c) {
     const d = e.datos?.[id] ?? {};
     openForm('Editar datos', FICHAS[id].map((x) => (x.t === 'sel'
       ? { name: x.k, label: x.l, type: 'select', options: { '': '—', ...x.o }, value: d[x.k] ?? '' }
-      : { name: x.k, label: x.l, type: x.t === 'date' ? 'date' : 'text', value: d[x.k] })), async (v) => {
+      : { name: x.k, label: x.l, type: x.t === 'date' ? 'date' : x.t === 'area' ? 'textarea' : 'text', value: d[x.k] })), async (v) => {
       const datos = { ...(e.datos ?? {}), [id]: v };
       const { error } = await db.from('empresas').update({ datos }).eq('id', e.id);
       if (error) return error.message;
@@ -272,6 +281,107 @@ export function crearModulos(c) {
     rmlibros: ['Libros', 'Libros contables', D('rmlibros')],
   };
 
+  // ---------- Carga de PDF (AEAT y tributos locales) ----------
+  async function textoPdf(file) {
+    const lib = window.pdfjsLib;
+    if (!lib) throw new Error('No se cargó el lector de PDF (pdf.js).');
+    lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const out = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const tc = await (await doc.getPage(p)).getTextContent();
+      out.push(`--- página ${p} ---`, ...lineasPagina(tc.items.map((i) => ({ x: i.transform[4], y: i.transform[5], str: i.str }))));
+    }
+    return out.join('\n');
+  }
+
+  async function guardarRegistro(existente, fila) {
+    const { error } = existente
+      ? await db.from('registros').update(fila).eq('id', existente.id)
+      : await db.from('registros').insert(fila);
+    return error?.message;
+  }
+
+  async function cargarPdfs(files) {
+    const informe = [];
+    const vistos = new Set();
+    const ficha = {};
+    for (const f of files) {
+      try {
+        const t = await textoPdf(f);
+        const tipo = clasificar(t);
+        if (!tipo) { informe.push(`❔ ${f.name}: no reconocido`); continue; }
+        const nif = nifDe(t);
+        const e = S.empresas.find((x) => x.cif === nif);
+        if (!e) { informe.push(`⚠ ${f.name}: el NIF ${nif || '?'} no coincide con ninguna empresa`); continue; }
+        const nom = e.siglas || e.nombre;
+        const F_ = (ficha[e.id] ??= { e, it: { ...(e.datos?.it ?? {}) }, dreg: { ...(e.datos?.dreg ?? {}) }, tocado: false });
+        if (tipo === 'censo') {
+          const r = leerCenso(t);
+          Object.assign(F_.it, { nif: r.nif, razon: r.razon, domicilio: r.domicilio_fiscal, ref_catastral: r.ref_catastral,
+            delegacion: r.delegacion, sii: r.sii, notificaciones: r.notificaciones });
+          Object.assign(F_.dreg, { nif: r.nif, constitucion: r.constitucion, domicilio: r.domicilio_social });
+          F_.tocado = true; informe.push(`✔ ${nom}: datos censales`);
+        } else if (tipo === 'actividades') {
+          const r = leerActividades(t);
+          F_.it.iae = r.map((a) => a.epigrafe).join(', ');
+          F_.it.actividades = r.map((a) => `${a.epigrafe} ${a.denominacion} (${a.estado} desde ${fmt(a.desde)})`).join('\n');
+          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} actividades`);
+        } else if (tipo === 'obligaciones') {
+          const r = leerObligaciones(t);
+          F_.it.obligaciones = r.map((o) => `${o.descripcion} · ${o.periodicidad.toLowerCase()} · ${o.estado.toLowerCase()} desde ${fmt(o.alta)}`).join('\n');
+          const iva = r.find((o) => /VALOR AÑADIDO/.test(o.descripcion));
+          if (iva) F_.it.periodicidad = iva.periodicidad === 'MENSUAL' ? 'Mensual' : 'Trimestral';
+          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} obligaciones censales`);
+        } else if (tipo === 'situacion') {
+          const r = leerSituacion(t);
+          Object.assign(F_.it, { regimen: r.regimen_iva, deduccion: r.deduccion, cierre: r.cierre, pagos_frac: r.pagos_frac, retenciones: r.retenciones });
+          F_.tocado = true; informe.push(`✔ ${nom}: situación tributaria`);
+        } else if (tipo === 'representantes') {
+          const r = leerRepresentantes(t);
+          F_.it.representante = r.map((x) => `${x.nombre} (${x.nif})`).join('; ');
+          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} representantes`);
+        } else if (tipo === 'representados') {
+          const r = leerRepresentantes(t);
+          F_.it.representados = r.map((x) => `${x.nombre} (${x.nif}) · ${x.situacion.toLowerCase()} ${x.tipo.toLowerCase()} desde ${fmt(x.fecha)}`).join('\n');
+          F_.tocado = true; informe.push(`✔ ${nom}: ${r.length} representados`);
+        } else if (tipo === 'participes') {
+          const r = leerParticipes(t);
+          for (const p of r) {
+            const ex = S.registros.find((x) => x.tipo === 'acc' && x.empresa_id === e.id && x.datos.nif === p.nif);
+            const err = await guardarRegistro(ex, { empresa_id: e.id, tipo: 'acc', ejercicio: null,
+              datos: { relacion: p.tipo === 'Socio' ? 'Socio' : 'Participada', nombre: p.nombre, nif: p.nif, pct: p.pct, notas: `AEAT: ${p.estado}` } });
+            if (err) throw new Error(err);
+          }
+          informe.push(`✔ ${nom}: ${r.length} socios/partícipes`);
+        } else if (tipo === 'local') {
+          const r = leerLocal(t);
+          const clave = `${e.id}|${r.ref}`;
+          if (!r.ref) { informe.push(`⚠ ${f.name}: no se encontró el id del recibo`); continue; }
+          if (vistos.has(clave)) { informe.push(`↩ ${f.name}: repetido (${r.ref})`); continue; }
+          vistos.add(clave);
+          const ex = S.registros.find((x) => x.tipo === 'iloc' && x.empresa_id === e.id && x.datos.ref === r.ref);
+          const estado = r.clase === 'pagado' ? 'Pagado' : 'Pendiente';
+          if (ex && ex.datos.estado === 'Pagado' && estado === 'Pendiente') { informe.push(`↩ ${f.name}: ya está pagado`); continue; }
+          const id = ex?.id || crypto.randomUUID();
+          const sub = await subir(e.id, 'iloc', id, 'archivo', f);
+          const datos = { impuesto: r.impuesto, municipio: r.municipio, per: r.periodo, objeto: r.objeto, importe: r.importe,
+            vencimiento: r.vencimiento, fecha_pago: r.fecha_pago, estado, ref: r.ref, ...(sub.val ? { archivo: sub.val } : {}) };
+          const err = await guardarRegistro(ex, { id, empresa_id: e.id, tipo: 'iloc', ejercicio: r.ejercicio, datos });
+          if (err) throw new Error(err);
+          informe.push(`✔ ${nom}: ${r.impuesto} ${r.periodo} · ${estado.toLowerCase()} · ${r.importe != null ? eur(r.importe) : '—'}`);
+        }
+      } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
+    }
+    for (const F_ of Object.values(ficha)) {
+      if (!F_.tocado) continue;
+      const { error } = await db.from('empresas').update({ datos: { ...(F_.e.datos ?? {}), it: F_.it, dreg: F_.dreg } }).eq('id', F_.e.id);
+      if (error) informe.push(`✖ ${F_.e.nombre}: ${error.message}`);
+    }
+    await cargar(); render();
+    alert(informe.join('\n') || 'No se leyó ningún archivo.');
+  }
+
   function accion(d) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
@@ -282,8 +392,9 @@ export function crearModulos(c) {
       'm-ficha': () => formFicha(d.m),
       'm-doc-edit': () => formDoc(d.m, d.slot),
       'm-doc-del': () => quitarDoc(d.m, d.slot),
+      'm-pdf': () => document.getElementById('pdfIn')?.click(),
     })[d.act]?.();
   }
 
-  return { tabs, accion };
+  return { tabs, accion, cargarPdfs };
 }

@@ -81,7 +81,8 @@ img.logo-ficha, span.logo-ficha { display: block; max-width: 220px; max-height: 
 .ficha { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; }
 .ficha dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.2rem; margin: 0; }
 .ficha dt { color: var(--muted); }
-.ficha dd { margin: 0; font-weight: 500; }
+.ficha dd { margin: 0; font-weight: 500; white-space: pre-line; }
+.lat > button { background: #2b4a82; color: #fff; border-color: #5a74a6; text-align: left; }
 .ficha button { align-self: end; }
 @media (prefers-color-scheme: dark) { .doc h2, .tab-tit { color: #9fb7e8; } }
 @media (max-width: 800px) {
