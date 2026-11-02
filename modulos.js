@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS } from './lectores.js?v=14';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta } from './lectores.js?v=16';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -300,9 +300,22 @@ export function crearModulos(c) {
     .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table>`;
   const dropzone = `<div class="dropzone" tabindex="0" role="button"><b>Suelta aquí los PDF de la sede de la AEAT</b> (uno o varios) o haz clic para elegirlos
     <input type="file" id="aeatIn" accept=".pdf" multiple hidden></div>`;
-  const tb = (cols, filas) => `<div class="wrap"><table class="tabla tabla-it"><thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead>
-    <tbody>${filas.map((f) => `<tr>${f.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  const coma = (n) => (n == null ? '' : String(n).replace('.', ','));
+  // dcha: posiciones de las columnas numéricas (alineadas a la derecha)
+  const tb = (cols, filas, dcha = []) => `<div class="wrap"><table class="tabla tabla-it"><thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead>
+    <tbody>${filas.map((f) => `<tr>${f.map((v, i) => `<td${dcha.includes(i) ? ' class="num"' : ''}>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const coma = (n) => (n == null ? '' : n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const guiones = (d) => (d ? d.split('-').reverse().join('-') : '');
+
+  function tablaSituacion(f) {
+    let sec = '';
+    const filas = f.filas.map((r) => {
+      const cab = r.seccion !== sec ? `<tr class="sec"><td colspan="4">${esc((sec = r.seccion))}</td></tr>` : '';
+      return `${cab}<tr><td class="num">${esc(r.casilla)}</td><td>${esc(r.concepto)}</td><td class="marca">${esc(r.marca)}</td><td class="c">${esc(r.fecha)}</td></tr>`;
+    }).join('');
+    return `<p>Estado situación tributaria: <b>${esc(f.estado)}</b></p><div class="wrap"><table class="tabla tabla-it">
+      <thead><tr><th>Casilla</th><th>Concepto</th><th>Marcado / situación</th><th>Fecha</th></tr></thead><tbody>${filas}</tbody></table></div>
+      <p class="hint">Solo las casillas marcadas en la declaración censal. En las preguntas Sí/No (500, 501) el PDF solo trae la X: compruébalo en el original.</p>`;
+  }
 
   function vistaIT() {
     const e = empresa();
@@ -325,23 +338,25 @@ export function crearModulos(c) {
         + tb(['Situación', 'Fecha de Situación', 'Obligación Mensual IVA', 'Fecha Alta Efectiva', 'Fecha Baja Efectiva', 'Referencia'],
           [[c.sii_tabla?.situacion, c.sii_tabla?.fecha, c.sii_tabla?.obligacion, c.sii_tabla?.alta, c.sii_tabla?.baja, '']])
         + kv('Domicilio fiscal', dom(c.fiscal, true)) + kv('Domicilio social', dom(c.social, false)) : sinDatos),
-      act: () => (A.actividades ? tb(['Sección', 'Epígrafe', 'Denominación', 'Estado', 'F.Inicio', 'F.Baja', 'Locales', 'Num.Ref.'],
-        A.actividades.map((a) => [a.seccion, a.epigrafe, a.denominacion, a.estado, fmt(a.desde), '', '', ''])) : sinDatos),
-      sit: () => (s ? kv('Situación tributaria', [['Régimen de IVA', s.regimen_iva], ['% provisional de deducción', s.deduccion],
-        ['Cierre del ejercicio (IS)', s.cierre], ['Pagos fraccionados IS (art. 40.3)', s.pagos_frac], ['Retenciones (modelos)', s.retenciones]]) : sinDatos),
-      soc: () => (A.participes ? tb(['NIF', 'Apellidos y Nombre', 'Estado', '% Part.', '% Atrib.', 'Tipo'],
-        A.participes.map((p) => [p.nif, p.nombre, p.estado, coma(p.pct), coma(p.atrib), p.tipo])) : sinDatos),
-      obl: () => (A.obligaciones ? tb(['Descripción de la obligación', 'Periodicidad', 'F. Alta Efec.', 'F. Baja Efec.', 'F. Ult. Modif.', 'Estado'],
-        A.obligaciones.map((o) => [o.descripcion, o.periodicidad, fmt(o.alta), fmt(o.baja), fmt(o.modif), o.estado])) : sinDatos),
-      rep: () => {
-        const cols = ['NIF', 'Apellidos y Nombre', 'Situación', 'Tipo de representación', 'Fecha última modificación'];
-        const f = (l) => l.map((x) => [x.nif, x.nombre, x.situacion, x.tipo, fmt(x.fecha)]);
-        return `<h4 class="it-sec">Mis representantes</h4>${A.representantes ? tb(cols, f(A.representantes)) : sinDatos}
-          <h4 class="it-sec">Mis representados</h4>${A.representados ? tb(cols, f(A.representados)) : sinDatos}`;
+      act: () => (A.actividades ? tb(['Sección', 'Epígrafe', 'Denominación', 'Estado', 'F. Inicio', 'F. Baja'],
+        A.actividades.map((a) => [a.seccion, a.epigrafe, a.denominacion, a.estado, guiones(a.desde), ''])) : sinDatos),
+      sit: () => (A.situacionFull ? tablaSituacion(A.situacionFull) : s ? kv('Situación tributaria (resumen)', [['Régimen de IVA', s.regimen_iva],
+        ['% provisional de deducción', s.deduccion], ['Cierre del ejercicio (IS)', s.cierre], ['Pagos fraccionados IS (art. 40.3)', s.pagos_frac],
+        ['Retenciones (modelos)', s.retenciones]]) + '<p class="hint">Vuelve a soltar el PDF «Situación Tributaria» para ver todas las casillas.</p>' : sinDatos),
+      soc: () => {
+        if (!A.participes) return sinDatos;
+        const alta = A.participes.filter((p) => p.estado === 'Alta').reduce((a, p) => a + p.pct, 0);
+        return tb(['NIF', 'Apellidos y nombre / Razón social', 'Estado', '% Part.', '% Atrib.', 'Tipo'],
+          A.participes.map((p) => [p.nif, p.nombre, p.estado, coma(p.pct), coma(p.atrib), p.tipo]), [3, 4])
+          + `<p class="hint">Total % participación (altas): <b>${coma(alta)} %</b></p>`;
       },
+      obl: () => (A.obligaciones ? tb(['Descripción de la obligación', 'Periodicidad', 'F. Alta efec.', 'F. Baja efec.', 'F. Últ. modif.', 'Estado'],
+        A.obligaciones.map((o) => [o.descripcion, o.periodicidad, fmt(o.alta), fmt(o.baja), fmt(o.modif), o.estado])) : sinDatos),
+      rep: () => (A.representantes ? tb(['NIF', 'Apellidos y nombre', 'Situación', 'Tipo de representación', 'Fecha última modificación'],
+        A.representantes.map((x) => [x.nif, x.nombre, x.situacion, x.tipo, `${guiones(x.fecha)} ${x.hora ?? ''}`.trim()])) : sinDatos),
     }[subIT]();
-    return `${dropzone}<h4 class="it-tit">Información tributaria · ${esc(e.nombre)}</h4>
-      <nav class="subtabs">${subs.map(([k, l]) => `<button class="${k === subIT ? 'on' : ''}" data-act="m-sub" data-sub="${k}">${l}</button>`).join('')}</nav>${cuerpo}`;
+    return `${dropzone}<section class="block"><h4 class="it-tit">Información tributaria · ${esc(e.nombre)}</h4>
+      <nav class="subtabs">${subs.map(([k, l]) => `<button class="${k === subIT ? 'on' : ''}" data-act="m-sub" data-sub="${k}">${l}</button>`).join('')}</nav>${cuerpo}</section>`;
   }
 
   // ---------- Botones del lateral: un archivo por tipo, solo se ve el nombre ----------
@@ -592,7 +607,7 @@ export function crearModulos(c) {
         } else if (tipo === 'situacion') {
           const r = leerSituacion(t);
           Object.assign(F_.it, { regimen: r.regimen_iva, deduccion: r.deduccion, cierre: r.cierre, pagos_frac: r.pagos_frac, retenciones: r.retenciones });
-          F_.tocado = true; F_.aeat.situacion = r; informe.push(`✔ ${nom}: situación tributaria`);
+          F_.tocado = true; F_.aeat.situacion = r; F_.aeat.situacionFull = leerSituacionCompleta(t); informe.push(`✔ ${nom}: situación tributaria`);
         } else if (tipo === 'representantes') {
           const r = leerRepresentantes(t);
           F_.it.representante = r.map((x) => `${x.nombre} (${x.nif})`).join('; ');

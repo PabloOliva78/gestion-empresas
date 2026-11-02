@@ -128,9 +128,32 @@ export function leerSituacion(t) {
 }
 
 export function leerRepresentantes(t) {
-  const re = /^\d+\s+([A-Z0-9]{9})\s+(.+?)\s+(ALTA|BAJA)\s+([A-ZÁÉÍÓÚ]+)\s+(\d\d-\d\d-\d{4})/;
+  const re = /^\d+\s+([A-Z0-9]{9})\s+(.+?)\s+(ALTA|BAJA)\s+([A-ZÁÉÍÓÚ]+)\s+(\d\d-\d\d-\d{4})(?:\s+(\d\d\.\d\d))?/;
   return filas(t).map((l) => re.exec(l)).filter(Boolean)
-    .map((m) => ({ nif: m[1], nombre: m[2], situacion: m[3], tipo: m[4], fecha: iso(m[5]) }));
+    .map((m) => ({ nif: m[1], nombre: m[2], situacion: m[3], tipo: m[4], fecha: iso(m[5]), hora: m[6] ?? '' }));
+}
+
+// Situación tributaria con sus casillas: solo las marcadas, agrupadas por impuesto, como la consulta de la AEAT
+export function leerSituacionCompleta(t) {
+  const L = filas(t);
+  const SEC = ['Impuesto sobre el Valor Añadido', 'Impuesto sobre Sociedades', 'Retenciones e ingresos a cuenta'];
+  const cont = (i) => { // líneas de continuación del concepto (empiezan en minúscula o con «(»)
+    let extra = '';
+    for (let k = i + 1; L[k] && /^[a-zñáéíóú(¿]/.test(L[k]); k++) extra += ' ' + L[k];
+    return extra;
+  };
+  const out = [];
+  let sec = '', m;
+  L.forEach((l, i) => {
+    if (SEC.includes(l)) { sec = l; return; }
+    const add = (casilla, concepto, marca, fecha) => out.push({ seccion: sec, casilla, concepto: (concepto + cont(i)).replace(/\s+/g, ' ').trim(), marca, fecha });
+    if ((m = /^(\d{3})\s+X\s+(.+?)\s+\d{3}\s+(\d\d\/\d\d\/\d{4})$/.exec(l))) add(m[1], m[2], 'X', m[3]);
+    else if ((m = /^(Fecha de cierre .+?)\s+(\d{3})\s+(\d\d\/\d\d)\b/.exec(l))) out.push({ seccion: sec, casilla: m[2], concepto: `${m[1]} (dd/mm)`, marca: m[3], fecha: '' });
+    else if ((m = /^(.+?)\s+(\d{3})\s+X\s+\d{3}\s+(\d\d\/\d\d\/\d{4})$/.exec(l))) add(m[2], m[1], 'X', m[3]);
+    else if ((m = /^(\d{3})\s+(.+?)\s+X$/.exec(l))) add(m[1], m[2], 'X', '');
+    else if ((m = /^(Ingreso cuotas IVA a la importación.+?)\s+(INCLUIDO|EXCLUIDO)\s+(\d\d\/\d\d\/\d{4})$/.exec(l))) add('', m[1], m[2], m[3]);
+  });
+  return { estado: val(t, /Estado Sit\. Trib\.\s+(\S+)/), filas: out };
 }
 
 export function leerParticipes(t) {
