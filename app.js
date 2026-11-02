@@ -144,12 +144,12 @@ function vistaObligaciones() {
 }
 
 function vistaEmpresas() {
-  const filas = S.empresas.map((e) => `<tr><td>${esc(e.nombre)}</td><td>${esc(e.cif)}</td><td>${esc(e.notas)}</td>
+  const filas = S.empresas.map((e) => `<tr><td>${esc(e.nombre)}</td><td>${esc(e.cif)}</td><td>${esc(e.siglas)}</td><td>${esc(e.tipo)}</td><td>${esc(e.notas)}</td>
     <td class="acciones">${puedeEditar() ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}
     ${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}">Borrar</button>` : ''}</td></tr>`).join('');
   return `<div class="bar"><span class="space"></span>
     ${puedeEditar() ? '<button class="primary" data-act="new-emp">Nueva empresa</button>' : ''}</div>
-    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>CIF</th><th>Notas</th><th></th></tr></thead>
+    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>CIF</th><th>Siglas</th><th>Tipo</th><th>Notas</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
 }
 
@@ -206,9 +206,11 @@ function formEmpresa(e = {}) {
   openForm(e.id ? 'Editar empresa' : 'Nueva empresa', [
     { name: 'nombre', label: 'Nombre', value: e.nombre, required: true },
     { name: 'cif', label: 'CIF', value: e.cif },
+    { name: 'siglas', label: 'Siglas', value: e.siglas },
+    { name: 'tipo', label: 'Tipo de empresa', type: 'select', options: { '': '—', GE: 'GE', PYME: 'PYME' }, value: e.tipo ?? '' },
     { name: 'notas', label: 'Notas', type: 'textarea', value: e.notas },
   ], async (v) => {
-    const datos = { nombre: v.nombre, cif: nul(v.cif), notas: nul(v.notas) };
+    const datos = { nombre: v.nombre, cif: nul(v.cif), siglas: nul(v.siglas.toUpperCase()), tipo: nul(v.tipo), notas: nul(v.notas) };
     const q = e.id ? db.from('empresas').update(datos).eq('id', e.id) : db.from('empresas').insert(datos);
     const { error } = await q;
     if (error) return error.message;
