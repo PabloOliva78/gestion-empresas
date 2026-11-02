@@ -39,6 +39,15 @@ button.small { padding: .2rem .55rem; font-size: .85rem; }
 .wrap { overflow-x: auto; }
 .chip { display: inline-block; padding: .05rem .5rem; border-radius: 99px; border: 1px solid var(--line); font-size: .78rem; }
 .ok { color: var(--ok); }
+img.logo, span.logo { display: inline-block; height: 28px; width: 56px; object-fit: contain; vertical-align: middle; flex: none; background: #fff; border-radius: 4px; }
+.emp { display: flex; align-items: center; gap: .6rem; }
+.sel { position: relative; }
+.sel-btn { display: flex; align-items: center; gap: .5rem; min-width: 220px; justify-content: space-between; font-weight: 600; }
+.sel-menu { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 320px; max-height: 70vh; overflow: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: .25rem; }
+.sel-op { display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left; border: 0; background: none; padding: .4rem .5rem; border-radius: 6px; }
+.sel-op:hover, .sel-op.on { background: var(--bg); }
+.sel-op small { display: block; color: var(--muted); font-size: .78rem; }
 .tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .acciones { white-space: nowrap; display: flex; gap: .25rem; }
 .vacio { color: var(--muted); text-align: center; padding: 2rem; }

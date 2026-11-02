@@ -10,7 +10,8 @@ const ROLES = { admin: 'Administrador', gestor: 'Gestor', consulta: 'Consulta' }
 const S = {
   perfil: null, empresas: [], obligaciones: [], conciliaciones: [], usuarios: [], asign: [],
   tab: 'obligaciones', filtro: { empresa: '', area: '', estado: '' },
-  cfiltro: { empresa: '', ejercicio: new Date().getFullYear() },
+  cfiltro: { ejercicio: new Date().getFullYear() },
+  sel: '', menu: false, // empresa elegida en el desplegable de la cabecera ('' = todas)
 };
 let uidActual = null;
 
@@ -21,6 +22,20 @@ const esAdmin = () => S.perfil?.rol === 'admin';
 const hoy = () => new Date().toISOString().slice(0, 10);
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '');
 const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? '—';
+// Logos en logos/<CIF>.jpg; si no existe el archivo, la imagen se oculta.
+const logoHtml = (e) => (e?.cif
+  ? `<img class="logo" src="logos/${esc(e.cif)}.jpg?v=5" alt="" onerror="this.style.visibility='hidden'">` : '<span class="logo"></span>');
+
+function empresaSelector() {
+  const e = S.empresas.find((x) => x.id === S.sel);
+  const item = (x) => `<button class="sel-op${x?.id === S.sel || (!x && !S.sel) ? ' on' : ''}" data-sel="${x ? x.id : ''}">
+    ${x ? logoHtml(x) : '<span class="logo"></span>'}<span><b>${esc(x ? (x.siglas || x.nombre) : 'Todas las empresas')}</b>
+    ${x ? `<small>${esc(x.nombre)}</small>` : ''}</span></button>`;
+  return `<div class="sel"><button class="sel-btn" data-act="menu">${e ? logoHtml(e) : ''}
+    <span>${esc(e ? (e.siglas || e.nombre) : 'Todas las empresas')}</span> ▾</button>
+    ${S.menu ? `<div class="sel-menu">${item(null)}${S.empresas.map(item).join('')}</div>` : ''}</div>`;
+}
+
 const opts = (obj, sel) => Object.entries(obj)
   .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
 
@@ -34,6 +49,7 @@ async function cargar() {
   S.empresas = e.data ?? [];
   S.obligaciones = o.data ?? [];
   S.conciliaciones = c.data ?? [];
+  if (!S.empresas.some((x) => x.id === S.sel)) S.sel = '';
   if (esAdmin()) {
     const [u, a] = await Promise.all([
       db.from('profiles').select('*').order('created_at'),
@@ -107,6 +123,7 @@ function render() {
   if (esAdmin()) tabs.push(['usuarios', 'Usuarios']);
   if (!tabs.some(([k]) => k === S.tab)) S.tab = 'obligaciones';
   root.innerHTML = `<header class="top"><h1>Gestión fiscal, contable y laboral</h1>
+      ${empresaSelector()}
       <div>${esc(S.perfil.nombre || S.perfil.email)} · <span class="chip">${ROLES[S.perfil.rol]}</span>
       <button id="out" class="small">Salir</button></div></header>
     <nav>${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === S.tab ? 'on' : ''}">${l}</button>`).join('')}</nav>
@@ -114,7 +131,7 @@ function render() {
 }
 
 function vistaObligaciones() {
-  const f = S.filtro;
+  const f = { ...S.filtro, empresa: S.sel };
   const lista = S.obligaciones.filter((o) =>
     (!f.empresa || o.empresa_id === f.empresa) && (!f.area || o.area === f.area) && (!f.estado || o.estado === f.estado));
   const filas = lista.map((o) => {
@@ -131,8 +148,6 @@ function vistaObligaciones() {
            <button class="small danger" data-act="del-obl" data-id="${o.id}">Borrar</button>` : ''}</td></tr>`;
   }).join('');
   return `<div class="bar">
-    <label>Empresa<select data-filtro="empresa"><option value="">Todas</option>${S.empresas
-      .map((e) => `<option value="${e.id}"${e.id === f.empresa ? ' selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></label>
     <label>Área<select data-filtro="area"><option value="">Todas</option>${opts(AREAS, f.area)}</select></label>
     <label>Estado<select data-filtro="estado"><option value="">Todos</option>${opts(ESTADOS, f.estado)}</select></label>
     <span class="space"></span>
@@ -144,7 +159,7 @@ function vistaObligaciones() {
 }
 
 function vistaEmpresas() {
-  const filas = S.empresas.map((e) => `<tr><td>${esc(e.nombre)}</td><td>${esc(e.cif)}</td><td>${esc(e.siglas)}</td><td>${esc(e.tipo)}</td><td>${esc(e.notas)}</td>
+  const filas = S.empresas.map((e) => `<tr><td><div class="emp">${logoHtml(e)}${esc(e.nombre)}</div></td><td>${esc(e.cif)}</td><td>${esc(e.siglas)}</td><td>${esc(e.tipo)}</td><td>${esc(e.notas)}</td>
     <td class="acciones">${puedeEditar() ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}
     ${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}">Borrar</button>` : ''}</td></tr>`).join('');
   return `<div class="bar"><span class="space"></span>
@@ -220,7 +235,7 @@ function formEmpresa(e = {}) {
 
 function formObligacion(o = {}) {
   openForm(o.id ? 'Editar obligación' : 'Nueva obligación', [
-    { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: o.empresa_id || S.filtro.empresa },
+    { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: o.empresa_id || S.sel },
     { name: 'area', label: 'Área', type: 'select', options: AREAS, value: o.area },
     { name: 'nombre', label: 'Obligación (p. ej. Modelo 303, TC1, Cierre mensual)', value: o.nombre, required: true },
     { name: 'periodo', label: 'Periodo (p. ej. 2026-T1)', value: o.periodo },
@@ -300,8 +315,8 @@ const estadoConc = (c) => (Math.abs(c.diferencia) < 0.005 ? 'Cuadra' : c.justifi
 const pad = (n) => String(n).padStart(2, '0');
 
 function vistaConciliaciones() {
-  const f = S.cfiltro;
-  if (!f.empresa && S.empresas[0]) f.empresa = S.empresas[0].id;
+  const f = { ...S.cfiltro, empresa: S.sel };
+  if (!f.empresa) return '<p class="vacio">Elija una empresa en el desplegable de arriba para ver sus conciliaciones.</p>';
   const lista = S.conciliaciones
     .filter((c) => c.empresa_id === f.empresa && c.ejercicio === Number(f.ejercicio))
     .sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.periodo.localeCompare(b.periodo));
@@ -319,8 +334,6 @@ function vistaConciliaciones() {
            <button class="small danger" data-act="del-conc" data-id="${c.id}">Borrar</button>` : ''}</td></tr>`;
   }).join('');
   return `<div class="bar">
-    <label>Empresa<select data-cfiltro="empresa">${S.empresas
-      .map((e) => `<option value="${e.id}"${e.id === f.empresa ? ' selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></label>
     <label>Ejercicio<input type="number" data-cfiltro="ejercicio" value="${esc(f.ejercicio)}" min="2000" max="2100"></label>
     <span class="space"></span>
     ${lista.length ? `<span class="chip">${desc ? desc + ' con descuadre' : 'Todo cuadra'}</span>` : ''}
@@ -351,7 +364,7 @@ function formConciliacion(c = {}) {
     const concepto = v.concepto || p?.[1];
     if (!cuenta || !concepto) return 'Elija una plantilla o indique cuenta y concepto.';
     const datos = {
-      empresa_id: c.empresa_id || S.cfiltro.empresa, ejercicio: Number(S.cfiltro.ejercicio), periodo: v.periodo,
+      empresa_id: c.empresa_id || S.sel, ejercicio: Number(S.cfiltro.ejercicio), periodo: v.periodo,
       cuenta, concepto, fuente: nul(v.fuente || p?.[2] || ''),
       saldo_contable: parseFloat(v.saldo) || 0, importe_oficial: parseFloat(v.oficial) || 0,
       justificada: v.justificada === 'si', notas: nul(v.notas),
@@ -390,7 +403,7 @@ function calendarioEstandar(ej) {
 
 function formCalendario() {
   openForm('Calendario estándar de obligaciones', [
-    { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: S.filtro.empresa },
+    { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: S.sel },
     { name: 'ejercicio', label: 'Ejercicio (año natural)', type: 'number', value: new Date().getFullYear(), required: true },
   ], async (v) => {
     const ej = parseInt(v.ejercicio, 10);
@@ -408,8 +421,11 @@ function formCalendario() {
 
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
+  if (S.menu && !ev.target.closest('.sel')) { S.menu = false; render(); }
   const t = ev.target.closest('button');
   if (!t) return;
+  if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
+  if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
   if (t.id === 'out') return void db.auth.signOut();
   if (t.dataset.tab) { S.tab = t.dataset.tab; return render(); }
   const id = t.dataset.id;
