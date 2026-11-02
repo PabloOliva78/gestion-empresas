@@ -93,6 +93,26 @@ img.logo-ficha, span.logo-ficha { display: block; max-width: 220px; max-height: 
 .kv { border-collapse: collapse; min-width: min(100%, 640px); margin-bottom: .6rem; }
 .kv th { text-align: left; font-weight: 600; padding: .32rem 1.5rem .32rem .2rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .kv td { padding: .32rem .2rem; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+/* Aspecto de la consulta censal: franja punteada, título con barra azul, pestañas azul marino y tablas con rejilla */
+body { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
+.dropzone { border: 2px dashed #7f9bd8; background: #eef3ff; color: #1f3864; padding: .8rem 1rem; border-radius: 6px; cursor: pointer; margin-bottom: 1rem; font-size: .9rem; }
+.dropzone:hover, .dropzone.over { background: #dfe9ff; border-color: #2f5fd0; }
+.it-tit { border-left: 4px solid #2f6bff; padding-left: .7rem; font-size: 1rem; margin: 1.1rem 0 .9rem; }
+.subtabs { gap: .25rem; border-bottom: 2px solid var(--ink); }
+.subtabs button { background: #f1f3f9; color: var(--ink-2); border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; padding: .4rem .85rem; }
+.subtabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); border-bottom: 0; font-weight: 500; }
+.kv { border: 1px solid var(--line); }
+.kv th, .kv td { border: 1px solid var(--line); padding: .32rem .75rem; }
+.kv td { color: var(--ink-2); }
+.tabla-it { width: auto; min-width: 420px; }
+.tabla-it th { background: #e9eefb; color: var(--ink); text-transform: none; letter-spacing: 0; font-size: .85rem; font-weight: 500; border: 1px solid var(--line); }
+.tabla-it td { border: 1px solid var(--line); color: var(--ink-2); }
+@media (prefers-color-scheme: dark) {
+  .dropzone { background: #1b2742; color: #cfdcff; border-color: #4a68b0; }
+  .subtabs button { background: #1d222d; color: #cfdcff; }
+  .tabla-it th { background: #243253; color: #e8ebf2; }
+  .kv td, .tabla-it td { color: #cfdcff; }
+}
 /* Menú de grupos: pastillas con logo y panel azul de fichas */
 .tabs-wrap { position: relative; }
 .gpill { display: flex; align-items: center; gap: .5rem; text-align: left; background: var(--card); border: 1px solid var(--line);

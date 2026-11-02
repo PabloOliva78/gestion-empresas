@@ -298,7 +298,9 @@ export function crearModulos(c) {
   let subIT = 'censo';
   const kv = (tit, filas) => `<h4 class="it-sec">${esc(tit)}</h4><table class="kv"><tbody>${filas
     .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table>`;
-  const tb = (cols, filas) => `<div class="wrap"><table class="tabla"><thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead>
+  const dropzone = `<div class="dropzone" tabindex="0" role="button"><b>Suelta aquí los PDF de la sede de la AEAT</b> (uno o varios) o haz clic para elegirlos
+    <input type="file" id="aeatIn" accept=".pdf" multiple hidden></div>`;
+  const tb = (cols, filas) => `<div class="wrap"><table class="tabla tabla-it"><thead><tr>${cols.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead>
     <tbody>${filas.map((f) => `<tr>${f.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const coma = (n) => (n == null ? '' : String(n).replace('.', ','));
 
@@ -306,7 +308,7 @@ export function crearModulos(c) {
     const e = empresa();
     if (!e) return sinEmpresa;
     const A = e.datos?.aeat;
-    if (!A) return `<p class="hint">Aún no hay consulta de la AEAT cargada: usa «Cargar carpeta…» con los PDF.</p>${vistaFichaDatos('it')}`;
+    if (!A) return `${dropzone}<p class="hint">Aún no hay consulta de la AEAT cargada: suelta aquí sus PDF.</p>${vistaFichaDatos('it')}`;
     const subs = [['censo', 'Datos censales'], ['act', 'Relación de actividades'], ['sit', 'Situación tributaria'],
       ['soc', 'Socios / partícipes'], ['obl', 'Mis obligaciones'], ['rep', 'Mis representantes']];
     const dom = (d = {}, conRc) => [['Dirección', d.direccion], ['Tipo Vía', d.tipoVia], ['Nombre Vía', d.nombreVia], ['Tipo de Número', d.tipoNumero],
@@ -338,7 +340,7 @@ export function crearModulos(c) {
           <h4 class="it-sec">Mis representados</h4>${A.representados ? tb(cols, f(A.representados)) : sinDatos}`;
       },
     }[subIT]();
-    return `<h4 class="it-tit">Información tributaria · ${esc(e.nombre)}</h4>
+    return `${dropzone}<h4 class="it-tit">Información tributaria · ${esc(e.nombre)}</h4>
       <nav class="subtabs">${subs.map(([k, l]) => `<button class="${k === subIT ? 'on' : ''}" data-act="m-sub" data-sub="${k}">${l}</button>`).join('')}</nav>${cuerpo}`;
   }
 

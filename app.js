@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=14';
+import { crearModulos } from './modulos.js?v=15';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -590,6 +590,8 @@ document.addEventListener('keydown', (ev) => {
 root.addEventListener('click', (ev) => {
   const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap'));
   if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap')) S.grp = -1; render(); }
+  const dz = ev.target.closest('.dropzone');
+  if (dz && ev.target.id !== 'aeatIn') return void dz.querySelector('input').click();
   const t = ev.target.closest('button');
   if (!t) return;
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
@@ -621,6 +623,7 @@ root.addEventListener('click', (ev) => {
 root.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.id === 'aeatIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void M.subirArchivos(fs); }
   if (t.dataset.glob) {
     S[t.dataset.glob] = t.dataset.glob === 'ejercicio' ? (parseInt(t.value, 10) || S.ejercicio) : t.value;
@@ -630,6 +633,15 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.estado) return void run(db.from('obligaciones').update({ estado: t.value }).eq('id', t.dataset.estado));
   if (t.dataset.rol) return void run(db.from('profiles').update({ rol: t.value }).eq('id', t.dataset.rol));
   if (t.dataset.activo) return void run(db.from('profiles').update({ activo: t.checked }).eq('id', t.dataset.activo));
+});
+
+// Soltar PDF sobre la franja punteada de datos censales
+root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });
+root.addEventListener('dragleave', (ev) => ev.target.closest?.('.dropzone')?.classList.remove('over'));
+root.addEventListener('drop', (ev) => {
+  if (!ev.target.closest('.dropzone')) return;
+  ev.preventDefault();
+  M.cargarPdfs([...ev.dataTransfer.files]);
 });
 
 boot();
