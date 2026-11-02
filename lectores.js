@@ -442,6 +442,46 @@ export function calcular303(libroE, libroR, ej, periodo, man = {}, opc = {}) {
     c68: m('c68'), c69, c70: m('c70'), c71: r2n(c69 - m('c70')), suma: c46 };
 }
 
+// ---------- Modelo 349: operaciones intracomunitarias por clave de operación (importes sin IVA) ----------
+// [clave, concepto, libro, códigos de impuesto del ERP]
+export const CLAVES349 = [
+  ['E', 'Entregas intracomunitarias de bienes', 'E', ['R.UE']],
+  ['S', 'Prestaciones de servicios intracomunitarios', 'E', ['R.UE.S']],
+  ['A', 'Adquisiciones intracomunitarias de bienes', 'R', ['S.UE.NR', 'S.UE.RD', 'S.UE.SR']],
+  ['I', 'Adquisiciones de servicios intracomunitarios', 'R', ['S.UE.NR.SR', 'S.UE.RD.SR', 'S.UE.SR.SR']],
+];
+const PAISES_IVA = { AT: 'Austria', BE: 'Bélgica', BG: 'Bulgaria', CY: 'Chipre', CZ: 'Chequia', DE: 'Alemania', DK: 'Dinamarca', EE: 'Estonia', EL: 'Grecia', ES: 'España',
+  FI: 'Finlandia', FR: 'Francia', GB: 'Reino Unido', HR: 'Croacia', HU: 'Hungría', IE: 'Irlanda', IT: 'Italia', LT: 'Lituania', LU: 'Luxemburgo', LV: 'Letonia', MT: 'Malta',
+  NL: 'Países Bajos', PL: 'Polonia', PT: 'Portugal', RO: 'Rumanía', SE: 'Suecia', SI: 'Eslovenia', SK: 'Eslovaquia', XI: 'Irlanda del Norte' };
+export const paisNombre = (nif) => PAISES_IVA[String(nif ?? '').slice(0, 2).toUpperCase()] ?? String(nif ?? '').slice(0, 2).toUpperCase();
+
+export function calcular349(libroE, libroR, ej, periodo) {
+  const r = rangoPeriodo(ej, periodo);
+  const detalle = [];
+  for (const [clave, , lib, cods] of CLAVES349) {
+    for (const l of (lib === 'E' ? libroE : libroR)) {
+      if (l.fecha >= r.desde && l.fecha <= r.hasta && cods.includes(l.codigo)) {
+        detalle.push({ clave, nif: l.nif, nombre: l.nombre, pais: paisNombre(l.nif), factura: l.factura, fecha: l.fecha, base: l.base });
+      }
+    }
+  }
+  detalle.sort((a, b) => a.clave.localeCompare(b.clave) || a.nif.localeCompare(b.nif) || a.fecha.localeCompare(b.fecha));
+  const nOp = (x) => new Set(x.map((d) => d.nif).filter(Boolean)).size;
+  const porClave = CLAVES349.map(([clave, concepto]) => {
+    const x = detalle.filter((d) => d.clave === clave);
+    return { clave, concepto, n: nOp(x), importe: r2n(x.reduce((a, d) => a + d.base, 0)) };
+  });
+  const m = new Map();
+  for (const d of detalle) {
+    const k = `${d.nif}|${d.nombre}|${d.clave}`;
+    const a = m.get(k) ?? { nif: d.nif, nombre: d.nombre, clave: d.clave, base: 0 };
+    a.base += d.base;
+    m.set(k, a);
+  }
+  const porOperador = [...m.values()].map((x) => ({ ...x, base: r2n(x.base) })).sort((a, b) => a.nif.localeCompare(b.nif) || a.clave.localeCompare(b.clave));
+  return { periodo: r, detalle, porClave, porOperador, operadores: nOp(detalle), total: r2n(detalle.reduce((a, d) => a + d.base, 0)) };
+}
+
 // ---------- Retenciones (111 profesionales, 115, 123): libro soportado por código de impuesto, cuotas en positivo ----------
 export const RET = {
   111: [['I.PR.GN', 'Actividades profesionales - tipo general'], ['I.PR.PRA', 'Profesionales - inicio de actividad'], ['I.PR.SR', 'Actividades profesionales - tipo reducido']],

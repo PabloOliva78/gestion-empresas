@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet } from './lectores.js?v=26';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349 } from './lectores.js?v=28';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -284,7 +284,7 @@ export function crearModulos(c) {
     mod200: ['Modelo 200', 'IS desde balance y PyG', pendienteMod('Mod200')],
     mod202: ['Modelo 202', 'Pagos fraccionados IS', pendienteMod('Mod202')],
     mod303: ['Modelo 303', 'IVA', () => vistaMod303()],
-    mod349: ['Modelo 349', 'Intracomunitarias', pendienteMod('Mod349')],
+    mod349: ['Modelo 349', 'Intracomunitarias', () => vistaMod349()],
     mod583: ['Modelo 583', 'Producción energía eléctrica', pendienteMod('Mod583')],
     mod592: ['Modelo 592', 'Envases de plástico', pendienteMod('Mod592')],
     moda22: ['Modelo A22', 'Devoluciones plástico', pendienteMod('(sin hoja propia en el Excel)')],
@@ -695,6 +695,33 @@ export function crearModulos(c) {
     return `<h4 class="cu-t gr">Cuadre de los libros con el 303 (${mes})</h4>
       <p class="hint">Todo lo que traen los libros en el periodo, agrupado por código, y cómo se trata en el 303. La diferencia entre el total del libro y el 303 son las líneas que no llevan IVA a esta liquidación (retenciones, exentas, no sujetas) o que ya se calculan desde el otro libro.</p>
       ${tabla('IVA repercutido', lib, `En el 303: total devengado (27) = ${fnum(c.devengado)}`)}${tabla('IVA soportado', libroR, `En el 303: total a deducir (45) = ${fnum(c.deducir)}`)}`;
+  }
+
+  // ---- Modelo 349: declaración recapitulativa de operaciones intracomunitarias (importes sin IVA) ----
+  function vistaMod349() {
+    if (!S.sel) return sinEmpresa;
+    const E = grande('fact-E'), R = grande('fact-R');
+    if (!E || !R) return cargandoTxt;
+    if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
+    const c = calcular349(E, R, Number(S.ejercicio), S.periodo);
+    const f = (d) => d.split('-').reverse().join('/');
+    const fila = (t, k, n, i, cls = '') => `<tr class="${cls}"><td>${t}</td><td class="c">${k}</td><td class="num">${n}</td><td class="num">${fnum(i)}</td></tr>`;
+    return `<div class="bar"><span class="chip">${f(c.periodo.desde)} – ${f(c.periodo.hasta)}</span>
+        ${S.periodo ? '' : '<span class="hint">Sin periodo elegido se muestra el ejercicio completo.</span>'}</div>
+      <p class="hint">Declaración informativa, sin ingreso. Importes sin IVA.</p>
+      <div class="wrap"><table class="tabla-cu"><thead><tr><th>Concepto</th><th>Clave</th><th>Nº operadores</th><th>Importe (€)</th></tr></thead><tbody>
+        ${c.porClave.map((x) => fila(esc(x.concepto), x.clave, x.n, x.importe)).join('')}
+        ${fila('Rectificaciones de periodos anteriores (clave C)', 'C', 0, 0)}
+        ${fila('<b>TOTAL DECLARACIÓN</b>', '', c.operadores, c.total, 'tot')}</tbody></table></div>
+      <h4 class="cu-t">Resumen por operador y clave (lo que se declara en el 349)</h4>
+      ${c.porOperador.length ? `<div class="wrap"><table class="tabla-cu"><thead><tr><th>NIF-IVA</th><th>Nombre</th><th>Clave</th><th>Base imponible</th></tr></thead><tbody>
+        ${c.porOperador.map((x) => `<tr><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td><td class="c">${x.clave}</td><td class="num">${fnum(x.base)}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="hint">Sin operaciones intracomunitarias en el periodo.</p>'}
+      <h4 class="cu-t">Detalle de operaciones intracomunitarias del periodo</h4>
+      ${c.detalle.length ? `<div class="wrap"><table class="tabla-cu"><thead><tr><th>NIF-CIF</th><th>Nombre</th><th>País</th><th>Clave</th><th>Factura</th><th>Fecha</th><th>Base imponible</th></tr></thead><tbody>
+        ${c.detalle.map((d) => `<tr><td>${esc(d.nif)}</td><td>${esc(d.nombre)}</td><td>${esc(d.pais)}</td><td class="c">${d.clave}</td><td>${esc(d.factura)}</td><td>${f(d.fecha)}</td><td class="num">${fnum(d.base)}</td></tr>`).join('')}
+        <tr class="tot"><td colspan="6">TOTAL</td><td class="num">${fnum(c.total)}</td></tr></tbody></table></div>` : ''}
+      <p class="hint">Borrador de trabajo. Claves de operación: E entregas de bienes · S servicios prestados · A adquisiciones de bienes · I servicios adquiridos · C rectificaciones. Verificar antes de presentar.</p>`;
   }
 
   function vistaMod303() {
@@ -1349,7 +1376,15 @@ export function crearModulos(c) {
     const man = regMan()?.datos ?? {};
     return { t: fnum(ps.reduce((a, p) => a + calcular303(l.E, l.R, Number(S.ejercicio), p, man[p] ?? {}, { rectif: rectif303 }).c71, 0)), c: 'amar' };
   };
-  ['mod200', 'mod202', 'mod349', 'mod583', 'mod592', 'moda22', 'mod232', 'modintra'].forEach((id) => { badges[id] = () => ({ t: 'Sin datos' }); });
+  badges.mod349 = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const l = libros();
+    if (!l) return { t: '…' };
+    if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
+    const c = calcular349(l.E, l.R, Number(S.ejercicio), S.periodo);
+    return c.detalle.length ? { t: fnum(c.total), c: 'amar' } : { t: 'Sin importe' };
+  };
+  ['mod200', 'mod202', 'mod583', 'mod592', 'moda22', 'mod232', 'modintra'].forEach((id) => { badges[id] = () => ({ t: 'Sin datos' }); });
   badges.bss = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
