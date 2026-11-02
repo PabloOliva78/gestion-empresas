@@ -359,6 +359,47 @@ export function conciliarSII(sentido, libro, sii, ej, periodo, tol = 0.005) {
   return { resumen, cuadra, a, b, c, desde: r.desde, hasta: r.hasta };
 }
 
+// ---------- Modelo 303 (borrador): suma por código de impuesto del libro, como la hoja Mod303 del Excel ----------
+// grupo → [libro (E repercutido / R soportado), códigos de impuesto del ERP]
+export const G303 = {
+  rg21: ['E', ['R.NC.NR']], rg10: ['E', ['R.NC.RD']], rg5: ['E', ['R.NC.RDN']], rg4: ['E', ['R.NC.SR']], rg2: ['E', ['R.NC.SRN']],
+  intra: ['E', ['R.UE.NR', 'R.UE.RD', 'R.UE.SR', 'R.UE.NR.SR', 'R.UE.RD.SR', 'R.UE.SR.SR']],
+  isp: ['E', ['S.NC.ISP.A', 'R.ISP.NR', 'R.ISP.RD']],
+  re52: ['E', ['R.RC.NR']], re14: ['E', ['R.RC.RD']], re05: ['E', ['R.RC.SR']],
+  ded: ['R', ['S.NC.NR', 'S.NC.RD', 'S.NC.RDN', 'S.NC.SR', 'S.NC.SRN', 'S.NC.ISP', 'S.ISP.NR', 'S.ISP.RD']],
+  inv: ['R', ['IN.NR', 'IN.RD', 'IN.SR']], dua: ['R', ['DUA', 'DUARED', 'DUALCNR', 'DUALCRED']],
+  dedintra: ['R', ['S.UE.NR', 'S.UE.RD', 'S.UE.SR', 'S.UE.NR.SR', 'S.UE.RD.SR', 'S.UE.SR.SR']],
+  entregas: ['E', ['R.UE', 'R.UE.S']], export: ['E', ['R.EX']], nosuj: ['E', ['R.ISP', 'R.NAC.NS']],
+  exVentas: ['E', ['R.NC.EX']], exCompras: ['R', ['S.NC.EX']], exImp: ['R', ['S.EX.NR', 'S.EX.RD', 'S.EX.SR']], comprasNS: ['R', ['S.NAC.NS']],
+};
+
+// man = ajustes manuales (celdas amarillas): b14/c14, b25/c25, b35/c35, b39/c39, b41/c41, c42, c43, c44, pct65, c110, c70
+export function calcular303(libroE, libroR, ej, periodo, man = {}) {
+  const r = rangoPeriodo(ej, periodo);
+  const m = (k) => Number(man[k]) || 0;
+  const G = {};
+  const detalle = [];
+  for (const [g, [lib, cods]] of Object.entries(G303)) {
+    const lineas = (lib === 'E' ? libroE : libroR).filter((l) => l.fecha >= r.desde && l.fecha <= r.hasta && cods.includes(l.codigo));
+    G[g] = { base: lineas.reduce((a, l) => a + l.base, 0), cuota: lineas.reduce((a, l) => a + l.cuota, 0) }; // sin redondear, como Excel
+    for (const c of cods) {
+      const x = lineas.filter((l) => l.codigo === c);
+      if (x.length) detalle.push({ grupo: g, codigo: c, libro: lib, base: r2n(x.reduce((a, l) => a + l.base, 0)), cuota: r2n(x.reduce((a, l) => a + l.cuota, 0)), n: x.length });
+    }
+  }
+  const devengado = ['rg21', 'rg10', 'rg5', 'rg4', 'rg2', 'intra', 'isp', 're52', 're14', 're05'].reduce((a, g) => a + G[g].cuota, 0) + m('c14') + m('c25');
+  const deducir = G.ded.cuota + G.inv.cuota + G.dua.cuota + G.dedintra.cuota + m('c35') + m('c39') + m('c41') + m('c42') + m('c43') + m('c44');
+  const c46 = devengado - deducir;
+  const pct = man.pct65 === undefined || man.pct65 === '' ? 100 : Number(man.pct65);
+  const c66 = c46 * pct / 100;
+  const c77 = G.dua.cuota; // IVA a la importación liquidado por la Aduana (diferido)
+  const suma = r2n(c66 + c77);
+  const comp = Math.abs(m('c110'));
+  const aplic = suma > 0 && comp > 0 ? r2n(Math.min(suma, comp)) : 0;
+  const c69 = r2n(suma - aplic);
+  return { periodo: r, G, detalle, man, devengado, deducir, c46, pct, c66, c77, suma, c110: comp, c78: aplic, c87: r2n(comp - aplic), c69, c70: m('c70'), c71: r2n(c69 - m('c70')) };
+}
+
 const IMPUESTOS = [[/IBI/, 'IBI'], [/ACTIVIDADES|IAE/, 'IAE'], [/IVTM|VEH[IÍ]CULOS/, 'IVTM'], [/VADO/, 'Vados'], [/BASURA|RESIDUOS/, 'Basura']];
 const impuestoDe = (s) => (IMPUESTOS.find(([re]) => re.test(s)) || [0, 'Otros'])[1];
 

@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=17';
+import { crearModulos } from './modulos.js?v=18';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -129,7 +129,8 @@ const GRUPOS = [
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmcert', 'rmaud', 'rmig', 'rmmem', 'rmacu', 'rmnota', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
-  ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200'], 'aeat', 'Conciliación de cada modelo con la contabilidad.'],
+  ['4.- MODELOS TRIBUTARIOS', ['mod111', 'mod115', 'mod123', 'mod200', 'mod202', 'mod303', 'mod349', 'mod583', 'mod592', 'moda22', 'mod180', 'mod190', 'mod193', 'mod232', 'mod390', 'modintra'],
+    'aeat', 'Modelos calculados a partir de los libros de IVA, el mayor y las nóminas.'],
   ['5.- CUENTAS CONTABLES', ['bss', 'c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['8.- CONCILIACIONES FISCALES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],

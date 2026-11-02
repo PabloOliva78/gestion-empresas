@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo } from './lectores.js?v=17';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303 } from './lectores.js?v=18';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -278,6 +278,22 @@ export function crearModulos(c) {
     dua: ['DUA-H1', 'Importaciones · IVA diferido', L('dua')],
     otros: ['Otros documentos', 'PDF de la empresa sin clasificar', L('otros')],
     bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', () => vistaBss()],
+    mod111: ['Modelo 111', 'Retenciones trabajo y profesionales', pendienteMod('Mod111')],
+    mod115: ['Modelo 115', 'Retenciones alquileres', pendienteMod('Mod115')],
+    mod123: ['Modelo 123', 'Retenciones capital mobiliario', pendienteMod('Mod123')],
+    mod200: ['Modelo 200', 'Impuesto sobre Sociedades', pendienteMod('Mod200')],
+    mod202: ['Modelo 202', 'Pago fraccionado Sociedades', pendienteMod('Mod202')],
+    mod303: ['Modelo 303', 'IVA · autoliquidación (borrador)', () => vistaMod303()],
+    mod349: ['Modelo 349', 'Operaciones intracomunitarias', pendienteMod('Mod349')],
+    mod583: ['Modelo 583', 'Impuesto sobre el valor de la producción de energía eléctrica', pendienteMod('Mod583')],
+    mod592: ['Modelo 592', 'Envases de plástico no reutilizables', pendienteMod('Mod592')],
+    moda22: ['Modelo A22', 'Según tu aplicación', pendienteMod('(sin hoja propia en el Excel)')],
+    mod180: ['Modelo 180', 'Resumen anual alquileres', pendienteMod('Audi115 / Mod115')],
+    mod190: ['Modelo 190', 'Resumen anual retenciones', pendienteMod('Audi111 / Mod111')],
+    mod193: ['Modelo 193', 'Resumen anual capital mobiliario', pendienteMod('Audi123 / Mod123')],
+    mod232: ['Modelo 232', 'Operaciones vinculadas', pendienteMod('(sin hoja propia en el Excel)')],
+    mod390: ['Modelo 390', 'Resumen anual IVA', pendienteMod('Mod303 (suma de periodos)')],
+    modintra: ['Intrastat', 'Declaración de expediciones e introducciones', pendienteMod('Intrastat / Export Intrastat')],
     siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => vistaSII('E')],
     siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => vistaSII('R')],
     concsiie: ['Conciliación SII Emitidas', 'SII frente a contabilidad', () => vistaConcSII('E')],
@@ -471,6 +487,97 @@ export function crearModulos(c) {
         (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.baseS)}${celdasNum(Math.round((q.base - q.baseS) * 100) / 100)}${celdasNum(q.cuota)}${celdasNum(q.cuotaS)}${celdasNum(Math.round((q.cuota - q.cuotaS) * 100) / 100)}</tr>`)}
       <p class="hint">Reglas de tu Excel: en emitidas se dejan fuera las líneas de inversión del sujeto pasivo, intracomunitarias y RC, y los importes de las facturas «no sujetas / intereses / alquileres»; en recibidas, los códigos que no son IVA (I.PR.*, I.ALQ, I.INT, I.DV…).</p>`;
   }
+
+  // ---------- Bloque 4: modelos tributarios ----------
+  // Modelo 303: se calcula a partir de los libros de IVA (EMITIDAS / RECIBIDAS), con ajustes manuales por periodo
+  const claveMan = () => (S.periodo || 'anual');
+  const regMan = () => S.registros.find((r) => r.tipo === 'm303' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
+  const manuales = () => regMan()?.datos?.[claveMan()] ?? {};
+  const MAN303 = [['b14', 'Casilla 14 · Modificación bases'], ['c14', 'Casilla 15 · Modificación cuotas'], ['b25', 'Casilla 25 · Modificación bases (rec. equivalencia)'],
+    ['c25', 'Casilla 26 · Modificación cuotas (rec. equivalencia)'], ['b35', 'Casilla 34 · Importaciones bienes de inversión (base)'], ['c35', 'Casilla 35 · Importaciones bienes de inversión (cuota)'],
+    ['b39', 'Casilla 38 · Adq. intracomunitarias bienes de inversión (base)'], ['c39', 'Casilla 39 · Adq. intracomunitarias bienes de inversión (cuota)'],
+    ['b41', 'Casilla 40 · Rectificación de deducciones (base)'], ['c41', 'Casilla 41 · Rectificación de deducciones (cuota)'], ['c42', 'Casilla 42 · Compensaciones régimen agricultura'],
+    ['c43', 'Casilla 43 · Regularización de bienes de inversión'], ['c44', 'Casilla 44 · Regularización por prorrata definitiva'], ['pct65', 'Casilla 65 · % atribuible a la Administración del Estado (100)'],
+    ['c110', 'Casilla 110 · Cuotas a compensar de periodos anteriores (importe positivo)'], ['c70', 'Casilla 70 · Resultado de la anterior autoliquidación (complementaria)']];
+
+  function formMan303() {
+    const d = manuales();
+    openForm(`Ajustes manuales del 303 · ${S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'ejercicio'} ${S.ejercicio}`,
+      MAN303.map(([k, l]) => ({ name: k, label: l, type: 'number', step: '0.01', value: d[k] ?? (k === 'pct65' ? 100 : 0) })), async (v) => {
+        const reg = regMan();
+        const datos = { ...(reg?.datos ?? {}), [claveMan()]: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x === '' ? 0 : parseFloat(x)])) };
+        const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'm303', ejercicio: Number(S.ejercicio), datos });
+        if (err) return err;
+        await cargar(); render();
+      });
+  }
+
+  function vistaMod303() {
+    if (!S.sel) return sinEmpresa;
+    const E = grande('fact-E'), R = grande('fact-R');
+    if (!E || !R) return cargandoTxt;
+    if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
+    const c = calcular303(E, R, Number(S.ejercicio), S.periodo, manuales());
+    const m = (k) => Number(c.man[k]) || 0;
+    const fila = (t, cb, b, ct, tipo, cc, cuota, cls = '') => `<tr class="${cls}"><td>${t}</td><td class="cas">${cb}</td><td class="num">${b === null ? '' : eur(b)}</td>
+      <td class="cas">${ct}</td><td class="num">${tipo}</td><td class="cas">${cc}</td><td class="num">${cuota === null ? '' : eur(cuota)}</td></tr>`;
+    const g = (k) => c.G[k];
+    const sec = (t) => `<tr class="sec"><td colspan="7"><b>${t}</b></td></tr>`;
+    const de = (t, k, cb, ct, cc, tipo = '') => fila(t, cb, g(k).base, ct, tipo, cc, g(k).cuota);
+    const man = (t, cb, kb, cc, kc) => fila(t, cb, kb ? m(kb) : null, '', '', cc, m(kc));
+    const cuerpo = [
+      sec('IVA DEVENGADO · Régimen general'),
+      de('Régimen general 21%', 'rg21', 1, 2, 3, 21), de('Régimen general 10%', 'rg10', 4, 5, 6, 10), de('Régimen general 5%', 'rg5', 's/ej', '', 's/ej', 5),
+      de('Régimen general 4%', 'rg4', 7, 8, 9, 4), de('Régimen general 2%', 'rg2', 's/ej', '', 's/ej', 2),
+      de('Adquisiciones intracomunitarias de bienes y servicios', 'intra', 10, '', 11), de('Otras operaciones con inversión del sujeto pasivo', 'isp', 12, '', 13),
+      man('Modificación bases y cuotas', 14, 'b14', 15, 'c14'),
+      de('Recargo de equivalencia 5,2%', 're52', 16, 17, 18, 5.2), de('Recargo de equivalencia 1,4%', 're14', 19, 20, 21, 1.4), de('Recargo de equivalencia 0,5%', 're05', 22, 23, 24, 0.5),
+      man('Modificación bases y cuotas del recargo de equivalencia', 25, 'b25', 26, 'c25'),
+      fila('<b>TOTAL CUOTA DEVENGADA</b>', '', null, '', '', 27, c.devengado, 'tot'),
+      sec('IVA DEDUCIBLE'),
+      de('Operaciones interiores corrientes', 'ded', 28, '', 29), de('Operaciones interiores con bienes de inversión', 'inv', 30, '', 31),
+      de('Importaciones de bienes corrientes (DUA)', 'dua', 32, '', 33), man('Importaciones de bienes de inversión', 34, 'b35', 35, 'c35'),
+      de('Adquisiciones intracomunitarias de bienes y servicios corrientes', 'dedintra', 36, '', 37), man('Adquisiciones intracomunitarias de bienes de inversión', 38, 'b39', 39, 'c39'),
+      man('Rectificación de deducciones', 40, 'b41', 41, 'c41'), man('Compensaciones en régimen especial de agricultura, ganadería y pesca', '', null, 42, 'c42'),
+      man('Regularización de bienes de inversión', '', null, 43, 'c43'), man('Regularización por aplicación del porcentaje definitivo de prorrata', '', null, 44, 'c44'),
+      fila('<b>TOTAL A DEDUCIR</b>', '', null, '', '', 45, c.deducir, 'tot'),
+      fila('<b>RESULTADO RÉGIMEN GENERAL</b>', '', null, '', '', 46, c.c46, 'tot'),
+      sec('INFORMACIÓN ADICIONAL'),
+      de('Entregas intracomunitarias de bienes y servicios', 'entregas', 59, '', ''), de('Exportaciones y operaciones asimiladas', 'export', 60, '', ''),
+      de('Operaciones no sujetas o con inversión del sujeto pasivo con derecho a deducción', 'nosuj', 61, '', ''),
+      sec('OPERACIONES EXENTAS Y NO SUJETAS (control interno, sin casilla propia)'),
+      de('Ventas exentas art. 20 LIVA', 'exVentas', '-', '', ''), de('Compras exentas art. 20 LIVA', 'exCompras', '-', '', ''),
+      de('Importaciones exentas art. 21 LIVA', 'exImp', '-', '', ''), de('Compras no sujetas', 'comprasNS', '-', '', ''),
+      sec('RESULTADO DE LA LIQUIDACIÓN'),
+      fila('% atribuible a la Administración del Estado', '', null, '', '', 65, null).replace('<td class="num"></td></tr>', `<td class="num">${esc(c.pct)}</td></tr>`),
+      fila('Atribuible a la Administración del Estado', '', null, '', '', 66, c.c66),
+      fila('IVA diferido aduana pendiente de ingreso', '', null, '', '', 77, c.c77),
+      fila('<b>SUMA DE RESULTADOS</b>', '', null, '', '', '', c.suma, 'tot'),
+      fila('Cuotas a compensar de ejercicios anteriores', '', null, '', '', 110, c.c110),
+      fila('Cuotas a compensar aplicadas en el ejercicio', '', null, '', '', 78, c.c78),
+      fila('Cuotas a compensar pendientes para periodos posteriores', '', null, '', '', 87, c.c87),
+      fila('Resultado', '', null, '', '', 69, c.c69),
+      fila('A deducir: resultado de la anterior autoliquidación (complementaria)', '', null, '', '', 70, c.c70),
+      fila('<b>RESULTADO DE LA LIQUIDACIÓN</b>', '', null, '', '', 71, c.c71, 'tot final'),
+    ].join('');
+    const nomG = { rg21: 'Régimen general 21%', rg10: 'Régimen general 10%', rg5: 'Régimen general 5%', rg4: 'Régimen general 4%', rg2: 'Régimen general 2%',
+      intra: 'Adquisiciones intracomunitarias', isp: 'Operaciones con inversión del sujeto pasivo', re52: 'Recargo equivalencia 5,2%', re14: 'Recargo equivalencia 1,4%',
+      re05: 'Recargo equivalencia 0,5%', ded: 'IVA deducible · interiores corrientes', inv: 'IVA deducible · bienes de inversión', dua: 'IVA deducible · importaciones (DUA)',
+      dedintra: 'IVA deducible · adquisiciones intracomunitarias', entregas: 'Entregas intracomunitarias', export: 'Exportaciones', nosuj: 'No sujetas / ISP con derecho a deducción',
+      exVentas: 'Ventas exentas art. 20', exCompras: 'Compras exentas art. 20', exImp: 'Importaciones exentas art. 21', comprasNS: 'Compras no sujetas' };
+    const det = c.detalle.map((x) => `<tr><td>${esc(nomG[x.grupo])}</td><td>${esc(x.codigo)}</td><td>${x.libro === 'E' ? 'Repercutido' : 'Soportado'}</td>
+      <td class="num">${x.n}</td>${celdasNum(x.base)}${celdasNum(x.cuota)}</tr>`).join('');
+    return `<div class="bar"><span class="chip">${c.periodo.desde.split('-').reverse().join('/')} – ${c.periodo.hasta.split('-').reverse().join('/')}</span>
+      ${S.periodo ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral: el 303 es por periodo.</span>'}<span class="space"></span>
+      ${puede() ? '<button data-act="m-man303">Ajustes manuales</button>' : ''}</div>
+      <div class="wrap"><table class="tabla tabla-it m303"><thead><tr><th>Concepto</th><th>Cas.</th><th>Base imponible (€)</th><th>Cas.</th><th>Tipo %</th><th>Cas.</th><th>Cuota (€)</th></tr></thead>
+      <tbody>${cuerpo}</tbody></table></div>
+      <h4 class="it-sec">Detalle por código de impuesto del periodo</h4>
+      ${det ? `<div class="wrap"><table class="tabla"><thead><tr><th>Grupo</th><th>Código</th><th>Libro</th><th class="num">Líneas</th><th class="num">Base imponible</th><th class="num">Cuota IVA</th></tr></thead><tbody>${det}</tbody></table></div>` : '<p class="hint">Sin operaciones en el periodo.</p>'}
+      <p class="hint">Borrador de trabajo: los importes salen del libro de IVA por código de impuesto y fecha (igual que la hoja Mod303 de tu Excel). Las casillas de los tipos 5 % y 2 % varían según el ejercicio: verifica en el modelo oficial. Los ajustes manuales (modificaciones, regularizaciones y complementaria) se guardan por periodo.</p>`;
+  }
+
+  const pendienteMod = (hoja) => () => `<p class="vacio">Este modelo todavía no está migrado. En tu Excel se calcula en la hoja «${hoja}».</p>`;
 
   // ---------- Botones del lateral: un archivo por tipo, solo se ve el nombre ----------
   const ARCH = { emitidas: 'Emitidas', recibidas: 'Recibidas', extractos: 'Extractos', sys: 'SYS', sii: 'SII', nominas: 'Nóminas' };
@@ -782,6 +889,7 @@ export function crearModulos(c) {
       'm-doc-del': () => quitarDoc(d.m, d.slot),
       'm-sub': () => { subIT = d.sub; render(); },
       'm-bss': () => { bssFiltro = d.f; render(); },
+      'm-man303': () => formMan303(),
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
@@ -831,6 +939,14 @@ export function crearModulos(c) {
       return conciliarSII(s, lib, sii, Number(S.ejercicio), S.periodo).cuadra ? { t: 'Cuadra', c: 'verde' } : { t: 'Descuadre', c: 'rojo' };
     };
   });
+  badges.mod303 = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const E = grande('fact-E'), R = grande('fact-R');
+    if (!E || !R) return { t: '…' };
+    if (!E.length && !R.length) return { t: 'Sin datos' };
+    const c = calcular303(E, R, Number(S.ejercicio), S.periodo, manuales());
+    return { t: `${c.c71 < 0 ? 'A compensar' : 'A ingresar'} ${eur(Math.abs(c.c71))}`, c: c.c71 < 0 ? 'verde' : 'rojo' };
+  };
   badges.bss = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
