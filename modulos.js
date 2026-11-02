@@ -392,6 +392,8 @@ export function crearModulos(c) {
       .then(({ data }) => { GR.set(k, data?.datos?.filas ?? []); render(); });
     return null;
   }
+  // Solo mira lo que ya está cargado (las insignias del menú no deben disparar descargas pesadas)
+  const peek = (tipo) => GR.get(`${tipo}|${S.sel}`);
   async function guardarGrande(tipo, empresaId, nuevas, clave) {
     const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
     const mapa = new Map((data?.datos?.filas ?? []).map((x) => [clave(x), x]));
@@ -1026,7 +1028,7 @@ export function crearModulos(c) {
     };
   });
   // Insignias del bloque 6: usan los datos si ya se han leído; si no, los piden en segundo plano
-  const nFilas = (tipo) => { const d = S.sel ? grande(tipo) : null; return d ? d.length : null; };
+  const nFilas = (tipo) => { const d = S.sel ? peek(tipo) : null; return d ? d.length : null; };
   [['siie', 'sii-E', 'facturas'], ['siir', 'sii-R', 'facturas'], ['fe', 'fact-E', 'líneas'], ['fr', 'fact-R', 'líneas']].forEach(([id, tipo, u]) => {
     badges[id] = () => {
       if (!S.sel) return { t: 'Por empresa' };
@@ -1037,16 +1039,16 @@ export function crearModulos(c) {
   [['concsiie', 'E'], ['concsiir', 'R']].forEach(([id, s]) => {
     badges[id] = () => {
       if (!S.sel) return { t: 'Por empresa' };
-      const lib = grande('fact-' + s), sii = grande('sii-' + s);
-      if (!lib || !sii) return { t: '…' };
+      const lib = peek('fact-' + s), sii = peek('sii-' + s);
+      if (!lib || !sii) return { t: 'Abrir' };
       if (!lib.length || !sii.length) return { t: 'Sin datos' };
       return conciliarSII(s, lib, sii, Number(S.ejercicio), S.periodo).cuadra ? { t: 'Cuadra', c: 'verde' } : { t: 'Descuadre', c: 'rojo' };
     };
   });
   badges.mod303 = () => {
     if (!S.sel) return { t: 'Por empresa' };
-    const E = grande('fact-E'), R = grande('fact-R');
-    if (!E || !R) return { t: '…' };
+    const E = peek('fact-E'), R = peek('fact-R');
+    if (!E || !R) return { t: 'Abrir' };
     if (!E.length && !R.length) return { t: 'Sin datos' };
     const c = calcular303(E, R, Number(S.ejercicio), S.periodo, manuales());
     return { t: `${c.c71 < 0 ? 'A compensar' : 'A ingresar'} ${eur(Math.abs(c.c71))}`, c: c.c71 < 0 ? 'verde' : 'rojo' };

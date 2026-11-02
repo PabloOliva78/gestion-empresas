@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=20';
+import { crearModulos } from './modulos.js?v=21';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -12,7 +12,7 @@ const S = {
   perfil: null, empresas: [], obligaciones: [], conciliaciones: [], registros: [], usuarios: [], asign: [],
   tab: 'cmg', filtro: { area: '', estado: '' },
   ejercicio: new Date().getFullYear(), periodo: '', // periodo '' = todo el ejercicio
-  sel: '', menu: false, grp: -1, // empresa elegida ('' = todas) y grupo de pestañas abierto
+  sel: '', menu: false, grp: -1, cargando: false, // empresa elegida ('' = todas) y grupo de pestañas abierto
 };
 let uidActual = null;
 
@@ -46,7 +46,8 @@ async function cargar() {
     db.from('empresas').select('*').order('nombre'),
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
-    db.from('registros').select('*').not('tipo', 'like', 'fact-%').not('tipo', 'like', 'sii-%'), // las facturas se piden aparte, al abrir su pestaña
+    // las facturas (libros de IVA y SII) pesan mucho: se piden aparte, solo al abrir su pestaña
+    db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R)'),
   ]);
   S.empresas = e.data ?? [];
   S.obligaciones = o.data ?? [];
@@ -80,8 +81,9 @@ async function boot() {
   if (error || !perfil) return renderLogin('No se pudo cargar el perfil.');
   S.perfil = perfil;
   if (!perfil.activo) return renderPendiente();
+  S.cargando = true; render(); // se enseña ya la pantalla y los datos llegan después
   await cargar();
-  render();
+  S.cargando = false; render();
 }
 
 db.auth.onAuthStateChange((ev, session) => {
@@ -234,7 +236,7 @@ function render() {
     <main class="princ">
       <header class="doc"><div><h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
         <p class="doc-emp">${e ? `${esc(e.nombre)} · ${esc(e.cif)}` : 'Todas las empresas'}</p>
-        <p><b>Ejercicio ${esc(S.ejercicio)} · ${esc(per)}</b></p></div>
+        <p><b>Ejercicio ${esc(S.ejercicio)} · ${esc(per)}</b>${S.cargando ? ' · <span class="hint">Cargando datos…</span>' : ''}</p></div>
         <div class="doc-r"><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></header>
       ${tabsNav()}
       <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
