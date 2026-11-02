@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta } from './lectores.js?v=16';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo } from './lectores.js?v=17';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -278,6 +278,12 @@ export function crearModulos(c) {
     dua: ['DUA-H1', 'Importaciones · IVA diferido', L('dua')],
     otros: ['Otros documentos', 'PDF de la empresa sin clasificar', L('otros')],
     bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', () => vistaBss()],
+    siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => vistaSII('E')],
+    siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => vistaSII('R')],
+    concsiie: ['Conciliación SII Emitidas', 'SII frente a contabilidad', () => vistaConcSII('E')],
+    concsiir: ['Conciliación SII Recibidas', 'SII frente a contabilidad', () => vistaConcSII('R')],
+    fe: ['Facturas emitidas', 'Libro de IVA repercutido', () => vistaFacturas('E')],
+    fr: ['Facturas recibidas', 'Libro de IVA soportado', () => vistaFacturas('R')],
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', () => vistaFichaDatos('dreg')],
     trl: ['Titularidad Real', 'Titulares reales', L('trl')],
     acc: ['Organigrama', 'Socios y participadas', L('acc')],
@@ -357,6 +363,113 @@ export function crearModulos(c) {
     }[subIT]();
     return `${dropzone}<section class="block"><h4 class="it-tit">Información tributaria · ${esc(e.nombre)}</h4>
       <nav class="subtabs">${subs.map(([k, l]) => `<button class="${k === subIT ? 'on' : ''}" data-act="m-sub" data-sub="${k}">${l}</button>`).join('')}</nav>${cuerpo}</section>`;
+  }
+
+  // ---------- Bloque 6: SII y libros de IVA ----------
+  // Las facturas son muchas: se guardan en filas aparte (fact-E, fact-R, sii-E, sii-R) y se leen solo al abrir la pestaña.
+  const GR = new Map(); // `${tipo}|${empresa}` → filas (null mientras carga)
+  function grande(tipo) {
+    const k = `${tipo}|${S.sel}`;
+    if (GR.has(k)) return GR.get(k);
+    GR.set(k, null);
+    db.from('registros').select('datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle()
+      .then(({ data }) => { GR.set(k, data?.datos?.filas ?? []); render(); });
+    return null;
+  }
+  async function guardarGrande(tipo, empresaId, nuevas, clave) {
+    const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
+    const mapa = new Map((data?.datos?.filas ?? []).map((x) => [clave(x), x]));
+    nuevas.forEach((x) => mapa.set(clave(x), x));
+    const filas = [...mapa.values()];
+    const err = await guardarRegistro(data, { ...(data ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
+    if (err) throw new Error(err);
+    GR.set(`${tipo}|${empresaId}`, filas);
+    return filas.length;
+  }
+  // Libro de IVA del ERP o consulta del SII: se reconoce por las cabeceras
+  async function ingestaIVA(f, empresaId) {
+    const filas = await leerXlsx(await f.arrayBuffer(), window.JSZip);
+    const sii = leerSII(filas);
+    if (sii) {
+      const s = sii[0].sentido;
+      const n = await guardarGrande('sii-' + s, empresaId, sii, (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`);
+      return `✔ ${f.name}: SII ${s === 'E' ? 'emitidas' : 'recibidas'} · ${sii.length} facturas leídas (${n} en total)`;
+    }
+    const lib = leerLibroIVA(filas);
+    if (lib) {
+      const partes = [];
+      for (const s of ['E', 'R']) {
+        const x = lib.filter((l) => l.sentido === s);
+        if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
+      }
+      return `✔ ${f.name}: libro de IVA · ${partes.join(' y ')}`;
+    }
+    return `❔ ${f.name}: guardado, pero no reconozco el formato (libro de IVA del ERP o consulta del SII)`;
+  }
+
+  const SENT = { E: { lib: 'repercutido', cuota: 'Cuota repercutida', nif: 'NIF destinatario', boton: 'EMITIDAS' }, R: { lib: 'soportado', cuota: 'Cuota soportada', nif: 'NIF emisor', boton: 'RECIBIDAS' } };
+  const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
+  const suma = (a, k) => a.reduce((t, x) => t + x[k], 0);
+  const TOPE = 400;
+  const tope = (n) => (n > TOPE ? `<p class="hint">Se muestran las ${TOPE} primeras de ${n}; el resto está cargado y cuenta en los totales.</p>` : '');
+  const celdasNum = (v) => `<td class="num">${eur(v)}</td>`;
+
+  function vistaFacturas(s) {
+    if (!S.sel) return sinEmpresa;
+    const datos = grande('fact-' + s);
+    if (!datos) return cargandoTxt;
+    if (!datos.length) return `<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>`;
+    const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
+    const f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
+    return `<div class="bar"><span class="space"></span><span class="chip">${f.length} líneas · ${r.desde.split('-').reverse().join('/')} – ${r.hasta.split('-').reverse().join('/')}</span></div>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Asiento</th><th>Factura</th><th>Fecha factura</th><th>NIF-CIF</th><th>Nombre</th>
+      <th class="num">Base imponible</th><th class="num">%</th><th class="num">Cuota</th><th>Código impuesto</th></tr></thead><tbody>
+      ${f.slice(0, TOPE).map((l) => `<tr><td>${esc(l.asiento)}</td><td>${esc(l.factura)}</td><td>${fmt(s === 'E' ? l.ff : l.fecha)}</td><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td>
+        ${celdasNum(l.base)}<td class="num">${esc(l.pct)}</td>${celdasNum(l.cuota)}<td>${esc(l.codigo)}</td></tr>`).join('')}
+      <tr><td colspan="5"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td></td></tr></tbody></table></div>${tope(f.length)}`;
+  }
+
+  function vistaSII(s) {
+    if (!S.sel) return sinEmpresa;
+    const datos = grande('sii-' + s);
+    if (!datos) return cargandoTxt;
+    if (!datos.length) return '<p class="vacio">Sin datos: carga la consulta del SII con el botón SII.</p>';
+    const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
+    const f = datos.filter((x) => (s === 'E' ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === Number(S.ejercicio) && (!S.periodo || x.per === S.periodo)));
+    const cab = s === 'E' ? ['Factura', 'Fecha expedición', SENT.E.nif, 'Nombre', 'Tipo', 'Estado'] : ['Factura', 'Fecha expedición', SENT.R.nif, 'Nombre', 'Tipo', 'Estado'];
+    return `<div class="bar"><span class="space"></span><span class="chip">${f.length} facturas</span></div>
+      <div class="wrap"><table class="tabla"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join('')}<th class="num">Base total</th><th class="num">${SENT[s].cuota}</th>
+      ${s === 'R' ? '<th class="num">Cuota deducible</th>' : ''}</tr></thead><tbody>
+      ${f.slice(0, TOPE).map((x) => `<tr><td>${esc(x.factura)}</td><td>${fmt(x.fecha)}</td><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td><td>${esc(x.tipo)}</td><td>${esc(x.estado)}</td>
+        ${celdasNum(x.base)}${celdasNum(x.cuota)}${s === 'R' ? celdasNum(x.deducible) : ''}</tr>`).join('')}
+      <tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}${celdasNum(suma(f, 'cuota'))}${s === 'R' ? celdasNum(suma(f, 'deducible')) : ''}</tr></tbody></table></div>${tope(f.length)}`;
+  }
+
+  function vistaConcSII(s) {
+    if (!S.sel) return sinEmpresa;
+    const lib = grande('fact-' + s), sii = grande('sii-' + s);
+    if (!lib || !sii) return cargandoTxt;
+    if (!lib.length || !sii.length) {
+      return `<p class="vacio">Faltan datos para conciliar: ${[!lib.length && `el libro de IVA (${SENT[s].boton})`, !sii.length && 'la consulta del SII (SII)'].filter(Boolean).join(' y ')}.</p>`;
+    }
+    const r = conciliarSII(s, lib, sii, Number(S.ejercicio), S.periodo);
+    const x = r.resumen;
+    const fila = (t, c, d, esN) => `<tr><td><b>${t}</b></td><td class="num">${esN ? c : eur(c)}</td><td class="num">${esN ? d : eur(d)}</td>
+      <td class="num">${esN ? c - d : eur(Math.round((c - d) * 100) / 100)}</td></tr>`;
+    const detalle = (tit, cols, filas, pinta) => `<h4 class="it-sec">${tit} <span class="chip">${filas.length}</span></h4>${filas.length ? `<div class="wrap"><table class="tabla">
+      <thead><tr>${cols.map((c, i) => `<th${i > 2 ? ' class="num"' : ''}>${c}</th>`).join('')}</tr></thead><tbody>${filas.slice(0, 200).map(pinta).join('')}</tbody></table></div>
+      ${filas.length > 200 ? `<p class="hint">Se muestran 200 de ${filas.length}.</p>` : ''}` : '<p class="hint">Ninguna.</p>'}`;
+    const base = (q) => `<td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td>`;
+    return `<div class="conc-estado ${r.cuadra ? 'conc-ok' : 'conc-ko'}">${r.cuadra ? 'CUADRA' : 'DESCUADRE · revisar el detalle'}
+        <small>${r.desde.split('-').reverse().join('/')} – ${r.hasta.split('-').reverse().join('/')}</small></div>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Resumen del periodo</th><th class="num">Contabilizado</th><th class="num">Declarado SII</th><th class="num">Diferencia</th></tr></thead><tbody>
+      ${fila('Nº de facturas', x.nC, x.nS, true)}${fila('Base imponible', x.baseC, x.baseS)}${fila(SENT[s].cuota, x.cuotaC, x.cuotaS)}
+      ${s === 'R' ? `<tr><td><b>Cuota deducible declarada (solo SII)</b></td><td></td>${celdasNum(x.dedS)}<td></td></tr>` : ''}</tbody></table></div>
+      ${detalle('A. Contabilizadas que no están en el SII', ['Factura', 'NIF', 'Nombre', 'Base contab.', 'Cuota contab.'], r.a, (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.cuota)}</tr>`)}
+      ${detalle('B. Declaradas en el SII que no están contabilizadas', ['Factura', 'NIF', 'Nombre', 'Base SII', 'Cuota SII'], r.b, (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.cuota)}</tr>`)}
+      ${detalle('C. Facturas en ambos con importes distintos', ['Factura', 'NIF', 'Nombre', 'Base contab.', 'Base SII', 'Dif. base', 'Cuota contab.', 'Cuota SII', 'Dif. cuota'], r.c,
+        (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.baseS)}${celdasNum(Math.round((q.base - q.baseS) * 100) / 100)}${celdasNum(q.cuota)}${celdasNum(q.cuotaS)}${celdasNum(Math.round((q.cuota - q.cuotaS) * 100) / 100)}</tr>`)}
+      <p class="hint">Reglas de tu Excel: en emitidas se dejan fuera las líneas de inversión del sujeto pasivo, intracomunitarias y RC, y los importes de las facturas «no sujetas / intereses / alquileres»; en recibidas, los códigos que no son IVA (I.PR.*, I.ALQ, I.INT, I.DV…).</p>`;
   }
 
   // ---------- Botones del lateral: un archivo por tipo, solo se ve el nombre ----------
@@ -528,7 +641,7 @@ export function crearModulos(c) {
         const err = await guardarRegistro(null, { id, empresa_id: S.sel, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
           datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
         if (err) throw new Error(err);
-        informe.push(`✔ ${f.name}`);
+        informe.push(['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, S.sel) : `✔ ${f.name}`);
       } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
     }
     await cargar(); render();
@@ -698,6 +811,24 @@ export function crearModulos(c) {
       const D = regDoc(id)?.datos ?? {};
       const n = DOCS[id].filter(([k]) => D[k] && (D[k].fecha || D[k].ref || D[k].archivo)).length;
       return { t: `${n} de ${DOCS[id].length}`, c: n === DOCS[id].length ? 'verde' : '' };
+    };
+  });
+  // Insignias del bloque 6: usan los datos si ya se han leído; si no, los piden en segundo plano
+  const nFilas = (tipo) => { const d = S.sel ? grande(tipo) : null; return d ? d.length : null; };
+  [['siie', 'sii-E', 'facturas'], ['siir', 'sii-R', 'facturas'], ['fe', 'fact-E', 'líneas'], ['fr', 'fact-R', 'líneas']].forEach(([id, tipo, u]) => {
+    badges[id] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const n = nFilas(tipo);
+      return n === null ? { t: '…' } : n ? { t: `${n} ${u}`, c: 'verde' } : { t: 'Sin datos' };
+    };
+  });
+  [['concsiie', 'E'], ['concsiir', 'R']].forEach(([id, s]) => {
+    badges[id] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const lib = grande('fact-' + s), sii = grande('sii-' + s);
+      if (!lib || !sii) return { t: '…' };
+      if (!lib.length || !sii.length) return { t: 'Sin datos' };
+      return conciliarSII(s, lib, sii, Number(S.ejercicio), S.periodo).cuadra ? { t: 'Cuadra', c: 'verde' } : { t: 'Descuadre', c: 'rojo' };
     };
   });
   badges.bss = () => {

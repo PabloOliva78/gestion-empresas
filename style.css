@@ -104,6 +104,10 @@ body { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 .kv { border: 1px solid var(--line); }
 .kv th, .kv td { border: 1px solid var(--line); padding: .32rem .75rem; }
 .kv td { color: var(--ink-2); }
+.conc-estado { display: inline-flex; align-items: baseline; gap: .8rem; font-weight: 700; padding: .5rem 1rem; border-radius: 8px; margin-bottom: .9rem; }
+.conc-estado small { font-weight: 400; opacity: .8; }
+.conc-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); }
+.conc-ko { background: var(--warn-bg); color: var(--danger); border: 1px solid var(--danger); }
 .block { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.2rem 1.2rem; box-shadow: 0 1px 3px rgba(20,40,90,.08); }
 .tabla-it { border-collapse: collapse; width: auto; min-width: 0; border: 1px solid #3b5aa0; background: var(--card); }
 .tabla-it th { background: #e8edf8; color: var(--ink); text-transform: none; letter-spacing: 0; font-size: .88rem; font-weight: 500;

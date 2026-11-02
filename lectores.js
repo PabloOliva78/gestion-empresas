@@ -168,11 +168,21 @@ const colNum = (ref) => ref.replace(/\d+/g, '').split('').reduce((a, ch) => a * 
 const sinPrefijo = (s) => s.replace(/<(\/?)x:/g, '<$1');
 
 // buffer: ArrayBuffer del archivo · JSZip: la librería (en el navegador window.JSZip) · devuelve filas (arrays de celdas)
-export async function leerXlsx(buffer, JSZip) {
+export async function leerXlsx(buffer, JSZip, nombreHoja) {
   const zip = await JSZip.loadAsync(buffer);
   const ss = zip.file('xl/sharedStrings.xml') ? sinPrefijo(await zip.file('xl/sharedStrings.xml').async('string')) : '';
   const comp = [...ss.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => dec([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')));
-  const hoja = Object.keys(zip.files).find((n) => /^xl\/worksheets\/[^/]+\.xml$/.test(n));
+  let hoja = Object.keys(zip.files).find((n) => /^xl\/worksheets\/[^/]+\.xml$/.test(n));
+  if (nombreHoja) { // hoja concreta por su nombre (libros con varias hojas)
+    const wb = sinPrefijo(await zip.file('xl/workbook.xml').async('string'));
+    const rels = sinPrefijo(await zip.file('xl/_rels/workbook.xml.rels').async('string'));
+    const tag = [...wb.matchAll(/<sheet\b[^>]*>/g)].map((m) => m[0]).find((t) => dec(/name="([^"]*)"/.exec(t)?.[1] ?? '') === nombreHoja);
+    const rid = tag && /r:id="([^"]+)"/.exec(tag)?.[1];
+    const rel = rid && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((t) => t.includes(`Id="${rid}"`));
+    const tg = rel && /Target="([^"]+)"/.exec(rel)?.[1];
+    if (!tg) return [];
+    hoja = tg.replace(/^\/?(xl\/)?/, 'xl/');
+  }
   if (!hoja) return [];
   const xml = sinPrefijo(await zip.file(hoja).async('string'));
   const filas = [];
@@ -233,6 +243,120 @@ export function resumenSYS(cuentas) {
     const valor = { saldo: suma('previo'), acreedor: -suma('previo'), debe: suma('debe'), haber: suma('haber'), neto: suma('debe') - suma('haber') }[modo];
     return { clave, concepto, modo, n: cs.length, valor: r2(valor) };
   }).filter((r) => r.n);
+}
+
+// ---------- Libros de IVA del ERP y consultas del SII ----------
+const fechaIso = (v) => {
+  if (typeof v === 'number' && v > 20000 && v < 80000) return new Date(Math.round((v - 25569) * 86400) * 1000).toISOString().slice(0, 10);
+  const s = String(v ?? '');
+  const m = /^(\d{2})[/-](\d{2})[/-](\d{4})/.exec(s);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+};
+const numero = (v) => {
+  if (typeof v === 'number') return v;
+  const s = String(v ?? '').trim();
+  return (s.includes(',') ? parseFloat(s.replace(/\./g, '').replace(',', '.')) : parseFloat(s)) || 0;
+};
+const r2n = (x) => Math.round(x * 100) / 100 + 0;
+
+// «impuestos repercutidos / soportados registrados» (listado del ERP): asiento, factura, fecha, fecha factura, nif-cif, nombre, base, %, cuota, código, tipo libro
+export function leerLibroIVA(filas) {
+  const h = filas.findIndex((f) => f && f.some((c) => /^factura$/i.test(String(c ?? '').trim())) && f.some((c) => /codigo impuestos/i.test(String(c ?? ''))));
+  if (h < 0) return null;
+  const cab = Array.from(filas[h], (c) => String(c ?? '').trim().toLowerCase());
+  const ix = (re) => cab.findIndex((c) => re.test(c));
+  const c = { as: ix(/^asiento/), fa: ix(/^factura$/), fe: ix(/^fecha$/), ff: ix(/fecha factura/), nif: ix(/^nif/), nom: ix(/^nombre/),
+    ba: ix(/^base/), pc: ix(/^%/), cu: ix(/^cuota/), co: ix(/codigo impuestos/), tl: ix(/tipo libro/) };
+  const out = [];
+  for (const f of filas.slice(h + 1)) {
+    const factura = String(f?.[c.fa] ?? '').trim();
+    if (!factura) continue;
+    const codigo = String(f[c.co] ?? '').trim();
+    const fecha = fechaIso(f[c.fe]);
+    out.push({ asiento: String(f[c.as] ?? ''), factura, fecha, ff: fechaIso(f[c.ff]) || fecha, nif: String(f[c.nif] ?? '').trim().toUpperCase(),
+      nombre: String(f[c.nom] ?? '').trim(), base: numero(f[c.ba]), pct: numero(f[c.pc]), cuota: numero(f[c.cu]), codigo,
+      sentido: /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) ? 'E' : 'R' });
+  }
+  return out.length ? out : null;
+}
+
+// Consulta de facturas del SII (Sede AEAT). Total base/cuota = suma de los desgloses, igual que las columnas «TOTAL … DECLARADA (SII)» del Excel
+export function leerSII(filas) {
+  // la fila de cabecera tiene a la vez «Nº Serie + Nº Factura», «Ejercicio» y «Periodo» (el cuadro de filtros de arriba solo trae el primero)
+  const h = filas.findIndex((f) => f && f.some((c) => /^N[ºo°] Serie\s+\+\s+N[ºo°] Factura$/i.test(String(c ?? '').trim()))
+    && f.some((c) => /^Ejercicio$/i.test(String(c ?? '').trim())) && f.some((c) => /^Periodo$/i.test(String(c ?? '').trim())));
+  if (h < 0) return null;
+  const cab = Array.from(filas[h], (c) => String(c ?? '').trim());
+  const ix = (re) => cab.findIndex((c) => re.test(c));
+  const emitidas = cab.some((c) => /^NIF Destinatario/i.test(c));
+  const bases = [], cuotas = [];
+  cab.forEach((c, i) => {
+    if (emitidas) {
+      if (/^\((Factura|Servicio|Bienes)\) (Base Imponible \d+|Base Imponible Sujeta \/ Exenta|Importe no sujeto por reglas de localización)/.test(c)) bases.push(i);
+      else if (/^\((Factura|Servicio|Bienes)\) Cuota Repercutida \d+/.test(c)) cuotas.push(i);
+    } else if (/^\((NO ISP|ISP)\) Base Imponible ?\d+/.test(c)) bases.push(i);
+    else if (/^\((NO ISP|ISP)\) Cuota Soportada ?\d+/.test(c)) cuotas.push(i);
+  });
+  const c = { fa: ix(/^N[ºo°] Serie/i), ej: ix(/^Ejercicio$/i), pe: ix(/^Periodo$/i), fe: ix(/^Fecha Expedici[oó]n$/i),
+    nif: ix(emitidas ? /^NIF Destinatario/i : /^NIF Emisor/i), nom: ix(emitidas ? /^Nombre o Raz[oó]n Social Destinatario/i : /^Nombre o Raz[oó]n Social Factura Emisor/i),
+    tipo: ix(/^Tipo de factura/i), est: ix(/^Estado( del registro)?$/i), ded: ix(/^Cuota Deducible$/i) };
+  const suma = (f, cols) => cols.reduce((a, i) => a + (typeof f[i] === 'number' ? f[i] : 0), 0);
+  const out = [];
+  for (const f of filas.slice(h + 1)) {
+    const factura = String(f?.[c.fa] ?? '').trim();
+    if (!factura) continue;
+    out.push({ factura, ej: Number(f[c.ej]) || null, per: String(f[c.pe] ?? '').trim(), fecha: fechaIso(f[c.fe]), nif: String(f[c.nif] ?? '').trim().toUpperCase(),
+      nombre: String(f[c.nom] ?? '').trim(), tipo: String(f[c.tipo] ?? '').trim(), estado: String(f[c.est] ?? '').trim(),
+      base: r2n(suma(f, bases)), cuota: r2n(suma(f, cuotas)), deducible: c.ded >= 0 ? r2n(numero(f[c.ded])) : 0, sentido: emitidas ? 'E' : 'R' });
+  }
+  return out.length ? out : null;
+}
+
+// Periodo → fechas. '' = ejercicio completo, 1T..4T = trimestre, 01..12 = mes
+export function rangoPeriodo(ej, periodo) {
+  const ult = (m) => new Date(Date.UTC(ej, m, 0)).getUTCDate();
+  const p2 = (n) => String(n).padStart(2, '0');
+  let m1 = 1, m2 = 12;
+  if (/^[1-4]T$/.test(periodo)) { m1 = (+periodo[0] - 1) * 3 + 1; m2 = m1 + 2; } else if (/^\d\d$/.test(periodo)) { m1 = m2 = +periodo; }
+  return { desde: `${ej}-${p2(m1)}-01`, hasta: `${ej}-${p2(m2)}-${p2(ult(m2))}` };
+}
+
+// Reglas copiadas del Excel «INFORMACION CONCILIACION IMPUESTOS» (hojas ConcSII-E y ConsSII-R)
+export const EXC_EMITIDAS = ['R.ISP.NR', 'R.ISP.RD', 'S.NC.ISP.A', 'R.UE.NR', 'R.UE.RD', 'R.UE.NR.SR', 'R.UE.RD.SR', 'R.RC.NR', 'R.RC.RD', 'R.RC.SR']; // líneas fuera del SII
+export const FACT_FUERA_E = ['R.NAC.NS', 'R.I.INT', 'R.I.ALQ'];  // si una línea es de estos códigos, la factura entera queda fuera
+export const EXC_RECIBIDAS = ['I.PR.GN', 'I.PR.PRA', 'I.PR.SR', 'I.ALQ', 'I.INT', 'I.DV', 'I.DV.E']; // códigos «no IVA»
+
+export function conciliarSII(sentido, libro, sii, ej, periodo, tol = 0.005) {
+  const r = rangoPeriodo(ej, periodo);
+  const emit = sentido === 'E';
+  const clave = (x) => (emit ? x.factura : `${x.factura}|${x.nif}`);
+  // Facturas «fuera»: cuentan en el nº de facturas, pero sus importes no entran en las sumas (igual que el Excel)
+  const fuera = emit ? new Set(libro.filter((l) => FACT_FUERA_E.includes(l.codigo)).map((l) => l.factura)) : new Set();
+  const lc = libro.filter((l) => l.sentido === sentido && (emit
+    ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo)
+    : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
+  const ls = sii.filter((s) => s.sentido === sentido && (emit
+    ? s.fecha >= r.desde && s.fecha <= r.hasta
+    : s.ej === ej && (!periodo || s.per === periodo)));
+  const agrupa = (lista) => {
+    const m = new Map();
+    for (const x of lista) {
+      const k = clave(x), a = m.get(k) ?? { k, factura: x.factura, nif: x.nif, nombre: x.nombre, base: 0, cuota: 0, deducible: 0 };
+      if (!fuera.has(x.factura)) { a.base += x.base; a.cuota += x.cuota; a.deducible += x.deducible ?? 0; }
+      m.set(k, a);
+    }
+    return m;
+  };
+  const C = agrupa(lc), S = agrupa(ls);
+  const tot = (m, k) => r2n([...m.values()].reduce((a, x) => a + x[k], 0));
+  const resumen = { nC: C.size, nS: S.size, baseC: tot(C, 'base'), baseS: tot(S, 'base'), cuotaC: tot(C, 'cuota'), cuotaS: tot(S, 'cuota'), dedS: tot(S, 'deducible') };
+  const redondea = (x) => ({ ...x, base: r2n(x.base), cuota: r2n(x.cuota) });
+  const a = [...C.values()].filter((x) => !S.has(x.k)).map(redondea);
+  const b = [...S.values()].filter((x) => !C.has(x.k)).map(redondea);
+  const c = [...C.values()].filter((x) => S.has(x.k)).map((x) => ({ ...x, baseS: r2n(S.get(x.k).base), cuotaS: r2n(S.get(x.k).cuota) }))
+    .filter((x) => Math.abs(x.base - x.baseS) > tol || Math.abs(x.cuota - x.cuotaS) > tol).map((x) => ({ ...x, base: r2n(x.base), cuota: r2n(x.cuota) }));
+  const cuadra = r2n(resumen.nC - resumen.nS) === 0 && r2n(resumen.baseC - resumen.baseS) === 0 && r2n(resumen.cuotaC - resumen.cuotaS) === 0;
+  return { resumen, cuadra, a, b, c, desde: r.desde, hasta: r.hasta };
 }
 
 const IMPUESTOS = [[/IBI/, 'IBI'], [/ACTIVIDADES|IAE/, 'IAE'], [/IVTM|VEH[IÍ]CULOS/, 'IVTM'], [/VADO/, 'Vados'], [/BASURA|RESIDUOS/, 'Basura']];

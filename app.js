@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=16';
+import { crearModulos } from './modulos.js?v=17';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -46,7 +46,7 @@ async function cargar() {
     db.from('empresas').select('*').order('nombre'),
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
-    db.from('registros').select('*'),
+    db.from('registros').select('*').not('tipo', 'like', 'fact-%').not('tipo', 'like', 'sii-%'), // las facturas se piden aparte, al abrir su pestaña
   ]);
   S.empresas = e.data ?? [];
   S.obligaciones = o.data ?? [];
@@ -131,9 +131,10 @@ const GRUPOS = [
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
   ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200'], 'aeat', 'Conciliación de cada modelo con la contabilidad.'],
   ['5.- CUENTAS CONTABLES', ['bss', 'c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
-  ['6.- SEGURIDAD SOCIAL', ['ssconc', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
-  ['7.- CONCILIACIONES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
-  ['8.- ADMINISTRACIÓN', ['usuarios'], '', 'Usuarios, roles y acceso a las empresas.'],
+  ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
+  ['8.- CONCILIACIONES FISCALES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
+  ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['ssconc', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
+  ['11.- ADMINISTRACIÓN', ['usuarios'], '', 'Usuarios, roles y acceso a las empresas.'],
 ];
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
