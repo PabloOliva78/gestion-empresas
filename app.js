@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=25';
+import { crearModulos } from './modulos.js?v=27';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -132,7 +132,7 @@ const GRUPOS = [
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
   ['4.- MODELOS TRIBUTARIOS', ['mod111', 'mod115', 'mod123', 'mod200', 'mod202', 'mod303', 'mod349', 'mod583', 'mod592', 'moda22', 'mod180', 'mod190', 'mod193', 'mod232', 'mod390', 'modintra'],
-    'aeat', 'Modelos calculados a partir de los libros de IVA, el mayor y las nóminas.'],
+    'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
   ['5.- CUENTAS CONTABLES', ['bss', 'c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['8.- CONCILIACIONES FISCALES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
@@ -628,6 +628,9 @@ root.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
+  if (t.dataset.man) return void M.guardarMan303(t.dataset.man, t.value);
+  if (t.dataset.iban !== undefined) return void M.guardarIban(t.value);
+  if (t.dataset.rectif !== undefined) return void M.setRectif(t.checked);
   if (t.dataset.dzkind) { const fs = [...t.files]; t.value = ''; return void M.subirComo(t.dataset.dzkind, fs); }
   if (t.id === 'aeatIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void M.subirArchivos(fs); }

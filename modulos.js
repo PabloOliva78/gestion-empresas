@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet } from './lectores.js?v=23';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet } from './lectores.js?v=26';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -278,22 +278,22 @@ export function crearModulos(c) {
     dua: ['DUA-H1', 'Importaciones · IVA diferido', L('dua')],
     otros: ['Otros documentos', 'PDF de la empresa sin clasificar', L('otros')],
     bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', () => vistaBss()],
-    mod111: ['Modelo 111', 'Retenciones trabajo y profesionales', () => vistaRet('111')],
-    mod115: ['Modelo 115', 'Retenciones alquileres', () => vistaRet('115')],
-    mod123: ['Modelo 123', 'Retenciones capital mobiliario', () => vistaRet('123')],
-    mod200: ['Modelo 200', 'Impuesto sobre Sociedades', pendienteMod('Mod200')],
-    mod202: ['Modelo 202', 'Pago fraccionado Sociedades', pendienteMod('Mod202')],
-    mod303: ['Modelo 303', 'IVA · autoliquidación (borrador)', () => vistaMod303()],
-    mod349: ['Modelo 349', 'Operaciones intracomunitarias', pendienteMod('Mod349')],
-    mod583: ['Modelo 583', 'Impuesto sobre el valor de la producción de energía eléctrica', pendienteMod('Mod583')],
-    mod592: ['Modelo 592', 'Envases de plástico no reutilizables', pendienteMod('Mod592')],
-    moda22: ['Modelo A22', 'Según tu aplicación', pendienteMod('(sin hoja propia en el Excel)')],
-    mod180: ['Modelo 180', 'Resumen anual alquileres', () => vistaRetAnual('115')],
-    mod190: ['Modelo 190', 'Resumen anual retenciones', () => vistaRetAnual('111')],
-    mod193: ['Modelo 193', 'Resumen anual capital mobiliario', () => vistaRetAnual('123')],
+    mod111: ['Modelo 111', 'Retenciones IRPF', () => vistaRet('111')],
+    mod115: ['Modelo 115', 'Retenciones alquiler', () => vistaRet('115')],
+    mod123: ['Modelo 123', 'Capital mobiliario', () => vistaRet('123')],
+    mod200: ['Modelo 200', 'IS desde balance y PyG', pendienteMod('Mod200')],
+    mod202: ['Modelo 202', 'Pagos fraccionados IS', pendienteMod('Mod202')],
+    mod303: ['Modelo 303', 'IVA', () => vistaMod303()],
+    mod349: ['Modelo 349', 'Intracomunitarias', pendienteMod('Mod349')],
+    mod583: ['Modelo 583', 'Producción energía eléctrica', pendienteMod('Mod583')],
+    mod592: ['Modelo 592', 'Envases de plástico', pendienteMod('Mod592')],
+    moda22: ['Modelo A22', 'Devoluciones plástico', pendienteMod('(sin hoja propia en el Excel)')],
+    mod180: ['Modelo 180', 'Resumen anual 115', () => vistaRetAnual('115')],
+    mod190: ['Modelo 190', 'Resumen anual 111', () => vistaRetAnual('111')],
+    mod193: ['Modelo 193', 'Resumen anual 123', () => vistaRetAnual('123')],
     mod232: ['Modelo 232', 'Operaciones vinculadas', pendienteMod('(sin hoja propia en el Excel)')],
     mod390: ['Modelo 390', 'Resumen anual IVA', () => vistaMod390()],
-    modintra: ['Intrastat', 'Declaración de expediciones e introducciones', pendienteMod('Intrastat / Export Intrastat')],
+    modintra: ['Intrastat', 'Fichero AEAT', pendienteMod('Intrastat / Export Intrastat')],
     siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas emitidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('E')],
     siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas recibidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('R')],
     concsiie: ['Conciliación SII Emitidas', 'SII frente a contabilidad', () => vistaConcSII('E')],
@@ -393,7 +393,8 @@ export function crearModulos(c) {
     return null;
   }
   // Solo mira lo que ya está cargado (las insignias del menú no deben disparar descargas pesadas)
-  const peek = (tipo) => GR.get(`${tipo}|${S.sel}`);
+  // Las insignias del panel de modelos enseñan importes: al abrir el grupo se piden los libros de la empresa elegida (una vez, luego quedan en memoria)
+  const peek = (tipo) => (S.sel ? grande(tipo) : null);
   async function guardarGrande(tipo, empresaId, nuevas, clave) {
     const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
     const mapa = new Map((data?.datos?.filas ?? []).map((x) => [clave(x), x]));
@@ -628,7 +629,158 @@ export function crearModulos(c) {
       });
   }
 
+  // ---- Modelo 303 con el aspecto del borrador de la Sede (casillas en recuadros) ----
+  let rectif303 = true;
+  const fnum = (n) => (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' });
+  const parseES = (s) => { const t = String(s ?? '').trim(); return (t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t)) || 0; };
+  const BANCOS = { 2085: 'IBERCAJA', '0049': 'SANTANDER', '0182': 'BBVA', 2100: 'CAIXABANK', '0081': 'SABADELL', 3058: 'CAJAMAR', 2103: 'UNICAJA',
+    '0128': 'BANKINTER', 1465: 'ING', '0073': 'OPENBANK', '0075': 'POPULAR', '0019': 'DEUTSCHE BANK', 3187: 'CAJA RURAL DEL SUR' };
+  const bancoDe = (iban) => BANCOS[String(iban ?? '').replace(/\s/g, '').slice(4, 8)] ?? '';
+  // periodo anterior: mes → mes anterior, trimestre → trimestre anterior (el primero enlaza con el último del año anterior)
+  const prevPer = (ej, p) => {
+    if (/^\d\d$/.test(p)) return +p === 1 ? [ej - 1, '12'] : [ej, String(+p - 1).padStart(2, '0')];
+    if (/^[1-4]T$/.test(p)) return +p[0] === 1 ? [ej - 1, '4T'] : [ej, `${+p[0] - 1}T`];
+    return null;
+  };
+  const manualDe = (ej, p) => S.registros.find((r) => r.tipo === 'm303' && r.empresa_id === S.sel && r.ejercicio === ej)?.datos?.[p] ?? {};
+  // Cuota a compensar disponible al empezar el periodo: 87 del 303 anterior + su resultado si salió a compensar (71 < 0)
+  function disponible303(E, R, ej, p, prof = 0) {
+    const pp = prevPer(ej, p);
+    if (!pp || prof > 24) return 0;
+    const [e2, p2] = pp, r = rangoPeriodo(e2, p2);
+    if (![...E, ...R].some((l) => l.fecha >= r.desde && l.fecha <= r.hasta)) return 0;
+    const c = calcular303(E, R, e2, p2, manualDe(e2, p2), { rectif: rectif303, c110: disponible303(E, R, e2, p2, prof + 1) });
+    return Math.round((c.c87 + (c.c71 < 0 ? -c.c71 : 0)) * 100) / 100;
+  }
+  async function guardarMan303(k, v) {
+    const reg = regMan(), per = claveMan();
+    const datos = { ...(reg?.datos ?? {}), [per]: { ...((reg?.datos ?? {})[per] ?? {}), [k]: parseES(v) } };
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'm303', ejercicio: Number(S.ejercicio), datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  async function guardarIban(v) {
+    const e = empresa();
+    if (!e) return;
+    const { error } = await db.from('empresas').update({ datos: { ...(e.datos ?? {}), cuenta303: String(v).trim() } }).eq('id', e.id);
+    if (error) return void alert(error.message);
+    await cargar(); render();
+  }
+  const setRectif = (v) => { rectif303 = !!v; render(); };
+
+  // Cuadre de los libros con el 303: todo lo que traen los libros en el periodo, por código de impuesto, y cómo se trata en el 303
+  const TRAT = [[/^R\.EX/, 'Exportación'], [/^R\.ISP$/, 'Emitida con inversión del sujeto pasivo'],
+    [/^(R\.ISP\.|R\.UE\.(NR|RD|SR)(\.SR)?$)/, 'Autoliquidación (ya se calcula desde el soportado)'], [/^R\.NC\.EX$/, 'Operación exenta (art. 20)'],
+    [/^R\.NC\./, 'Operación interior sujeta'], [/^R\.RC\./, 'Recargo de equivalencia (línea aparte)'],
+    [/^R\.UE\.S$/, 'Servicio intracomunitario no sujeto por localización (casilla 59 y 349 clave S)'], [/^R\.UE$/, 'Entrega intracomunitaria de bienes'],
+    [/^R\.NAC\.NS/, 'Operación no sujeta por reglas de localización (casilla por verificar)'], [/^S\.NC\.ISP\.A/, 'Inversión del sujeto pasivo (autorrepercusión)'],
+    [/^I\./, 'Línea de retención IRPF (no es IVA)'], [/^IN\./, 'Interior, bienes de inversión'], [/^S\.EX\./, 'Importación: factura del proveedor sin IVA (el IVA va en el DUA)'],
+    [/^(S\.ISP\.|S\.NC\.ISP)/, 'Inversión del sujeto pasivo (recibida)'], [/^S\.(NAC\.NS|NC\.EX)/, 'Exenta o no sujeta (no va en el 303)'], [/^S\.NC\./, 'Interior, bienes y servicios corrientes'],
+    [/^S\.UE\.(NR|RD|SR)\.SR$/, 'Adquisición intracomunitaria de servicios'], [/^S\.UE\./, 'Adquisición intracomunitaria de bienes'], [/^DUA/, 'Importación (DUA)']];
+  const trat = (c) => (TRAT.find(([re]) => re.test(c)) || [0, ''])[1];
+
+  function cuadre303(lib, libroR, c, p, ej) {
+    const r = c.periodo;
+    const mes = /^\d\d$/.test(p) ? `${p} (${MESES[+p - 1]}) ${ej}` : p ? `${p} ${ej}` : `ejercicio ${ej}`;
+    const tabla = (titulo, datos, total) => {
+      const en = datos.filter((l) => l.fecha >= r.desde && l.fecha <= r.hasta);
+      const m = new Map();
+      for (const l of en) { const a = m.get(l.codigo) ?? { n: 0, b: 0, q: 0 }; a.n++; a.b += l.base; a.q += l.cuota; m.set(l.codigo, a); }
+      const filas = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      return `<h4 class="cu-t">${titulo} · ${en.length} líneas del periodo (${datos.length - en.length} de otros periodos no cuentan)</h4>
+        <div class="wrap"><table class="tabla-cu"><thead><tr><th>Código</th><th>Nº</th><th>Base</th><th>Cuota</th><th>Tratamiento en el 303</th></tr></thead><tbody>
+        ${filas.map(([cod, a]) => `<tr><td>${esc(cod)}</td><td class="num">${a.n}</td><td class="num">${fnum(a.b)}</td><td class="num">${fnum(a.q)}</td><td>${esc(trat(cod))}</td></tr>`).join('')}
+        <tr class="tot"><td>TOTAL DEL LIBRO</td><td class="num">${en.length}</td><td class="num">${fnum(suma(en, 'base'))}</td><td class="num">${fnum(suma(en, 'cuota'))}</td><td>${total}</td></tr></tbody></table></div>`;
+    };
+    return `<h4 class="cu-t gr">Cuadre de los libros con el 303 (${mes})</h4>
+      <p class="hint">Todo lo que traen los libros en el periodo, agrupado por código, y cómo se trata en el 303. La diferencia entre el total del libro y el 303 son las líneas que no llevan IVA a esta liquidación (retenciones, exentas, no sujetas) o que ya se calculan desde el otro libro.</p>
+      ${tabla('IVA repercutido', lib, `En el 303: total devengado (27) = ${fnum(c.devengado)}`)}${tabla('IVA soportado', libroR, `En el 303: total a deducir (45) = ${fnum(c.deducir)}`)}`;
+  }
+
   function vistaMod303() {
+    if (!S.sel) return sinEmpresa;
+    const E = grande('fact-E'), R = grande('fact-R');
+    if (!E || !R) return cargandoTxt;
+    if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
+    const e = empresa(), ej = Number(S.ejercicio), p = S.periodo;
+    const c = calcular303(E, R, ej, p, manuales(), { rectif: rectif303, c110: p ? disponible303(E, R, ej, p) : 0 });
+    const g = c.G, mm = c.man, ro = puede() ? '' : ' readonly';
+    const bx = (n, v, cls = '') => `<span class="bx ${cls}"><b>${n}</b><span class="v">${fnum(v)}</span></span>`;
+    const inp = (n, k, v) => `<span class="bx man"><b>${n}</b><input data-man="${k}" value="${fnum(v)}"${ro}></span>`;
+    const fila = (lb, a = '', t = '', q = '', cls = '') => `<div class="f-row ${cls}"><span class="lb">${lb}</span><span class="c1">${a}</span><span class="c2">${t}</span><span class="c3">${q}</span></div>`;
+    const cab = (a, t, q) => fila('', `<span class="hd">${a}</span>`, `<span class="hd">${t}</span>`, `<span class="hd">${q}</span>`, 'head');
+    const sec = (t) => `<div class="f303-sec">${t}</div>`;
+    const tipo = (x) => (x.base ? Math.round((x.cuota / x.base) * 10000) / 100 : 0);
+    const nota = (t) => ` <span class="nota">(${t})</span>`;
+    const pp = p ? prevPer(ej, p) : null;
+    const prevTxt = pp ? (/^\d\d$/.test(pp[1]) ? `${pp[1]}/${pp[0]}` : `${pp[1]} ${pp[0]}`) : '—';
+    const t = c.c71 > 0 ? 'ing' : c.c71 < 0 ? 'comp' : 'cero';
+    const chk = (l, on) => `<span class="chk"><span class="cb${on ? ' on' : ''}">✕</span>${l}</span>`;
+    const iban = e?.datos?.cuenta303 ?? '';
+    const det = c.detalle.map((x) => `<tr><td>${esc(x.codigo)}</td><td>${x.libro === 'E' ? 'Repercutido' : 'Soportado'}</td><td class="num">${x.n}</td>${celdasNum(x.base)}${celdasNum(x.cuota)}</tr>`).join('');
+    return `<div class="f303-top-bar"><label>Cuenta de cargo del 303 <input data-iban class="iban" value="${esc(iban)}"${ro}></label>
+        <label class="rect"><input type="checkbox" data-rectif${rectif303 ? ' checked' : ''}> Llevar facturas con base negativa a modificación (14-15 y 40-41)</label>
+        ${p ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral: el 303 es por periodo.</span>'}</div>
+      <div class="f303">
+        <div class="f303-top"><div class="ag"><b>Agencia Tributaria</b><small>Borrador para transcribir en la Sede Electrónica</small></div>
+          <div class="tt">Impuesto sobre el Valor Añadido. Autoliquidación</div><div class="mod"><small>Modelo</small><b>303</b></div></div>
+        ${sec('Identificación')}<div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e?.cif)}</span></span>
+          <span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(e?.nombre)}</span></span></div>
+        ${sec('Devengo')}<div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${ej}</span></span><span class="idbox"><b>Período</b><span>${esc(p || '—')}</span></span></div>
+        ${sec('Liquidación (1) · IVA devengado')}${cab('Base imponible', 'Tipo %', 'Cuota')}
+        ${fila('<b>Régimen general</b>')}
+        ${fila('', bx('01', g.rg4.base), bx('02', 4, 't'), bx('03', g.rg4.cuota))}
+        ${fila('', bx('04', g.rg10.base), bx('05', 10, 't'), bx('06', g.rg10.cuota))}
+        ${fila('', bx('07', g.rg21.base), bx('08', 21, 't'), bx('09', g.rg21.cuota))}
+        ${fila('Adquisiciones intracomunitarias de bienes y servicios', bx('10', g.intra.base), '', bx('11', g.intra.cuota))}
+        ${fila('Otras operaciones con inversión del sujeto pasivo (excepto adq. intracom.)', bx('12', g.isp.base), '', bx('13', g.isp.cuota))}
+        ${fila('Modificación bases y cuotas', bx('14', c.b14), '', bx('15', c.c14))}
+        ${fila('<b>Recargo de equivalencia</b>')}
+        ${fila('', bx('16', g.re14.base), bx('17', tipo(g.re14), 't'), bx('18', g.re14.cuota))}
+        ${fila('', bx('19', g.re52.base), bx('20', tipo(g.re52), 't'), bx('21', g.re52.cuota))}
+        ${fila('', bx('22', g.re05.base), bx('23', tipo(g.re05), 't'), bx('24', g.re05.cuota))}
+        ${fila('Modificaciones bases y cuotas del recargo de equivalencia', bx('25', c.b25), '', bx('26', c.c25))}
+        ${fila('<b>Total cuota devengada ( [03] + [06] + [09] + [11] + [13] + [15] + [18] + [21] + [24] + [26] )</b>', '', '', bx('27', c.devengado, 'tot'))}
+        ${sec('Liquidación (1) · IVA deducible')}${cab('Base', '', 'Cuota')}
+        ${fila('Por cuotas soportadas en operaciones interiores corrientes', bx('28', g.ded.base), '', bx('29', g.ded.cuota))}
+        ${fila('Por cuotas soportadas en operaciones interiores con bienes de inversión', bx('30', g.inv.base), '', bx('31', g.inv.cuota))}
+        ${fila('Por cuotas soportadas en las importaciones de bienes corrientes', bx('32', g.dua.base), '', bx('33', g.dua.cuota))}
+        ${fila('Por cuotas soportadas en las importaciones de bienes de inversión', bx('34', mm.b35), '', bx('35', mm.c35))}
+        ${fila('En adquisiciones intracomunitarias de bienes y servicios corrientes', bx('36', g.dedintra.base), '', bx('37', g.dedintra.cuota))}
+        ${fila('En adquisiciones intracomunitarias de bienes de inversión', bx('38', mm.b39), '', bx('39', mm.c39))}
+        ${fila('Rectificación de deducciones', bx('40', c.b40), '', bx('41', c.c41))}
+        ${fila('Compensaciones Régimen especial A.G. y P.', '', '', inp('42', 'c42', mm.c42))}
+        ${fila('Regularización bienes de inversión', '', '', inp('43', 'c43', mm.c43))}
+        ${fila('Regularización por aplicación del porcentaje definitivo de prorrata', '', '', inp('44', 'c44', mm.c44))}
+        ${fila('<b>Total a deducir ( [29] + [31] + [33] + [35] + [37] + [39] + [41] + [42] + [43] + [44] )</b>', '', '', bx('45', c.deducir, 'tot'))}
+        ${fila('<b>Resultado régimen general ( [27] − [45] )</b>', '', '', bx('46', c.c46, 'tot'))}
+        ${sec('Información adicional')}
+        ${fila('Entregas intracomunitarias de bienes y servicios', '', '', bx('59', g.entregas.base))}
+        ${fila('Exportaciones y operaciones asimiladas', '', '', bx('60', g.export.base))}
+        ${fila(`Operaciones sujetas con inversión del sujeto pasivo que originan el derecho a deducción${nota('casilla 122 según mi conocimiento: compruébala')}`, '', '', bx('122', g.nosuj.base, 'warn'))}
+        ${fila(`Operaciones no sujetas por reglas de localización${nota('casilla por verificar')}`, '', '', bx('¿?', g.locNS.base, 'warn'))}
+        ${fila(`Operaciones exentas o no sujetas interiores${nota('casilla por verificar')}`, '', '', bx('¿?', g.exVentas.base + g.exCompras.base, 'warn'))}
+        ${sec('Resultado')}
+        ${fila('Suma de resultados ( [46] )', '', '', bx('64', c.c46))}
+        ${fila('% Atribuible a la Administración del Estado', '', '', inp('65', 'pct65', c.pct))}
+        ${fila('Atribuible a la Administración del Estado', '', '', bx('66', c.c66))}
+        ${fila(`IVA a la importación liquidado por la Aduana pendiente de ingreso${nota('suma de DUA, DUARED, DUALCNR y DUALCRED')}`, '', '', bx('77', c.c77))}
+        ${fila(`Cuotas a compensar pendientes de periodos previos${nota(`303 de ${prevTxt}: 87 + resultado a compensar (71), pestaña Presentados`)}`, '', '', bx('110', c.c110))}
+        ${fila('Cuotas a compensar de periodos previos aplicadas en este periodo', '', '', inp('78', 'c78', c.c78))}
+        ${fila('Cuotas a compensar de periodos previos pendientes para periodos posteriores ( [110] − [78] )', '', '', bx('87', c.c87))}
+        ${fila('Exclusivamente para sujetos pasivos que tributan conjuntamente a la Administración del Estado y a las Haciendas Forales. Resultado de la regularización anual', '', '', inp('68', 'c68', c.c68))}
+        ${fila('<b>Resultado ( [66] + [77] − [78] + [68] )</b>', '', '', bx('69', c.c69, 'tot'))}
+        ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', inp('70', 'c70', c.c70))}
+        ${fila('<b>Resultado de la liquidación ( [69] − [70] )</b>', '', '', bx('71', c.c71, 'final'))}
+        ${sec('Tipo de declaración')}<div class="f-chk">${chk('A ingresar', t === 'ing')}${chk('A compensar', t === 'comp')}${chk('A devolver o compensar (a elegir en el último periodo)', false)}${chk('Sin actividad o resultado cero', t === 'cero')}</div>
+        ${sec('Domiciliación del pago')}
+        ${fila(`Cuenta de cargo (IBAN) del 303 · importe a ingresar ${fnum(Math.max(c.c71, 0))} · <b>${esc(bancoDe(iban))}</b>`, '', '', `<input class="iban" data-iban value="${esc(iban)}"${ro}>`)}
+      </div>
+      ${p ? cuadre303(E, R, c, p, ej) : ''}
+      <p class="hint">Borrador de trabajo: los importes salen del libro de IVA por código de impuesto y fecha. Las casillas en amarillo se rellenan a mano y se guardan por periodo. Las casillas marcadas «por verificar» hay que comprobarlas en el modelo oficial.</p>`;
+  }
+
+  function vistaMod303Viejo() {
     if (!S.sel) return sinEmpresa;
     const E = grande('fact-E'), R = grande('fact-R');
     if (!E || !R) return cargandoTxt;
@@ -1153,19 +1305,51 @@ export function crearModulos(c) {
     badges[id] = () => {
       if (!S.sel) return { t: 'Por empresa' };
       const lib = peek('fact-' + s), sii = peek('sii-' + s);
-      if (!lib || !sii) return { t: 'Abrir' };
+      if (!lib || !sii) return { t: '…' };
       if (!lib.length || !sii.length) return { t: 'Sin datos' };
       return conciliarSII(s, lib, sii, Number(S.ejercicio), S.periodo).cuadra ? { t: 'Cuadra', c: 'verde' } : { t: 'Descuadre', c: 'rojo' };
     };
   });
+  // Insignias del panel «Modelos tributarios»: rojo = a ingresar, verde = a compensar/devolver, amarillo = resumen anual, gris = sin importe o sin datos
+  const imp = (v) => (Math.abs(v) < 0.005 ? { t: 'Sin importe' } : v > 0 ? { t: `A ingresar ${fnum(v)}`, c: 'rojo' } : { t: `A compensar ${fnum(-v)}`, c: 'verde' });
+  const libros = () => { const E = peek('fact-E'), R = peek('fact-R'); return E && R ? { E, R } : null; };
   badges.mod303 = () => {
     if (!S.sel) return { t: 'Por empresa' };
-    const E = peek('fact-E'), R = peek('fact-R');
-    if (!E || !R) return { t: 'Abrir' };
-    if (!E.length && !R.length) return { t: 'Sin datos' };
-    const c = calcular303(E, R, Number(S.ejercicio), S.periodo, manuales());
-    return { t: `${c.c71 < 0 ? 'A compensar' : 'A ingresar'} ${eur(Math.abs(c.c71))}`, c: c.c71 < 0 ? 'verde' : 'rojo' };
+    if (!S.periodo) return { t: 'Elige periodo' };
+    const l = libros();
+    if (!l) return { t: '…' };
+    if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
+    return imp(calcular303(l.E, l.R, Number(S.ejercicio), S.periodo, manuales(), { rectif: rectif303 }).c71);
   };
+  ['111', '115', '123'].forEach((m) => {
+    badges['mod' + m] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      if (!S.periodo) return { t: 'Elige periodo' };
+      const l = libros();
+      if (!l) return { t: '…' };
+      if (!l.R.length) return { t: 'Sin datos' };
+      const man = manPer('m' + m);
+      return imp(calcularRet(m, l.R, Number(S.ejercicio), S.periodo).ret + (m === '111' ? Number(man.t3) || 0 : 0) - (Number(man.c29 ?? man.c4) || 0));
+    };
+  });
+  [['mod180', '115'], ['mod190', '111'], ['mod193', '123']].forEach(([id, m]) => {
+    badges[id] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const l = libros();
+      if (!l) return { t: '…' };
+      return l.R.length ? { t: fnum(calcularRet(m, l.R, Number(S.ejercicio), '').ret), c: 'amar' } : { t: 'Sin datos' };
+    };
+  });
+  badges.mod390 = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const l = libros();
+    if (!l) return { t: '…' };
+    if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
+    const ps = empresa()?.tipo === 'GE' ? Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')) : ['1T', '2T', '3T', '4T'];
+    const man = regMan()?.datos ?? {};
+    return { t: fnum(ps.reduce((a, p) => a + calcular303(l.E, l.R, Number(S.ejercicio), p, man[p] ?? {}, { rectif: rectif303 }).c71, 0)), c: 'amar' };
+  };
+  ['mod200', 'mod202', 'mod349', 'mod583', 'mod592', 'moda22', 'mod232', 'modintra'].forEach((id) => { badges[id] = () => ({ t: 'Sin datos' }); });
   badges.bss = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
@@ -1182,5 +1366,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc };
+  return { tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }

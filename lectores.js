@@ -374,12 +374,12 @@ export const G303 = {
   ded: ['R', ['S.NC.NR', 'S.NC.RD', 'S.NC.RDN', 'S.NC.SR', 'S.NC.SRN', 'S.NC.ISP', 'S.ISP.NR', 'S.ISP.RD']],
   inv: ['R', ['IN.NR', 'IN.RD', 'IN.SR']], dua: ['R', ['DUA', 'DUARED', 'DUALCNR', 'DUALCRED']],
   dedintra: ['R', ['S.UE.NR', 'S.UE.RD', 'S.UE.SR', 'S.UE.NR.SR', 'S.UE.RD.SR', 'S.UE.SR.SR']],
-  entregas: ['E', ['R.UE', 'R.UE.S']], export: ['E', ['R.EX']], nosuj: ['E', ['R.ISP', 'R.NAC.NS']],
+  entregas: ['E', ['R.UE', 'R.UE.S']], export: ['E', ['R.EX']], nosuj: ['E', ['R.ISP']], locNS: ['E', ['R.NAC.NS']],
   exVentas: ['E', ['R.NC.EX']], exCompras: ['R', ['S.NC.EX']], exImp: ['R', ['S.EX.NR', 'S.EX.RD', 'S.EX.SR']], comprasNS: ['R', ['S.NAC.NS']],
 };
 
 // man = ajustes manuales (celdas amarillas): b14/c14, b25/c25, b35/c35, b39/c39, b41/c41, c42, c43, c44, pct65, c110, c70
-export function calcular303(libroE, libroR, ej, periodo, man = {}) {
+export function calcular303Viejo(libroE, libroR, ej, periodo, man = {}) {
   const r = rangoPeriodo(ej, periodo);
   const m = (k) => Number(man[k]) || 0;
   const G = {};
@@ -403,6 +403,43 @@ export function calcular303(libroE, libroR, ej, periodo, man = {}) {
   const aplic = suma > 0 && comp > 0 ? r2n(Math.min(suma, comp)) : 0;
   const c69 = r2n(suma - aplic);
   return { periodo: r, G, detalle, man, devengado, deducir, c46, pct, c66, c77, suma, c110: comp, c78: aplic, c87: r2n(comp - aplic), c69, c70: m('c70'), c71: r2n(c69 - m('c70')) };
+}
+
+// Modelo 303 como el borrador de la Sede: las líneas con base negativa (rectificativas) van a modificación (14-15, 25-26 y 40-41)
+// man: celdas amarillas (c42, c43, c44, pct65, c78, c68, c70, y ajustes extra b14/c14, b25/c25, b35/c35, b39/c39, b41/c41) · opc: {rectif, c110}
+export function calcular303(libroE, libroR, ej, periodo, man = {}, opc = {}) {
+  const rectif = opc.rectif !== false;
+  const r = rangoPeriodo(ej, periodo);
+  const m = (k) => Number(man[k]) || 0;
+  const DEST = { rg21: 'dev', rg10: 'dev', rg5: 'dev', rg4: 'dev', rg2: 'dev', re52: 're', re14: 're', re05: 're', ded: 'ded', inv: 'ded', dedintra: 'ded' };
+  const mod = { dev: { b: 0, c: 0 }, re: { b: 0, c: 0 }, ded: { b: 0, c: 0 } };
+  const sum = (a, k) => a.reduce((t, l) => t + l[k], 0);
+  const G = {};
+  const detalle = [];
+  for (const [g, [lib, cods]] of Object.entries(G303)) {
+    const todas = (lib === 'E' ? libroE : libroR).filter((l) => l.fecha >= r.desde && l.fecha <= r.hasta && cods.includes(l.codigo));
+    const neg = rectif && DEST[g] ? todas.filter((l) => l.base < 0) : [];
+    const pos = neg.length ? todas.filter((l) => l.base >= 0) : todas;
+    G[g] = { base: sum(pos, 'base'), cuota: sum(pos, 'cuota') };
+    if (neg.length) { mod[DEST[g]].b += sum(neg, 'base'); mod[DEST[g]].c += sum(neg, 'cuota'); }
+    for (const c of cods) {
+      const x = todas.filter((l) => l.codigo === c);
+      if (x.length) detalle.push({ grupo: g, codigo: c, libro: lib, base: r2n(sum(x, 'base')), cuota: r2n(sum(x, 'cuota')), n: x.length });
+    }
+  }
+  const b14 = mod.dev.b + m('b14'), c14 = mod.dev.c + m('c14'), b25 = mod.re.b + m('b25'), c25 = mod.re.c + m('c25');
+  const b40 = mod.ded.b + m('b41'), c41 = mod.ded.c + m('c41');
+  const devengado = ['rg21', 'rg10', 'rg5', 'rg4', 'rg2', 'intra', 'isp', 're52', 're14', 're05'].reduce((a, g) => a + G[g].cuota, 0) + c14 + c25;
+  const deducir = G.ded.cuota + G.inv.cuota + G.dua.cuota + G.dedintra.cuota + m('c35') + m('c39') + c41 + m('c42') + m('c43') + m('c44');
+  const c46 = devengado - deducir;
+  const pct = man.pct65 === undefined || man.pct65 === '' ? 100 : Number(man.pct65);
+  const c66 = c46 * pct / 100;
+  const c77 = G.dua.cuota; // IVA a la importación liquidado por la Aduana (diferido)
+  const c110 = m('c110') ? Math.abs(m('c110')) : (opc.c110 ?? 0); // pendiente de periodos previos (lo calcula la vista desde el 303 anterior)
+  const c78 = Math.abs(m('c78'));
+  const c69 = r2n(c66 + c77 - c78 + m('c68'));
+  return { periodo: r, G, detalle, man, b14, c14, b25, c25, b40, c41, devengado, deducir, c46, pct, c66, c77, c110, c78, c87: r2n(c110 - c78),
+    c68: m('c68'), c69, c70: m('c70'), c71: r2n(c69 - m('c70')), suma: c46 };
 }
 
 // ---------- Retenciones (111 profesionales, 115, 123): libro soportado por código de impuesto, cuotas en positivo ----------
