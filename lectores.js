@@ -139,6 +139,79 @@ export function leerParticipes(t) {
     .map((m) => ({ nif: m[1], nombre: m[2], estado: m[3], pct: aNum(m[4]), atrib: aNum(m[5]), tipo: m[6] }));
 }
 
+// ---------- Excel (.xlsx): lector mínimo, vale con hojas de nombre raro y prefijo x: (exports de Dynamics 365) ----------
+const dec = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+const colNum = (ref) => ref.replace(/\d+/g, '').split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+const sinPrefijo = (s) => s.replace(/<(\/?)x:/g, '<$1');
+
+// buffer: ArrayBuffer del archivo · JSZip: la librería (en el navegador window.JSZip) · devuelve filas (arrays de celdas)
+export async function leerXlsx(buffer, JSZip) {
+  const zip = await JSZip.loadAsync(buffer);
+  const ss = zip.file('xl/sharedStrings.xml') ? sinPrefijo(await zip.file('xl/sharedStrings.xml').async('string')) : '';
+  const comp = [...ss.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => dec([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join('')));
+  const hoja = Object.keys(zip.files).find((n) => /^xl\/worksheets\/[^/]+\.xml$/.test(n));
+  if (!hoja) return [];
+  const xml = sinPrefijo(await zip.file(hoja).async('string'));
+  const filas = [];
+  for (const r of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+    const celdas = [];
+    let seq = 0;
+    for (const c of r[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      const ref = /\br="([A-Z]+\d+)"/.exec(c[1])?.[1];
+      const col = ref ? colNum(ref) : seq;
+      seq = col + 1;
+      const t = /\bt="(\w+)"/.exec(c[1])?.[1];
+      const v = c[2] ? (/<v>([\s\S]*?)<\/v>/.exec(c[2]) || [])[1] : undefined;
+      const inl = c[2] ? (/<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>/.exec(c[2]) || [])[1] : undefined;
+      let val = v ?? inl ?? '';
+      if (t === 's') val = comp[+val] ?? '';
+      else if (t === 'str' || t === 'inlineStr') val = dec(String(val));
+      else if (val !== '' && !isNaN(+val)) val = +val;
+      celdas[col] = val;
+    }
+    if (celdas.length) filas.push(celdas);
+  }
+  return filas;
+}
+
+// Balance de sumas y saldos (Dynamics 365: MainAccount, Nombre, Saldo de apertura, Débito, Crédito, Ajustes, Transacciones de cierre, Saldo de cierre)
+export function leerSYS(filas) {
+  const h = filas.findIndex((f) => (f ?? []).some((c) => /^(MainAccount|cuenta)$/i.test(String(c))) && f.some((c) => /saldo de apertura/i.test(String(c))));
+  if (h < 0) return null;
+  const cab = Array.from(filas[h], (c) => String(c ?? '').toLowerCase());
+  const col = (re) => cab.findIndex((c) => re.test(c));
+  const ix = { cta: col(/mainaccount|^cuenta/), nom: col(/nombre/), ape: col(/saldo de apertura/), deb: col(/d[eé]bito/), cre: col(/cr[eé]dito/),
+    aju: col(/ajustes/), cie: col(/saldo de cierre/) };
+  const n = (v) => (typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0);
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const cuentas = filas.slice(h + 1).filter((f) => f && /^\d{3,}$/.test(String(f[ix.cta] ?? ''))).map((f) => {
+    const apertura = n(f[ix.ape]), debe = n(f[ix.deb]), haber = n(f[ix.cre]), ajustes = ix.aju >= 0 ? n(f[ix.aju]) : 0;
+    return { cuenta: String(f[ix.cta]), nombre: String(f[ix.nom] ?? ''), apertura, debe, haber, ajustes,
+      cierre: ix.cie >= 0 ? n(f[ix.cie]) : 0, previo: r2(apertura + debe - haber + ajustes) }; // previo = saldo antes de las transacciones de cierre
+  });
+  return cuentas.length ? cuentas : null;
+}
+
+// Cuentas que se conciliarán: [clave, prefijos de cuenta, concepto, cómo se mide]
+//  saldo = saldo previo · acreedor = saldo previo cambiado de signo · debe / haber = movimiento del año · neto = debe − haber
+export const PLAN_SYS = [
+  ['4700', ['470000'], 'HP deudora por IVA', 'saldo'], ['4750', ['4750'], 'HP acreedora por IVA', 'acreedor'],
+  ['472', ['472'], 'HP IVA soportado', 'debe'], ['477', ['477'], 'HP IVA repercutido', 'haber'],
+  ['4751', ['4751'], 'HP acreedora por retenciones practicadas', 'acreedor'], ['4752', ['4752'], 'HP acreedora por Impuesto sobre Sociedades', 'acreedor'],
+  ['473', ['473'], 'HP retenciones y pagos a cuenta', 'debe'], ['474', ['474'], 'Activos / pasivos por impuesto diferido', 'saldo'],
+  ['476', ['476'], 'Organismos de la Seguridad Social acreedores', 'acreedor'], ['465', ['465'], 'Remuneraciones pendientes de pago', 'acreedor'],
+  ['640', ['640'], 'Sueldos y salarios', 'neto'], ['642', ['642'], 'Seguridad Social a cargo de la empresa', 'neto'],
+];
+export function resumenSYS(cuentas) {
+  const r2 = (x) => Math.round(x * 100) / 100 + 0; // el + 0 evita el «-0»
+  return PLAN_SYS.map(([clave, pref, concepto, modo]) => {
+    const cs = cuentas.filter((c) => pref.some((p) => c.cuenta.startsWith(p)));
+    const suma = (k) => cs.reduce((a, c) => a + c[k], 0);
+    const valor = { saldo: suma('previo'), acreedor: -suma('previo'), debe: suma('debe'), haber: suma('haber'), neto: suma('debe') - suma('haber') }[modo];
+    return { clave, concepto, modo, n: cs.length, valor: r2(valor) };
+  }).filter((r) => r.n);
+}
+
 const IMPUESTOS = [[/IBI/, 'IBI'], [/ACTIVIDADES|IAE/, 'IAE'], [/IVTM|VEH[IÍ]CULOS/, 'IVTM'], [/VADO/, 'Vados'], [/BASURA|RESIDUOS/, 'Basura']];
 const impuestoDe = (s) => (IMPUESTOS.find(([re]) => re.test(s)) || [0, 'Otros'])[1];
 

@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal } from './lectores.js?v=12';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS } from './lectores.js?v=14';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -277,6 +277,7 @@ export function crearModulos(c) {
     iloc: ['Impuestos Locales', 'IBI · IAE · IVTM', L('iloc')],
     dua: ['DUA-H1', 'Importaciones · IVA diferido', L('dua')],
     otros: ['Otros documentos', 'PDF de la empresa sin clasificar', L('otros')],
+    bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', () => vistaBss()],
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', () => vistaFichaDatos('dreg')],
     trl: ['Titularidad Real', 'Titulares reales', L('trl')],
     acc: ['Organigrama', 'Socios y participadas', L('acc')],
@@ -427,7 +428,74 @@ export function crearModulos(c) {
     alert(informe.join('\n') || 'No se cargó ningún archivo.');
   }
 
+  // Balance de sumas y saldos: guarda el archivo, las cuentas y rellena el saldo contable de las conciliaciones anuales
+  async function cargarSYS(files) {
+    const informe = [];
+    const porNombre = (name) => {
+      const n = ` ${norm(name)} `;
+      return S.empresas.map((x) => [x, norm(x.nombre).replace(/\s(s l|s a|sl|sa)$/, '').trim()])
+        .filter(([, k]) => k.length > 3 && n.includes(` ${k} `)).sort((a, b) => b[1].length - a[1].length)[0]?.[0];
+    };
+    for (const f of files) {
+      try {
+        const e = porNombre(f.name) ?? empresa();
+        if (!e) { informe.push(`⚠ ${f.name}: elige la empresa (no la reconozco por el nombre)`); continue; }
+        const ej = parseInt((/\b(20\d\d)\b/.exec(f.name) || [])[1] ?? '', 10) || Number(S.ejercicio);
+        const cuentas = leerSYS(await leerXlsx(await f.arrayBuffer(), window.JSZip));
+        if (!cuentas) { informe.push(`❔ ${f.name}: no parece un balance de sumas y saldos`); continue; }
+        const nom = e.siglas || e.nombre;
+        const ref = `${f.name}|${f.size}`;
+        if (!S.registros.some((r) => r.tipo === 'arch-sys' && r.empresa_id === e.id && r.datos.ref === ref)) {
+          const id = crypto.randomUUID();
+          const sub = await subir(e.id, 'arch-sys', id, 'archivo', f);
+          if (sub.error) throw new Error(sub.error);
+          const err = await guardarRegistro(null, { id, empresa_id: e.id, tipo: 'arch-sys', ejercicio: ej,
+            datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
+          if (err) throw new Error(err);
+        }
+        const ex = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === e.id && r.ejercicio === ej);
+        const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: e.id, tipo: 'sys', ejercicio: ej, datos: { nombre: f.name, cuentas } });
+        if (err) throw new Error(err);
+        let n = 0;
+        for (const r of resumenSYS(cuentas)) { // saldo contable de cada cuenta; el importe oficial y las notas no se tocan
+          const c = S.conciliaciones.find((x) => x.empresa_id === e.id && x.ejercicio === ej && x.periodo === 'Anual' && x.cuenta === r.clave);
+          const { error } = c
+            ? await db.from('conciliaciones').update({ saldo_contable: r.valor }).eq('id', c.id)
+            : await db.from('conciliaciones').insert({ empresa_id: e.id, ejercicio: ej, periodo: 'Anual', cuenta: r.clave, concepto: r.concepto,
+              fuente: 'Balance de sumas y saldos', saldo_contable: r.valor, importe_oficial: 0 });
+          if (error) throw new Error(error.message);
+          n++;
+        }
+        informe.push(`✔ ${nom} ${ej}: ${cuentas.length} cuentas · ${n} conciliaciones con su saldo contable`);
+      } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
+    }
+    await cargar(); render();
+    alert(informe.join('\n'));
+  }
+
+  // Pestaña «Balance de Sumas y Saldos»
+  let bssFiltro = '';
+  function vistaBss() {
+    const e = empresa();
+    if (!e) return sinEmpresa;
+    const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === e.id && r.ejercicio === Number(S.ejercicio));
+    if (!reg) return `<p class="vacio">No hay balance de ${esc(S.ejercicio)}. Cárgalo con el botón SYS (el ejercicio se toma del nombre del archivo).</p>`;
+    const todas = reg.datos.cuentas;
+    const filtros = [['', 'Todas'], ['47', 'Grupo 47'], ['465', '465'], ['640', '640'], ['642', '642'], ['4', 'Grupo 4'], ['6', 'Gastos (6)'], ['7', 'Ingresos (7)']];
+    const filas = todas.filter((c) => !bssFiltro || c.cuenta.startsWith(bssFiltro));
+    const suma = (k) => filas.reduce((a, c) => a + c[k], 0);
+    const ks = ['apertura', 'debe', 'haber', 'ajustes', 'previo', 'cierre'];
+    return `<div class="bar">${filtros.map(([k, l]) => `<button class="small${k === bssFiltro ? ' primary' : ''}" data-act="m-bss" data-f="${k}">${l}</button>`).join('')}
+      <span class="space"></span><span class="chip">${esc(reg.datos.nombre)} · ${filas.length} de ${todas.length} cuentas</span></div>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Cuenta</th><th>Nombre</th><th class="num">Saldo de apertura</th><th class="num">Débito</th>
+        <th class="num">Crédito</th><th class="num">Ajustes</th><th class="num">Saldo antes del cierre</th><th class="num">Saldo de cierre</th></tr></thead>
+        <tbody>${filas.map((c) => `<tr><td><b>${esc(c.cuenta)}</b></td><td>${esc(c.nombre)}</td>${ks.map((k) => `<td class="num">${eur(c[k])}</td>`).join('')}</tr>`).join('')}
+        <tr><td></td><td><b>Total</b></td>${ks.map((k) => `<td class="num"><b>${eur(suma(k))}</b></td>`).join('')}</tr></tbody></table></div>
+      <p class="hint">«Saldo antes del cierre» = apertura + débito − crédito + ajustes. El saldo de cierre sale a cero porque el ejercicio ya está regularizado.</p>`;
+  }
+
   async function subirArchivos(files) {
+    if (archKind === 'sys') return cargarSYS(files);
     if (archKind === 'impuestos') return cargarPdfs(files);
     if (archKind === 'registro') return cargarRegistro(files);
     if (!S.sel) return void alert('Elige primero la empresa en el desplegable de la izquierda.');
@@ -583,6 +651,7 @@ export function crearModulos(c) {
       'm-doc-edit': () => formDoc(d.m, d.slot),
       'm-doc-del': () => quitarDoc(d.m, d.slot),
       'm-sub': () => { subIT = d.sub; render(); },
+      'm-bss': () => { bssFiltro = d.f; render(); },
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
@@ -614,6 +683,11 @@ export function crearModulos(c) {
       return { t: `${n} de ${DOCS[id].length}`, c: n === DOCS[id].length ? 'verde' : '' };
     };
   });
+  badges.bss = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
+    return reg ? { t: `${reg.datos.cuentas.length} cuentas`, c: 'verde' } : { t: 'Sin datos' };
+  };
   Object.keys(FICHAS).forEach((id) => {
     badges[id] = () => {
       const e = empresa();

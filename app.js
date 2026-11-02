@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=13';
+import { crearModulos } from './modulos.js?v=14';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -130,7 +130,7 @@ const GRUPOS = [
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
   ['4.- MODELOS TRIBUTARIOS', ['m303', 'm111', 'm200'], 'aeat', 'Conciliación de cada modelo con la contabilidad.'],
-  ['5.- CUENTAS CONTABLES', ['c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
+  ['5.- CUENTAS CONTABLES', ['bss', 'c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
   ['6.- SEGURIDAD SOCIAL', ['ssconc', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['7.- CONCILIACIONES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
   ['8.- ADMINISTRACIÓN', ['usuarios'], '', 'Usuarios, roles y acceso a las empresas.'],
