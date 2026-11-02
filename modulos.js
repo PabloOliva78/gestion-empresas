@@ -61,6 +61,10 @@ export function crearModulos(c) {
     rmesc: { ej: false, cols: [F('fecha', 'Fecha'), T('notario', 'Notario'), T('protocolo', 'Nº protocolo'), T('tipo', 'Tipo'), T('desc', 'Descripción'), A('archivo')] },
   };
 
+  // Pendiente en rojo; pagado / presentado / cargado… en verde.
+  const HECHO = ['Pagado', 'Presentado', 'Cargado', 'Aplicado', 'Respondida', 'Cerrada'];
+  const claseEstado = (e) => (e === 'Pendiente' ? 'fila-pend' : HECHO.includes(e) ? 'fila-ok' : '');
+
   const celda = (x, v) => {
     if (x.t === 'eur') return `<td class="num">${v == null ? '' : eur(v)}</td>`;
     if (x.t === 'num') return `<td class="num">${esc(v)}</td>`;
@@ -80,7 +84,7 @@ export function crearModulos(c) {
     const clave = (r) => r.datos.fecha || r.datos.vencimiento || r.datos.periodo || '';
     filas.sort((a, b) => clave(a).localeCompare(clave(b)));
     const edit = puede();
-    const cuerpo = filas.map((r) => `<tr>${cfg.todas ? `<td>${esc(empNombre(r.empresa_id))}</td>` : ''}
+    const cuerpo = filas.map((r) => `<tr class="${claseEstado(r.datos.estado)}">${cfg.todas ? `<td>${esc(empNombre(r.empresa_id))}</td>` : ''}
       ${cfg.cols.map((x) => celda(x, r.datos[x.k])).join('')}
       <td class="acciones">${edit ? `<button class="small" data-act="m-edit" data-m="${id}" data-id="${r.id}">Editar</button>
         <button class="small danger" data-act="m-del" data-id="${r.id}">Borrar</button>` : ''}</td></tr>`).join('');

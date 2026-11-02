@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=9';
+import { crearModulos } from './modulos.js?v=10';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -163,6 +163,14 @@ function tabsNav() {
   }).join('')}</nav>`;
 }
 
+// Años del desplegable de ejercicio: el actual más 1 y los 7 anteriores (y el elegido, si queda fuera).
+function ejercicios() {
+  const y = new Date().getFullYear();
+  const a = new Set([Number(S.ejercicio)]);
+  for (let i = y + 1; i >= y - 7; i--) a.add(i);
+  return [...a].sort((p, q) => q - p);
+}
+
 function render() {
   if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'cmg';
   const e = S.empresas.find((x) => x.id === S.sel);
@@ -171,7 +179,8 @@ function render() {
     <aside class="lat">
       <div>${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1></div>
       <div class="two">
-        <label>Ejercicio<input type="number" data-glob="ejercicio" value="${esc(S.ejercicio)}" min="2000" max="2100"></label>
+        <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
+    `<option${y === Number(S.ejercicio) ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
         <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
@@ -224,7 +233,7 @@ function vistaObligaciones({ area = '' } = {}) {
     (!f.empresa || o.empresa_id === f.empresa) && (!f.area || o.area === f.area) && (!f.estado || o.estado === f.estado));
   const filas = lista.map((o) => {
     const vencida = o.vencimiento && o.vencimiento < hoy() && o.estado !== 'presentado';
-    return `<tr class="${vencida ? 'vencida' : ''}">
+    return `<tr class="${vencida ? 'vencida' : o.estado === 'presentado' ? 'fila-ok' : ''}">
       <td>${esc(empNombre(o.empresa_id))}</td><td>${AREAS[o.area]}</td>
       <td>${esc(o.nombre)}<br><small>${esc(o.notas)}</small></td><td>${esc(o.periodo)}</td>
       <td>${fmt(o.vencimiento)}${vencida ? ' ⚠' : ''}</td>
@@ -416,7 +425,7 @@ function vistaConciliaciones(cuentas) {
   const desc = lista.filter((c) => estadoConc(c) === 'Descuadre').length;
   const filas = lista.map((c) => {
     const est = estadoConc(c);
-    return `<tr class="${est === 'Descuadre' ? 'vencida' : ''}">
+    return `<tr class="${est === 'Descuadre' ? 'vencida' : est === 'Cuadra' ? 'fila-ok' : ''}">
       <td>${esc(c.periodo)}</td><td><b>${esc(c.cuenta)}</b></td>
       <td>${esc(c.concepto)}<br><small>${esc(c.fuente)}${c.notas ? ' · ' + esc(c.notas) : ''}</small></td>
       <td class="num">${eur(c.saldo_contable)}</td><td class="num">${eur(c.importe_oficial)}</td>
