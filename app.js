@@ -1,0 +1,440 @@
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const root = document.getElementById('app');
+
+const AREAS = { fiscal: 'Fiscal', contable: 'Contable', laboral: 'Laboral', mercantil: 'Registro Mercantil' };
+const ESTADOS = { pendiente: 'Pendiente', en_curso: 'En curso', presentado: 'Presentado' };
+const ROLES = { admin: 'Administrador', gestor: 'Gestor', consulta: 'Consulta' };
+
+const S = {
+  perfil: null, empresas: [], obligaciones: [], conciliaciones: [], usuarios: [], asign: [],
+  tab: 'obligaciones', filtro: { empresa: '', area: '', estado: '' },
+  cfiltro: { empresa: '', ejercicio: new Date().getFullYear() },
+};
+let uidActual = null;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const puedeEditar = () => ['admin', 'gestor'].includes(S.perfil?.rol);
+const esAdmin = () => S.perfil?.rol === 'admin';
+const hoy = () => new Date().toISOString().slice(0, 10);
+const fmt = (d) => (d ? d.split('-').reverse().join('/') : '');
+const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? '—';
+const opts = (obj, sel) => Object.entries(obj)
+  .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+
+// ---------- Datos ----------
+async function cargar() {
+  const [e, o, c] = await Promise.all([
+    db.from('empresas').select('*').order('nombre'),
+    db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
+    db.from('conciliaciones').select('*'),
+  ]);
+  S.empresas = e.data ?? [];
+  S.obligaciones = o.data ?? [];
+  S.conciliaciones = c.data ?? [];
+  if (esAdmin()) {
+    const [u, a] = await Promise.all([
+      db.from('profiles').select('*').order('created_at'),
+      db.from('empresa_usuarios').select('*'),
+    ]);
+    S.usuarios = u.data ?? [];
+    S.asign = a.data ?? [];
+  }
+}
+
+async function run(promesa) {
+  const { error } = await promesa;
+  if (error) { alert(error.message); return false; }
+  await cargar();
+  render();
+  return true;
+}
+
+// ---------- Arranque / sesión ----------
+async function boot() {
+  const { data: { session } } = await db.auth.getSession();
+  uidActual = session?.user?.id ?? null;
+  if (!session) { S.perfil = null; return renderLogin(); }
+  const { data: perfil, error } = await db.from('profiles').select('*').eq('id', uidActual).maybeSingle();
+  if (error || !perfil) return renderLogin('No se pudo cargar el perfil.');
+  S.perfil = perfil;
+  if (!perfil.activo) return renderPendiente();
+  await cargar();
+  render();
+}
+
+db.auth.onAuthStateChange((ev, session) => {
+  const uid = session?.user?.id ?? null;
+  if (ev === 'SIGNED_OUT' || (ev === 'SIGNED_IN' && uid !== uidActual)) setTimeout(boot, 0);
+});
+
+// ---------- Pantallas ----------
+function renderLogin(msg = '') {
+  root.innerHTML = `<main class="login"><form id="f" class="card">
+    <h1>Gestión fiscal, contable y laboral</h1>
+    <label>Correo<input name="email" type="email" required autocomplete="username"></label>
+    <label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="current-password"></label>
+    <p class="err" id="msg">${esc(msg)}</p>
+    <button class="primary">Entrar</button>
+    <button type="button" id="reg" class="link">Solicitar acceso (crear cuenta)</button>
+  </form></main>`;
+  const f = root.querySelector('#f');
+  const m = root.querySelector('#msg');
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const { error } = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value });
+    if (error) m.textContent = 'Correo o contraseña incorrectos.';
+  };
+  root.querySelector('#reg').onclick = async () => {
+    if (!f.reportValidity()) return;
+    const { error } = await db.auth.signUp({ email: f.email.value, password: f.password.value });
+    m.textContent = error ? error.message
+      : 'Cuenta creada. Un administrador debe activarla (revise su correo si se pide confirmación).';
+  };
+}
+
+function renderPendiente() {
+  root.innerHTML = `<main class="login"><div class="card"><h1>Cuenta pendiente de activación</h1>
+    <p>Su cuenta (${esc(S.perfil.email)}) existe, pero un administrador debe activarla y asignarle empresas.</p>
+    <button id="out">Salir</button></div></main>`;
+  root.querySelector('#out').onclick = () => db.auth.signOut();
+}
+
+function render() {
+  const tabs = [['obligaciones', 'Obligaciones'], ['conciliaciones', 'Conciliaciones'], ['empresas', 'Empresas']];
+  if (esAdmin()) tabs.push(['usuarios', 'Usuarios']);
+  if (!tabs.some(([k]) => k === S.tab)) S.tab = 'obligaciones';
+  root.innerHTML = `<header class="top"><h1>Gestión fiscal, contable y laboral</h1>
+      <div>${esc(S.perfil.nombre || S.perfil.email)} · <span class="chip">${ROLES[S.perfil.rol]}</span>
+      <button id="out" class="small">Salir</button></div></header>
+    <nav>${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === S.tab ? 'on' : ''}">${l}</button>`).join('')}</nav>
+    <main class="vista">${{ obligaciones: vistaObligaciones, conciliaciones: vistaConciliaciones, empresas: vistaEmpresas, usuarios: vistaUsuarios }[S.tab]()}</main>`;
+}
+
+function vistaObligaciones() {
+  const f = S.filtro;
+  const lista = S.obligaciones.filter((o) =>
+    (!f.empresa || o.empresa_id === f.empresa) && (!f.area || o.area === f.area) && (!f.estado || o.estado === f.estado));
+  const filas = lista.map((o) => {
+    const vencida = o.vencimiento && o.vencimiento < hoy() && o.estado !== 'presentado';
+    return `<tr class="${vencida ? 'vencida' : ''}">
+      <td>${esc(empNombre(o.empresa_id))}</td><td>${AREAS[o.area]}</td>
+      <td>${esc(o.nombre)}<br><small>${esc(o.notas)}</small></td><td>${esc(o.periodo)}</td>
+      <td>${fmt(o.vencimiento)}${vencida ? ' ⚠' : ''}</td>
+      <td>${puedeEditar()
+        ? `<select data-estado="${o.id}">${opts(ESTADOS, o.estado)}</select>`
+        : ESTADOS[o.estado]}</td>
+      <td class="acciones">${puedeEditar()
+        ? `<button class="small" data-act="edit-obl" data-id="${o.id}">Editar</button>
+           <button class="small danger" data-act="del-obl" data-id="${o.id}">Borrar</button>` : ''}</td></tr>`;
+  }).join('');
+  return `<div class="bar">
+    <label>Empresa<select data-filtro="empresa"><option value="">Todas</option>${S.empresas
+      .map((e) => `<option value="${e.id}"${e.id === f.empresa ? ' selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></label>
+    <label>Área<select data-filtro="area"><option value="">Todas</option>${opts(AREAS, f.area)}</select></label>
+    <label>Estado<select data-filtro="estado"><option value="">Todos</option>${opts(ESTADOS, f.estado)}</select></label>
+    <span class="space"></span>
+    ${puedeEditar() && S.empresas.length ? `<button data-act="calendario">Calendario estándar</button>
+      <button class="primary" data-act="new-obl">Nueva obligación</button>` : ''}</div>
+    ${lista.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Área</th><th>Obligación</th>
+      <th>Periodo</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`
+      : '<p class="vacio">No hay obligaciones que mostrar.</p>'}`;
+}
+
+function vistaEmpresas() {
+  const filas = S.empresas.map((e) => `<tr><td>${esc(e.nombre)}</td><td>${esc(e.cif)}</td><td>${esc(e.notas)}</td>
+    <td class="acciones">${puedeEditar() ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}
+    ${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}">Borrar</button>` : ''}</td></tr>`).join('');
+  return `<div class="bar"><span class="space"></span>
+    ${puedeEditar() ? '<button class="primary" data-act="new-emp">Nueva empresa</button>' : ''}</div>
+    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>CIF</th><th>Notas</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
+}
+
+function vistaUsuarios() {
+  const filas = S.usuarios.map((u) => {
+    const yo = u.id === S.perfil.id;
+    const n = S.asign.filter((a) => a.user_id === u.id).length;
+    return `<tr><td>${esc(u.nombre)}<br><small>${esc(u.email)}</small></td>
+      <td><select data-rol="${u.id}" ${yo ? 'disabled' : ''}>${opts(ROLES, u.rol)}</select></td>
+      <td><input type="checkbox" data-activo="${u.id}" ${u.activo ? 'checked' : ''} ${yo ? 'disabled' : ''}></td>
+      <td>${u.rol === 'admin' ? 'Todas' : n + ' empresa(s)'}
+        ${u.rol !== 'admin' ? `<button class="small" data-act="asig" data-id="${u.id}">Asignar</button>` : ''}</td></tr>`;
+  }).join('');
+  return `<div class="bar"><span class="space"></span><button class="primary" data-act="new-user">Nuevo usuario</button></div>
+    <div class="wrap"><table class="tabla"><thead><tr><th>Usuario</th><th>Rol</th><th>Activo</th><th>Empresas</th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+}
+
+// ---------- Formularios ----------
+function fieldHtml(f) {
+  const v = esc(f.value ?? '');
+  if (f.type === 'select') return `<label>${f.label}<select name="${f.name}">${opts(f.options, f.value)}</select></label>`;
+  if (f.type === 'textarea') return `<label>${f.label}<textarea name="${f.name}" rows="3">${v}</textarea></label>`;
+  if (f.type === 'checks') return `<div><b>${f.label}</b><div class="checks">${f.options.map(([id, l]) =>
+    `<label><input type="checkbox" name="${f.name}" value="${id}"${(f.value || []).includes(id) ? ' checked' : ''}>${esc(l)}</label>`).join('')}</div></div>`;
+  return `<label>${f.label}<input name="${f.name}" type="${f.type || 'text'}" value="${v}"${f.required ? ' required' : ''}${f.minlength ? ` minlength="${f.minlength}"` : ''}${f.step ? ` step="${f.step}"` : ''}></label>`;
+}
+
+function openForm(title, fields, onSubmit) {
+  const d = document.createElement('dialog');
+  d.innerHTML = `<form class="form"><h3>${esc(title)}</h3>${fields.map(fieldHtml).join('')}
+    <p class="err"></p><div class="row"><button type="button" class="ghost" data-x>Cancelar</button><button class="primary">Guardar</button></div></form>`;
+  document.body.append(d);
+  const form = d.querySelector('form');
+  const err = d.querySelector('.err');
+  d.querySelector('[data-x]').onclick = () => d.close();
+  d.onclose = () => d.remove();
+  form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(form);
+    const v = {};
+    fields.forEach((f) => { v[f.name] = f.type === 'checks' ? fd.getAll(f.name) : (fd.get(f.name) ?? '').toString().trim(); });
+    err.textContent = '';
+    const msg = await onSubmit(v);
+    if (msg) err.textContent = msg; else d.close();
+  };
+  d.showModal();
+}
+
+const empOpts = () => Object.fromEntries(S.empresas.map((e) => [e.id, e.nombre]));
+const nul = (s) => (s === '' ? null : s);
+
+function formEmpresa(e = {}) {
+  openForm(e.id ? 'Editar empresa' : 'Nueva empresa', [
+    { name: 'nombre', label: 'Nombre', value: e.nombre, required: true },
+    { name: 'cif', label: 'CIF', value: e.cif },
+    { name: 'notas', label: 'Notas', type: 'textarea', value: e.notas },
+  ], async (v) => {
+    const datos = { nombre: v.nombre, cif: nul(v.cif), notas: nul(v.notas) };
+    const q = e.id ? db.from('empresas').update(datos).eq('id', e.id) : db.from('empresas').insert(datos);
+    const { error } = await q;
+    if (error) return error.message;
+    await cargar(); render();
+  });
+}
+
+function formObligacion(o = {}) {
+  openForm(o.id ? 'Editar obligación' : 'Nueva obligación', [
+    { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: o.empresa_id || S.filtro.empresa },
+    { name: 'area', label: 'Área', type: 'select', options: AREAS, value: o.area },
+    { name: 'nombre', label: 'Obligación (p. ej. Modelo 303, TC1, Cierre mensual)', value: o.nombre, required: true },
+    { name: 'periodo', label: 'Periodo (p. ej. 2026-T1)', value: o.periodo },
+    { name: 'vencimiento', label: 'Vencimiento', type: 'date', value: o.vencimiento },
+    { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, value: o.estado },
+    { name: 'notas', label: 'Notas', type: 'textarea', value: o.notas },
+  ], async (v) => {
+    const datos = { empresa_id: v.empresa_id, area: v.area, nombre: v.nombre, periodo: nul(v.periodo),
+      vencimiento: nul(v.vencimiento), estado: v.estado, notas: nul(v.notas) };
+    const q = o.id ? db.from('obligaciones').update(datos).eq('id', o.id) : db.from('obligaciones').insert(datos);
+    const { error } = await q;
+    if (error) return error.message;
+    await cargar(); render();
+  });
+}
+
+function formUsuario() {
+  openForm('Nuevo usuario', [
+    { name: 'nombre', label: 'Nombre', required: true },
+    { name: 'email', label: 'Correo', type: 'email', required: true },
+    { name: 'password', label: 'Contraseña inicial (mín. 8)', type: 'password', required: true, minlength: 8 },
+    { name: 'rol', label: 'Rol', type: 'select', options: ROLES, value: 'gestor' },
+  ], async (v) => {
+    // Cliente auxiliar sin sesión persistente para no desconectar al admin.
+    const aux = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
+      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    const { data, error } = await aux.auth.signUp({ email: v.email, password: v.password, options: { data: { nombre: v.nombre } } });
+    if (error) return error.message;
+    if (!data.user || data.user.identities?.length === 0) return 'Ese correo ya está registrado.';
+    const { error: e2 } = await db.from('profiles').update({ rol: v.rol, activo: true }).eq('id', data.user.id);
+    if (e2) return e2.message;
+    await cargar(); render();
+  });
+}
+
+function formAsignar(uid) {
+  const u = S.usuarios.find((x) => x.id === uid);
+  openForm(`Empresas de ${u.nombre || u.email}`, [
+    { name: 'ids', label: 'Empresas a las que tiene acceso', type: 'checks',
+      options: S.empresas.map((e) => [e.id, e.nombre]),
+      value: S.asign.filter((a) => a.user_id === uid).map((a) => a.empresa_id) },
+  ], async (v) => {
+    const del = await db.from('empresa_usuarios').delete().eq('user_id', uid);
+    if (del.error) return del.error.message;
+    if (v.ids.length) {
+      const ins = await db.from('empresa_usuarios').insert(v.ids.map((id) => ({ empresa_id: id, user_id: uid })));
+      if (ins.error) return ins.error.message;
+    }
+    await cargar(); render();
+  });
+}
+
+// ---------- Conciliaciones (grupo 47, 465, 640, 642) ----------
+const PERIODOS = {
+  '1T': '1T', '2T': '2T', '3T': '3T', '4T': '4T', Anual: 'Anual',
+  ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => {
+    const m = String(i + 1).padStart(2, '0');
+    return [m, 'Mes ' + m];
+  })),
+};
+const PLANTILLAS = [
+  ['4700', 'HP deudora por IVA', 'Modelo 303 (a devolver / compensar)'],
+  ['4750', 'HP acreedora por IVA', 'Modelo 303 (a ingresar)'],
+  ['472', 'HP IVA soportado', 'Libro registro IVA soportado'],
+  ['477', 'HP IVA repercutido', 'Libro registro IVA repercutido'],
+  ['4751', 'HP acreedora por retenciones practicadas', 'Modelos 111 / 115 / 123'],
+  ['4752', 'HP acreedora por Impuesto sobre Sociedades', 'Modelo 200 / 202'],
+  ['473', 'HP retenciones y pagos a cuenta', 'Modelo 200'],
+  ['474', 'Activos / pasivos por impuesto diferido', 'Cálculo fiscal'],
+  ['476', 'Organismos de la Seguridad Social acreedores', 'RLC / RNT (Seguros Sociales)'],
+  ['465', 'Remuneraciones pendientes de pago', 'Nóminas (líquido a percibir)'],
+  ['640', 'Sueldos y salarios', 'Resumen de nóminas / Modelo 190'],
+  ['642', 'Seguridad Social a cargo de la empresa', 'RLC / RNT (cuota empresa)'],
+];
+const eur = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n ?? 0);
+const estadoConc = (c) => (Math.abs(c.diferencia) < 0.005 ? 'Cuadra' : c.justificada ? 'Justificada' : 'Descuadre');
+const pad = (n) => String(n).padStart(2, '0');
+
+function vistaConciliaciones() {
+  const f = S.cfiltro;
+  if (!f.empresa && S.empresas[0]) f.empresa = S.empresas[0].id;
+  const lista = S.conciliaciones
+    .filter((c) => c.empresa_id === f.empresa && c.ejercicio === Number(f.ejercicio))
+    .sort((a, b) => a.cuenta.localeCompare(b.cuenta) || a.periodo.localeCompare(b.periodo));
+  const desc = lista.filter((c) => estadoConc(c) === 'Descuadre').length;
+  const filas = lista.map((c) => {
+    const est = estadoConc(c);
+    return `<tr class="${est === 'Descuadre' ? 'vencida' : ''}">
+      <td>${esc(c.periodo)}</td><td><b>${esc(c.cuenta)}</b></td>
+      <td>${esc(c.concepto)}<br><small>${esc(c.fuente)}${c.notas ? ' · ' + esc(c.notas) : ''}</small></td>
+      <td class="num">${eur(c.saldo_contable)}</td><td class="num">${eur(c.importe_oficial)}</td>
+      <td class="num">${eur(c.diferencia)}</td>
+      <td>${est === 'Cuadra' ? '<span class="ok">✔ Cuadra</span>' : est}</td>
+      <td class="acciones">${puedeEditar()
+        ? `<button class="small" data-act="edit-conc" data-id="${c.id}">Editar</button>
+           <button class="small danger" data-act="del-conc" data-id="${c.id}">Borrar</button>` : ''}</td></tr>`;
+  }).join('');
+  return `<div class="bar">
+    <label>Empresa<select data-cfiltro="empresa">${S.empresas
+      .map((e) => `<option value="${e.id}"${e.id === f.empresa ? ' selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select></label>
+    <label>Ejercicio<input type="number" data-cfiltro="ejercicio" value="${esc(f.ejercicio)}" min="2000" max="2100"></label>
+    <span class="space"></span>
+    ${lista.length ? `<span class="chip">${desc ? desc + ' con descuadre' : 'Todo cuadra'}</span>` : ''}
+    ${puedeEditar() && f.empresa ? '<button class="primary" data-act="new-conc">Nueva conciliación</button>' : ''}</div>
+    ${lista.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Periodo</th><th>Cuenta</th><th>Concepto</th>
+      <th class="num">Saldo contable</th><th class="num">Importe oficial</th><th class="num">Diferencia</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`
+      : '<p class="vacio">No hay conciliaciones para esta empresa y ejercicio.</p>'}`;
+}
+
+function formConciliacion(c = {}) {
+  const plantillas = { '': 'Personalizada' };
+  PLANTILLAS.forEach((p, i) => { plantillas['p' + i] = `${p[0]} · ${p[1]}`; });
+  openForm(c.id ? 'Editar conciliación' : 'Nueva conciliación', [
+    { name: 'plantilla', label: 'Cuenta (plantilla)', type: 'select', options: plantillas, value: '' },
+    { name: 'periodo', label: 'Periodo', type: 'select', options: PERIODOS, value: c.periodo },
+    { name: 'cuenta', label: 'Cuenta (si es personalizada)', value: c.cuenta },
+    { name: 'concepto', label: 'Concepto (si es personalizada)', value: c.concepto },
+    { name: 'fuente', label: 'Documento oficial', value: c.fuente },
+    { name: 'saldo', label: 'Saldo contable (€)', type: 'number', step: '0.01', value: c.saldo_contable ?? 0 },
+    { name: 'oficial', label: 'Importe del documento oficial (€)', type: 'number', step: '0.01', value: c.importe_oficial ?? 0 },
+    { name: 'justificada', label: 'Diferencia justificada', type: 'select',
+      options: { no: 'No', si: 'Sí (explicada en notas)' }, value: c.justificada ? 'si' : 'no' },
+    { name: 'notas', label: 'Notas', type: 'textarea', value: c.notas },
+  ], async (v) => {
+    const p = v.plantilla ? PLANTILLAS[Number(v.plantilla.slice(1))] : null;
+    const cuenta = v.cuenta || p?.[0];
+    const concepto = v.concepto || p?.[1];
+    if (!cuenta || !concepto) return 'Elija una plantilla o indique cuenta y concepto.';
+    const datos = {
+      empresa_id: c.empresa_id || S.cfiltro.empresa, ejercicio: Number(S.cfiltro.ejercicio), periodo: v.periodo,
+      cuenta, concepto, fuente: nul(v.fuente || p?.[2] || ''),
+      saldo_contable: parseFloat(v.saldo) || 0, importe_oficial: parseFloat(v.oficial) || 0,
+      justificada: v.justificada === 'si', notas: nul(v.notas),
+    };
+    const q = c.id ? db.from('conciliaciones').update(datos).eq('id', c.id) : db.from('conciliaciones').insert(datos);
+    const { error } = await q;
+    if (error) return error.message;
+    await cargar(); render();
+  });
+}
+
+// Fechas orientativas para año natural; no ajusta fines de semana ni festivos. Revisar.
+function calendarioEstandar(ej) {
+  const y1 = ej + 1;
+  const o = [];
+  for (const [p, d] of [['1T', `${ej}-04-20`], ['2T', `${ej}-07-20`], ['3T', `${ej}-10-20`], ['4T', `${y1}-01-20`]]) {
+    o.push(['fiscal', 'Modelo 303 IVA', `${ej}-${p}`, p === '4T' ? `${y1}-01-30` : d]);
+    o.push(['fiscal', 'Modelo 111 Retenciones trabajo y profesionales', `${ej}-${p}`, d]);
+    o.push(['fiscal', 'Modelo 115 Retenciones alquileres', `${ej}-${p}`, d]);
+  }
+  o.push(
+    ['fiscal', 'Modelo 190 Resumen anual retenciones', `${ej}`, `${y1}-01-31`],
+    ['fiscal', 'Modelo 390 Resumen anual IVA', `${ej}`, `${y1}-01-30`],
+    ['fiscal', 'Modelo 347 Operaciones con terceros', `${ej}`, `${y1}-02-28`],
+    ['fiscal', 'Modelo 200 Impuesto sobre Sociedades', `${ej}`, `${y1}-07-25`],
+    ['contable', 'Formulación de cuentas anuales', `${ej}`, `${y1}-03-31`],
+    ['contable', 'Aprobación de cuentas por la Junta', `${ej}`, `${y1}-06-30`],
+    ['mercantil', 'Legalización de libros contables', `${ej}`, `${y1}-04-30`],
+    ['mercantil', 'Depósito de cuentas anuales en el Registro Mercantil', `${ej}`, `${y1}-07-30`],
+  );
+  for (let m = 1; m <= 12; m++) {
+    o.push(['laboral', 'Seguros Sociales (RLC/RNT)', `${ej}-${pad(m)}`, `${ej}-${pad(m)}-${pad(new Date(ej, m, 0).getDate())}`]);
+  }
+  return o;
+}
+
+function formCalendario() {
+  openForm('Calendario estándar de obligaciones', [
+    { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: S.filtro.empresa },
+    { name: 'ejercicio', label: 'Ejercicio (año natural)', type: 'number', value: new Date().getFullYear(), required: true },
+  ], async (v) => {
+    const ej = parseInt(v.ejercicio, 10);
+    if (!ej) return 'Ejercicio no válido.';
+    const existentes = new Set(S.obligaciones.filter((o) => o.empresa_id === v.empresa_id).map((o) => `${o.nombre}|${o.periodo}`));
+    const filas = calendarioEstandar(ej)
+      .filter(([, nombre, periodo]) => !existentes.has(`${nombre}|${periodo}`))
+      .map(([area, nombre, periodo, vencimiento]) => ({ empresa_id: v.empresa_id, area, nombre, periodo, vencimiento, estado: 'pendiente' }));
+    if (!filas.length) return 'Ese calendario ya existe para la empresa.';
+    const { error } = await db.from('obligaciones').insert(filas);
+    if (error) return error.message;
+    await cargar(); render();
+  });
+}
+
+// ---------- Eventos ----------
+root.addEventListener('click', (ev) => {
+  const t = ev.target.closest('button');
+  if (!t) return;
+  if (t.id === 'out') return void db.auth.signOut();
+  if (t.dataset.tab) { S.tab = t.dataset.tab; return render(); }
+  const id = t.dataset.id;
+  const acciones = {
+    'new-emp': () => formEmpresa(),
+    'edit-emp': () => formEmpresa(S.empresas.find((e) => e.id === id)),
+    'del-emp': () => confirm('¿Borrar la empresa y TODAS sus obligaciones?') && run(db.from('empresas').delete().eq('id', id)),
+    'new-obl': () => formObligacion(),
+    'edit-obl': () => formObligacion(S.obligaciones.find((o) => o.id === id)),
+    'del-obl': () => confirm('¿Borrar la obligación?') && run(db.from('obligaciones').delete().eq('id', id)),
+    calendario: () => formCalendario(),
+    'new-conc': () => formConciliacion(),
+    'edit-conc': () => formConciliacion(S.conciliaciones.find((c) => c.id === id)),
+    'del-conc': () => confirm('¿Borrar la conciliación?') && run(db.from('conciliaciones').delete().eq('id', id)),
+    'new-user': () => formUsuario(),
+    asig: () => formAsignar(id),
+  };
+  acciones[t.dataset.act]?.();
+});
+
+root.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (t.dataset.cfiltro) { S.cfiltro[t.dataset.cfiltro] = t.value; return render(); }
+  if (t.dataset.filtro) { S.filtro[t.dataset.filtro] = t.value; return render(); }
+  if (t.dataset.estado) return void run(db.from('obligaciones').update({ estado: t.value }).eq('id', t.dataset.estado));
+  if (t.dataset.rol) return void run(db.from('profiles').update({ rol: t.value }).eq('id', t.dataset.rol));
+  if (t.dataset.activo) return void run(db.from('profiles').update({ activo: t.checked }).eq('id', t.dataset.activo));
+});
+
+boot();
