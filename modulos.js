@@ -682,7 +682,8 @@ export function crearModulos(c) {
       <p class="hint">Suma de los 303 de cada periodo, con sus ajustes manuales. Resumen de trabajo: compáralo con el 390 oficial antes de presentarlo.</p>`;
   }
 
-  const pendienteMod = (hoja) => () => `<p class="vacio">Este modelo todavía no está migrado. En tu Excel se calcula en la hoja «${hoja}».</p>`;
+  // function (y no const) para que exista antes de montar las pestañas
+  function pendienteMod(hoja) { return () => `<p class="vacio">Este modelo todavía no está migrado. En tu Excel se calcula en la hoja «${hoja}».</p>`; }
 
   // ---------- Botones del lateral: un archivo por tipo, solo se ve el nombre ----------
   const ARCH = { emitidas: 'Emitidas', recibidas: 'Recibidas', extractos: 'Extractos', sys: 'SYS', sii: 'SII', nominas: 'Nóminas' };
