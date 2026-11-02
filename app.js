@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=18';
+import { crearModulos } from './modulos.js?v=19';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -593,7 +593,7 @@ root.addEventListener('click', (ev) => {
   const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap'));
   if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap')) S.grp = -1; render(); }
   const dz = ev.target.closest('.dropzone');
-  if (dz && ev.target.id !== 'aeatIn') return void dz.querySelector('input').click();
+  if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
   const t = ev.target.closest('button');
   if (!t) return;
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
@@ -625,6 +625,7 @@ root.addEventListener('click', (ev) => {
 root.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.dataset.dzkind) { const fs = [...t.files]; t.value = ''; return void M.subirComo(t.dataset.dzkind, fs); }
   if (t.id === 'aeatIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void M.subirArchivos(fs); }
   if (t.dataset.glob) {
@@ -641,9 +642,11 @@ root.addEventListener('change', (ev) => {
 root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });
 root.addEventListener('dragleave', (ev) => ev.target.closest?.('.dropzone')?.classList.remove('over'));
 root.addEventListener('drop', (ev) => {
-  if (!ev.target.closest('.dropzone')) return;
+  const dz = ev.target.closest('.dropzone');
+  if (!dz) return;
   ev.preventDefault();
-  M.cargarPdfs([...ev.dataTransfer.files]);
+  const fs = [...ev.dataTransfer.files];
+  return void (dz.dataset.kind ? M.subirComo(dz.dataset.kind, fs) : M.cargarPdfs(fs));
 });
 
 boot();

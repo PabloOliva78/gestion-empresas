@@ -294,12 +294,12 @@ export function crearModulos(c) {
     mod232: ['Modelo 232', 'Operaciones vinculadas', pendienteMod('(sin hoja propia en el Excel)')],
     mod390: ['Modelo 390', 'Resumen anual IVA', pendienteMod('Mod303 (suma de periodos)')],
     modintra: ['Intrastat', 'Declaración de expediciones e introducciones', pendienteMod('Intrastat / Export Intrastat')],
-    siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => vistaSII('E')],
-    siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => vistaSII('R')],
+    siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas emitidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('E')],
+    siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas recibidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('R')],
     concsiie: ['Conciliación SII Emitidas', 'SII frente a contabilidad', () => vistaConcSII('E')],
     concsiir: ['Conciliación SII Recibidas', 'SII frente a contabilidad', () => vistaConcSII('R')],
-    fe: ['Facturas emitidas', 'Libro de IVA repercutido', () => vistaFacturas('E')],
-    fr: ['Facturas recibidas', 'Libro de IVA soportado', () => vistaFacturas('R')],
+    fe: ['Facturas emitidas', 'Libro de IVA repercutido', () => dz('emitidas', 'Suelta aquí el libro de IVA repercutido', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('E')],
+    fr: ['Facturas recibidas', 'Libro de IVA soportado', () => dz('recibidas', 'Suelta aquí el libro de IVA soportado', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('R')],
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', () => vistaFichaDatos('dreg')],
     trl: ['Titularidad Real', 'Titulares reales', L('trl')],
     acc: ['Organigrama', 'Socios y participadas', L('acc')],
@@ -425,6 +425,9 @@ export function crearModulos(c) {
 
   const SENT = { E: { lib: 'repercutido', cuota: 'Cuota repercutida', nif: 'NIF destinatario', boton: 'EMITIDAS' }, R: { lib: 'soportado', cuota: 'Cuota soportada', nif: 'NIF emisor', boton: 'RECIBIDAS' } };
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
+  // Franja punteada para soltar un Excel (kind = botón del lateral al que equivale: sii, emitidas, recibidas)
+  const dz = (kind, titulo, sub) => `<div class="dropzone" data-kind="${kind}" tabindex="0" role="button"><b>${titulo}</b> ${sub}
+    <input type="file" data-dzkind="${kind}" accept=".xlsx,.xls,.csv" multiple hidden></div>`;
   const suma = (a, k) => a.reduce((t, x) => t + x[k], 0);
   const TOPE = 400;
   const tope = (n) => (n > TOPE ? `<p class="hint">Se muestran las ${TOPE} primeras de ${n}; el resto está cargado y cuenta en los totales.</p>` : '');
@@ -961,5 +964,7 @@ export function crearModulos(c) {
     };
   });
 
-  return { tabs, accion, cargarPdfs, badges, subirArchivos, cargado, titulo, listaArchivos };
+  const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
+
+  return { tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos };
 }
