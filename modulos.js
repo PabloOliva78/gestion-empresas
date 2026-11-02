@@ -341,6 +341,115 @@ export function crearModulos(c) {
       <nav class="subtabs">${subs.map(([k, l]) => `<button class="${k === subIT ? 'on' : ''}" data-act="m-sub" data-sub="${k}">${l}</button>`).join('')}</nav>${cuerpo}`;
   }
 
+  // ---------- Botones del lateral: un archivo por tipo, solo se ve el nombre ----------
+  const ARCH = { emitidas: 'Emitidas', recibidas: 'Recibidas', extractos: 'Extractos', sys: 'SYS', sii: 'SII', nominas: 'Nóminas' };
+  let archKind = 'impuestos';
+  const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\.\w{2,4}$/, '').replace(/[_.\-]+/g, ' ');
+  const archivosDe = (k) => S.registros.filter((r) => r.tipo === 'arch-' + k && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
+
+  function cargado(k) {
+    if (!S.sel) return false;
+    if (ARCH[k]) return archivosDe(k).length > 0;
+    if (k === 'impuestos') return !!empresa()?.datos?.aeat || S.registros.some((r) => r.empresa_id === S.sel && ['pres', 'iloc', 'otros'].includes(r.tipo));
+    return S.registros.some((r) => r.empresa_id === S.sel && (r.tipo === 'rmesc'
+      || (r.tipo.startsWith('doc-rm') && r.ejercicio === Number(S.ejercicio) && Object.keys(r.datos).length)));
+  }
+  const titulo = (k) => (ARCH[k] ? `${archivosDe(k).length} archivos` : cargado(k) ? 'Hay datos cargados' : 'Sin cargar');
+
+  function listaArchivos() {
+    if (!S.sel) return '';
+    const filas = Object.keys(ARCH).flatMap((k) => archivosDe(k).map((r) => `<li><b>${ARCH[k]}</b> ${esc(r.datos.nombre)}</li>`));
+    return filas.length ? `<ul class="arch">${filas.join('')}</ul>` : '<span class="hint">Sin archivos cargados</span>';
+  }
+
+  // Nombre del PDF del Registro → pestaña y hueco (acuse, nota de despacho, libro de actas…)
+  function claseRegistro(nombre) {
+    const n = ` ${norm(nombre)} `;
+    let slot = /instancia/.test(n) ? 'instancia' : /acuse/.test(n) ? 'acuse' : /nota.*despacho/.test(n) ? 'nota' : /asiento/.test(n) ? 'asiento' : null;
+    let tab = null;
+    if (/acta/.test(n) && !/certific/.test(n)) { tab = 'rmactas'; slot ||= 'libro'; }
+    else if (/socios|titular|compraventa/.test(n)) { tab = 'rmsocios'; slot = /titular/.test(n) ? 'titular' : /compraventa|escritura/.test(n) ? 'escritura' : slot || 'libro'; }
+    else if (/diario|mayor|sumas y saldos|\bsys\b|bsit|situacion/.test(n)) {
+      tab = 'rmlibros'; slot = /diario/.test(n) ? 'diario' : /mayor/.test(n) ? 'mayor' : /sumas|\bsys\b/.test(n) ? 'sys' : /bsit|situacion/.test(n) ? 'bsit' : slot;
+    } else if (/certific/.test(n)) { tab = 'rmcert'; slot = /acta/.test(n) ? 'acta' : 'cert'; }
+    else if (/audit/.test(n)) { tab = 'rmaud'; slot = 'informe'; }
+    else if (/gestion/.test(n)) { tab = 'rmig'; slot = 'informe'; }
+    else if (/memoria/.test(n)) { tab = 'rmmem'; slot = 'memoria'; }
+    else if (/cuentas anuales|deposito/.test(n)) { tab = 'rmca'; slot = ['acuse', 'nota'].includes(slot) ? slot : 'cuentas'; }
+    else if (slot === 'acuse') tab = 'rmacu';
+    else if (slot === 'nota') tab = 'rmnota';
+    else if (/escritura/.test(n)) return { tab: 'rmesc' };
+    return tab && DOCS[tab]?.some(([k]) => k === slot) ? { tab, slot } : null;
+  }
+
+  async function cargarRegistro(files) {
+    const estado = (m) => { const el = document.getElementById('pdfEstado'); if (el) el.textContent = m; };
+    const informe = [], cache = {};
+    for (const [i, f] of files.entries()) {
+      try {
+        estado(`Leyendo ${i + 1} de ${files.length}…`);
+        let e = empresa();
+        if (!e) { // sin empresa elegida: se busca por el NIF que trae el PDF
+          const t = await textoPdf(f);
+          e = S.empresas.find((x) => x.cif === (nifDe(t) || nifDe(f.webkitRelativePath || '')));
+        }
+        if (!e) { informe.push(`⚠ ${f.name}: elige la empresa o usa un PDF con su NIF`); continue; }
+        const ej = parseInt((/\b(20\d\d)\b/.exec(f.name) || [])[1] ?? '', 10) || Number(S.ejercicio);
+        const cl = claseRegistro(f.name);
+        const nom = e.siglas || e.nombre;
+        if (!cl || cl.tab === 'rmesc') {
+          const id = crypto.randomUUID();
+          const sub = await subir(e.id, cl ? 'rmesc' : 'otros', id, 'archivo', f);
+          if (sub.error) throw new Error(sub.error);
+          const err = await guardarRegistro(null, { id, empresa_id: e.id, tipo: cl ? 'rmesc' : 'otros', ejercicio: null,
+            datos: cl ? { fecha: '', desc: f.name, archivo: sub.val } : { nombre: f.name, cargado: new Date().toISOString().slice(0, 10), ref: `${f.name}|${f.size}`, archivo: sub.val } });
+          if (err) throw new Error(err);
+          informe.push(`✔ ${nom}: ${f.name} → ${cl ? 'Escrituras' : 'Otros documentos'}`);
+          continue;
+        }
+        const clave = `${e.id}|${cl.tab}|${ej}`;
+        const c = (cache[clave] ??= (() => {
+          const reg = S.registros.find((r) => r.tipo === 'doc-' + cl.tab && r.empresa_id === e.id && r.ejercicio === ej);
+          return { reg, empresa: e.id, tab: cl.tab, ej, datos: { ...(reg?.datos ?? {}) } };
+        })());
+        const sub = await subir(e.id, `doc-${cl.tab}-${ej}`, 'doc', cl.slot, f);
+        if (sub.error) throw new Error(sub.error);
+        c.datos[cl.slot] = { fecha: c.datos[cl.slot]?.fecha ?? '', ref: c.datos[cl.slot]?.ref ?? '', archivo: sub.val };
+        informe.push(`✔ ${nom}: ${f.name} → ${tabs[cl.tab][0]} (${DOCS[cl.tab].find(([k]) => k === cl.slot)[1]}, ${ej})`);
+      } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
+    }
+    for (const c of Object.values(cache)) {
+      const err = await guardarRegistro(c.reg, { ...(c.reg ? {} : { id: crypto.randomUUID() }), empresa_id: c.empresa, tipo: 'doc-' + c.tab, ejercicio: c.ej, datos: c.datos });
+      if (err) informe.push(`✖ ${tabs[c.tab][0]}: ${err}`);
+    }
+    estado('');
+    await cargar(); render();
+    alert(informe.join('\n') || 'No se cargó ningún archivo.');
+  }
+
+  async function subirArchivos(files) {
+    if (archKind === 'impuestos') return cargarPdfs(files);
+    if (archKind === 'registro') return cargarRegistro(files);
+    if (!S.sel) return void alert('Elige primero la empresa en el desplegable de la izquierda.');
+    const informe = [], vistos = new Set();
+    for (const f of files) {
+      try {
+        const ref = `${f.name}|${f.size}`;
+        if (vistos.has(ref) || archivosDe(archKind).some((r) => r.datos.ref === ref)) { informe.push(`↩ ${f.name}: repetido`); continue; }
+        vistos.add(ref);
+        const id = crypto.randomUUID();
+        const sub = await subir(S.sel, 'arch-' + archKind, id, 'archivo', f);
+        if (sub.error) throw new Error(sub.error);
+        const err = await guardarRegistro(null, { id, empresa_id: S.sel, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
+          datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
+        if (err) throw new Error(err);
+        informe.push(`✔ ${f.name}`);
+      } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
+    }
+    await cargar(); render();
+    alert(`${ARCH[archKind]}: ${informe.length} archivos\n${informe.join('\n')}\n\nSe guardan en la empresa y el ejercicio elegidos.`);
+  }
+
   // ---------- Carga de PDF (AEAT y tributos locales) ----------
   async function textoPdf(file) {
     const lib = window.pdfjsLib;
@@ -474,6 +583,12 @@ export function crearModulos(c) {
       'm-doc-edit': () => formDoc(d.m, d.slot),
       'm-doc-del': () => quitarDoc(d.m, d.slot),
       'm-sub': () => { subIT = d.sub; render(); },
+      'm-sube': () => {
+        archKind = d.kind;
+        const inp = document.getElementById('archIn');
+        inp.accept = d.kind === 'impuestos' || d.kind === 'registro' ? '.pdf' : '.xlsx,.xls,.csv,.txt,.pdf';
+        inp.click();
+      },
       'm-pdf': () => document.getElementById('pdfIn')?.click(),
       'm-carpeta': () => document.getElementById('carpetaIn')?.click(),
     })[d.act]?.();
@@ -508,5 +623,5 @@ export function crearModulos(c) {
     };
   });
 
-  return { tabs, accion, cargarPdfs, badges };
+  return { tabs, accion, cargarPdfs, badges, subirArchivos, cargado, titulo, listaArchivos };
 }

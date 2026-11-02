@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=12';
+import { crearModulos } from './modulos.js?v=13';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -217,11 +217,15 @@ function render() {
         <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
-      ${puedeEditar() ? `<button data-act="m-carpeta">📂 Cargar carpeta…</button>
-        <button data-act="m-pdf">📄 Cargar PDF…</button>
-        <input type="file" id="pdfIn" accept=".pdf" multiple hidden>
+      ${puedeEditar() ? `<div class="drops">${[['emitidas', 'EMITIDAS'], ['recibidas', 'RECIBIDAS'], ['extractos', 'EXTRACTOS'], ['sys', 'SYS'],
+        ['impuestos', 'IMPUESTOS'], ['sii', 'SII'], ['nominas', 'NÓMINAS'], ['registro', 'REGISTRO']].map(([k, l]) =>
+        `<button class="drop${M.cargado(k) ? ' ok' : ''}" data-act="m-sube" data-kind="${k}" title="${esc(M.titulo(k))}">${l}</button>`).join('')}</div>
+        <input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
-        <span class="hint" id="pdfEstado"></span>` : ''}
+        <span class="hint" id="pdfEstado"></span>
+        <details class="arch-det"><summary>Archivos cargados</summary>${M.listaArchivos()}</details>
+        <div class="bot-izq"><button data-act="buscar">🔍 Buscar pestaña (Ctrl+K)</button><button data-act="inicio">🏠 Inicio</button>
+          <button data-act="m-carpeta">📁 Elegir carpeta y buscar…</button></div>` : ''}
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -557,6 +561,31 @@ function formCalendario() {
 const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml });
 Object.assign(TABS, M.tabs);
 
+// Buscador de pestañas (Ctrl+K)
+function paleta() {
+  const d = document.createElement('dialog');
+  d.innerHTML = '<form class="form"><h3>Buscar pestaña</h3><input id="q" placeholder="p. ej. IBI, 111, socios…" autocomplete="off"><div class="pal"></div></form>';
+  document.body.append(d);
+  const q = d.querySelector('#q'), lista = d.querySelector('.pal');
+  const sinAcento = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const pinta = () => {
+    const f = sinAcento(q.value);
+    const r = Object.entries(TABS).filter(([id, t]) => (!t[3] || esAdmin()) && (!f || sinAcento(`${t[0]} ${t[1]} ${id}`).includes(f))).slice(0, 12);
+    lista.innerHTML = r.map(([id, t]) => `<button type="button" class="pal-op" data-ir="${id}"><b>${esc(t[0])}</b><small>${esc(t[1])}</small></button>`).join('')
+      || '<p class="vacio">Sin resultados</p>';
+  };
+  const ir = (id) => { S.tab = id; S.grp = -1; d.close(); render(); };
+  q.oninput = pinta;
+  lista.onclick = (ev) => { const b = ev.target.closest('[data-ir]'); if (b) ir(b.dataset.ir); };
+  q.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); const b = lista.querySelector('[data-ir]'); if (b) ir(b.dataset.ir); } };
+  d.onclose = () => d.remove();
+  d.querySelector('form').onsubmit = (ev) => ev.preventDefault();
+  pinta(); d.showModal(); q.focus();
+}
+document.addEventListener('keydown', (ev) => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k' && S.perfil?.activo) { ev.preventDefault(); paleta(); }
+});
+
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
   const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap'));
@@ -578,6 +607,8 @@ root.addEventListener('click', (ev) => {
     'edit-obl': () => formObligacion(S.obligaciones.find((o) => o.id === id)),
     'del-obl': () => confirm('¿Borrar la obligación?') && run(db.from('obligaciones').delete().eq('id', id)),
     calendario: () => formCalendario(),
+    inicio: () => { S.tab = 'cmg'; S.grp = -1; render(); },
+    buscar: () => paleta(),
     'new-conc': () => formConciliacion({ periodo: S.periodo || '1T' }),
     'edit-conc': () => formConciliacion(S.conciliaciones.find((c) => c.id === id)),
     'del-conc': () => confirm('¿Borrar la conciliación?') && run(db.from('conciliaciones').delete().eq('id', id)),
@@ -589,7 +620,8 @@ root.addEventListener('click', (ev) => {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.id === 'pdfIn' || t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void M.subirArchivos(fs); }
   if (t.dataset.glob) {
     S[t.dataset.glob] = t.dataset.glob === 'ejercicio' ? (parseInt(t.value, 10) || S.ejercicio) : t.value;
     return render();
