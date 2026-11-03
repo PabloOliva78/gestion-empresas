@@ -511,3 +511,11 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .xc-kg { margin-top: 10px; gap: 6px; }
 .xc-k { padding: 5px 10px 6px; }
 .xc-rev { flex: 0 0 15em; }
+
+/* cuentas (ajuste final): cabecera, filtros y títulos pequeños; tablas (extracto y resumen) grandes y proporcionales a la pantalla */
+.xc-cab { font-size: max(10px, 0.58vw); }
+.ctas { font-size: max(11px, 0.7vw); }
+.ctas .css-flex .tnom { font-size: max(13px, 1.02vw); }
+.ctas .css-flex .tnom td, .ctas .css-flex .tnom td.num, .ctas .css-flex .tnom td.in input, .ctas .css-flex .tnom td select { font-size: 1em; }
+.ctas .css-flex .tnom th { font-size: .82em; }
+.ctas .css-4760-t { font-size: 1em; }
