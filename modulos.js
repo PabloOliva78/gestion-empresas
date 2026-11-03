@@ -1680,7 +1680,7 @@ export function crearModulos(c) {
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
         <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
         ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button> <button class="small" data-act="m-ctanv">＋ Añadir línea</button>` : ''}</div>
-        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th><th></th></tr></thead>
+        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th title="Comprobado">C</th><th title="Eliminar apunte">E</th></tr></thead>
         <tbody>${filas || '<tr><td colspan="8" class="vacio">Sin movimientos</td></tr>'}${nv}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
         <div class="res-wrap">${resumen}</div></div></section>

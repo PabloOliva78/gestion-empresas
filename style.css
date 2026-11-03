@@ -582,3 +582,13 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom.mov th:nth-child(1) { width: 6.6em; } .ctas .css-flex .tnom.mov th:nth-child(2) { width: 8em; }
 .ctas .css-flex .tnom.mov td:nth-child(1) input, .ctas .css-flex .tnom.mov td:nth-child(2) input { font-size: .9em; padding: .2em .1em; letter-spacing: -.01em; }
 .ctas .css-flex .tnom.mov td:nth-child(1), .ctas .css-flex .tnom.mov td:nth-child(2) { padding-left: 0; padding-right: 0; }
+
+/* cabeceras: misma altura exacta en extracto y resumen (en unidades absolutas, no dependen del tamaño de cada celda) */
+.ctas { --tb: max(8.5px, 0.56vw); }
+.ctas .css-flex .tnom thead th, .ctas .css-flex .tnom thead th.pp { height: calc(var(--tb) * 6); min-height: calc(var(--tb) * 6); max-height: calc(var(--tb) * 6); font-size: calc(var(--tb) * .9); line-height: 1.12; padding: .2em .15em; box-sizing: border-box; overflow: hidden; vertical-align: middle; }
+/* debe, haber y saldo acumulado: algo más pequeños para que el dato siempre quepa */
+.ctas .css-flex .tnom.mov td:nth-child(4), .ctas .css-flex .tnom.mov td:nth-child(5), .ctas .css-flex .tnom.mov td:nth-child(6) { font-size: .88em; padding-left: 0; padding-right: .1em; }
+.ctas .css-flex .tnom.mov td:nth-child(4) input, .ctas .css-flex .tnom.mov td:nth-child(5) input { font-size: .88em; padding: .2em .1em; }
+.ctas .css-flex .tnom.mov th:nth-child(4), .ctas .css-flex .tnom.mov th:nth-child(5) { width: 7em; } .ctas .css-flex .tnom.mov th:nth-child(6) { width: 7.4em; }
+.ctas .css-flex .tnom.mov th:nth-child(7), .ctas .css-flex .tnom.mov th:nth-child(8) { width: 3em; }
+.ctas .css-flex .tnom.mov td:nth-child(7) select { width: 100%; padding: 0; }
