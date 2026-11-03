@@ -624,3 +624,6 @@ td.amar { background: #fff3a8; }
 
 .arch-det { margin: .3rem 0 .8rem; font-size: .85rem; }
 .arch-det summary { cursor: pointer; color: #1f3a7a; font-weight: 600; }
+
+/* bloque 3: botón de logo con aspecto de botón pequeño */
+label.lbl-btn { display: inline-block; padding: .2rem .55rem; font-size: .85rem; border: 1px solid #b9c7e4; border-radius: 6px; background: #fff; color: #1f3864; cursor: pointer; margin-right: .3rem; }

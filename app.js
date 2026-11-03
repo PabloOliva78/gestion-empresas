@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=87';
+import { crearModulos } from './modulos.js?v=89';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -35,8 +35,9 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '');
 const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? '—';
 // Logos en logos/<CIF>.jpg; si no existe el archivo, la imagen se oculta.
-const logoHtml = (e, cls = 'logo') => (e?.cif
-  ? `<img class="${cls}" src="logos/${esc(e.cif)}.jpg?v=6" alt="" onerror="this.style.visibility='hidden'">` : `<span class="${cls}"></span>`);
+const logoHtml = (e, cls = 'logo') => (e?.datos?.logo
+  ? `<img class="${cls}" src="${esc(e.datos.logo)}" alt="">` : e?.cif
+    ? `<img class="${cls}" src="logos/${esc(e.cif)}.jpg?v=6" alt="" onerror="this.style.visibility='hidden'">` : `<span class="${cls}"></span>`);
 
 // Orden y nombre con que se muestran las empresas en el desplegable (se reconocen por el nombre guardado)
 const ORDEN_EMP = [['HEROGRA FERTILIZANTES S.A.', /herogra\s+fertiliz/i], ['HEROGRA ESPECIALES', /herogra\s+especiales/i], ['HISPALENSE DE LIQUIDOS S.L', /hispalense/i],
@@ -148,7 +149,7 @@ const GRUPOS = [
     'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmcert', 'rmaud', 'rmig', 'rmmem', 'rmacu', 'rmnota', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
-  ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
+  ['3.- INFORMACIÓN EMPRESA', ['asi', 'rev', 'chk', 'opemp', 'ficha'], '', 'Entrada de apuntes, archivos cargados, checking de lo declarado y opciones de las empresas.'],
   ['4.- MODELOS TRIBUTARIOS', ['mod111', 'mod115', 'mod123', 'mod200', 'mod202', 'mod303', 'mod349', 'mod583', 'mod592', 'moda22', 'mod180', 'mod190', 'mod193', 'mod232', 'mod390', 'modintra'],
     'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
   ['5.- CUENTAS CONTABLES', ['bss', 'c4650', 'c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
@@ -162,7 +163,7 @@ const TABS = {
   chkf: ['Checking Fiscal', 'Obligaciones, plazos y límites', () => vistaObligaciones({ area: 'fiscal' })],
   rmobl: ['Plazos registrales', 'Libros y depósito de cuentas', () => vistaObligaciones({ area: 'mercantil' })],
   ficha: ['Ficha de la empresa', 'Datos y resumen', () => vistaFicha()],
-  empresas: ['Empresas', 'Listado y logos', () => vistaEmpresas()],
+  opemp: ['Opciones Empresa', 'Sigla, tipo, programa, banco y logo', () => vistaEmpresas()],
   m303: ['303 IVA', '4700 · 4750 · 472 · 477', () => vistaConciliaciones(['4700', '4750', '472', '477'])],
   m111: ['111 · 115 · 123', 'Retenciones · 4751', () => vistaConciliaciones(['4751'])],
   m200: ['200 · 202 Sociedades', '4752 · 473 · 474', () => vistaConciliaciones(['4752', '473', '474'])],
@@ -192,7 +193,7 @@ const badgeConc = (cuentas) => {
 };
 const BADGES_APP = {
   calf: () => pendObl(''), chkf: () => pendObl('fiscal'), rmobl: () => pendObl('mercantil'), ssobl: () => pendObl('laboral'),
-  ficha: () => ({ t: 'Por empresa' }), empresas: () => ({ t: `${S.empresas.length} empresas` }),
+  ficha: () => ({ t: 'Por empresa' }), opemp: () => ({ t: `${S.empresas.length} empresas` }),
   m303: () => badgeConc(['4700', '4750', '472', '477']), m111: () => badgeConc(['4751']), m200: () => badgeConc(['4752', '473', '474']),
   c47: () => badgeConc(['47']), c465: () => badgeConc(['465']), c640: () => badgeConc(['640']), c642: () => badgeConc(['642']),
   ssconc: () => badgeConc(['476', '465', '640', '642']), conc: () => badgeConc(null),
@@ -379,6 +380,22 @@ async function guardarEmpCampo(clave, valor) {
   if (error) return void alert(error.message);
   await cargar(); render();
 }
+// Logo elegido a mano: se reduce a 240 px de alto y se guarda en la ficha de la empresa (si no hay, se usa logos/NIF.jpg)
+async function subirLogo(id, file) {
+  const e = S.empresas.find((x) => x.id === id);
+  if (!e || !file) return;
+  try {
+    const img = await createImageBitmap(file), k = Math.min(1, 240 / img.height), cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(img, 0, 0, cv.width, cv.height);
+    await guardarEmpDatos(e, { ...(e.datos ?? {}), logo: cv.toDataURL('image/jpeg', 0.85) });
+  } catch (err) { alert(`No se pudo leer la imagen: ${err.message}`); }
+}
+async function guardarEmpDatos(e, datos) {
+  const { error } = await db.from('empresas').update({ datos }).eq('id', e.id);
+  if (error) return void alert(error.message);
+  await cargar(); render();
+}
 function vistaEmpresas() {
   const ed = puedeEditar();
   const cel = (e, campo, v, ph = '') => (ed ? `<input class="emp-in" data-empf="${e.id}|${campo}" value="${esc(v ?? '')}" placeholder="${ph}">` : esc(v ?? ''));
@@ -386,10 +403,11 @@ function vistaEmpresas() {
   const TIPOS = { '': '—', GE: 'Gran empresa (mensual)', PYME: 'Pyme (trimestral)' };
   const filas = [...S.empresas].sort((a, b) => (idxEmp(a) < 0 ? 99 : idxEmp(a)) - (idxEmp(b) < 0 ? 99 : idxEmp(b))).map((e) => `<tr><td><div class="emp">${logoHtml(e)}${esc(etiquetaEmp(e))}</div></td><td>${esc(e.cif)}</td>
     <td>${cel(e, 'siglas', e.siglas, 'Sigla')}</td><td>${sel(e, 'tipo', TIPOS, e.tipo ?? '')}</td><td>${sel(e, 'programa', PROGRAMAS, programaDe(e))}</td><td>${cel(e, 'banco', e.datos?.banco, 'Banco')}</td>
+    <td class="acciones">${ed ? `<label class="small lbl-btn" title="Cambiar el logo">Logo<input type="file" accept="image/*" data-emplogo="${e.id}" hidden></label>${e.datos?.logo ? `<button class="small" data-act="emp-logodel" data-id="${e.id}" title="Quitar el logo cambiado">sin logo</button>` : ''}` : ''}</td>
     <td class="acciones">${ed ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}" title="Borrar">✕</button>` : ''}</td></tr>`).join('');
   return `<div class="bar"><span class="space"></span>
     ${ed ? '<button class="primary" data-act="new-emp">Nueva empresa</button>' : ''}</div>
-    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>NIF</th><th>Sigla</th><th>Tipo</th><th>Programa</th><th>Banco</th><th></th></tr></thead>
+    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>NIF</th><th>Sigla</th><th>Tipo</th><th>Programa</th><th>Banco</th><th>Logo</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>
       <p class="hint">La sigla es la que usan los asientos de liquidación (HER, ESP…). Programa contable: D365, y Business Central en Fertinova (su libro de IVA trae ventas y compras en un solo archivo y se reparte solo al cargarlo en Facturas emitidas o recibidas).</p>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
 }
@@ -696,6 +714,7 @@ root.addEventListener('click', (ev) => {
   const acciones = {
     'new-emp': () => formEmpresa(),
     'edit-emp': () => formEmpresa(S.empresas.find((e) => e.id === id)),
+    'emp-logodel': () => { const e = S.empresas.find((x) => x.id === id); const { logo, ...resto } = e?.datos ?? {}; return e && guardarEmpDatos(e, resto); },
     'del-emp': () => confirm('¿Borrar la empresa y TODAS sus obligaciones?') && run(db.from('empresas').delete().eq('id', id)),
     'new-obl': () => formObligacion({ area: AREA_TAB[S.tab] }),
     'edit-obl': () => formObligacion(S.obligaciones.find((o) => o.id === id)),
@@ -725,6 +744,9 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
   if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);
+  if (t.dataset.emplogo) { const f = t.files[0]; t.value = ''; return void subirLogo(t.dataset.emplogo, f); }
+  if (t.dataset.asib) return void M.asiCampo(t.dataset.asib, t.value);
+  if (t.dataset.asip) return void M.asiPrevCampo(t.dataset.asip, t.value);
   if (t.dataset.retclave) return void M.guardarRetClave(t.dataset.retclave, t.value);
   if (t.dataset.prsver !== undefined) return void M.setPrsVer(t.value);
   if (t.dataset.man) return void M.guardarMan303(t.dataset.man, t.value);
@@ -764,6 +786,8 @@ root.addEventListener('mouseout', (ev) => {
   if (S.grp < 0 || !ev.target.closest?.('.tabs-wrap') || ev.relatedTarget?.closest?.('.tabs-wrap')) return;
   cierraGrp = setTimeout(() => { S.grp = -1; refrescarTabs(); }, 250);
 });
+// Ctrl+V sobre el recuadro de Entrada Información: captura de pantalla o texto copiado de Excel
+root.addEventListener('paste', (ev) => { if (ev.target.closest?.('[data-asipega]')) M.asiPegar(ev); });
 root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });
 root.addEventListener('dragleave', (ev) => ev.target.closest?.('.dropzone')?.classList.remove('over'));
 root.addEventListener('drop', (ev) => {

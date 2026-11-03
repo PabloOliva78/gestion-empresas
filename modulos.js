@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=41';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=41';
 
 import { CAB_SII } from './siicab.js?v=1';
 
@@ -548,9 +548,10 @@ export function crearModulos(c) {
     const n = new Set(f.map((l) => l.factura)).size;
     const otro = s === 'E' ? 'Recibidas' : 'Emitidas';
     const acc = (l) => {
-      if (!puede()) return '';
+      const lupa = s === 'R' && l.factura ? `<button class="pill" data-act="m-esker" data-n="${esc(l.factura)}" title="Buscar esta factura en Esker">🔎</button>` : '';
+      if (!puede()) return lupa;
       const a = (op, t) => `<button class="pill" data-act="m-fc" data-op="${op}" data-s="${s}" data-k="${esc(claveL(l))}">${t}</button>`;
-      return `${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}`;
+      return `${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}${lupa}`;
     };
     // cada campo del libro es editable (se guarda en el propio libro de la empresa)
     const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
@@ -623,6 +624,15 @@ export function crearModulos(c) {
     if (!arr?.[+i] || !confirm(`¿Quitar la factura ${arr[+i].factura} del SII?`)) return;
     await reemplazarGrande(tipo, S.sel, arr.filter((_, j) => j !== +i));
     render();
+  }
+  // Esker on Demand: abre la lista de facturas de proveedor y deja el nº de factura en el portapapeles
+  const ESKER_URL = 'https://as1.ondemand.esker.com/ondemand/webaccess/ase/documents.aspx?Target=adminList&ViewId=101747698&tab=1580987142';
+  async function buscarEsker(n) {
+    let url = ESKER_URL;
+    try { url = localStorage.getItem('imp-eskerUrl') || ESKER_URL; } catch (_) { /* sin almacenamiento */ }
+    const w = window.open(`${url.split('#')[0]}#hgfac=${encodeURIComponent(n)}`, 'esker');
+    try { await navigator.clipboard.writeText(n); } catch (_) { /* si no se copia, se escribe a mano */ }
+    if (w) try { w.focus(); } catch (_) { /* otra pestaña */ }
   }
   function setFc(campo, valor) { if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
 
@@ -2365,6 +2375,7 @@ export function crearModulos(c) {
   function accion(d) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
+      ...acc3,
       'm-new': () => formReg(d.m),
       'm-edit': () => formReg(d.m, reg()),
       'm-del': () => borrarReg(reg()),
@@ -2376,6 +2387,7 @@ export function crearModulos(c) {
       'm-bss': () => { bssFiltro = d.f; render(); },
       'm-man303': () => formMan303(),
       'm-fc': () => opFc(d.s, d.op, d.k),
+      'm-esker': () => buscarEsker(d.n),
       'm-manret': () => formManRet(d.m),
       'm-retprint': () => imprimirRet(d.m),
       'm-fundaedel': () => quitarFundae(d.y),
@@ -2399,11 +2411,438 @@ export function crearModulos(c) {
       },
       'm-pdf': () => document.getElementById('pdfIn')?.click(),
       'm-carpeta': () => document.getElementById('carpetaIn')?.click(),
-    })[d.act]?.();
+    })[d.act]?.(d);
   }
 
+  // ================= Bloque 3 · Información empresa: Entrada Información, Archivos Documentación y Checking Información =================
+  // Libro grande de la empresa (facturas, SII, extracto): lo pide a la base de datos y lo deja en memoria para el resto de pestañas
+  async function traer(tipo) {
+    const k = `${tipo}|${S.sel}`;
+    if (GR.get(k)) return GR.get(k);
+    const { data } = await db.from('registros').select('datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle();
+    const filas = data?.datos?.filas ?? [];
+    GR.set(k, filas);
+    return filas;
+  }
+
+  // ---- Entrada Información: apuntes a mano en cualquier cuenta contable (misma lista que «Añadir línea» de cada extracto) ----
+  let asiB = null, asiPrev = [], asiOcr = '', asiCtl = null, asiOrigen = 'texto';
+  const asiBor = () => (asiB ??= { fecha: fdate(Date.now()), asiento: '', cuenta: '', desc: '', debe: '', haber: '' });
+  const asiCampo = (k, v) => { asiBor()[k] = v; };
+  const asiPrevCampo = (clave, v) => { const [i, k] = clave.split('|'); if (asiPrev[+i]) asiPrev[+i][k] = v; };
+
+  // texto pegado desde Excel (Ctrl+V): tabuladores, celdas entre comillas con saltos de línea y fila de cabecera opcional
+  function tsvFilas(txt) {
+    const R = []; let f = [], c = '', q = false;
+    const t = String(txt || '').replace(/\r\n?/g, '\n');
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (q) { if (ch === '"') { if (t[i + 1] === '"') { c += '"'; i++; } else q = false; } else c += ch; continue; }
+      if (ch === '"' && c === '') { q = true; continue; }
+      if (ch === '\t') { f.push(c); c = ''; continue; }
+      if (ch === '\n') { f.push(c); R.push(f); f = []; c = ''; continue; }
+      c += ch;
+    }
+    if (c !== '' || f.length) { f.push(c); R.push(f); }
+    return R.map((r) => r.map((v) => v.replace(/\s+/g, ' ').trim())).filter((r) => r.some((v) => v));
+  }
+  function asiNum(v) {
+    let x = String(v || '').replace(/[€\s]/g, '');
+    if (!x || x === '-') return 0;
+    let neg = false;
+    if (/^\(.*\)$/.test(x)) { neg = true; x = x.slice(1, -1); }
+    if (/-$/.test(x)) { neg = true; x = x.slice(0, -1); }
+    if (/,\d{1,2}$/.test(x)) x = x.replace(/\./g, '').replace(',', '.');
+    else if (/\.\d{1,2}$/.test(x) && /,/.test(x)) x = x.replace(/,/g, '');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(x)) x = x.replace(/\./g, '');
+    const n = parseFloat(x);
+    return Number.isNaN(n) ? null : (neg ? -n : n);
+  }
+  // asiento metido en el concepto (p. ej. «$SS-01018349 NOMINAS JULIO»): pasa a su columna
+  const asiFix = (l) => {
+    const m = /^[^A-Za-z0-9]*([A-Za-z$§|]{1,6}-\d{3,})\s+(.*)$/.exec(String(l.desc || ''));
+    if (!String(l.asiento || '').trim() && m) { l.asiento = m[1]; l.desc = m[2].trim(); }
+    return l;
+  };
+  // lecturas de imagen: prefijos del asiento estropeados («SsS-…», «S$SS-…») se igualan al prefijo habitual del lote
+  function asiLimpiarLote(L2) {
+    L2.forEach(asiFix);
+    const cnt = {};
+    L2.forEach((l) => { const m = /^([A-Z]{1,5})-\d+$/.exec(String(l.asiento || '')); if (m) cnt[m[1]] = (cnt[m[1]] || 0) + 1; });
+    const P = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    if (!P) return L2;
+    const pre = P[0];
+    L2.forEach((l) => {
+      const m = /^([A-Za-z$§|]{1,6})-(\d{3,})$/.exec(String(l.asiento || '').trim());
+      if (!m) return;
+      const letras = m[1].toUpperCase().replace(/[^A-Z]/g, '');
+      if (m[1] !== pre && (letras === pre || letras.includes(pre) || (letras.length <= pre.length + 2 && [...pre].every((ch) => letras.includes(ch))))) l.asiento = `${pre}-${m[2]}`;
+    });
+    return L2;
+  }
+  // texto suelto (de un PDF o de la lectura de una imagen): fecha, asiento, cuenta de 9 a 12 cifras, concepto e importes
+  function lineasDeTextoOcr(txt, B) {
+    const out = [], rxF = /\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/, rxImp = /-?\d{1,3}(?:[.\s]\d{3})+[,.]\d{2}\b|-?\d+[,.]\d{2}\b/g;
+    const num = (x) => { const m = /^(-?[\d.\s]*?)[,.](\d{2})$/.exec(x); return m ? +`${m[1].replace(/[.\s]/g, '')}.${m[2]}` : parseES(x); };
+    let prev = null;
+    String(txt || '').split(/\r?\n/).forEach((raw) => {
+      let s = raw.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!s) return;
+      const tags = [...s.matchAll(/⟦([DHS]):([^⟧]+)⟧/g)].map((m) => ({ c: m[1], v: m[2] }));
+      s = s.replace(/⟦[DHS]:[^⟧]+⟧/g, ' ');
+      const imps = tags.length ? tags.map((t) => t.v) : (s.match(rxImp) || []).map((x) => x.replace(/\s/g, '')), mf = rxF.exec(s);
+      if (!imps.length) { // fila sin importes: continuación del concepto de la anterior (texto partido en dos renglones)
+        if (!mf && prev && !/^(fecha|asiento|concepto|debe|haber|saldo|divisa|importe)\b/i.test(s)) prev.desc = `${prev.desc} ${s.replace(/\bEUR\b/g, '').trim()}`.trim(); else prev = null;
+        return;
+      }
+      if (/\bsaldo\s+(final|inicial|anterior|acumulado)\b/i.test(s)) { prev = null; return; }
+      let fecha = B.fecha || '';
+      if (mf) { const y = mf[3].length === 2 ? `20${mf[3]}` : mf[3]; fecha = `${mf[1].padStart(2, '0')}/${mf[2].padStart(2, '0')}/${y}`; s = s.replace(mf[0], ' '); }
+      if (!tags.length) imps.forEach((x) => { s = s.replace(x, ' '); });
+      s = s.replace(/\b(EUR|EURO|EUROS|€)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+      let asiento = B.asiento || '', cuenta = B.cuenta || '';
+      const tk = s.split(' ');
+      if (tk[0] && /\d/.test(tk[0]) && /^[A-Z0-9/\-.]{3,}$/i.test(tk[0])) { asiento = tk.shift(); s = tk.join(' '); }
+      const mc = /\b[1-7]\d{8,11}\b/.exec(s);
+      if (mc) { cuenta = mc[0]; s = s.replace(mc[0], ' ').replace(/\s+/g, ' ').trim(); }
+      const v = imps.map(num);
+      let debe = '', haber = '';
+      if (tags.length) { // columna según la posición del importe en la imagen
+        const sum = (c) => rr(tags.reduce((a, t) => a + (t.c === c ? (num(t.v) || 0) : 0), 0)), d = sum('D'), h = sum('H');
+        debe = d ? fnum(d) : ''; haber = h ? fnum(h) : '';
+      } else if (v.length === 1) { if (v[0] < 0) haber = fnum(-v[0]); else debe = fnum(v[0]); } else { debe = v[0] ? fnum(v[0]) : ''; haber = v[1] ? fnum(v[1]) : ''; }
+      if (!debe && !haber) { prev = null; return; }
+      prev = { fecha, asiento, cuenta, desc: s, debe, haber };
+      out.push(prev);
+    });
+    return out;
+  }
+  function asiDeTexto(txt, B) {
+    asiCtl = null;
+    const R = tsvFilas(txt);
+    if (!R.length) return [];
+    if (!R.some((r) => r.length > 1)) return lineasDeTextoOcr(txt, B);
+    const hi = R.findIndex((r) => r.some((v) => /^fecha/.test(sinAc(v))) && r.some((v) => /^(debe|haber)/.test(sinAc(v)))), H = (hi >= 0 ? R[hi] : []).map(sinAc);
+    const ix = (rx) => H.findIndex((h) => rx.test(h));
+    const C = hi >= 0 ? { f: ix(/^fecha/), a: ix(/^asiento|^n.? ?asiento|documento/), c: ix(/^cuenta/), t: ix(/^concepto|^descrip/), d: ix(/^debe/), h: ix(/^haber/) } : { f: 0, a: 1, c: 2, t: 3, d: 4, h: 5 };
+    const datos = R.slice(hi + 1), g = (r, k) => (k >= 0 ? (r[k] || '') : ''), out = [], fuera = [];
+    let td = 0, th = 0;
+    datos.forEach((r, n) => {
+      const d = asiNum(g(r, C.d)), h = asiNum(g(r, C.h)), fila = hi + 2 + n;
+      if (d === null || h === null) { fuera.push(`fila ${fila}: importe no válido (${g(r, C.d)} / ${g(r, C.h)})`); return; }
+      if (!d && !h) { if (r.join('').trim()) fuera.push(`fila ${fila}: sin importe en Debe ni Haber`); return; }
+      td += d; th += h;
+      const l = { fecha: g(r, C.f) || B.fecha || '', asiento: g(r, C.a) || B.asiento || '', cuenta: g(r, C.c).replace(/\s/g, '') || B.cuenta || '', desc: g(r, C.t), debe: d ? fnum(d) : '', haber: h ? fnum(h) : '' };
+      if (!fIsoCta(l.fecha)) fuera.push(`fila ${fila}: fecha no válida (${l.fecha}) — se deja para corregir`);
+      if (!l.cuenta) fuera.push(`fila ${fila}: sin cuenta — se deja para corregir`);
+      out.push(l);
+    });
+    asiCtl = { filas: datos.length, leidas: out.length, debe: rr(td), haber: rr(th), fuera, cab: hi >= 0 };
+    return out;
+  }
+  function asiTexto(t) {
+    asiOrigen = 'texto';
+    const L2 = asiLimpiarLote(asiDeTexto(t, asiBor())), c = asiCtl;
+    asiPrev = asiPrev.concat(L2);
+    asiOcr = L2.length ? `${L2.length} línea(s) leídas del texto${c ? ` · Debe ${fnum(c.debe)} · Haber ${fnum(c.haber)}` : ''}${c?.fuera.length ? ` · ${c.fuera.length} aviso(s): ${c.fuera.slice(0, 4).join('; ')}` : ''}`
+      : 'No he encontrado líneas con importes en el texto';
+    render();
+  }
+  const cargarTesseract = () => (window.Tesseract ? Promise.resolve() : new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    s.onload = ok; s.onerror = () => ko(new Error('No se ha podido descargar el lector de imágenes (hace falta internet)'));
+    document.head.appendChild(s);
+  }));
+  // Captura de un extracto: se amplía, se lee con OCR y las filas se rehacen por la posición de cada palabra (Debe/Haber por columna)
+  async function asiLeerImagen(blob) {
+    const B = asiBor();
+    asiOrigen = 'imagen'; asiOcr = 'Leyendo la imagen…'; render();
+    try {
+      await cargarTesseract();
+      const img = await createImageBitmap(blob), k = Math.min(3, Math.max(1, 2000 / Math.max(img.width, 1))), cv = document.createElement('canvas');
+      cv.width = img.width * k; cv.height = img.height * k;
+      const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.imageSmoothingQuality = 'high'; cx.drawImage(img, 0, 0, cv.width, cv.height);
+      const w = await window.Tesseract.createWorker('spa');
+      await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+      const r = await w.recognize(cv);
+      await w.terminate();
+      const W = (r.data.words || []).filter((x) => String(x.text || '').trim()).map((x) => ({ t: x.text, x: x.bbox.x0, x1: x.bbox.x1, y: (x.bbox.y0 + x.bbox.y1) / 2, h: x.bbox.y1 - x.bbox.y0 }));
+      const esImp = (t) => /^-?\d{1,3}(?:[.\s]\d{3})+[,.]\d{2}$|^-?\d+[,.]\d{2}$/.test(String(t).trim());
+      const imW = W.filter((x) => esImp(x.t)), cab = { D: W.find((x) => /^debe$/i.test(x.t)), H: W.find((x) => /^haber$/i.test(x.t)), S: W.find((x) => /^saldo$/i.test(x.t)) };
+      let colDe = null;
+      if (cab.D && cab.H) { // con cabecera Debe/Haber/Saldo se usa su sitio
+        const cs = Object.entries(cab).filter(([, v]) => v).map(([kk, v]) => [kk, (v.x + v.x1) / 2]);
+        colDe = (x) => cs.reduce((m, c) => (Math.abs(c[1] - (x.x + x.x1) / 2) < Math.abs(m[1] - (x.x + x.x1) / 2) ? c : m))[0];
+      } else if (imW.length) { // sin cabecera: los importes se agrupan por su borde derecho
+        const tol = cv.width * 0.04, xs = imW.map((x) => x.x1).sort((a, b) => a - b), gr = [];
+        xs.forEach((v) => { const g = gr[gr.length - 1]; if (g && v - g.max <= tol) { g.v.push(v); g.max = v; } else gr.push({ v: [v], max: v }); });
+        const cen = gr.map((g) => g.v.reduce((s, v) => s + v, 0) / g.v.length), et = cen.length >= 3 ? ['D', 'H', 'S'] : cen.length === 2 ? ['D', 'H'] : ['D'];
+        if (cen.length >= 2) colDe = (x) => { let kk = 0; cen.forEach((c, i) => { if (Math.abs(c - x.x1) < Math.abs(cen[kk] - x.x1)) kk = i; }); return et[Math.min(kk, et.length - 1)]; };
+      }
+      if (colDe) W.forEach((x) => { if (esImp(x.t)) x.t = `⟦${colDe(x)}:${x.t.trim()}⟧`; });
+      let texto = r.data.text;
+      if (W.length) {
+        const hs = W.map((x) => x.h).sort((a, b) => a - b), tol = Math.max(4, (hs[Math.floor(hs.length / 2)] || 10) * 0.6), filas = [];
+        [...W].sort((a, b) => a.y - b.y).forEach((x) => { const f = filas.find((ff) => Math.abs(ff.y - x.y) <= tol); if (f) { f.w.push(x); f.y = (f.y * (f.w.length - 1) + x.y) / f.w.length; } else filas.push({ y: x.y, w: [x] }); });
+        texto = filas.sort((a, b) => a.y - b.y).map((f) => f.w.sort((a, b) => a.x - b.x).map((x) => x.t).join(' ')).join('\n');
+      }
+      const L2 = asiLimpiarLote(lineasDeTextoOcr(texto, B));
+      asiPrev = asiPrev.concat(L2);
+      asiOcr = L2.length ? `${L2.length} línea(s) leídas de la imagen: revísalas antes de registrar` : 'No he encontrado líneas con importes en la imagen';
+    } catch (e) { asiOcr = `⚠ ${e.message}`; }
+    render();
+  }
+  async function asiImagenes(files) { for (const f of files) { if (/^image\//.test(f.type)) await asiLeerImagen(f); } }
+  function asiPegar(ev) {
+    const cd = ev.clipboardData;
+    if (!cd) return;
+    ev.preventDefault();
+    const it = [...cd.items].find((i) => i.type.startsWith('image/'));
+    if (it) return void asiLeerImagen(it.getAsFile());
+    const t = cd.getData('text');
+    if (t) asiTexto(t);
+    return undefined;
+  }
+  async function asiPegarBoton() {
+    try {
+      for (const it of await navigator.clipboard.read()) {
+        const ty = it.types.find((x) => x.startsWith('image/'));
+        if (ty) return void asiLeerImagen(await it.getType(ty));
+      }
+      const txt = await navigator.clipboard.readText();
+      if (txt) return void asiTexto(txt);
+      return void alert('No hay ninguna imagen ni texto en el portapapeles.');
+    } catch { return void alert('El navegador no deja leer el portapapeles desde el botón: haz clic en el recuadro y pulsa Ctrl+V.'); }
+  }
+  const asiValida = (l) => {
+    const f = fIsoCta(l.fecha), cuenta = String(l.cuenta || '').trim(), debe = rr(parseES(l.debe)), haber = rr(parseES(l.haber));
+    return f && cuenta && (debe || haber) ? { fecha: f, cuenta, asiento: String(l.asiento || '').trim(), desc: String(l.desc || '').trim(), debe, haber } : null;
+  };
+  // Registra las líneas válidas en la configuración de cuentas de la empresa; devuelve las que no valen (sin fecha, cuenta o importe)
+  async function asiRegistrar(lineas, origen) {
+    if (!S.sel) return void alert('Elige primero la empresa en el desplegable de la izquierda.');
+    const ok = [], mal = [];
+    lineas.forEach((l) => { const v = asiValida(l); if (v) ok.push(v); else mal.push(l); });
+    if (!ok.length) return void alert('Rellena la fecha (dd/mm/aaaa), la cuenta y un importe en debe o en haber.');
+    const lote = origen ? Date.now() : null;
+    await guardarCta((d) => { ok.forEach((v) => (d.lineas ??= []).push({ id: crypto.randomUUID(), ...v, ...(lote ? { lote, origen } : {}) })); });
+    return mal;
+  }
+  async function asiRegUna() {
+    const B = asiBor(), mal = await asiRegistrar([B]);
+    if (mal && !mal.length) { asiB = { ...B, cuenta: '', desc: '', debe: '', haber: '' }; render(); } // la fecha y el asiento se mantienen para la siguiente
+  }
+  async function asiRegPrev() {
+    asiLimpiarLote(asiPrev);
+    const mal = await asiRegistrar(asiPrev, asiOrigen);
+    if (!mal) return;
+    asiPrev = mal;
+    asiOcr = mal.length ? `${mal.length} línea(s) sin fecha, cuenta o importe: corrígelas y vuelve a registrar` : '';
+    render();
+  }
+  const asiQuitarLote = (lote) => confirm('¿Quitar todas las líneas de este lote de las cuentas contables?')
+    && guardarCta((d) => { d.lineas = (d.lineas ?? []).filter((x) => String(x.lote) !== String(lote)); });
+
+  function vistaAsi() {
+    if (!S.sel) return sinEmpresa;
+    const ed = puede(), B = asiBor(), cfg = ctaCfg(), dis = ed ? '' : ' disabled';
+    const inp = (k, w, ph, cls = '') => `<td class="in ${cls}"><input data-asib="${k}" value="${esc(B[k] ?? '')}" size="${w}" placeholder="${esc(ph)}"${dis}></td>`;
+    const CAB = '<th>Fecha</th><th>Asiento</th><th>Cuenta contable</th><th>Concepto</th><th>Debe</th><th>Haber</th>';
+    const form = `<section class="prs-card"><div class="prs-h">Nueva línea en una cuenta contable</div><div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr>${CAB}<th></th></tr></thead>
+      <tbody><tr>${inp('fecha', 11, 'dd/mm/aaaa', 'c')}${inp('asiento', 12, 'nº asiento')}${inp('cuenta', 14, 'p. ej. 470000001')}${inp('desc', 40, 'concepto')}${inp('debe', 12, '', 'num')}${inp('haber', 12, '', 'num')}
+      <td>${ed ? '<button class="small" data-act="m-asireg">Registrar</button>' : ''}</td></tr></tbody></table></div>
+      <p class="hint">La línea va a la cuenta contable indicada y aparece en su extracto (pestañas del bloque 5), ordenada por fecha. Tras registrar se vacía para meter la siguiente (la fecha y el asiento se mantienen).</p></section>`;
+    const ip = (i, k, w, cls = '') => `<td class="in ${cls}"><input data-asip="${i}|${k}" value="${esc(asiPrev[i][k] ?? '')}" size="${w}"></td>`;
+    const prev = asiPrev.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr>${CAB}<th></th></tr></thead><tbody>
+      ${asiPrev.map((l, i) => `<tr>${ip(i, 'fecha', 11, 'c')}${ip(i, 'asiento', 12)}${ip(i, 'cuenta', 14)}${ip(i, 'desc', 40)}${ip(i, 'debe', 12, 'num')}${ip(i, 'haber', 12, 'num')}
+        <td><button class="small" data-act="m-asipswap" data-i="${i}" title="Pasar el importe de Debe a Haber o al revés">⇄</button> <button class="small" data-act="m-asipdel" data-i="${i}" title="Quitar esta línea">✖</button></td></tr>`).join('')}</tbody></table></div>
+      <div style="margin-top:.5rem"><button class="small" data-act="m-asipreg">Registrar todas (${asiPrev.length})</button> <button class="small" data-act="m-asipvaciar">Descartar</button></div>
+      <p class="hint">La lectura de imágenes no es perfecta: revisa cuentas e importes. Debe y Haber se distinguen por la columna en que está cada importe (con o sin cabecera); si no se sabe, va a Debe (usa ⇄ para pasarlo a Haber). Las líneas sin fecha, asiento o cuenta toman las del formulario de arriba.</p>` : '';
+    const imagen = ed ? `<section class="prs-card"><div class="prs-h">Líneas desde una imagen o texto pegado</div>
+      <div style="display:flex;gap:.6rem;align-items:stretch;flex-wrap:wrap"><div contenteditable="true" data-asipega="1" style="flex:1;min-width:280px;min-height:64px;border:2px dashed #7f9bd8;border-radius:6px;padding:.6rem;outline:none;cursor:text" title="Haz clic aquí y pulsa Ctrl+V"><b>Haz clic aquí y pulsa Ctrl+V</b> para pegar una captura o líneas copiadas de Excel</div>
+        <button class="small" data-act="m-asipegabtn">📋 Pegar del portapapeles</button>
+        ${dz('asiimg', 'o suelta / elige', 'un archivo de imagen', 'image/*')}</div>
+      <textarea id="asiPegaTxt" rows="4" style="width:100%;margin-top:.5rem;font-size:.85rem" placeholder="…o pega aquí líneas de Excel, del ERP o de un PDF: fecha, asiento, cuenta, concepto, debe y haber (con o sin fila de cabecera)"></textarea>
+      <div style="margin:.4rem 0"><button class="small" data-act="m-asipegatxt">Leer el texto</button> <span class="hint">Las líneas salen abajo para revisarlas antes de registrarlas.</span></div>
+      ${asiOcr ? `<p class="hint"><b>${esc(asiOcr)}</b></p>` : ''}${prev}</section>` : '';
+    const todas = cfg.lineas ?? [], G = new Map();
+    todas.filter((l) => l.lote).forEach((l) => {
+      const g = G.get(l.lote) ?? G.set(l.lote, { k: l.lote, n: 0, d: 0, h: 0, cts: new Set(), f1: l.fecha, f2: l.fecha, o: l.origen || 'imagen' }).get(l.lote);
+      g.n++; g.d += +l.debe || 0; g.h += +l.haber || 0; g.cts.add(l.cuenta); if (l.fecha < g.f1) g.f1 = l.fecha; if (l.fecha > g.f2) g.f2 = l.fecha;
+    });
+    const lotes = G.size ? `<section class="prs-card"><div class="prs-h">Lotes registrados desde imagen o texto · ${G.size}</div><div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Registrado</th><th>Origen</th><th>Líneas</th><th>Cuentas</th><th>Fechas</th><th>Debe</th><th>Haber</th><th></th></tr></thead><tbody>
+      ${[...G.values()].sort((a, b) => b.k - a.k).map((g) => `<tr><td>${new Date(+g.k).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(g.o)}</td><td class="c">${g.n}</td><td>${esc([...g.cts].slice(0, 4).join(', ') + (g.cts.size > 4 ? ' …' : ''))}</td>
+        <td>${fdate(Date.parse(g.f1))}${g.f2 !== g.f1 ? ` a ${fdate(Date.parse(g.f2))}` : ''}</td><td class="num">${fnum(g.d)}</td><td class="num">${fnum(g.h)}</td><td>${ed ? `<button class="small danger" data-act="m-asilotedel" data-lote="${g.k}">✖ Quitar lote</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+      <p class="hint">Quitar un lote borra todas sus líneas de las cuentas contables de una vez.</p></section>` : '';
+    const A = [...todas].sort((a, b) => String(a.cuenta).localeCompare(String(b.cuenta)) || String(a.fecha).localeCompare(String(b.fecha)));
+    const nq = Object.keys(cfg.quit ?? {}).length;
+    const lista = `<section class="prs-card"><div class="prs-h">Líneas metidas a mano · ${A.length}</div>${A.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Cuenta</th><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th></th></tr></thead><tbody>
+      ${A.slice(0, 300).map((l) => `<tr><td>${esc(l.cuenta)}</td><td class="c">${fdate(Date.parse(l.fecha))}</td><td>${esc(l.asiento)}</td><td>${esc(l.desc)}</td><td class="num">${l.debe ? fnum(l.debe) : ''}</td><td class="num">${l.haber ? fnum(l.haber) : ''}</td>
+        <td>${ed ? `<button class="small" data-act="m-asiquit" data-id="${l.id}" title="Quitar esta línea">✖</button>` : ''}</td></tr>`).join('')}</tbody></table></div>${A.length > 300 ? `<p class="hint">Se muestran las 300 primeras de ${A.length}.</p>` : ''}` : '<p class="hint">Todavía no hay líneas metidas a mano en esta empresa.</p>'}
+      ${nq && ed ? `<p class="hint">Hay ${nq} apunte(s) de los extractos quitados en las cuentas. <button class="small" data-act="m-asirest">Volver a poner todos los quitados</button></p>` : ''}</section>`;
+    return `${form}${imagen}${lotes}${lista}`;
+  }
+
+  // ---- Archivos Documentación: todo lo que se ha dejado en la empresa y cuántas líneas se han leído de cada archivo ----
+  const KIND_STORES = { emitidas: ['fact-E', 'fact-R'], recibidas: ['fact-E', 'fact-R'], sii: ['sii-E', 'sii-R'], extractos: ['may-mov'] };
+  const STORES_REV = [['fact-E', 'Libro emitidas', 'ff'], ['fact-R', 'Libro recibidas', 'fecha'], ['sii-E', 'SII emitidas', 'fecha'], ['sii-R', 'SII recibidas', 'fecha'], ['may-mov', 'Extracto contable', 'fecha']];
+  function revDatos() {
+    if (!S.sel) return null;
+    const st = {};
+    let cargando = false;
+    STORES_REV.forEach(([t]) => { const d = grande(t); if (d === null) cargando = true; st[t] = d ?? []; });
+    const filas = Object.keys(ARCH).flatMap((k) => S.registros.filter((r) => r.tipo === `arch-${k}` && r.empresa_id === S.sel)
+      .sort((a, b) => String(b.datos.subido).localeCompare(String(a.datos.subido))).map((r) => {
+        const ts = KIND_STORES[k];
+        let n = null, desde = '', hasta = '', sinOrigen = false;
+        if (ts) {
+          const ls = ts.flatMap((t) => st[t].filter((x) => x.src === r.datos.nombre)), fs = ls.map((x) => x.ff || x.fecha).filter(Boolean).sort();
+          n = ls.length; desde = fs[0] ?? ''; hasta = fs[fs.length - 1] ?? '';
+          sinOrigen = !n && ts.some((t) => st[t].length && !st[t].some((x) => x.src));
+        }
+        return { r, k, n, desde, hasta, sinOrigen };
+      }));
+    return { st, filas, cargando, nRev: filas.filter((f) => f.n === 0 && !f.sinOrigen).length };
+  }
+  function vistaRev() {
+    if (!S.sel) return sinEmpresa;
+    const D = revDatos(), ed = puede();
+    const fd = (iso) => (iso ? fdate(Date.parse(iso)) : '');
+    const resumen = STORES_REV.map(([t, nom, campo]) => {
+      const d = D.st[t], fs = d.map((x) => x[campo] || x.fecha).filter(Boolean).sort();
+      return `<div class="xc-k"><div class="xc-kt">${nom}</div><div class="xc-kv">${D.cargando && !d.length ? '…' : d.length}</div><small>${fs.length ? `${fd(fs[0])} → ${fd(fs[fs.length - 1])}` : 'sin líneas'}</small></div>`;
+    }).join('');
+    const estado = (f) => (f.n === null ? '<span class="hint">se guarda tal cual</span>'
+      : f.n > 0 ? `<span class="verde">✔ ${f.n} líneas</span>` : f.sinOrigen ? '<span class="hint">cargado antes de guardar el origen: no se puede contar</span>'
+        : D.cargando ? '…' : '<b class="rojo">✖ Sin líneas leídas · revisa el formato del archivo</b>');
+    const filas = D.filas.map((f) => `<tr class="${f.n === 0 && !f.sinOrigen ? 'cf-ko' : f.n > 0 ? 'cf-ok' : ''}"><td>${ARCH[f.k]}</td><td>${esc(f.r.datos.nombre)}</td><td class="c">${esc(f.r.datos.subido ?? '')}</td><td class="c">${f.r.ejercicio ?? ''}</td>
+      <td>${estado(f)}</td><td class="c">${f.desde ? `${fd(f.desde)} → ${fd(f.hasta)}` : ''}</td><td>${verArchivo(f.r.datos.archivo)}</td>
+      <td>${ed ? `<button class="small danger" data-act="m-archdel" data-id="${f.r.id}" title="Quitar el archivo y los datos que aportó">✖ Quitar</button>` : ''}</td></tr>`).join('');
+    return `<div class="fc-cab"><span><b>${esc(empresa().nombre)}</b> · ${D.filas.length} archivos guardados${D.nRev ? ` · <b class="rojo">${D.nRev} por revisar</b>` : D.filas.length ? ' · <span class="verde">Revisado ✓</span>' : ''}</span></div>
+      <div class="xc-kg" style="margin:.4rem 0 .8rem">${resumen}</div>
+      <section class="prs-card"><div class="prs-h">Archivos de la empresa</div>${D.filas.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Tipo</th><th>Archivo</th><th>Subido</th><th>Ejercicio</th><th>Lectura</th><th>Fechas leídas</th><th></th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`
+        : '<p class="hint">Todavía no hay archivos cargados en esta empresa. Se suben en las zonas de carga de cada pestaña (libros, SII, extractos, SYS y nóminas).</p>'}
+      <p class="hint">Para cada archivo se cuentan las líneas que la app ha leído y el rango de fechas que contienen. Un archivo con «Sin líneas leídas» se guardó pero no se reconoció su formato (libro de IVA del ERP, consulta del SII o extracto con fecha, cuenta, debe y haber). Las columnas se reconocen solas por su cabecera.</p></section>`;
+  }
+
+  // ---- Checking Información: lo declarado frente a lo contabilizado, de una vez, para el ejercicio y periodo elegidos ----
+  const MARGEN_RET = 0.2 + 1e-9, MARGEN_IVA = 0.1 + 1e-9;
+  let chkR = null, chkOcupado = false;
+  const chkClave = () => `${S.sel}|${S.ejercicio}|${S.periodo}`;
+  const mesesPer = (p) => (/^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : /^\d\d$/.test(p) ? [+p] : MM12.map(Number));
+  const chkPers = (e) => { const ms = mesesPer(S.periodo); return (e?.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'] : MM12).filter((p) => mesesPer(p).some((m) => ms.includes(m))); };
+  async function calcChk() {
+    const e = empresa(), ej = Number(S.ejercicio), pers = chkPers(e), out = [];
+    const add = (area, txt, dec, con, tol, nota = '') => {
+      if (dec === null && con !== null && /^Mod\. 1/.test(area)) nota = `${nota ? `${nota} · ` : ''}falta la declaración en Impuestos Presentados`;
+      const d = dec === null || con === null ? null : rr(dec - con);
+      out.push({ area, txt, dec, con, d, ok: d === null ? null : Math.abs(d) <= tol, nota });
+    };
+    const [E, R, SE, SR, M] = await Promise.all(['fact-E', 'fact-R', 'sii-E', 'sii-R', 'may-mov'].map(traer));
+    // retenciones: presentado frente a contabilidad (mismas líneas que el listado justificativo)
+    const decl = (m, cols) => { let hay = false, t = 0; pers.forEach((p) => cols.forEach((c) => { const v = prsVal(ej, m, p, c); if (v !== undefined) { hay = true; t += Number(v) || 0; } })); return hay ? rr(t) : null; };
+    const nom = (p) => nomPer(ej, p) ?? { s: Number(nominasMan(p, p).t2) || 0, r: Number(nominasMan(p, p).t3) || 0 };
+    const sumP = (f) => rr(pers.reduce((a, p) => a + f(p), 0));
+    const lst = (m, p, ks) => lineasListado(m, R, ej, p).filter((x) => ks.includes(x.k[0]));
+    const sre = (m, ks) => sumP((p) => lst(m, p, ks).reduce((s, x) => s + x.re, 0)), sb = (m, ks) => sumP((p) => lst(m, p, ks).reduce((s, x) => s + x.b, 0));
+    if (R.length || pers.some((p) => nom(p).s || nom(p).r)) {
+      add('Mod. 111', 'Rendimientos del trabajo · base', decl('111', ['base']), rr(sumP((p) => nom(p).s) + sb('111', ['111T'])), MARGEN_RET, 'Nóminas y libro de recibidas');
+      add('Mod. 111', 'Rendimientos del trabajo · retenciones', decl('111', ['retN']), rr(sumP((p) => nom(p).r) + sre('111', ['111T'])), MARGEN_RET, 'Nóminas y libro de recibidas');
+      add('Mod. 111', 'Profesionales · base', decl('111', ['baseP']), sb('111', ['111']), MARGEN_RET, 'Libro de recibidas (I.PR)');
+      add('Mod. 111', 'Profesionales · retenciones', decl('111', ['retP']), sre('111', ['111']), MARGEN_RET, 'Libro de recibidas (I.PR)');
+      add('Mod. 115', 'Alquileres · base', decl('115', ['base']), sb('115', ['115']), MARGEN_RET, 'Libro de recibidas (I.ALQ)');
+      add('Mod. 115', 'Alquileres · retenciones', decl('115', ['ret']), sre('115', ['115']), MARGEN_RET, 'Libro de recibidas (I.ALQ)');
+      add('Mod. 123', 'Capital mobiliario · base', decl('123', ['base']), sb('123', ['123']), MARGEN_RET, 'Libro de recibidas');
+      add('Mod. 123', 'Capital mobiliario · retenciones', decl('123', ['ret']), sre('123', ['123']), MARGEN_RET, 'Libro de recibidas');
+    } else add('Mod. 111', 'Sin libro de recibidas ni nóminas: no se pueden comprobar las retenciones', null, null, 0, 'Carga el libro de recibidas y las nóminas');
+    // saldo de cada cuenta de impuestos frente a lo declarado (resumen por periodo de las pestañas del bloque 5)
+    if (M.length) {
+      const mesesFila = (T, key) => (T === 'ano' ? MM12.map(Number) : T === 'p202' ? ({ '1P': [1, 2, 3, 4], '2P': [5, 6, 7, 8, 9, 10], '3P': [11, 12] }[key.slice(5)] ?? []) : T === 'tri' ? mesesPer(key.slice(5)) : [+key.slice(5)]);
+      const sel = mesesPer(S.periodo);
+      for (const k of Object.keys(ctasEmpresa(e))) {
+        const Dc = calcCuenta(k, M), C = Dc.C;
+        if (!Dc.movs.length) continue;
+        const filas = Dc.filas.filter((f) => +f.y === ej && mesesFila(Dc.T, f.key).some((m) => sel.includes(m)));
+        const X = C.cols.find((c) => c[0] === 'x'), hayD = C.cols.some((c) => c[0] === 'f' && c[1] === 'D'), hayTD = C.cols.some((c) => c[0] === 'f' && c[1] === 'TD');
+        const txt = `Cta ${Dc.pref} · ${C.desc}`;
+        if (X && hayD) {
+          const con = filas.filter((f) => f.v[X[1]] !== null && f.v[X[1]] !== undefined);
+          if (con.length) {
+            const dec = rr(con.reduce((a, f) => a + f.v[X[1]], 0)), dif = rr(con.reduce((a, f) => a + (f.v.D ?? 0), 0));
+            add('Cuentas', txt, dec, rr(dec + dif), MARGEN_IVA, `${X[2]} frente al saldo de la cuenta`);
+          } else add('Cuentas', txt, null, null, 0, `Sin importe de «${X[2]}» en el periodo`);
+        } else if (hayTD && filas.length) {
+          const d = rr(filas.reduce((a, f) => a + (f.v.TD ?? 0), 0));
+          out.push({ area: 'Cuentas', txt, dec: null, con: null, d, ok: Math.abs(d) <= MARGEN_IVA, nota: 'Total diferencias de la cuenta en el periodo' });
+        }
+      }
+    } else add('Cuentas', 'Sin extracto contable: no se pueden comprobar los saldos', null, null, 0, 'Carga el extracto contable');
+    // 303: SII frente a libros, resultado presentado frente a calculado y 349
+    const sinPer = S.periodo === 'Anual' ? '' : S.periodo;
+    for (const s of ['E', 'R']) {
+      const nm = s === 'E' ? 'Emitidas' : 'Recibidas', lib = s === 'E' ? E : R, sii = s === 'E' ? SE : SR;
+      if (!sii.length || !lib.length) { add('Mod. 303', `${nm} · SII frente a libro`, null, null, 0, !sii.length ? `Sin descarga del SII de ${nm.toLowerCase()}` : `Sin libro de IVA de ${nm.toLowerCase()}`); continue; }
+      const c = conciliarSiiCompleta(s, lib, sii, ej, sinPer), dif = c.A.length + c.B.length + c.C.length;
+      add('Mod. 303', `${nm} · base SII frente a libro`, c.ts.base, c.tc.base, MARGEN_SII, dif ? `${dif} factura(s) con diferencia: ver ConcSII` : '');
+      add('Mod. 303', `${nm} · cuota SII frente a libro`, c.ts.cuota, c.tc.cuota, MARGEN_SII, dif ? `${dif} factura(s) con diferencia: ver ConcSII` : '');
+    }
+    if (E.length || R.length) {
+      const liq = pers.map((p) => prsVal(ej, '303', p, 'liq'));
+      if (liq.some((v) => v !== undefined)) {
+        const calc = rr(pers.reduce((a, p, i) => a + (liq[i] === undefined ? 0 : calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71), 0));
+        add('Mod. 303', 'Resultado presentado frente a calculado con los libros', rr(liq.reduce((a, v) => a + (Number(v) || 0), 0)), calc, MARGEN_IVA, 'Casilla 71 del 303 presentado frente al calculado en la pestaña 303');
+      } else add('Mod. 303', 'Resultado presentado frente a calculado con los libros', null, null, 0, 'Sin 303 en Impuestos Presentados');
+      const i349 = pers.map((p) => prsVal(ej, '349', p, 'imp'));
+      if (i349.some((v) => v !== undefined)) {
+        const calc = rr(pers.reduce((a, p, i) => a + (i349[i] === undefined ? 0 : calcular349(E, R, ej, p).total), 0));
+        add('Mod. 349', 'Importe presentado frente a calculado con los libros', rr(i349.reduce((a, v) => a + (Number(v) || 0), 0)), calc, MARGEN_IVA, 'Operaciones intracomunitarias');
+      }
+    }
+    return out;
+  }
+  async function hacerChk() {
+    if (!S.sel || chkOcupado) return;
+    chkOcupado = true; render();
+    try {
+      const res = await calcChk();
+      chkR = { key: chkClave(), ts: new Date(), res, nOk: res.filter((x) => x.ok === true).length, nKo: res.filter((x) => x.ok === false).length, nNo: res.filter((x) => x.ok === null).length };
+    } catch (err) { alert(`No se ha podido hacer el checking: ${err.message}`); }
+    chkOcupado = false; render();
+  }
+  function vistaChk() {
+    if (!S.sel) return sinEmpresa;
+    const C = chkR?.key === chkClave() ? chkR : null, per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
+    const btn = `<div style="margin:0 0 .6rem"><button class="primary" data-act="m-chkhacer"${chkOcupado ? ' disabled' : ''}>${chkOcupado ? 'Comprobando…' : C ? '⟳ Volver a comprobar' : '▶ Hacer el checking'}</button> ${C ? `<span class="hint">Comprobado el ${C.ts.toLocaleDateString('es-ES')} a las ${C.ts.toLocaleTimeString('es-ES')}</span>` : ''}</div>`;
+    const tit = `<div class="fc-cab"><span><b>${esc(empresa().nombre)}</b> · Ejercicio ${esc(S.ejercicio)} · ${esc(per)}</span></div>`;
+    if (!C) return `${tit}${btn}<p class="hint">Compara de una vez: retenciones del trabajo, profesionales (111), alquileres (115) y capital mobiliario (123); el saldo de cada cuenta de impuestos frente a lo presentado; el 303 (SII frente a libros y resultado) y el 349. Los importes presentados salen de «Impuestos Presentados». Pendiente de migrar: Intrastat y los plazos del SII (4 días hábiles).</p>`;
+    const areas = [...new Set(C.res.map((x) => x.area))], z = (v) => (v === null ? '-' : fnum(v));
+    const filas = areas.map((a) => `<tr class="ttot"><td colspan="6"><b>${esc(a)}</b></td></tr>${C.res.filter((x) => x.area === a).map((x) => `<tr class="${x.ok === null ? '' : x.ok ? 'cf-ok' : 'cf-ko'}"><td>${esc(x.txt)}</td><td class="num">${z(x.dec)}</td><td class="num">${z(x.con)}</td><td class="num">${z(x.d)}</td><td>${x.ok === null ? '— sin datos' : x.ok ? '✓ OK' : '✖ Revisar'}</td><td class="hint">${esc(x.nota)}</td></tr>`).join('')}`).join('');
+    const banner = C.nKo ? `<div style="background:#fde7e7;color:#a4161a;border:1px solid #a4161a;border-radius:6px;padding:.6rem .9rem;font-weight:700;margin-bottom:.6rem">✖ ${C.nKo} comprobación(es) a revisar de ${C.nOk + C.nKo}${C.nNo ? ` · ${C.nNo} sin datos` : ''}</div>`
+      : `<div style="background:#e6f6ec;color:#0a5c2b;border:1px solid #0a6;border-radius:6px;padding:.6rem .9rem;font-weight:700;margin-bottom:.6rem">✓ OK · todo lo declarado coincide con lo contabilizado (${C.nOk} comprobaciones${C.nNo ? ` · ${C.nNo} sin datos para comprobar` : ''})</div>`;
+    return `${tit}${btn}${banner}<section class="prs-card"><div class="wrap"><table class="tprs tnom" style="width:100%"><thead><tr><th>Comprobación</th><th>Declarado €</th><th>Contabilizado €</th><th>Diferencia</th><th>Estado</th><th>Origen</th></tr></thead><tbody>${filas}</tbody></table></div></section>
+      <p class="hint">Márgenes: ±${MARGEN_RET.toFixed(2).replace('.', ',')} € en retenciones y ±${MARGEN_IVA.toFixed(2).replace('.', ',')} € en IVA, SII y cuentas. «Sin datos» = falta el archivo o la declaración en Impuestos Presentados.</p>`;
+  }
+
+  tabs.asi = ['Entrada Información', 'Apuntes en cuentas contables', vistaAsi];
+  tabs.rev = ['Archivos Documentación', 'Columnas y líneas', vistaRev];
+  tabs.chk = ['Checking Información', 'Declarado vs contabilizado', vistaChk];
+  const acc3 = {
+    'm-asireg': () => asiRegUna(),
+    'm-asipegabtn': () => asiPegarBoton(),
+    'm-asipegatxt': () => { const t = document.getElementById('asiPegaTxt')?.value ?? ''; if (t.trim()) asiTexto(t); },
+    'm-asipreg': () => asiRegPrev(),
+    'm-asipvaciar': () => { asiPrev = []; asiOcr = ''; asiCtl = null; render(); },
+    'm-asipdel': (d) => { asiPrev.splice(+d.i, 1); render(); },
+    'm-asipswap': (d) => { const l = asiPrev[+d.i]; if (l) [l.debe, l.haber] = [l.haber, l.debe]; render(); },
+    'm-asiquit': (d) => accionCta('quit', `m:${d.id}`, ''),
+    'm-asilotedel': (d) => asiQuitarLote(d.lote),
+    'm-asirest': () => guardarCta((d) => { delete d.quit; }),
+    'm-chkhacer': () => hacerChk(),
+  };
+
   // Insignias de las fichas del menú (texto y color)
-  const unidad = { pres: 'declaraciones', iloc: 'recibos', notif: 'notificaciones', otros: 'documentos', acc: 'socios y participadas', trl: 'titulares', rmesc: 'escrituras' };
+  const unidad ={ pres: 'declaraciones', iloc: 'recibos', notif: 'notificaciones', otros: 'documentos', acc: 'socios y participadas', trl: 'titulares', rmesc: 'escrituras' };
   const badges = {};
   Object.keys(LISTAS).forEach((id) => {
     badges[id] = () => {
@@ -2547,7 +2986,24 @@ export function crearModulos(c) {
     };
   });
 
-  const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
+  // Insignias del bloque 3
+  badges.asi = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const n = (ctaCfg().lineas ?? []).length;
+    return n ? { t: `${n} líneas a mano`, c: 'verde' } : { t: 'Sin líneas' };
+  };
+  badges.rev = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const D = revDatos();
+    if (D.cargando) return { t: '…' };
+    return D.nRev ? { t: `${D.nRev} por revisar`, c: 'rojo' } : D.filas.length ? { t: 'Revisado ✓', c: 'verde' } : { t: 'Sin archivos' };
+  };
+  badges.chk = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    return chkR?.key === chkClave() ? (chkR.nKo ? { t: `${chkR.nKo} a revisar`, c: 'rojo' } : { t: 'OK', c: 'verde' }) : { t: 'Sin hacer' };
+  };
 
-  return { siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  const subirComo = (kind, files) => (kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+
+  return { siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
