@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=38';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=39';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -520,7 +520,8 @@ export function crearModulos(c) {
         <td>${p}</td>${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
         <td class="num">${/^R\.RC\./.test(l.codigo) ? eur(l.cuota) : ''}</td><td>${esc(clasif(l.codigo))}</td><td class="acc">${acc(l)}</td></tr>`;
     }).join('');
-    const tot = `<tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td colspan="3"></td></tr>`;
+    const sinRet = f.filter((l) => !/^(R\.)?I\./.test(l.codigo)); // el total no incluye las retenciones (misma base que la factura)
+    const tot = `<tr><td colspan="6"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="3"></td></tr>`;
     return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
       <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${filas}${f.length ? tot : ''}</tbody></table></div>` };
   }
@@ -2423,7 +2424,7 @@ export function crearModulos(c) {
       const d = peek('fact-' + s);
       if (!d) return { t: '…' };
       const r = rg();
-      return { t: `Cuota ${fnum(suma(d.filter((l) => { const f = s === 'E' ? l.ff : l.fecha; return f >= r.desde && f <= r.hasta; }), 'cuota'))}` };
+      return { t: `Cuota ${fnum(suma(d.filter((l) => { const f = s === 'E' ? l.ff : l.fecha; return f >= r.desde && f <= r.hasta && !/^(R\.)?I\./.test(l.codigo); }), 'cuota'))}` }; // sin retenciones
     };
     badges[s === 'E' ? 'concsiie' : 'concsiir'] = () => {
       if (!S.sel) return { t: 'Por empresa' };

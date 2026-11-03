@@ -502,7 +502,8 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const r = rangoPeriodo(ej, periodo), emit = sentido === 'E';
   const clave = (fac, nif) => (emit ? normFac(fac) : `${normFac(fac)}|${normNif(nif)}`);
   const fuera = emit ? new Set(libro.filter((l) => FACT_FUERA_E.includes(l.codigo)).map((l) => l.factura)) : new Set();
-  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo)
+  // las retenciones (I.ALQ, R.I.ALQ, I.PR…) llevan la misma base que la factura y no son IVA: no se cuentan en emitidas (en recibidas ya están en EXC_RECIBIDAS)
+  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo)
     : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const ls = sii.filter((s) => s.sentido === sentido && (emit ? s.fecha >= r.desde && s.fecha <= r.hasta : s.ej === ej && (!periodo || s.per === periodo)));
   const cont = new Map();
