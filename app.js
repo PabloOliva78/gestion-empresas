@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=53';
+import { crearModulos } from './modulos.js?v=54';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -238,13 +238,9 @@ function render() {
         <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
-      ${puedeEditar() ? `<div class="drops">${[['emitidas', 'EMITIDAS'], ['recibidas', 'RECIBIDAS'], ['extractos', 'EXTRACTOS'], ['sys', 'SYS'],
-        ['impuestos', 'IMPUESTOS'], ['sii', 'SII'], ['nominas', 'NÓMINAS'], ['registro', 'REGISTRO']].map(([k, l]) =>
-        `<button class="drop${M.cargado(k) ? ' ok' : ''}" data-act="m-sube" data-kind="${k}" title="${esc(M.titulo(k))}">${l}</button>`).join('')}</div>
-        <input type="file" id="archIn" multiple hidden>
+      ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
-        <span class="hint" id="pdfEstado"></span>
-        <details class="arch-det"><summary>Archivos cargados</summary>${M.listaArchivos()}</details>` : ''}
+        <span class="hint" id="pdfEstado"></span>` : ''}
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
