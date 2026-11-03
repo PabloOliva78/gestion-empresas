@@ -1,5 +1,5 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=36';
+﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { crearModulos } from './modulos.js?v=37';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');

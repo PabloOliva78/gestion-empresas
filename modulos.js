@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349 } from './lectores.js?v=28';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=29';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -1011,7 +1011,7 @@ export function crearModulos(c) {
       ['232', [['ing', 'Total ingresos (I)', 'ING'], ['pag', 'Total pagos (P)', 'PAG'], ['nreg', 'Nº registros', 'NREG']]],
       ['202', [['res', 'A devolver / A ingresar', '34']], 'p202']] },
     { t: 'Impuestos especiales · 583, 592 y A22', tipo: 'per', ms: [
-      ['583', [['base', 'Base imponible', ''], ['cuota', 'Cuota íntegra', ''], ['pagos', 'Pagos fraccionados anteriores', ''], ['res', 'A ingresar / A devolver', '']]],
+      ['583', [['base', 'Base imponible', ''], ['cuota', 'Cuota íntegra', ''], ['pagos', 'Pagos fraccionados anteriores', ''], ['res', 'A ingresar / A devolver', '']], 'p583'],
       ['592', [['kg', 'Cantidad kg (2)', '2'], ['base', 'Base imponible kg (3)', '3'], ['cuota', 'Cuota íntegra (5)', '5'], ['ded', 'Deducción (6)', '6'], ['res', 'Cuota íntegra total a ingresar (8)', '8']]],
       ['A22', [['imp', 'Importe solicitado', 'IMP'], ['kgV', 'Kg no reciclado vendido', 'KGV'], ['qV', 'Unidades vendidas', 'QV'], ['sop', 'IIEE soportado en adquisiciones', 'SOP']]]] },
   ];
@@ -1020,13 +1020,14 @@ export function crearModulos(c) {
     if (!S.sel) return sinEmpresa;
     const e = empresa(), ej = Number(S.ejercicio), ed = puede();
     const anios = prsVer === 'todo' ? [...new Set([...prsRegs().map((r) => r.ejercicio), ej])].sort((a, b) => b - a) : [ej];
-    const per = (tipo) => (tipo === 'p202' ? [['1P', 'Abril (1P)'], ['2P', 'Octubre (2P)'], ['3P', 'Diciembre (3P)']]
+    const per = (tipo, y) => (tipo === 'p202' ? [['1P', 'Abril (1P)'], ['2P', 'Octubre (2P)'], ['3P', 'Diciembre (3P)']]
+      : tipo === 'p583' ? [['3T', `3T ${y} · enero–septiembre`, y], ['0A', `Anual 0A ${y - 1} · enero–diciembre`, y - 1]]
       : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((q) => [q, `${q} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m[0].toUpperCase() + m.slice(1)]));
     const celda = (y, m, p, c) => { const v = prsVal(y, m, p, c); return ed ? `<td class="in"><input data-prs="${m}|${p}|${c}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`; };
     const tablaM = (m, cols, tipo, y) => {
-      const filas = tipo === 'ano' ? anios.map((a) => [String(a), a, 'A']) : per(tipo).map(([p, l]) => [l, y, p]);
+      const filas = tipo === 'ano' ? anios.map((a) => [String(a), a, 'A']) : per(tipo, y).map(([p, l, yy]) => [l, yy ?? y, p]);
       const cuerpo = filas.map(([l, yy, p]) => `<tr><td class="pp">${esc(l)}</td>${cols.map(([c]) => celda(yy, m, p, c)).join('')}</tr>`).join('');
-      const tot = tipo === 'ano' ? '' : `<tr class="ttot"><td class="pp">Total ${y}</td>${cols.map(([c]) => `<td class="num">${fnum(per(tipo).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')}</tr>`;
+      const tot = tipo === 'ano' || tipo === 'p583' ? '' : `<tr class="ttot"><td class="pp">Total ${y}</td>${cols.map(([c]) => `<td class="num">${fnum(per(tipo, y).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')}</tr>`;
       return `<table class="tprs" style="flex:${cols.length + 1} 1 0"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">${m === 'INT' ? 'INTRASTAT' : `MODELO ${m}`}</th></tr>
         <tr>${cols.map(([, l, c]) => `<th class="ch">${l}<small>${CAS(c)}</small></th>`).join('')}</tr></thead><tbody>${cuerpo}${tot}</tbody></table>`;
     };
@@ -1035,7 +1036,7 @@ export function crearModulos(c) {
       : anios.map((y) => `${anios.length > 1 ? `<div class="prs-y">Ejercicio ${y}</div>` : ''}${fila(g, y)}`).join('')}</section>`).join('');
     return `${dz('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '(uno o varios) o haz clic para elegirlos', '.pdf')}<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
       <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
-      <p class="hint">Importes de las declaraciones presentadas, con las casillas de cada modelo. Se escriben a mano en cada celda (se guardan al salir). La lectura automática de las casillas de los PDF está pendiente.</p>${grupos}${listaPrsPdf()}`;
+      <p class="hint">Importes de las declaraciones presentadas, con las casillas de cada modelo. Al soltar el PDF se leen modelo, ejercicio, periodo y casillas y se rellenan solos; también puedes escribirlos o corregirlos a mano (se guardan al salir). El 583 tiene dos filas: el 3T del ejercicio (enero–septiembre) y el anual 0A del ejercicio anterior, que se presenta en el mismo mes.</p>${grupos}${listaPrsPdf()}`;
   }
 
   // ---- Bloque 1 · Retenciones Modelo 111 / 115 / 123: listado justificativo del periodo, desde el libro de recibidas ----
@@ -1304,25 +1305,44 @@ export function crearModulos(c) {
 
   // PDF de declaraciones presentadas: se guardan en la empresa (por el NIF del PDF, o la elegida) con modelo, ejercicio y periodo detectados
   async function cargarPresentados(files) {
-    const informe = [];
+    const informe = [], regs = new Map(); // regs: «prs» por empresa y ejercicio, acumulado mientras dura la carga
+    const ANUALES = ['180', '190', '193', '200', '232'];
     for (const f of files) {
       try {
         if (!/\.pdf$/i.test(f.name)) { informe.push(`↷ ${f.name}: no es PDF`); continue; }
-        const t = await textoPdf(f);
-        const e = S.empresas.find((x) => x.cif === nifDe(t)) ?? empresa();
+        const { texto: t, pags } = await leerPdf(f);
+        const e = S.empresas.find((x) => x.cif && t.includes(x.cif)) ?? S.empresas.find((x) => x.cif === nifDe(t)) ?? empresa();
         if (!e) { informe.push(`⚠ ${f.name}: elige la empresa`); continue; }
-        const s = `${f.name}\n${t}`;
-        const modelo = (/modelo\s*(?:n[ºo.]*\s*)?(A22|\d{3})/i.exec(s) || [])[1] ?? '';
-        const ej = Number((/(?:ejercicio|a[ñn]o)\D{0,12}(20\d\d)/i.exec(s) || /\b(20\d\d)\b/.exec(s) || [])[1]) || Number(S.ejercicio);
-        const per = (/per[ií]odo\D{0,12}(\d[TP]|\d{2}|0A)\b/i.exec(s) || [])[1] ?? '';
+        const h = cabeceraPresentado(t);
+        const modelo = h.modelo || (/\b(A22|\d{3})\b/.exec(f.name) || [])[1] || '';
+        const ej = h.ej || Number(S.ejercicio);
+        let per = h.per;
+        if (ANUALES.includes(modelo)) per = 'A';
+        else if (!['583', '202'].includes(modelo) && per) per = perEf(e, per);
+        const val = valoresPresentado(modelo, casillasPDF(pags), t);
         const ref = `${f.name}|${f.size}`;
-        if (S.registros.some((r) => r.tipo === 'prspdf' && r.empresa_id === e.id && r.datos.ref === ref)) { informe.push(`↩ ${f.name}: repetido`); continue; }
+        let aviso = '';
+        if (modelo && Object.keys(val).length) {
+          const k = `${e.id}|${ej}`;
+          let r = regs.get(k);
+          if (!r) {
+            const ex = S.registros.find((x) => x.tipo === 'prs' && x.empresa_id === e.id && x.ejercicio === ej);
+            r = { ex, datos: JSON.parse(JSON.stringify(ex?.datos ?? {})), id: ex?.id ?? crypto.randomUUID() };
+            regs.set(k, r);
+          }
+          const clave = `${modelo}|${per || 'A'}`;
+          r.datos[clave] = { ...(r.datos[clave] ?? {}), ...val };
+          const err = await guardarRegistro(r.ex, { ...(r.ex ? {} : { id: r.id }), empresa_id: e.id, tipo: 'prs', ejercicio: ej, datos: r.datos });
+          if (err) throw new Error(err);
+          r.ex ??= { id: r.id };
+        } else aviso = ' · sin casillas reconocidas (rellénalas a mano)';
+        if (S.registros.some((r) => r.tipo === 'prspdf' && r.empresa_id === e.id && r.datos.ref === ref)) { informe.push(`↻ ${e.siglas || e.nombre}: ${f.name} → ${modelo || '?'} · ${ej} · ${per || '—'} (PDF ya guardado, importes actualizados)${aviso}`); continue; }
         const id = crypto.randomUUID();
         const sub = await subir(e.id, 'prspdf', id, 'archivo', f);
         if (sub.error) throw new Error(sub.error);
         const err = await guardarRegistro(null, { id, empresa_id: e.id, tipo: 'prspdf', ejercicio: ej, datos: { nombre: f.name, ref, modelo, periodo: per, archivo: sub.val } });
         if (err) throw new Error(err);
-        informe.push(`✔ ${e.siglas || e.nombre}: ${f.name} → modelo ${modelo || '?'} · ${ej} · ${per || '—'}`);
+        informe.push(`✔ ${e.siglas || e.nombre}: ${f.name} → modelo ${modelo || '?'} · ${ej} · ${per || '—'}${aviso}`);
       } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
     }
     await cargar(); render();
@@ -1361,18 +1381,21 @@ export function crearModulos(c) {
   }
 
   // ---------- Carga de PDF (AEAT y tributos locales) ----------
-  async function textoPdf(file) {
+  async function leerPdf(file) {
     const lib = window.pdfjsLib;
     if (!lib) throw new Error('No se cargó el lector de PDF (pdf.js).');
     lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    const out = [];
+    const out = [], pags = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const tc = await (await doc.getPage(p)).getTextContent();
-      out.push(`--- página ${p} ---`, ...lineasPagina(tc.items.map((i) => ({ x: i.transform[4], y: i.transform[5], str: i.str }))));
+      const its = tc.items.map((i) => ({ x: i.transform[4], y: i.transform[5], str: i.str }));
+      pags.push(its);
+      out.push(`--- página ${p} ---`, ...lineasPagina(its));
     }
-    return out.join('\n');
+    return { texto: out.join('\n'), pags };
   }
+  const textoPdf = async (file) => (await leerPdf(file)).texto;
 
   async function guardarRegistro(existente, fila) {
     const { error } = existente

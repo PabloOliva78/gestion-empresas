@@ -442,6 +442,97 @@ export function calcular303(libroE, libroR, ej, periodo, man = {}, opc = {}) {
     c68: m('c68'), c69, c70: m('c70'), c71: r2n(c69 - m('c70')), suma: c46 };
 }
 
+// ---------- Declaraciones presentadas (PDF de la Sede): modelo, ejercicio, periodo y casillas ----------
+// pags: por página, la lista de trozos de texto {x, y, str}. Los importes van bajo (o junto a) el número de casilla:
+//  a) cabecera «… 01 02 03» y debajo los importes → cada uno a la casilla más cercana en horizontal
+//  b) línea con solo el número de casilla y debajo «etiqueta … importe»   c) «… 28 19.095,92» en la misma línea
+const MONEY = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$/;
+const ENTERO = /^\d{1,7}$/;
+export function casillasPDF(pags) {
+  const cas = {};
+  const poner = (k, v) => { if (cas[k] === undefined) cas[k] = aNum(v); };
+  for (const items of pags) {
+    const filas = new Map();
+    for (const it of items) { const k = Math.round(it.y / 3); if (!filas.has(k)) filas.set(k, []); filas.get(k).push(it); }
+    const L = [...filas.entries()].sort((a, b) => b[0] - a[0]).map(([, v]) => v.sort((a, b) => a.x - b.x));
+    L.forEach((its, i) => {
+      const sig = L[i + 1];
+      const ss = its.map((x) => x.str.trim()).filter(Boolean);
+      const cabs = its.filter((x) => /^\d{1,5}$/.test(x.str.trim()) && its.indexOf(x) > 0 && /\.{3,}|\s{2,}|[A-Za-zÁ-ú]/.test(its.slice(0, its.indexOf(x)).map((y) => y.str).join('')));
+      const textoAntes = (x) => /[A-Za-zÁ-ú]/.test(its.slice(0, its.indexOf(x)).map((y) => y.str).join(''));
+      // c) «casilla importe» en la misma línea
+      its.forEach((x, j) => { const n = its[j + 1]; if (/^\d{1,5}$/.test(x.str.trim()) && n && MONEY.test(n.str.trim()) && textoAntes(x)) poner(x.str.trim(), n.str.trim()); });
+      // a) cabecera de casillas y fila de importes debajo
+      const cs = cabs.filter((x) => textoAntes(x));
+      if (cs.length && sig) {
+        const vals = sig.filter((x) => MONEY.test(x.str.trim()) || (cs.length > 1 && ENTERO.test(x.str.trim())));
+        if (vals.length && !sig.some((x) => /[A-Za-zÁ-ú]/.test(x.str))) {
+          if (vals.length === cs.length) vals.forEach((v, k) => poner(cs[k].str.trim(), v.str.trim()));
+          else vals.forEach((v) => { const c = cs.reduce((m, x) => (Math.abs(x.x - v.x) < Math.abs(m.x - v.x) ? x : m)); poner(c.str.trim(), v.str.trim()); });
+        }
+      }
+      // b) línea con solo la casilla; la siguiente trae «etiqueta … importe»
+      if (ss.length === 1 && /^\d{1,3}$/.test(ss[0]) && sig && sig.some((x) => /[A-Za-zÁ-ú]/.test(x.str))) {
+        const u = sig[sig.length - 1].str.trim();
+        if (MONEY.test(u) || ENTERO.test(u)) poner(ss[0], u);
+      }
+    });
+  }
+  return cas;
+}
+// Columnas de «Impuestos Presentados» según el modelo: {columna: importe}. cas = casillasPDF(); texto = líneas del PDF (para 583 y 592, que no llevan casillas numeradas)
+const MON = '(-?\\d{1,3}(?:\\.\\d{3})*,\\d{2,3})';
+export function valoresPresentado(modelo, cas, texto = '') {
+  const n = {};
+  for (const [k, v] of Object.entries(cas)) n[+k] = v;
+  const g = (...ks) => { const x = ks.filter((k) => n[k] !== undefined); return x.length ? r2n(x.reduce((a, k) => a + n[k], 0)) : undefined; };
+  const out = {};
+  const pon = (c, v) => { if (v !== undefined) out[c] = v; };
+  const lineas = String(texto).split('\n').map((l) => l.trim());
+  const num = (s) => aNum(s);
+  if (modelo === '111') { pon('base', g(2, 5)); pon('retN', g(3, 6)); pon('baseP', g(8)); pon('retP', g(9)); }
+  else if (modelo === '115' || modelo === '180') { pon('base', g(2)); pon('ret', g(3)); }
+  else if (modelo === '190') { pon('base', g(2)); pon('retN', g(3)); }
+  else if (modelo === '193') { pon('base', g(2)); pon('ret', g(3)); }
+  else if (modelo === '123') { pon('based', g(4)); pon('baser', g(5)); pon('base', g(6)); pon('retd', g(7)); pon('retr', g(8)); pon('ret', g(9)); }
+  else if (modelo === '303') { pon('res', g(46)); pon('adu', g(77)); pon('comp', g(110)); pon('apl', g(78)); pon('c87', g(87) ?? (n[110] !== undefined ? r2n(n[110] - (n[78] ?? 0)) : undefined)); pon('liq', g(71)); }
+  else if (modelo === '349') { pon('imp', g(2)); pon('rect', g(4)); }
+  else if (modelo === '200') { pon('cuota', g(562)); pon('res', g(621)); }
+  else if (modelo === '202') { pon('res', g(34) ?? g(3)); }
+  else if (modelo === 'INT') {
+    const fl = (/Flujo:\s*([EI])\s*-/.exec(texto) || [])[1];
+    let imp = 0, kg = 0, nP = 0;
+    for (const l of lineas) {
+      const a = /^16\.\s*Masa Neta:\s*([\d.,]+)/.exec(l), b = /^18\.\s*\*?Importe Factura:\s*([\d.,]+)/.exec(l);
+      if (a) { kg += num(a[1]); nP++; } if (b) imp += num(b[1]);
+    }
+    if (fl && nP) { pon(fl === 'E' ? 'exp' : 'int', r2n(imp)); pon(fl === 'E' ? 'kgE' : 'kgI', r2n(kg)); }
+  } else if (modelo === '583') {
+    const re = new RegExp(`^\\d+\\s+\\d+\\s+\\d+\\s+${MON}\\s+${MON}\\s+(\\d+,\\d+)\\s+${MON}\\s+${MON}\\s+${MON}$`);
+    let t = null;
+    for (const l of lineas) { const m = re.exec(l); if (m) { t ??= { base: 0, cuota: 0, pagos: 0, res: 0 }; t.base += num(m[2]); t.cuota += num(m[4]); t.pagos += num(m[5]); t.res += num(m[6]); } }
+    if (t) Object.entries(t).forEach(([c, v]) => pon(c, r2n(v)));
+  } else if (modelo === '592') {
+    const re = new RegExp(`^\\d+\\s+\\S+\\s+.*?${MON}\\s+${MON}\\s+(\\d+,\\d+)\\s+${MON}\\s+${MON}\\s+${MON}$`);
+    let t = null;
+    for (const l of lineas) { const m = re.exec(l); if (m) { t ??= { kg: 0, base: 0, cuota: 0, ded: 0, res: 0 }; t.kg += num(m[1]); t.base += num(m[2]); t.cuota += num(m[4]); t.ded += num(m[5]); t.res += num(m[6]); } }
+    if (t) Object.entries(t).forEach(([c, v]) => pon(c, r2n(v)));
+    else { const i = lineas.findIndex((l) => /Total a ingresar/i.test(l)); const m = i >= 0 && new RegExp(`${MON}\\s*$`).exec(lineas[i]); if (m) pon('res', num(m[1])); }
+  }
+  return out;
+}
+export function cabeceraPresentado(texto) {
+  const t = texto.replace(/\s+/g, ' ');
+  if (/Consulta de Intrastat/i.test(t)) {
+    const m = /Periodo:\s*(\d\d)\s+(20\d\d)/i.exec(t) || [];
+    return { modelo: 'INT', ej: +m[2] || null, per: m[1] ?? '' };
+  }
+  const modelo = (/Modelo\s+(A22|\d{3})\b/i.exec(texto) || [])[1] ?? '';
+  const ej = parseInt((/Ejercicio.{0,150}?\b(20\d\d)\b/i.exec(t) || [])[1] ?? '', 10) || null;
+  const per = (/Per[ií]odo[^\dA-Z]{0,80}?\b(0[1-9]|1[0-2]|[1-4]T|[1-3]P|0A)\b/i.exec(t) || /Per[ií]odo.{0,80}?\b(0[1-9]|1[0-2]|[1-4]T|[1-3]P|0A)\b/i.exec(t) || [])[1] ?? '';
+  return { modelo, ej, per };
+}
+
 // ---------- Modelo 349: operaciones intracomunitarias por clave de operación (importes sin IVA) ----------
 // [clave, concepto, libro, códigos de impuesto del ERP]
 export const CLAVES349 = [
