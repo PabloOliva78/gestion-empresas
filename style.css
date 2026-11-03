@@ -429,3 +429,23 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .xc-est.ok{background:#e3f6ea;color:#17703a}
 .xc-est.ko{background:#fdecec;color:#a32b2b}
 .xc-tog{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#697080;cursor:pointer}
+
+/* extracto + resumen de cuentas: columnas ajustadas al importe, enunciados en dos líneas y fijos, resumen con barra de desplazamiento */
+.ctas .css-flex { display: flex; align-items: flex-start; gap: 1rem; overflow: visible; padding: .6rem .8rem 1rem; }
+.ctas .mov-wrap { flex: 0 0 auto; }
+.ctas .res-wrap { flex: 1 1 0; min-width: 0; }
+.ctas .wrap { max-height: 72vh; overflow: auto; }
+.ctas table { table-layout: fixed; border-collapse: separate; border-spacing: 0; min-width: 0; }
+.ctas th { position: sticky; top: 0; z-index: 3; background: #143a7b; color: #fff; font-size: .74rem; font-weight: 600; line-height: 1.15; padding: .35rem .3rem; text-align: center; vertical-align: middle; white-space: normal; overflow-wrap: anywhere; border-left: 1px solid rgba(255,255,255,.18); height: 3rem; }
+.ctas th.xdif { background: #1b4aa0; }
+.ctas td { font-size: .78rem; padding: .22rem .35rem; white-space: nowrap; }
+.ctas td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ctas table.mov { width: 49rem; }
+.ctas table.mov.vtp { width: 58rem; }
+.ctas table.mov th:nth-child(1) { width: 5.2rem; } .ctas table.mov th:nth-child(2) { width: 6rem; } .ctas table.mov th:nth-child(3) { width: 14rem; }
+.ctas table.mov th:nth-child(4), .ctas table.mov th:nth-child(5) { width: 6rem; } .ctas table.mov th:nth-child(6) { width: 6.4rem; } .ctas table.mov th:nth-child(7) { width: 5.4rem; }
+.ctas table.mov th:nth-child(8) { width: 4.2rem; } .ctas table.mov th:nth-child(9) { width: 4.6rem; }
+.ctas td.cto { overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
+.ctas table.res th.pp, .ctas table.res td.pp { width: 5rem; min-width: 0; font-size: .74rem; }
+.ctas table.res th:not(.pp) { width: 5.8rem; }
+.ctas table.res td.in input { width: 100%; min-width: 0; font-size: .78rem; }

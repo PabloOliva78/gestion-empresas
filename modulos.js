@@ -1609,7 +1609,7 @@ export function crearModulos(c) {
     ctaVis = movs.map((x) => x.l.firma);
     const opts = (t) => C.codes.map((cc) => `<option value="${cc}"${t === cc ? ' selected' : ''}>${esc(cc === 'S' ? sigla : cc)}</option>`).join('');
     const vis = movs.slice(0, ctaMas);
-    const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}"><td class="c">${fdate(x.l.ms)}</td><td>${esc(x.l.asiento)}</td><td>${esc(x.l.desc)}</td>
+    const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}"><td class="c">${fdate(x.l.ms)}</td><td>${esc(x.l.asiento)}</td><td title="${esc(x.l.desc)}" class="cto">${esc(x.l.desc)}</td>
       <td class="num">${x.l.debe ? fnum(x.l.debe) : ''}</td><td class="num">${x.l.haber ? fnum(x.l.haber) : ''}</td><td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
       <td class="c">${ed ? `<select data-cta="comp" data-id="${esc(x.l.firma)}"><option value=""></option><option${x.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${x.comp === 'No' ? ' selected' : ''}>No</option></select>` : esc(x.comp)}</td>
       ${ctaVerTp ? `<td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td>` : ''}</tr>`).join('');
@@ -1648,20 +1648,20 @@ export function crearModulos(c) {
       return `${tr}<tr class="ttot"><td class="pp">TOTAL ${y}</td>${cols.map(([tt, cn]) => `<td class="num">${tt === 'c' || tt === 'x' ? z(rr(rs.reduce((s, f) => s + (f.v[cn] || 0), 0))) : ''}</td>`).join('')}</tr>`;
     }).join('');
     const resumen = `<div class="css-4760-t">${esc(lblS(D.T === 'tri' ? C.tit.replace('MENSUAL', 'TRIMESTRAL') : C.tit))}</div>
-      <div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
+      <div class="wrap"><table class="tprs tnom res" style="width:calc(${cols.length} * 5.8rem + 5rem)"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
       <tbody>${cuerpo || `<tr><td colspan="${cols.length + 1}" class="vacio">Sin movimientos</td></tr>`}</tbody></table></div>`;
     const av = D.avisos.map((a) => `<p>⚠ ${esc(a)}</p>`).join('');
     return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel de la cuenta o de varias cuentas) o pulsa para elegirlo')}
       ${banner}
-      <section class="prs-card"><div class="css-flex"><div>
+      <section class="prs-card ctas"><div class="css-flex"><div class="mov-wrap">
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
         <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
         ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}
         <label class="xc-tog"><input type="checkbox" data-cta="vertp" data-id="x"${ctaVerTp ? ' checked' : ''}> Mostrar tipo y periodo</label></div>
-        <div class="wrap" style="max-height:70vh;overflow:auto"><table class="tprs tnom"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th>${ctaVerTp ? '<th>Tipo</th><th>Periodo</th>' : ''}</tr></thead>
+        <div class="wrap"><table class="tprs tnom mov${ctaVerTp ? ' vtp' : ''}"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th>${ctaVerTp ? '<th>Tipo</th><th>Periodo</th>' : ''}</tr></thead>
         <tbody>${filas || '<tr><td colspan="9" class="vacio">Sin movimientos</td></tr>'}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
-        <div>${resumen}</div></div></section>
+        <div class="res-wrap">${resumen}</div></div></section>
       ${av ? `<div class="aviso">${av}</div>` : ''}`;
   }
 
