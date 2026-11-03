@@ -543,3 +543,20 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .xc-kv { line-height: 1.05; }
 .xc-kt { line-height: 1.1; }
 .xc-k .xc-est { position: absolute; right: 8px; bottom: 6px; margin: 0; }
+
+/* cuentas: todo cabe en la pantalla sin barras laterales; el tamaño sigue al ancho de la ventana y las cabeceras miden lo mismo */
+.ctas .css-flex { display: flex; gap: .9em; align-items: flex-start; overflow: visible; padding: .5em .6em 1em; width: 100%; box-sizing: border-box; }
+.ctas .mov-wrap { flex: 0 0 35.5%; min-width: 0; }
+.ctas .res-wrap { flex: 1 1 0; min-width: 0; }
+.ctas .wrap { overflow-x: hidden; overflow-y: auto; max-height: 72vh; }
+.ctas .css-flex .tnom { font-size: max(9px, 0.62vw); table-layout: fixed; width: 100%; }
+.ctas .css-flex .tnom.res { width: 100%; }
+.ctas .css-flex .tnom.mov { width: 100%; table-layout: fixed; }
+.ctas .css-flex .tnom.res th:not(.pp) { width: auto; }
+.ctas .css-flex .tnom.res th.pp, .ctas .css-flex .tnom.res td.pp { width: 5.2em; }
+.ctas .css-flex .tnom.mov th:nth-child(1) { width: 5.6em; } .ctas .css-flex .tnom.mov th:nth-child(2) { width: 7em; } .ctas .css-flex .tnom.mov th:nth-child(3) { width: auto; }
+.ctas .css-flex .tnom.mov th:nth-child(4), .ctas .css-flex .tnom.mov th:nth-child(5) { width: 6.4em; } .ctas .css-flex .tnom.mov th:nth-child(6) { width: 6.6em; } .ctas .css-flex .tnom.mov th:nth-child(7) { width: 5.4em; }
+.ctas .css-flex .tnom td { padding: .22em .25em; overflow: hidden; }
+.ctas .css-flex .tnom td.cto { white-space: normal; max-width: none; min-width: 0; }
+.ctas .css-flex .tnom td.in input { padding: .15em .2em; }
+.ctas .css-flex .tnom thead th { height: 5em; overflow: hidden; font-size: .9em; padding: .2em .15em; line-height: 1.15; }
