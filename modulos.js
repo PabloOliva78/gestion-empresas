@@ -1648,7 +1648,7 @@ export function crearModulos(c) {
       return `${tr}<tr class="ttot"><td class="pp">TOTAL ${y}</td>${cols.map(([tt, cn]) => `<td class="num">${tt === 'c' || tt === 'x' ? z(rr(rs.reduce((s, f) => s + (f.v[cn] || 0), 0))) : ''}</td>`).join('')}</tr>`;
     }).join('');
     const resumen = `<div class="css-4760-t">${esc(lblS(D.T === 'tri' ? C.tit.replace('MENSUAL', 'TRIMESTRAL') : C.tit))}</div>
-      <div class="wrap"><table class="tprs tnom res" style="width:calc(${cols.length} * 5.8rem + 5rem)"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
+      <div class="wrap"><table class="tprs tnom res" style="--ncol:${cols.length}"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
       <tbody>${cuerpo || `<tr><td colspan="${cols.length + 1}" class="vacio">Sin movimientos</td></tr>`}</tbody></table></div>`;
     const av = D.avisos.map((a) => `<p>⚠ ${esc(a)}</p>`).join('');
     return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel de la cuenta o de varias cuentas) o pulsa para elegirlo')}

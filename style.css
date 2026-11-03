@@ -449,3 +449,12 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas table.res th.pp, .ctas table.res td.pp { width: 5rem; min-width: 0; font-size: .74rem; }
 .ctas table.res th:not(.pp) { width: 5.8rem; }
 .ctas table.res td.in input { width: 100%; min-width: 0; font-size: .78rem; }
+
+/* ajustes: concepto al texto más largo y enunciados del resumen completos */
+.ctas th { height: auto; }
+.ctas table.mov, .ctas table.mov.vtp { table-layout: auto; width: max-content; }
+.ctas table.mov th:nth-child(3) { width: auto; }
+.ctas table.mov th:nth-child(n) { white-space: normal; }
+.ctas td.cto { overflow: visible; text-overflow: clip; max-width: none; white-space: nowrap; }
+.ctas table.res th:not(.pp) { width: 7.2rem; font-size: .72rem; }
+.ctas table.res { width: calc(var(--ncol, 12) * 7.2rem + 5rem); }
