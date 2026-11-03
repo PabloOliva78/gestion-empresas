@@ -285,6 +285,71 @@ export function leerLibroIVA(filas) {
   return out.length ? out : null;
 }
 
+// ---------- Extracto contable (mayor): movimientos con fecha, cuenta, asiento, descripción, debe y haber ----------
+export function leerMayor(filas) {
+  const nm = (s) => sinTildes(s).replace(/[º°]/g, '').replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const SYN = {
+    fecha: ['fecha', 'fecha contable', 'fecha contabilizacion', 'fecha de contabilizacion', 'fecha registro', 'fecha asiento', 'fecha operacion', 'fecha de registro'],
+    cuenta: ['cuenta', 'cuenta contable', 'subcuenta', 'n cuenta', 'cta', 'codigo cuenta', 'numero de cuenta', 'cuenta n'],
+    asiento: ['asiento', 'n asiento', 'numero de asiento', 'tipo de asiento', 'tipo asiento', 'n de asiento', 'documento'],
+    desc: ['descripcion', 'concepto', 'texto', 'descripcion del asiento', 'detalle'],
+    debe: ['debe', 'debito', 'importe debe', 'debe moneda', 'importe debito'],
+    haber: ['haber', 'credito', 'importe haber', 'haber moneda', 'importe credito'],
+    importe: ['importe', 'importe moneda'],
+  };
+  const mapear = (H) => {
+    const map = {}, usado = new Set();
+    for (const pasada of [0, 1]) for (const f of Object.keys(SYN)) {
+      if (map[f] !== undefined) continue;
+      for (const s of SYN[f]) {
+        const i = H.findIndex((x, k) => !usado.has(k) && x && (pasada === 0 ? x === s : x.includes(s) && !(f === 'importe' && /debe|haber/.test(x))));
+        if (i >= 0) { map[f] = i; usado.add(i); break; }
+      }
+    }
+    for (const f of Object.keys(SYN)) if (map[f] === undefined) map[f] = -1;
+    return map;
+  };
+  let h = -1, M = null;
+  for (let i = 0; i < Math.min(filas.length, 60); i++) {
+    if (!filas[i]) continue;
+    const m = mapear(Array.from(filas[i], nm));
+    if (m.fecha >= 0 && (m.debe >= 0 || m.haber >= 0 || m.importe >= 0)) { h = i; M = m; break; }
+  }
+  if (h < 0) return null;
+  let fija = '';
+  if (M.cuenta < 0) {
+    for (let i = 0; i < h && !fija; i++) { const f = filas[i] || []; for (let j = 0; j < f.length && !fija; j++) if (/^(cuenta contable|cuenta|subcuenta)$/.test(nm(f[j]))) fija = String(f.slice(j + 1).find((v) => /\d{3,}/.test(String(v ?? ''))) ?? '').trim(); }
+  }
+  const out = [], vistos = new Map();
+  for (const r of filas.slice(h + 1)) {
+    if (!r) continue;
+    const g = (k) => (M[k] >= 0 ? r[M[k]] : null);
+    const fecha = fechaIso(g('fecha')), cuenta = String((M.cuenta >= 0 ? g('cuenta') : fija) ?? '').trim();
+    let debe = g('debe') === null || g('debe') === '' ? null : numero(g('debe')), haber = g('haber') === null || g('haber') === '' ? null : numero(g('haber'));
+    if (debe === null && haber === null && M.importe >= 0 && g('importe') !== null && g('importe') !== '') { const imp = numero(g('importe')); debe = imp > 0 ? imp : 0; haber = imp < 0 ? -imp : 0; }
+    if (!fecha || !cuenta || ((debe ?? 0) === 0 && (haber ?? 0) === 0)) continue;
+    const l = { fecha, cuenta, digitos: cuenta.replace(/\D/g, ''), debe: r2n(debe ?? 0), haber: r2n(haber ?? 0), asiento: String(g('asiento') ?? '').trim(), desc: String(g('desc') ?? '').trim() };
+    const k = [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
+    l.n = (vistos.get(k) ?? 0) + 1; // movimientos idénticos dentro del mismo archivo cuentan todos; el mismo archivo cargado dos veces no duplica
+    vistos.set(k, l.n);
+    out.push(l);
+  }
+  return out.length ? out : null;
+}
+
+// ---------- FUNDAE: costes comunicados (GRUPO aaff/grupo) y grupos formativos (aaff, grupo, fechas) ----------
+export function fundaeFilas(filas, anio) {
+  const R = { anio, costes: {}, grupos: {} };
+  for (const c of filas) {
+    const L = c.map((x) => String(x ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' ');
+    let m = L.match(/^GRUPO\s+(\d+)\s*\/\s*(\d+)\s+(.+?)\s+(-?[\d.]+,\d{2})$/i);
+    if (m) { R.costes[`${m[1]}/${m[2]}`] = { den: m[3], coste: numero(m[4]) }; continue; }
+    m = L.match(/^(\d{4,})\s+(\d+)\s+(\d+)\s+(.+?)\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(\S+))?/);
+    if (m) R.grupos[`${m[2]}/${m[3]}`] = { id: m[1], den: m[4], ini: m[5], fin: m[6], est: m[7] || '' };
+  }
+  return R;
+}
+
 // ---------- Business Central (Fertinova): un solo libro de movimientos de IVA con ventas y compras ----------
 // Se reparte en repercutido (Venta, Venta Autorepercutida) y soportado (Compra, Compra Autorepercutida); el código de impuestos es la columna
 // «Conversion D365» y, si el archivo no la trae, se calcula con la tabla de equivalencias.

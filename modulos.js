@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=34';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=35';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -1415,23 +1415,170 @@ export function crearModulos(c) {
       <section class="prs-card"><div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
   }
 
+  // ---- Conciliación Seguridad Social: pagos (asientos PS de la 4760.01) frente a la SS de las nóminas del mes anterior, IT y cursos FUNDAE ----
+  const casaCta = (pref, dig) => {
+    const m = /^(\d+)[.,](\d+)$/.exec(pref);
+    if (m) { const sub = m[2].replace(/^0+/, '') || '0'; return new RegExp(`^${m[1]}0*${sub}$`).test(dig) || new RegExp(`^${m[1]}${m[2]}0*$`).test(dig); }
+    return dig.startsWith(String(pref).replace(/\D/g, ''));
+  };
+  const cssCta = () => { try { return localStorage.getItem('cssCta') || '4760.01'; } catch { return '4760.01'; } };
+  const setCssCta = (v) => { try { localStorage.setItem('cssCta', String(v).trim() || '4760.01'); } catch { /* sin almacenamiento */ } render(); };
+  const ymDe = (f) => f.slice(0, 7);
+  const sumMes = (f, d) => { const [y, m] = f.slice(0, 7).split('-').map(Number); const t = y * 12 + (m - 1) + d; return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`; };
+
+  // FUNDAE: un registro «fundae» por empresa y ejercicio; costes y grupos se unen por AAFF/grupo
+  const fundaeReg = (y) => S.registros.find((r) => r.tipo === 'fundae' && r.empresa_id === S.sel && r.ejercicio === y);
+  const fundaeFecha = (s) => { const m = String(s ?? '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null; };
+  function fundaeMes(ej) {
+    const M = {}, sin = [];
+    S.registros.filter((r) => r.tipo === 'fundae' && r.empresa_id === S.sel).forEach((r) => {
+      Object.entries(r.datos.costes ?? {}).forEach(([k, c]) => {
+        const g = r.datos.grupos?.[k], fin = g && fundaeFecha(g.fin);
+        if (!fin) { if (r.ejercicio === ej) sin.push({ k, den: c.den, coste: c.coste }); return; }
+        if (+fin.slice(0, 4) !== ej) return;
+        (M[fin.slice(0, 7)] ??= []).push({ k, den: c.den || g.den, coste: c.coste, fin: g.fin });
+      });
+    });
+    return { M, sin };
+  }
+  async function cargarFundae(files) {
+    if (!S.sel) return void alert('Elige primero la empresa en el desplegable de la izquierda.');
+    const ok = [], mal = [], lote = [];
+    for (const f of files) {
+      try {
+        let filas = [], anio = null, nif = null;
+        if (/\.pdf$/i.test(f.name)) {
+          const { texto } = await leerPdf(f);
+          filas = texto.split('\n').filter((l) => !/^--- página/.test(l)).map((l) => [l]);
+          anio = Number((texto.match(/A[ñn]o:\s*(\d{4})/) || [])[1]) || null;
+          nif = (texto.match(/NIF empresa:\s*([A-Z0-9]{9})/i) || [])[1] || null;
+        } else {
+          const rows = await leerXlsx(await f.arrayBuffer(), window.JSZip);
+          rows.forEach((r) => { if (r && /^NIF:?$/i.test(String(r[0] ?? '').trim())) { const v = r.slice(1).find((x) => x && String(x).trim()); if (v) nif = String(v).trim(); } });
+          const hr = rows.findIndex((r) => r && r.some((v) => /C[oó]digo|Id Grupo|AAFF/i.test(String(v ?? ''))));
+          if (hr >= 0) {
+            const H = rows[hr].map((v) => String(v ?? '').trim()), ix = (re) => H.findIndex((h) => re.test(h));
+            const iC = ix(/^C[oó]digo/i), iD = ix(/^Denominaci/i), iCo = ix(/Coste/i), iId = ix(/Id Grupo/i), iA = ix(/^AAFF/i), iG = ix(/^Grupo$/i), iI = ix(/inicio/i), iF = ix(/^(Fecha )?fin/i);
+            const fd = (v) => { const d = typeof v === 'number' ? new Date(Date.UTC(1899, 11, 30) + v * 86400000) : null; return d ? `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` : String(v ?? ''); };
+            rows.slice(hr + 1).forEach((r) => {
+              if (!r) return;
+              if (iCo >= 0 && iC >= 0) { if (!r[iC]) return; filas.push(['GRUPO', String(r[iC]).replace(/\s+/g, ''), String(r[iD] ?? '-').trim() || '-', fnum(typeof r[iCo] === 'number' ? r[iCo] : parseES(r[iCo]))]); }
+              else if (iA >= 0 && iG >= 0 && iF >= 0) { if (r[iA] == null || r[iA] === '') return; filas.push([String(r[iId] != null ? Math.round(+r[iId]) || r[iId] : '0000').padStart(4, '0'), String(r[iA]).trim(), String(r[iG]).trim(), String(r[iD] ?? '-').trim() || '-', fd(r[iI]), fd(r[iF]), String(r[H.length - 1] ?? '').trim()]); }
+            });
+          }
+        }
+        if (nif && empresa()?.cif && nif.toUpperCase() !== empresa().cif.toUpperCase()) { mal.push(`${f.name} (es del NIF ${nif}, no de la empresa elegida)`); continue; }
+        const R = fundaeFilas(filas, anio), nC = Object.keys(R.costes).length, nG = Object.keys(R.grupos).length;
+        if (!nC && !nG) { mal.push(f.name); continue; }
+        const g = Object.values(R.grupos)[0], dg = g && fundaeFecha(g.fin);
+        lote.push({ f, R, nC, nG, y: anio || (dg ? +dg.slice(0, 4) : null) });
+      } catch (e) { mal.push(`${f.name} (${e.message})`); }
+    }
+    const yLote = (lote.find((x) => x.y) || {}).y || Number(S.ejercicio);
+    for (const { f, R, nC, nG, y } of lote) {
+      const yy = y || yLote, reg = fundaeReg(yy), d = JSON.parse(JSON.stringify(reg?.datos ?? { costes: {}, grupos: {} }));
+      Object.assign(d.costes ??= {}, R.costes); Object.assign(d.grupos ??= {}, R.grupos);
+      const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'fundae', ejercicio: yy, datos: d });
+      if (err) { mal.push(`${f.name} (${err})`); continue; }
+      await cargar();
+      ok.push(`${f.name} (${yy}: ${nC ? `${nC} costes` : ''}${nC && nG ? ', ' : ''}${nG ? `${nG} grupos` : ''})`);
+    }
+    render();
+    alert(`FUNDAE: ${ok.length ? ok.join('; ') : 'nada nuevo'}${mal.length ? `\nNo reconocidos: ${mal.join(', ')}` : ''}`);
+  }
+  async function quitarFundae(y) {
+    if (!confirm(`¿Quitar los datos de FUNDAE de ${y}?`)) return;
+    const reg = fundaeReg(Number(y));
+    if (reg) { const { error } = await db.from('registros').delete().eq('id', reg.id); if (error) return void alert(error.message); }
+    await cargar(); render();
+  }
+  async function ingestaMayor(f, empresaId) {
+    const filas = await leerXlsx(await f.arrayBuffer(), window.JSZip);
+    const mv = leerMayor(filas);
+    if (!mv) return `❔ ${f.name}: guardado, pero no reconozco el extracto (hacen falta fecha, cuenta, debe y haber)`;
+    const n = await guardarGrande('may-mov', empresaId, mv, (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
+    return `✔ ${f.name}: extracto contable · ${mv.length} movimientos leídos (${n} en total)`;
+  }
+
+  // resumen mensual de una cuenta del mayor, con el saldo de ejercicios anteriores; tipo(asiento, esDebe) → columna
+  function resumenCtaCss(titulo, cta, cols, tipo, sp, ej, M, desplazaPS, etqPrev, etq) {
+    const nuevo = () => Object.fromEntries(cols.map((c) => [c, 0]));
+    const mes = {}, P = nuevo(); let hay = false;
+    (M ?? []).forEach((l) => {
+      if (!casaCta(cta, l.digitos)) return;
+      hay = true;
+      let t = tipo(String(l.asiento || '').trim().toUpperCase(), !!l.debe);
+      if (!cols.includes(t)) t = l.debe ? 'OD' : 'OH';
+      const ym = desplazaPS && t === 'PS' ? sumMes(l.fecha, -1) : ymDe(l.fecha), y = +ym.slice(0, 4), imp = (+l.debe || 0) + (+l.haber || 0);
+      if (y < ej) { P[t] += imp; return; }
+      if (y > ej) return;
+      (mes[+ym.slice(5)] ??= nuevo())[t] += imp;
+    });
+    const z = (v) => (Math.abs(v) < 0.005 ? '-' : fnum(rr(v)));
+    let sal = rr(sp(P));
+    const T = nuevo(); let tsp = 0;
+    const fil = MESES.map((mn, i) => { const v = mes[i + 1] ?? nuevo(), s = rr(sp(v)); sal = rr(sal + s); cols.forEach((c) => (T[c] += v[c])); tsp += s;
+      return `<tr><td>${mn.toUpperCase()}</td>${cols.map((c) => `<td class="num">${z(v[c])}</td>`).join('')}<td class="num">${z(s)}</td><td class="num"><b>${fnum(sal)}</b></td></tr>`; }).join('');
+    return `<div class="css-4760"><div class="css-4760-t">RESUMEN CUENTA ${esc(cta)} · ${ej}${hay ? '' : ' <span class="hint">(sin movimientos: suelta el extracto contable)</span>'}</div>
+      <table class="tprs tnom"><thead><tr><th class="pp">Mes</th>${cols.map((c) => `<th title="${esc(etq[c] ?? c)}">${c}</th>`).join('')}<th>Saldo del mes</th><th>Saldo cuenta</th></tr></thead><tbody>
+      <tr class="cmp"><td colspan="${cols.length + 2}">${etqPrev}</td><td class="num"><b>${fnum(rr(sp(P)))}</b></td></tr>${fil}
+      <tr class="ttot"><td>TOTAL ${ej}</td>${cols.map((c) => `<td class="num">${fnum(rr(T[c]))}</td>`).join('')}<td class="num">${fnum(rr(tsp))}</td><td class="num">${fnum(sal)}</td></tr></tbody></table></div>`;
+  }
+
   function vistaCssoc() {
     if (!S.sel) return sinEmpresa;
-    const e = empresa(), y = Number(S.ejercicio), ed = puede(), T = { p: 0, ss: 0, dsn: 0, it: 0, cur: 0, d: 0 };
-    const z = (v) => (Math.abs(v) < 0.005 ? '—' : fnum(v));
+    const M = grande('may-mov');
+    if (!M) return cargandoTxt;
+    const e = empresa(), y = Number(S.ejercicio), ed = puede(), cta = cssCta(), hayMayor = M.length > 0;
+    const pag = {}, rit = {};
+    M.forEach((l) => {
+      const a = String(l.asiento || '').trim().toUpperCase();
+      if (/^PS/.test(a) && casaCta(cta, l.digitos)) pag[ymDe(l.fecha)] = rr((pag[ymDe(l.fecha)] || 0) + (+l.debe || 0) - (+l.haber || 0));
+      if (/^IT/.test(a) && casaCta(cta, l.digitos)) rit[ymDe(l.fecha)] = rr((rit[ymDe(l.fecha)] || 0) + (+l.debe || 0) + (+l.haber || 0));
+    });
+    const F = fundaeMes(y), T = { p: 0, ss: 0, dsn: 0, it: 0, cur: 0, d: 0 };
+    const z = (v) => (Math.abs(v) < 0.005 ? '-' : fnum(v));
     const filas = MM12.map((mm, i) => {
-      const N = nomMes(y, mm), x = nomReg(y)?.datos?.[mm] ?? {};
-      const ss = N ? N.ssTot : null, p = x.c_pagos !== undefined ? Number(x.c_pagos) : null;
-      const it = -Math.abs(Number(x.c_it) || 0), cur = -Math.abs(Number(x.c_bonif) || 0);
+      const ymN = `${y}-${mm}`, ymP = sumMes(`${ymN}-01`, 1), N = nomMes(y, mm), x = nomReg(y)?.datos?.[mm] ?? {};
+      const ss = N ? N.ssTot : null;
+      const p = pag[ymP] !== undefined ? pag[ymP] : (!hayMayor && x.c_pagos !== undefined ? Number(x.c_pagos) : null);
+      const it = hayMayor ? -(rit[ymN] || 0) : -Math.abs(Number(x.c_it) || 0);
+      const cur = F.M[ymN] ? -rr(F.M[ymN].reduce((a, c) => a + (c.coste || 0), 0)) : (Object.keys(F.M).length ? 0 : -Math.abs(Number(x.c_bonif) || 0));
       const dsn = p === null && ss === null ? null : rr((p || 0) - (ss || 0)), dif = dsn === null ? null : rr(dsn - it - cur), ok = dif !== null && Math.abs(dif) <= 1;
       T.p += p || 0; T.ss += ss || 0; T.dsn += dsn || 0; T.it += it; T.cur += cur; T.d += dif || 0;
-      return `<tr class="${dif === null ? '' : ok ? 'cf-ok' : 'cf-ko'}"><td class="pp">${MESES[i][0].toUpperCase() + MESES[i].slice(1)} ${y}</td>${celdaNom(mm, 'c_pagos', y, ed)}<td class="num">${ss === null ? '—' : fnum(ss)}</td>
-        <td class="num">${dsn === null ? '—' : fnum(dsn)}</td>${celdaNom(mm, 'c_it', y, ed)}${celdaNom(mm, 'c_bonif', y, ed)}<td class="num"><b>${dif === null ? '—' : fnum(dif)}</b></td><td>${dif === null ? 'Sin datos' : ok ? '✓ Cuadra' : p === null ? '✖ Sin pago' : '✖ Descuadra'}</td></tr>`;
+      const tit = (F.M[ymN] ?? []).map((c) => `${c.k} ${c.den} (${c.fin}): ${fnum(c.coste)}`).join('\n');
+      const pagoCel = !hayMayor && ed ? celdaNom(mm, 'c_pagos', y, ed) : `<td class="num" title="Pagados en ${MESES[+ymP.slice(5) - 1]} ${ymP.slice(0, 4)}">${p === null ? '-' : fnum(p)}</td>`;
+      return `<tr class="${dif === null ? '' : ok ? 'cf-ok' : 'cf-ko'}"><td class="pp">${MESES[i].toUpperCase()} ${y}</td>${pagoCel}<td class="num">${ss === null ? '-' : fnum(ss)}</td>
+        <td class="num">${dsn === null ? '-' : fnum(dsn)}</td><td class="num">${z(it)}</td><td class="num" title="${esc(tit)}">${z(cur)}</td><td class="num"><b>${dif === null ? '-' : fnum(dif)}</b></td>
+        <td>${dif === null ? 'Sin datos' : ok ? '✓ Cuadra' : p === null ? '✖ Sin pago' : '✖ Descuadra'}</td></tr>`;
     }).join('');
-    return `${cabNom(e, y)}
-      <p class="hint">Seguros Sociales pagados (los del mes siguiente, asientos PS de la 4760.01) − Seguridad Social de las nóminas (pestaña Nóminas) = Diferencias; menos IT y menos Bonificaciones (cursos FUNDAE), ambas en negativo = Dif. mes Seg. Social. Cero = verde; si no, rojo. Escribe pagos, IT y bonificaciones a mano en cada mes.</p>
-      <section class="prs-card"><div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">Mes</th><th>Seguros Sociales pagados</th><th>Seguridad Social Nóminas</th><th>Diferencias SS − Nóminas</th><th>IT</th><th>Bonificaciones</th><th>Dif. mes Seg. Social</th><th>Estado</th></tr></thead>
-      <tbody>${filas}<tr class="ttot"><td class="pp">TOTAL</td><td class="num">${fnum(T.p)}</td><td class="num">${fnum(T.ss)}</td><td class="num">${fnum(rr(T.dsn))}</td><td class="num">${z(T.it)}</td><td class="num">${z(T.cur)}</td><td class="num">${fnum(rr(T.d))}</td><td></td></tr></tbody></table></div></section>`;
+    const av = [];
+    if (!hayMayor) av.push(`Falta el extracto contable (mayor) de la cuenta ${cta}: suéltalo en la franja de arriba (mientras tanto los pagos se pueden escribir a mano).`);
+    if (!MM12.some((mm) => nomMes(y, mm))) av.push('Faltan las nóminas (pestaña Nóminas).');
+    if (!S.registros.some((r) => r.tipo === 'fundae' && r.empresa_id === S.sel)) av.push('Suelta los listados de FUNDAE (Costes y Grupos formativos, en PDF o en el Excel que exporta FUNDAE) para descontar los cursos bonificados.');
+    else { const ys = S.registros.filter((r) => r.tipo === 'fundae' && r.empresa_id === S.sel).map((r) => r.ejercicio); if (!ys.includes(y)) av.push(`Los listados de FUNDAE cargados son del ejercicio ${ys.join(', ')}: para ${y} suelta los de ${y}.`); }
+    if (F.sin.length) av.push(`Cursos de FUNDAE con coste pero sin grupo formativo (sin fecha), no se asignan a ningún mes: ${F.sin.map((c) => `${c.k} ${fnum(c.coste)}`).join(', ')}. En el PDF de costes solo vienen los registros visibles: exporta a Excel o pon «Mostrar 100».`);
+    const cursos = Object.entries(F.M).sort().flatMap(([ym, L]) => L.map((c) => `<tr><td>${MESES[+ym.slice(5) - 1].toUpperCase()}</td><td class="c">${esc(c.k)}</td><td>${esc(c.den)}</td><td class="c">${esc(c.fin)}</td><td class="num">${fnum(c.coste)}</td></tr>`)).join('');
+    const E4760 = { PS: 'Pago Seguridad Social (del mes siguiente)', OD: 'Otros mov. debe', OH: 'Otros mov. haber', IT: 'Rectificaciones IT', CB: 'Rectificaciones cursos bonificados', N: 'Seguridad Social devengada' };
+    const r4760 = resumenCtaCss('4760', '4760.01', ['PS', 'OD', 'OH', 'IT', 'CB', 'N'],
+      (a, d) => (a.startsWith('PS') ? 'PS' : a.startsWith('IT') ? 'IT' : a.startsWith('CB') ? 'CB' : a.startsWith('N') ? 'N' : d ? 'OD' : 'OH'), (v) => (v.PS + v.OD) - (v.OH + v.IT + v.CB + v.N), y, M, true, 'Diferencia ejercicio anterior', E4760);
+    const r6400 = resumenCtaCss('6400', '6400.01', ['N', 'IT', 'OD', 'OH', 'C'],
+      (a, d) => { const p = a.split('-')[0]; return p === 'N' || p === 'RTB' ? 'N' : p === 'IT' ? 'IT' : p === 'OD' ? 'OD' : p === 'OH' ? 'OH' : p === 'C' || p[0] === 'I' ? 'C' : d ? 'OD' : 'OH'; },
+      (v) => v.N + v.IT + v.OD - v.OH - v.C, y, M, false, 'Saldo ejercicio anterior', { N: 'Salarios nóminas', IT: 'Bajas', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
+    const r6420 = resumenCtaCss('6420', '6420.01', ['SS', 'R', 'OD', 'OH', 'C'],
+      (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; },
+      (v) => v.SS + v.R + v.OD - v.OH - v.C, y, M, false, 'Saldo ejercicio anterior', { SS: 'Seguridad Social empresa nóminas', R: 'Regularizaciones', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
+    return `${dz('fundae', 'Suelta aquí los listados de FUNDAE', '(Costes y Grupos formativos, PDF o Excel) o pulsa para elegirlos', '.pdf,.xlsx,.xls,.csv')}
+      ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01, 6400.01 y 6420.01 (Excel) o pulsa para elegirlo')}
+      ${av.length ? `<div class="aviso">${av.map((a) => `<p>⚠ ${esc(a)}</p>`).join('')}</div>` : ''}
+      <p class="hint">Seguros Sociales (pagos: asientos PS en la ${esc(cta)} del mes siguiente) − Seguridad Social de las nóminas = Diferencias; menos IT (asientos IT de la ${esc(cta)} del mes) y menos Bonificaciones (cursos FUNDAE), ambas en negativo = Dif. mes Seg. Social. Cero = verde; si no, rojo.</p>
+      <section class="prs-card"><div class="prs-h">Conciliación Seguridad Social · ${y}</div>
+      <p style="margin:.5rem 1rem" class="hint">Cuenta de pagos de seguros sociales: <input class="emp-in" data-csscta="1" value="${esc(cta)}" style="width:7rem"></p>
+      <div class="css-flex"><div class="wrap"><table class="tprs tnom css-conc"><thead><tr><th class="pp">Mes</th><th>Seguros Sociales</th><th>Seguridad Social Nóminas</th><th>Diferencias Seg. Soc. − Nóminas</th><th>IT</th><th>Bonificaciones</th><th>Dif. Mes Seg. Social</th><th>Estado</th></tr></thead>
+      <tbody><tr class="cmp"><td colspan="8">Ejercicio ${y}</td></tr>${filas}<tr class="ttot"><td class="pp">TOTAL</td><td class="num">${fnum(rr(T.p))}</td><td class="num">${fnum(rr(T.ss))}</td><td class="num">${fnum(rr(T.dsn))}</td><td class="num">${fnum(rr(T.it))}</td><td class="num">${fnum(rr(T.cur))}</td><td class="num">${fnum(rr(T.d))}</td><td></td></tr></tbody></table></div>
+      <div class="wrap">${r4760}</div><div class="wrap">${r6400}</div><div class="wrap">${r6420}</div></div></section>
+      ${cursos ? `<section class="prs-card"><div class="prs-h">Cursos bonificados FUNDAE · ${y}</div><div class="wrap"><table class="tprs tnom"><thead><tr><th>Mes</th><th>AAFF / Grupo</th><th>Denominación</th><th>Fecha fin</th><th>Coste bonificado</th></tr></thead><tbody>${cursos}</tbody></table></div>
+      ${ed ? `<button class="small" data-act="m-fundaedel" data-y="${y}" style="margin:.6rem 1rem">Quitar los datos de FUNDAE de ${y}</button>` : ''}</section>` : ''}`;
   }
 
   function vistaCnom() {
@@ -1541,6 +1688,7 @@ export function crearModulos(c) {
 
   async function subirArchivos(files) {
     if (archKind === 'prspdf') return cargarPresentados(files);
+    if (archKind === 'fundae') return cargarFundae(files);
     if (archKind === 'sys') return cargarSYS(files);
     if (archKind === 'impuestos') return cargarPdfs(files);
     if (archKind === 'registro') return cargarRegistro(files);
@@ -1557,7 +1705,7 @@ export function crearModulos(c) {
         const err = await guardarRegistro(null, { id, empresa_id: S.sel, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
           datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
         if (err) throw new Error(err);
-        informe.push(['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, S.sel) : `✔ ${f.name}`);
+        informe.push(['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, S.sel) : archKind === 'extractos' ? await ingestaMayor(f, S.sel) : `✔ ${f.name}`);
       } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
     }
     await cargar(); render();
@@ -1705,6 +1853,7 @@ export function crearModulos(c) {
       'm-fc': () => opFc(d.s, d.op, d.k),
       'm-manret': () => formManRet(d.m),
       'm-retprint': () => imprimirRet(d.m),
+      'm-fundaedel': () => quitarFundae(d.y),
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
@@ -1834,5 +1983,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }
