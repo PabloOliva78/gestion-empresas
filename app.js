@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=89';
+import { crearModulos } from './modulos.js?v=88';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -247,10 +247,12 @@ function render() {
         <button id="out" class="small">Salir</button></div>
     </aside>
     <main class="princ">
-      <header class="doc"><div><h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
-        <p class="doc-emp">${e ? `${esc(e.nombre)} · ${esc(e.cif)}` : 'Todas las empresas'}</p>
-        <p><b>Ejercicio ${esc(S.ejercicio)} · ${esc(per)}</b>${S.cargando ? ' · <span class="hint">Cargando datos…</span>' : ''}</p></div>
-        <div class="doc-r"><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></header>
+      <header class="doc"><div class="doc-l">
+        <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
+        <p class="doc-sub">Inicio · grupos de pestañas</p>
+        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>
+        <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
+        <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
       <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
@@ -741,6 +743,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.siifil) return void M.siiFiltro(t.dataset.siifil, t.value);
   if (t.dataset.siitodos) return void M.siiTodosSet(t.dataset.siitodos, t.checked);
   if (t.dataset.fce) return void M.editarFc(t.dataset.fce, t.value);
+  if (t.dataset.fcnv) return void M.fcNvCampo(t.dataset.fcnv, t.value);
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
   if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);
