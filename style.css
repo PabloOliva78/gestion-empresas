@@ -536,3 +536,10 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex { align-items: flex-start; }
 .ctas .mov-wrap > .fc-cab, .ctas .res-wrap > .css-4760-t { min-height: 3.2em; margin: 0 0 .4em; display: flex; align-items: center; gap: .6em; flex-wrap: wrap; }
 .ctas .res-wrap > .css-4760-t { font-size: 1em; }
+
+/* tarjetas de saldos: más bajas, sin hueco bajo el número */
+.xc-kg { align-items: start; }
+.xc-k { position: relative; padding: 4px 10px 5px; }
+.xc-kv { line-height: 1.05; }
+.xc-kt { line-height: 1.1; }
+.xc-k .xc-est { position: absolute; right: 8px; bottom: 6px; margin: 0; }
