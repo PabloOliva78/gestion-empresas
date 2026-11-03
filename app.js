@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=43';
+import { crearModulos } from './modulos.js?v=44';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -241,6 +241,13 @@ function render() {
       ${tabsNav()}
       <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
+  alinearPanel();
+}
+
+function refrescarTabs() {
+  const w = root.querySelector('.tabs-wrap');
+  if (!w) return;
+  w.outerHTML = tabsNav();
   alinearPanel();
 }
 
@@ -612,7 +619,7 @@ root.addEventListener('click', (ev) => {
   if (!t) return;
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
   if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
-  if (t.dataset.grp !== undefined) { const i = Number(t.dataset.grp); S.grp = S.grp === i ? -1 : i; return render(); }
+  if (t.dataset.grp !== undefined) { S.grp = Number(t.dataset.grp); return refrescarTabs(); }
   if (t.id === 'out') return void db.auth.signOut();
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.grp = -1; return render(); }
   if (t.dataset.act?.startsWith('m-')) return void M.accion(t.dataset);
@@ -668,6 +675,17 @@ root.addEventListener('input', (ev) => {
 });
 
 // Soltar PDF sobre la franja punteada de datos censales
+// Menú de bloques: al pasar el ratón por un bloque se abre su panel (superpuesto, sin mover nada); al salir se cierra
+let cierraGrp;
+root.addEventListener('mouseover', (ev) => {
+  const p = ev.target.closest?.('.gpill');
+  if (ev.target.closest?.('.tabs-wrap')) clearTimeout(cierraGrp);
+  if (p && S.grp !== Number(p.dataset.grp)) { S.grp = Number(p.dataset.grp); refrescarTabs(); }
+});
+root.addEventListener('mouseout', (ev) => {
+  if (S.grp < 0 || !ev.target.closest?.('.tabs-wrap') || ev.relatedTarget?.closest?.('.tabs-wrap')) return;
+  cierraGrp = setTimeout(() => { S.grp = -1; refrescarTabs(); }, 250);
+});
 root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });
 root.addEventListener('dragleave', (ev) => ev.target.closest?.('.dropzone')?.classList.remove('over'));
 root.addEventListener('drop', (ev) => {

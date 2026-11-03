@@ -353,3 +353,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .gpill { font-size: .95rem; padding: .55rem 1.2rem .55rem .6rem; gap: .65rem; }
 .gpill small { font-size: .8rem; }
 .gpill .gico { height: 36px; width: 62px; }
+
+/* panel superpuesto al pasar el ratón: no desplaza el contenido */
+.tabs-wrap { overflow: visible; max-height: none; }
+.gpanel { position: absolute; top: 100%; left: 0; z-index: 60; margin-top: 0; max-height: 75vh; overflow-y: auto; box-shadow: 0 14px 34px rgba(20,40,106,.35); }
