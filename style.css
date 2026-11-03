@@ -347,3 +347,9 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 /* bloques fijos arriba y zona de soltar fija debajo */
 .tabs-wrap { position: sticky; top: 0; z-index: 40; background: var(--bg, #f4f6fb); padding-bottom: .3rem; max-height: 85vh; overflow-y: auto; }
 .vista > .dropzone, .vista .dropzone:first-of-type { position: sticky; top: var(--tabsH, 64px); z-index: 20; box-shadow: 0 3px 8px rgba(31,56,100,.12); }
+
+/* bloques del menú más grandes */
+.tabs { gap: .55rem; padding-top: .9rem; }
+.gpill { font-size: .95rem; padding: .55rem 1.2rem .55rem .6rem; gap: .65rem; }
+.gpill small { font-size: .8rem; }
+.gpill .gico { height: 36px; width: 62px; }
