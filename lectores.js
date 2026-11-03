@@ -467,6 +467,7 @@ export function leerSII(filas) {
   const c = { fa: ix(/^N[ºo°] Serie/i), ej: ix(/^Ejercicio$/i), pe: ix(/^Periodo$/i), fe: ix(/^Fecha Expedici[oó]n$/i),
     nif: ix(emitidas ? /^NIF Destinatario/i : /^NIF Emisor/i), nom: ix(emitidas ? /^Nombre o Raz[oó]n Social Destinatario/i : /^Nombre o Raz[oó]n Social Factura Emisor/i),
     tipo: ix(/^Tipo de factura/i), est: ix(/^Estado( del registro)?$/i), ded: ix(/^Cuota Deducible$/i) };
+  const filaRaw = (f) => { const o = {}; f.forEach((v, i) => { const s = typeof v === 'number' ? v : String(v ?? '').trim(); if (s !== '') o[i] = s; }); return o; }; // solo las celdas con dato (todas las columnas de la descarga)
   const suma = (f, cols) => cols.reduce((a, i) => a + numero(f[i]), 0); // número (xlsx) o texto con coma decimal (csv de la sede)
   const out = [];
   for (const f of filas.slice(h + 1)) {
@@ -474,8 +475,9 @@ export function leerSII(filas) {
     if (!factura) continue;
     out.push({ factura, ej: Number(f[c.ej]) || null, per: String(f[c.pe] ?? '').trim(), fecha: fechaIso(f[c.fe]), nif: String(f[c.nif] ?? '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), tipo: String(f[c.tipo] ?? '').trim(), estado: String(f[c.est] ?? '').trim(),
-      base: r2n(suma(f, bases)), cuota: r2n(suma(f, cuotas)), deducible: c.ded >= 0 ? r2n(numero(f[c.ded])) : 0, sentido: emitidas ? 'E' : 'R', cats: catsFilaSii(emitidas, cab, f) });
+      base: r2n(suma(f, bases)), cuota: r2n(suma(f, cuotas)), deducible: c.ded >= 0 ? r2n(numero(f[c.ded])) : 0, sentido: emitidas ? 'E' : 'R', cats: catsFilaSii(emitidas, cab, f), raw: filaRaw(f) });
   }
+  if (out.length) out.cab = cab;
   return out.length ? out : null;
 }
 

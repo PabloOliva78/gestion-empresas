@@ -602,3 +602,9 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 tr.sel-cod td { background: #e3ecff !important; }
 td.est-ok { color: #14631f; }
 .conc-t td, .conc-t th { white-space: nowrap; }
+
+.siiwrap { max-height: 72vh; overflow: auto; }
+.sii-t th { position: sticky; top: 0; z-index: 2; white-space: normal; min-width: 5em; font-size: .78rem; }
+.sii-t td { white-space: nowrap; font-size: .82rem; }
+tr.sii-no td { opacity: .5; }
+td.amar { background: #fff3a8; }

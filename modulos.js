@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=37';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=38';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -296,12 +296,12 @@ export function crearModulos(c) {
     mod232: ['Modelo 232', 'Operaciones vinculadas', pendienteMod('(sin hoja propia en el Excel)')],
     mod390: ['Modelo 390', 'Resumen anual IVA', () => vistaMod390()],
     modintra: ['Intrastat', 'Fichero AEAT', pendienteMod('Intrastat / Export Intrastat')],
-    siie: ['SII Emitidas', 'Libro registro de facturas emitidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas emitidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('E')],
-    siir: ['SII Recibidas', 'Libro registro de facturas recibidas', () => dz('sii', 'Suelta aquí el Excel del SII de facturas recibidas', '(descarga de la sede de la AEAT) o haz clic para elegirlo') + vistaSII('R')],
-    concsiie: ['Conciliación SII Emitidas', 'SII frente a contabilidad', () => vistaConcSII('E')],
-    concsiir: ['Conciliación SII Recibidas', 'SII frente a contabilidad', () => vistaConcSII('R')],
-    fe: ['Facturas emitidas', 'Libro de IVA repercutido', () => dz('emitidas', 'Suelta aquí el libro de IVA repercutido', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('E')],
-    fr: ['Facturas recibidas', 'Libro de IVA soportado', () => dz('recibidas', 'Suelta aquí el libro de IVA soportado', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('R')],
+    siie: ['SII-LRFE', 'SII emitidas', () => vistaSII('E')],
+    siir: ['SII-LRFR', 'SII recibidas', () => vistaSII('R')],
+    concsiie: ['ConcSII-E', 'SII vs contabilidad', () => vistaConcSII('E')],
+    concsiir: ['ConsSII-R', 'SII vs contabilidad', () => vistaConcSII('R')],
+    fe: ['Emitidas', 'Facturas emitidas', () => dz('emitidas', 'Suelta aquí el libro de IVA repercutido', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('E')],
+    fr: ['Recibidas', 'Facturas recibidas', () => dz('recibidas', 'Suelta aquí el libro de IVA soportado', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('R')],
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', () => vistaFichaDatos('dreg')],
     trl: ['Titularidad Real', 'Titulares reales', L('trl')],
     acc: ['Organigrama', 'Socios y participadas', L('acc')],
@@ -441,7 +441,12 @@ export function crearModulos(c) {
     const sii = leerSII(filas);
     if (sii) {
       const s = sii[0].sentido;
-      const n = await guardarGrande('sii-' + s, empresaId, sii, (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`);
+      const kf = (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`, porPer = new Map();
+      // todas las columnas de la descarga, por periodo (la pantalla pide solo los meses que enseña)
+      sii.forEach((x) => { const p = `${x.ej}-${x.per}`; (porPer.get(p) ?? porPer.set(p, []).get(p)).push({ k: kf(x), raw: x.raw }); });
+      for (const [p, rows] of porPer) await guardarGrande(`sii-raw-${s}-${p}`, empresaId, rows, (q) => q.k);
+      await reemplazarGrande(`sii-cab-${s}`, empresaId, sii.cab);
+      const n = await guardarGrande('sii-' + s, empresaId, sii.map(({ raw, ...x }) => x), kf);
       return `✔ ${f.name}: SII ${s === 'E' ? 'emitidas' : 'recibidas'} · ${sii.length} facturas leídas (${n} en total)`;
     }
     const bc = leerLibroBC(filas); // Business Central (Fertinova): un solo libro con ventas y compras
@@ -625,24 +630,91 @@ export function crearModulos(c) {
       <tr><td colspan="5"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td></td></tr></tbody></table></div>${tope(f.length)}`;
   }
 
+  // ---- SII-LRFE / SII-LRFR: la descarga de la sede con todas sus columnas, filtros, corrección de factura/NIF/nombre/importes y registros quitados ----
+  let siiFil = { E: {}, R: {} }, siiTodos = { E: false, R: false }, siiN = { E: 150, R: 150 };
+  const siiKey = (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`;
+  const siiMeses = () => (/^\d\d$/.test(S.periodo) ? [S.periodo] : /^[1-4]T$/.test(S.periodo) ? [0, 1, 2].map((i) => String((+S.periodo[0] - 1) * 3 + i + 1).padStart(2, '0')) : MM12);
+  const quitReg = () => S.registros.find((r) => r.tipo === 'siiquit' && r.empresa_id === S.sel);
+  function siiFiltro(clave, valor) { const [s, c] = clave.split('|'); siiFil[s][c] = valor; siiN[s] = 150; render(); }
   function vistaSII(s) {
     if (!S.sel) return sinEmpresa;
-    const datos = grande('sii-' + s);
-    if (!datos) return cargandoTxt;
-    if (!datos.length) return '<p class="vacio">Sin datos: carga la consulta del SII con el botón SII.</p>';
-    const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
-    const f = datos.filter((x) => (s === 'E' ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === Number(S.ejercicio) && (!S.periodo || x.per === S.periodo)));
-    const cab = s === 'E' ? ['Factura', 'Fecha expedición', SENT.E.nif, 'Nombre', 'Tipo', 'Estado'] : ['Factura', 'Fecha expedición', SENT.R.nif, 'Nombre', 'Tipo', 'Estado'];
-    const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
+    const datos = grande('sii-' + s), cab = grande('sii-cab-' + s);
+    if (!datos || !cab) return cargandoTxt;
+    const ej = Number(S.ejercicio), e = empresa(), ed = puede(), emit = s === 'E';
+    const meses = siiMeses(), shards = meses.map((mm) => grande(`sii-raw-${s}-${ej}-${mm}`));
+    if (shards.some((x) => x === null)) return cargandoTxt;
+    const raw = new Map(); shards.forEach((sh) => sh.forEach((r) => raw.set(r.k, r.raw)));
+    const dropz = dz('sii', 'Suelta aquí las descargas del SII', '(facturas emitidas y recibidas, .xlsx, .xls o .csv) o pulsa para elegirlas');
+    if (!datos.length) return `${dropz}<div class="aviso"><p>⚠ Suelta la consulta de facturas ${emit ? 'emitidas' : 'recibidas'} descargada de la Sede Electrónica (el Excel o CSV con la columna «Nº Serie + Nº Factura»).</p></div>`;
+    const r = rangoPeriodo(ej, S.periodo), F = siiFil[s], idx = new Map(datos.map((l, i) => [l, i]));
+    const todos = datos.filter((x) => (emit ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && (!S.periodo || x.per === S.periodo)));
+    const iClave = cab.findIndex((c) => /^Clave de R[eé]gimen Especial/i.test(c));
+    const ok = (x) => {
+      const w = raw.get(siiKey(x)) ?? {};
+      if (F.nif && !String(x.nif).toLowerCase().includes(F.nif.toLowerCase())) return false;
+      if (F.nom && !sinAc(x.nombre).includes(sinAc(F.nom))) return false;
+      if (F.fac && !String(x.factura).toLowerCase().includes(F.fac.toLowerCase())) return false;
+      if (F.tipo && String(x.tipo).toLowerCase() !== F.tipo.toLowerCase()) return false;
+      if (F.desde && fIsoCta(F.desde) && x.fecha < fIsoCta(F.desde)) return false;
+      if (F.hasta && fIsoCta(F.hasta) && x.fecha > fIsoCta(F.hasta)) return false;
+      if (F.clave && !String(iClave >= 0 ? w[iClave] ?? '' : '').toLowerCase().includes(F.clave.toLowerCase())) return false;
+      if (F.estado && !String(x.estado).toLowerCase().includes(F.estado.toLowerCase())) return false;
+      if (F.csv && !Object.values(w).some((v) => String(v).toLowerCase().includes(F.csv.toLowerCase()))) return false;
+      const imp = x.base + x.cuota;
+      if (F.imin !== undefined && F.imin !== '' && imp < parseES(F.imin)) return false;
+      if (F.imax !== undefined && F.imax !== '' && imp > parseES(F.imax)) return false;
+      return true;
+    };
+    const cumple = todos.filter(ok), lista = (siiTodos[s] ? todos : cumple).slice(0, siiN[s]);
+    const sumB = rr(cumple.reduce((t, x) => t + x.base, 0)), sumC = rr(cumple.reduce((t, x) => t + x.cuota, 0));
+    // solo las columnas de la descarga que tienen algún dato en lo que se ve
+    const cols = [...new Set(lista.flatMap((x) => Object.keys(raw.get(siiKey(x)) ?? {}).map(Number)))].sort((a, b) => a - b);
+    const nOcultas = cab.length - cols.length;
+    const celdaRaw = (v) => { const t = v === undefined ? '' : String(v); return `<td class="${/^-?[\d.]+,\d+$/.test(t) ? 'num' : ''}">${esc(t)}</td>`; };
+    const fil = (k, lbl, ph = '') => `<label>${lbl}<input class="emp-in" style="width:7em" data-siifil="${s}|${k}" value="${esc(F[k] ?? '')}" placeholder="${esc(ph)}"></label>`;
     const ci = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-sie="${s}|${idx.get(x)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
-    return `${dz('sii', `Suelta aquí la descarga del SII de facturas ${s === 'E' ? 'emitidas' : 'recibidas'}`, '(.xlsx, .xls o .csv de la sede) o haz clic para elegirla')}
-      <div class="bar"><span class="space"></span><span class="chip">${f.length} facturas · base ${fnum(suma(f, 'base'))} · ${SENT[s].cuota.toLowerCase()} ${fnum(suma(f, 'cuota'))}</span></div>
-      <div class="wrap"><table class="tabla"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join('')}<th class="num">Base total</th><th class="num">${SENT[s].cuota}</th>
-      ${s === 'R' ? '<th class="num">Cuota deducible</th>' : ''}<th></th></tr></thead><tbody>
-      ${f.map((x) => `<tr>${ci(x, 'factura', x.factura)}${ci(x, 'fecha', fmt(x.fecha))}${ci(x, 'nif', x.nif)}${ci(x, 'nombre', x.nombre)}${ci(x, 'tipo', x.tipo)}${ci(x, 'estado', x.estado)}
-        ${ci(x, 'base', fnum(x.base), 'num')}${ci(x, 'cuota', fnum(x.cuota), 'num')}${s === 'R' ? ci(x, 'deducible', fnum(x.deducible), 'num') : ''}
-        <td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('')}
-      <tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}${celdasNum(suma(f, 'cuota'))}${s === 'R' ? celdasNum(suma(f, 'deducible')) : ''}<td></td></tr></tbody></table></div>`;
+    const Q = quitReg()?.datos?.[s] ?? [];
+    const filas = lista.map((x) => `<tr class="${ok(x) ? '' : 'sii-no'}">${cols.map((k) => celdaRaw((raw.get(siiKey(x)) ?? {})[k])).join('')}${ci(x, 'factura', x.factura)}${ci(x, 'nif', x.nif)}${ci(x, 'nombre', x.nombre)}${ci(x, 'base', fnum(x.base), 'num')}${ci(x, 'cuota', fnum(x.cuota), 'num')}
+      <td class="c">${ok(x) ? 'VERDADERO' : 'FALSO'}</td><td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('');
+    const quitados = Q.length ? `<div class="aviso"><b>Facturas quitadas del SII (${Q.length})</b> ${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${Q.length - 1}">↩ Deshacer la última (${esc(Q[Q.length - 1].factura)})</button> <button class="small" data-act="m-siirec" data-s="${s}" data-i="todas">Recuperar todas</button>` : ''}
+      <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
+    return `${dropz}
+      <section class="prs-card"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
+      <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas con datos (${nOcultas} vacías ocultas)</p>
+      <div class="css-flex" style="gap:2em;flex-wrap:wrap;padding-bottom:.2em"><table class="tprs tnom" style="width:auto"><tbody>
+        <tr><td>NIF Titular</td><td class="amar"><b>${esc(e.cif)}</b></td></tr><tr><td>Nombre / Razón social</td><td class="amar"><b>${esc(e.nombre)}</b></td></tr>
+        <tr><td>Libro registro</td><td class="amar"><b>Facturas ${emit ? 'Emitidas' : 'Recibidas'}</b></td></tr><tr><td>Ejercicio</td><td class="amar"><b>${ej}</b></td></tr>
+        <tr><td>Periodo</td><td class="amar"><b>${S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio'}</b></td></tr></tbody></table>
+        <table class="tprs tnom" style="width:auto"><tbody><tr><td>Registros que cumplen filtros / pegados</td><td class="amar num"><b>${cumple.length} / ${todos.length}</b></td></tr>
+        <tr><td>Total base declarada (filtrada)</td><td class="amar num"><b>${fnum(sumB)}</b></td></tr><tr><td>Total cuota ${emit ? 'repercutida' : 'soportada'} (filtrada)</td><td class="amar num"><b>${fnum(sumC)}</b></td></tr></tbody></table></div>
+      <div class="fc-cab" style="margin:.4em 1em"><b>Filtros adicionales:</b>${fil('nif', emit ? 'NIF Destinatario' : 'NIF Emisor')}${fil('nom', 'Nombre')}${fil('fac', 'Nº Serie + Nº Factura')}${fil('tipo', 'Tipo de factura', 'F1, F2, R1…')}
+        ${fil('desde', 'Fecha expedición desde', 'dd/mm/aaaa')}${fil('hasta', 'hasta', 'dd/mm/aaaa')}${fil('clave', 'Clave régimen')}${fil('estado', 'Estado', 'Correcta…')}${fil('csv', 'CSV')}${fil('imin', 'Importe total desde')}${fil('imax', 'hasta')}
+        <label><input type="checkbox" data-siitodos="${s}"${siiTodos[s] ? ' checked' : ''}> Ver también los que no cumplen</label></div>
+      <div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th>${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
+        <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(sumC)}</td><td></td><td></td></tr></tbody></table></div>
+      ${quitados}
+      ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section>`;
+  }
+  async function quitarSii2(s, i) {
+    const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
+    if (!l || !confirm(`¿Quitar la factura ${l.factura} del SII?`)) return;
+    const reg = quitReg(), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+    (datos[s] ??= []).push(l);
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'siiquit', ejercicio: null, datos });
+    if (err) return void alert(err);
+    await reemplazarGrande(tipo, S.sel, arr.filter((_, j) => j !== +i));
+    await cargar(); render();
+  }
+  async function recuperarSii(s, i) {
+    const reg = quitReg(); if (!reg) return;
+    const datos = JSON.parse(JSON.stringify(reg.datos)), Q = datos[s] ?? [];
+    const rec = i === 'todas' ? Q.splice(0, Q.length) : Q.splice(+i, 1);
+    if (!rec.length) return;
+    const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`) ?? [];
+    const err = await guardarRegistro(reg, { ...reg, datos });
+    if (err) return void alert(err);
+    await reemplazarGrande(tipo, S.sel, [...arr, ...rec]);
+    await cargar(); render();
   }
 
   // ---- Conciliación SII vs contabilidad (clon de la otra aplicación) ----
@@ -2266,7 +2338,9 @@ export function crearModulos(c) {
       'm-ctavis': () => accionCta('compvis', '', ''),
       'm-siicod': () => { siiCod[d.t] = d.cod; render(); },
       'm-siitodo': () => { siiTodo = true; render(); },
-      'm-siidel': () => quitarSii(d.s, d.i),
+      'm-siidel': () => quitarSii2(d.s, d.i),
+      'm-siirec': () => recuperarSii(d.s, d.i),
+      'm-siimas': () => { siiN[d.s] += 150; render(); },
       'm-ctamas': () => { ctaMas += 300; render(); },
       'm-ctaquit': () => accionCta('quit', d.id, ''),
       'm-ctanv': () => { ctaNueva = { fecha: ctaUlt.fecha, cuenta: ctaUlt.cuenta, asiento: '', desc: '', debe: '', haber: '' }; render(); },
@@ -2332,6 +2406,35 @@ export function crearModulos(c) {
     if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
     return imp(calcular303(l.E, l.R, Number(S.ejercicio), S.periodo, manuales(), { rectif: rectif303 }).c71);
   };
+  // SII y libros de IVA: cuota del periodo y estado de la conciliación
+  const cacheCs = new Map();
+  ['E', 'R'].forEach((s) => {
+    const rg = () => rangoPeriodo(Number(S.ejercicio), S.periodo);
+    badges[s === 'E' ? 'siie' : 'siir'] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const d = peek('sii-' + s);
+      if (!d) return { t: '…' };
+      if (!d.length) return { t: 'Sin descarga' };
+      const r = rg(), ej = Number(S.ejercicio);
+      return { t: `Cuota ${fnum(suma(d.filter((x) => (s === 'E' ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && (!S.periodo || x.per === S.periodo))), 'cuota'))}` };
+    };
+    badges[s === 'E' ? 'fe' : 'fr'] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const d = peek('fact-' + s);
+      if (!d) return { t: '…' };
+      const r = rg();
+      return { t: `Cuota ${fnum(suma(d.filter((l) => { const f = s === 'E' ? l.ff : l.fecha; return f >= r.desde && f <= r.hasta; }), 'cuota'))}` };
+    };
+    badges[s === 'E' ? 'concsiie' : 'concsiir'] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const lib = peek('fact-' + s), sii = peek('sii-' + s);
+      if (!lib || !sii) return { t: '…' };
+      if (!lib.length || !sii.length) return { t: '—' };
+      const k = `${S.sel}|${s}|${S.ejercicio}|${S.periodo}|${lib.length}|${sii.length}|${sii[0]?.base}|${lib[0]?.base}`;
+      if (!cacheCs.has(k)) { const D = conciliarSiiCompleta(s, lib, sii, Number(S.ejercicio), S.periodo); cacheCs.set(k, D.cuadra ? { t: 'Cuadra', c: 'verde' } : { t: `Dif. cuota ${fnum(rr(D.tc.cuota - D.ts.cuota))}`, c: 'rojo' }); }
+      return cacheCs.get(k);
+    };
+  });
   ['111', '115', '123'].forEach((m) => {
     badges['mod' + m] = () => {
       if (!S.sel) return { t: 'Por empresa' };
@@ -2401,5 +2504,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { editarFc, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }

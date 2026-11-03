@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=79';
+import { crearModulos } from './modulos.js?v=80';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -64,7 +64,8 @@ async function cargar() {
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
     // las facturas (libros de IVA y SII) pesan mucho: se piden aparte, solo al abrir su pestaña
-    db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R,may-mov)'),
+    db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R,may-mov)')
+    .not('tipo', 'like', 'sii-raw-%'),
   ]);
   S.empresas = e.data ?? [];
   S.obligaciones = o.data ?? [];
@@ -718,6 +719,8 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
   if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
   if (t.dataset.cta) return void M.cta(t.dataset.cta, t.dataset.id, t.type === 'checkbox' ? (t.checked ? '1' : '0') : t.value);
+  if (t.dataset.siifil) return void M.siiFiltro(t.dataset.siifil, t.value);
+  if (t.dataset.siitodos) return void M.siiTodosSet(t.dataset.siitodos, t.checked);
   if (t.dataset.fce) return void M.editarFc(t.dataset.fce, t.value);
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
