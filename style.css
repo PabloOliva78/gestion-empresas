@@ -592,3 +592,13 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom.mov th:nth-child(4), .ctas .css-flex .tnom.mov th:nth-child(5) { width: 7em; } .ctas .css-flex .tnom.mov th:nth-child(6) { width: 7.4em; }
 .ctas .css-flex .tnom.mov th:nth-child(7), .ctas .css-flex .tnom.mov th:nth-child(8) { width: 3em; }
 .ctas .css-flex .tnom.mov td:nth-child(7) select { width: 100%; padding: 0; }
+
+/* libros de IVA y SII editables, y conciliación SII */
+.tabla td.in { padding: 0 .1em; }
+.tabla td.in input { width: 100%; box-sizing: border-box; border: 1px solid transparent; background: transparent; font: inherit; padding: .2em .3em; color: inherit; min-width: 4em; }
+.tabla td.in input:hover { border-color: #cfd6e6; background: #fff; }
+.tabla td.in input:focus { outline: 0; border-color: #3b82f6; background: #fff; }
+.tabla td.in.num input { text-align: right; }
+tr.sel-cod td { background: #e3ecff !important; }
+td.est-ok { color: #14631f; }
+.conc-t td, .conc-t th { white-space: nowrap; }

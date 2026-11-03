@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=77';
+import { crearModulos } from './modulos.js?v=78';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -258,7 +258,7 @@ function render() {
 
 // Celdas de importes editables: el foco sobrevive a los redibujados y se navega con flechas, Intro y tabulador
 let focoCelda = null;
-const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id'];
+const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id', 'data-fce', 'data-sie'];
 function restaurarFoco() {
   if (!focoCelda || (document.activeElement && document.activeElement !== document.body)) return;
   const i = [...root.querySelectorAll(`input[${focoCelda.a}]`)].find((x) => x.getAttribute(focoCelda.a) === focoCelda.v);
@@ -718,6 +718,8 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
   if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
   if (t.dataset.cta) return void M.cta(t.dataset.cta, t.dataset.id, t.type === 'checkbox' ? (t.checked ? '1' : '0') : t.value);
+  if (t.dataset.fce) return void M.editarFc(t.dataset.fce, t.value);
+  if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
   if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);
   if (t.dataset.retclave) return void M.guardarRetClave(t.dataset.retclave, t.value);

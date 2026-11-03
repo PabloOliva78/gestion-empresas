@@ -1,4 +1,4 @@
-// Lectores de PDF: reciben el texto ya extraído y devuelven datos estructurados.
+﻿// Lectores de PDF: reciben el texto ya extraído y devuelven datos estructurados.
 // Funciones puras (sin DOM), se prueban igual en el navegador y en Node.
 
 const MODELOS_RET = { 700: '110/111', 701: '110/111', 702: '115', 703: '117', 704: '124', 705: '126', 706: '128', 707: '123' };
@@ -396,6 +396,57 @@ export function leerLibroBC(filas) {
   return out.length ? out : null;
 }
 
+// ---------- Coherencia código de impuesto (contabilidad) ↔ forma de declarar la factura en el SII ----------
+// categoría que se espera en el SII para cada código del ERP
+export function catEsperadaSii(sentido, cod) {
+  const c = String(cod || '').toUpperCase(), tp = c.match(/\.(NR|RD|SR|RDN)(\.SR)?$/), iva = tp ? { NR: 21, RD: 10, SR: 4, RDN: 5 }[tp[1]] : null;
+  if (sentido === 'E') {
+    if (c === 'R.EX' || c.startsWith('R.EX.')) return { k: 'EX-E2', txt: 'exenta por exportación (causa E2)' };
+    if (c === 'R.UE') return { k: 'EX-E5', txt: 'entrega intracomunitaria exenta (causa E5)' };
+    if (c === 'R.UE.S') return { k: 'NSL', txt: 'servicio no sujeto por reglas de localización' };
+    if (/^R\.ISP\./.test(c)) return { k: 'S2', txt: 'sujeta con inversión del sujeto pasivo (S2)' };
+    if (/^R\.(NC|RC)\.EX/.test(c)) return { k: 'EX-*', txt: 'exenta (con causa E1…E6)' };
+    if (/^R\.NAC\.NS/.test(c)) return { k: 'NS', txt: 'no sujeta (art. 7, 14 y otros)' };
+    if (/^R\.(NC|RC)\./.test(c) && iva) return { k: `S1-${iva}`, txt: `sujeta no exenta al ${iva} % (S1)` };
+    return null;
+  }
+  if (/^S\.UE\./.test(c)) return { k: `AIC-${iva || '?'}`, txt: `adquisición intracomunitaria (clave de régimen 09)${iva ? ` al ${iva} %` : ''}` };
+  if (/^S\.ISP\./.test(c)) return { k: 'ISP', txt: 'con inversión del sujeto pasivo (ISP)' };
+  if (/^IN\./.test(c) && iva) return { k: `NOISP-${iva}-BI`, txt: `sin ISP al ${iva} % · bien de inversión SÍ` };
+  if (/^S\.NC\./.test(c) && iva) return { k: `NOISP-${iva}`, txt: `sin inversión del sujeto pasivo al ${iva} %` };
+  return null;
+}
+export const txtCatSii = (k) => (/^AIC-/.test(k) ? `adquisición intracomunitaria (clave 09) al ${k.slice(4)} %` : /-BI$/.test(k) ? `${txtCatSii(k.slice(0, -3))} · bien de inversión SÍ` : k === 'NSL' ? 'no sujeta por localización'
+  : k === 'NS' ? 'no sujeta' : k === 'S2' ? 'inversión sujeto pasivo (S2)' : k === 'ISP' ? 'ISP' : /^S1-/.test(k) ? `S1 al ${k.slice(3)} %` : /^NOISP-/.test(k) ? `no ISP al ${k.slice(6)} %` : /^EX-/.test(k) ? `exenta ${k.slice(3)}` : k);
+export const normFac = (f) => String(f || '').toUpperCase().replace(/\s+/g, '');
+export const normNif = (n) => { const x = String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-Z]{2}/.test(x) ? x.slice(2) : x; }; // sin el prefijo de país, como el Excel
+// cómo está declarada una fila del SII: {categoría: base}
+function catsFilaSii(emit, H, r) {
+  const o = {}, add = (k, v) => { if (Math.abs(v) > 0.005) o[k] = r2n((o[k] || 0) + v); };
+  const esAIC = () => H.some((x, k) => /^Clave de R[eé]gimen Especial/i.test(x) && String(r[k] || '').trim().replace(/^0?/, '0') === '09');
+  const aic = emit ? false : esAIC();
+  const esBI = (g, j) => { const rx = new RegExp(`^\\(\\s*${g}\\s*\\)\\s*Bien\\s*(de\\s*)?Inversi[oó]n\\s*${j || ''}\\s*$`, 'i'); let k = H.findIndex((x) => rx.test(x)); if (k < 0) k = H.findIndex((x) => /^bien(es)?\s*(de\s*)?inversi/i.test(x)); return k >= 0 && /^S/i.test(String(r[k] || '').trim()) ? '-BI' : ''; };
+  H.forEach((h, i) => {
+    let m;
+    if (emit) {
+      if ((m = h.match(/^\((Servicio|Bienes|Factura)\) Base Imponible (\d+)$/))) {
+        const g = m[1], j = m[2], it = H.findIndex((x) => new RegExp(`^\\(${g}\\) Tipo Impositivo(\\(%\\))? ${j}$`).test(x)), tn = H.findIndex((x) => x === `(${g}) Tipo No Exenta`);
+        const tipoNE = String(tn >= 0 ? r[tn] || '' : '').trim().toUpperCase();
+        add(tipoNE === 'S2' ? 'S2' : `S1-${it >= 0 ? numero(r[it]) : '?'}`, numero(r[i]));
+      } else if ((m = h.match(/^\((Servicio|Bienes|Factura)\) Base Imponible Sujeta \/ Exenta (\d+)$/))) {
+        const ic = H.findIndex((x) => x === `(${m[1]}) Causa Exenta ${m[2]}`), cau = String(ic >= 0 ? r[ic] || '' : '').trim().toUpperCase();
+        add(cau ? `EX-${cau}` : 'EX-sin causa', numero(r[i]));
+      } else if (/Importe no sujeto por reglas de localizaci/i.test(h)) add('NSL', numero(r[i]));
+      else if (/Importe no sujeto/i.test(h)) add('NS', numero(r[i]));
+    } else if ((m = h.match(/^\(\s*ISP\s*\)\s*Base Imponible\s*(\d*)\s*$/i))) add(`ISP${esBI('ISP', m[1])}`, numero(r[i]));
+    else if ((m = h.match(/^\(\s*NO\s*ISP\s*\)\s*Base Imponible\s*(\d*)\s*$/i))) {
+      const j = m[1], it = H.findIndex((x) => new RegExp(`^\\(\\s*NO\\s*ISP\\s*\\)\\s*Tipo Impositivo\\s*(\\(%\\))?\\s*${j}\\s*$`, 'i').test(x));
+      add(aic ? `AIC-${it >= 0 ? numero(r[it]) : '?'}` : `NOISP-${it >= 0 ? numero(r[it]) : '?'}${esBI('NO\\s*ISP', j)}`, numero(r[i]));
+    }
+  });
+  return o;
+}
+
 // Consulta de facturas del SII (Sede AEAT). Total base/cuota = suma de los desgloses, igual que las columnas «TOTAL … DECLARADA (SII)» del Excel
 export function leerSII(filas) {
   // la fila de cabecera tiene a la vez «Nº Serie + Nº Factura», «Ejercicio» y «Periodo» (el cuadro de filtros de arriba solo trae el primero)
@@ -416,14 +467,14 @@ export function leerSII(filas) {
   const c = { fa: ix(/^N[ºo°] Serie/i), ej: ix(/^Ejercicio$/i), pe: ix(/^Periodo$/i), fe: ix(/^Fecha Expedici[oó]n$/i),
     nif: ix(emitidas ? /^NIF Destinatario/i : /^NIF Emisor/i), nom: ix(emitidas ? /^Nombre o Raz[oó]n Social Destinatario/i : /^Nombre o Raz[oó]n Social Factura Emisor/i),
     tipo: ix(/^Tipo de factura/i), est: ix(/^Estado( del registro)?$/i), ded: ix(/^Cuota Deducible$/i) };
-  const suma = (f, cols) => cols.reduce((a, i) => a + (typeof f[i] === 'number' ? f[i] : 0), 0);
+  const suma = (f, cols) => cols.reduce((a, i) => a + numero(f[i]), 0); // número (xlsx) o texto con coma decimal (csv de la sede)
   const out = [];
   for (const f of filas.slice(h + 1)) {
     const factura = String(f?.[c.fa] ?? '').trim();
     if (!factura) continue;
     out.push({ factura, ej: Number(f[c.ej]) || null, per: String(f[c.pe] ?? '').trim(), fecha: fechaIso(f[c.fe]), nif: String(f[c.nif] ?? '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), tipo: String(f[c.tipo] ?? '').trim(), estado: String(f[c.est] ?? '').trim(),
-      base: r2n(suma(f, bases)), cuota: r2n(suma(f, cuotas)), deducible: c.ded >= 0 ? r2n(numero(f[c.ded])) : 0, sentido: emitidas ? 'E' : 'R' });
+      base: r2n(suma(f, bases)), cuota: r2n(suma(f, cuotas)), deducible: c.ded >= 0 ? r2n(numero(f[c.ded])) : 0, sentido: emitidas ? 'E' : 'R', cats: catsFilaSii(emitidas, cab, f) });
   }
   return out.length ? out : null;
 }
@@ -441,6 +492,71 @@ export function rangoPeriodo(ej, periodo) {
 export const EXC_EMITIDAS = ['R.ISP.NR', 'R.ISP.RD', 'S.NC.ISP.A', 'R.UE.NR', 'R.UE.RD', 'R.UE.NR.SR', 'R.UE.RD.SR', 'R.RC.NR', 'R.RC.RD', 'R.RC.SR']; // líneas fuera del SII
 export const FACT_FUERA_E = ['R.NAC.NS', 'R.I.INT', 'R.I.ALQ'];  // si una línea es de estos códigos, la factura entera queda fuera
 export const EXC_RECIBIDAS = ['I.PR.GN', 'I.PR.PRA', 'I.PR.SR', 'I.ALQ', 'I.INT', 'I.DV', 'I.DV.E']; // códigos «no IVA»
+
+// Conciliación SII vs contabilidad completa (la de la otra aplicación): cruce por factura (+ NIF en recibidas), margen ±0,10 €,
+// descuadre por código de impuesto, facturas que se anulan entre sí y facturas declaradas en el SII de forma distinta a su código
+export const MARGEN_SII = 0.10 + 1e-9;
+export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
+  const r = rangoPeriodo(ej, periodo), emit = sentido === 'E';
+  const clave = (fac, nif) => (emit ? normFac(fac) : `${normFac(fac)}|${normNif(nif)}`);
+  const fuera = emit ? new Set(libro.filter((l) => FACT_FUERA_E.includes(l.codigo)).map((l) => l.factura)) : new Set();
+  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo)
+    : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
+  const ls = sii.filter((s) => s.sentido === sentido && (emit ? s.fecha >= r.desde && s.fecha <= r.hasta : s.ej === ej && (!periodo || s.per === periodo)));
+  const cont = new Map();
+  for (const l of lc) {
+    const k = clave(l.factura, l.nif);
+    const o = cont.get(k) ?? { fac: l.factura, nif: l.nif, nom: l.nombre, base: 0, cuota: 0, cods: new Set(), esp: {}, txt: {}, sinRegla: false };
+    if (!fuera.has(l.factura)) { o.base = r2n(o.base + l.base); o.cuota = r2n(o.cuota + l.cuota); }
+    o.cods.add(String(l.codigo || '').trim().toUpperCase() || '(sin código)');
+    const e = catEsperadaSii(sentido, l.codigo);
+    if (e) { o.esp[e.k] = r2n((o.esp[e.k] || 0) + l.base); o.txt[e.k] = e.txt; } else o.sinRegla = true;
+    cont.set(k, o);
+  }
+  const sm = new Map();
+  for (const x of ls) {
+    const k = clave(x.factura, x.nif);
+    const o = sm.get(k) ?? { fac: x.factura, nif: x.nif, nom: x.nombre, base: 0, cuota: 0, deduc: 0, cats: {} };
+    o.base = r2n(o.base + x.base); o.cuota = r2n(o.cuota + x.cuota); o.deduc = r2n(o.deduc + (x.deducible || 0));
+    for (const [c, v] of Object.entries(x.cats ?? {})) o.cats[c] = r2n((o.cats[c] || 0) + v);
+    sm.set(k, o);
+  }
+  const A = [...cont.entries()].filter(([k]) => !sm.has(k)).map(([, v]) => v);
+  const B = [...sm.entries()].filter(([k]) => !cont.has(k)).map(([, v]) => v);
+  const C = [...cont.entries()].filter(([k, v]) => sm.has(k) && (Math.abs(v.base - sm.get(k).base) > MARGEN_SII || Math.abs(v.cuota - sm.get(k).cuota) > MARGEN_SII))
+    .map(([k, v]) => ({ fac: v.fac, nif: v.nif, nom: v.nom, bc: v.base, bs: sm.get(k).base, cc: v.cuota, cs: sm.get(k).cuota }));
+  const tot = (m) => ({ n: m.size, base: r2n([...m.values()].reduce((s, v) => s + v.base, 0)), cuota: r2n([...m.values()].reduce((s, v) => s + v.cuota, 0)) });
+  const tc = tot(cont), ts = tot(sm); ts.deduc = r2n([...sm.values()].reduce((s, v) => s + v.deduc, 0));
+  // descuadre por código de impuesto: cada factura va al código (o combinación de códigos) con que está contabilizada
+  const facDesc = [], porCod = new Map();
+  const add = (cod, c, s) => {
+    if (Math.abs(r2n(c.base - s.base)) > MARGEN_SII || Math.abs(r2n(c.cuota - s.cuota)) > MARGEN_SII) facDesc.push({ cod, fac: c.fac || s.fac, nif: c.nif || s.nif, nom: c.nom || s.nom, bc: c.base, bs: s.base, db: r2n(c.base - s.base), cc: c.cuota, cs: s.cuota, dc: r2n(c.cuota - s.cuota), _c: c });
+    const o = porCod.get(cod) ?? { cod, n: 0, bc: 0, bs: 0, cc: 0, cs: 0 };
+    o.n++; o.bc = r2n(o.bc + c.base); o.cc = r2n(o.cc + c.cuota); o.bs = r2n(o.bs + s.base); o.cs = r2n(o.cs + s.cuota); porCod.set(cod, o);
+  };
+  cont.forEach((v, k) => add([...v.cods].sort().join(' + '), v, sm.get(k) ?? { base: 0, cuota: 0 }));
+  sm.forEach((v, k) => { if (!cont.has(k)) add('Solo en el SII (no contabilizadas)', { base: 0, cuota: 0, fac: v.fac, nif: v.nif, nom: v.nom }, v); });
+  // facturas solo en contabilidad que se anulan entre sí (mismo NIF y código; una factura y su abono): cuadran
+  const G = new Map();
+  facDesc.forEach((x) => { if (Math.abs(x.bs) < 0.01 && Math.abs(x.cs) < 0.01 && x._c && x._c.cods) { const g = `${String(x.nif || '').toUpperCase()}|${x.cod}`; (G.get(g) ?? G.set(g, []).get(g)).push(x); } });
+  G.forEach((xs) => { if (xs.length < 2) return; if (Math.abs(r2n(xs.reduce((s, x) => s + x.db, 0))) <= MARGEN_SII && Math.abs(r2n(xs.reduce((s, x) => s + x.dc, 0))) <= MARGEN_SII) xs.forEach((x) => { x.anula = true; x._c._anul = true; }); });
+  const cods = [...porCod.values()].map((o) => ({ ...o, db: r2n(o.bc - o.bs), dc: r2n(o.cc - o.cs) }))
+    .sort((a, b) => (Math.abs(b.db) + Math.abs(b.dc)) - (Math.abs(a.db) + Math.abs(a.dc)) || a.cod.localeCompare(b.cod));
+  // facturas cuyo código no casa con la forma de declararlas en el SII
+  const malSii = [];
+  cont.forEach((o, k) => {
+    if (!sm.has(k) || !Object.keys(o.esp).length || o.sinRegla) return;
+    const dec = sm.get(k).cats;
+    const ok = Object.keys(o.esp).every((ek) => { const v = ek === 'EX-*' ? r2n(Object.keys(dec).filter((d) => /^EX-E\d/.test(d)).reduce((s, d) => s + dec[d], 0)) : (dec[ek] || 0); return Math.abs(v - o.esp[ek]) <= 0.01; });
+    if (!ok) malSii.push({ fac: o.fac, nif: o.nif, nom: o.nom, cods: [...o.cods].join(' + '), esp: Object.keys(o.esp).map((ek) => `${o.txt[ek]} ${o.esp[ek].toFixed(2)}`).join(' · '),
+      dec: Object.keys(dec).map((d) => `${txtCatSii(d)} ${dec[d].toFixed(2)}`).join(' · ') || '(sin importes)' });
+  });
+  malSii.sort((a, b) => a.cods.localeCompare(b.cods) || String(a.fac).localeCompare(String(b.fac)));
+  facDesc.sort((a, b) => a.cod.localeCompare(b.cod) || (Math.abs(b.db) + Math.abs(b.dc)) - (Math.abs(a.db) + Math.abs(a.dc)));
+  const cero = (x) => Math.abs(x.base || 0) < 0.01 && Math.abs(x.cuota || 0) < 0.01;
+  return { desde: r.desde, hasta: r.hasta, tc, ts, A, B, C, cods, facDesc, malSii, anuladas: facDesc.filter((x) => x.anula).length, ceros: A.concat(B).filter(cero).length,
+    cuadra: Math.abs(r2n(tc.base - ts.base)) <= MARGEN_SII && Math.abs(r2n(tc.cuota - ts.cuota)) <= MARGEN_SII && A.filter((x) => !x._anul).concat(B).every(cero) && !C.length };
+}
 
 export function conciliarSII(sentido, libro, sii, ej, periodo, tol = 0.005) {
   const r = rangoPeriodo(ej, periodo);

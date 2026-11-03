@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=36';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=37';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -407,9 +407,28 @@ export function crearModulos(c) {
     GR.set(`${tipo}|${empresaId}`, filas);
     return filas.length;
   }
-  // Excel moderno (.xlsx) con el lector propio; los .xls antiguos (FUNDAE, algunos extractos) con SheetJS
+  function parseCsv(txt) {
+    const l1 = txt.slice(0, txt.indexOf('\n') < 0 ? txt.length : txt.indexOf('\n'));
+    const d = [';', '\t', ','].map((c) => [c, l1.split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+    const rows = []; let r = [], c = '', q = false;
+    for (let i = 0; i < txt.length; i++) {
+      const ch = txt[i];
+      if (q) { if (ch === '"') { if (txt[i + 1] === '"') { c += '"'; i++; } else q = false; } else c += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === d) { r.push(c); c = ''; }
+      else if (ch === '\n') { r.push(c.replace(/\r$/, '')); rows.push(r); r = []; c = ''; }
+      else c += ch;
+    }
+    if (c || r.length) { r.push(c.replace(/\r$/, '')); rows.push(r); }
+    return rows;
+  }  // Excel moderno (.xlsx) con el lector propio; los .xls antiguos (FUNDAE, algunos extractos) con SheetJS
   async function filasExcel(f) {
     const buf = await f.arrayBuffer(), u = new Uint8Array(buf, 0, 4);
+    if (/\.(csv|txt)$/i.test(f.name)) { // descargas de la sede (CSV con ; y acentos de Windows)
+      const bytes = new Uint8Array(buf); let txt = new TextDecoder('utf-8').decode(bytes);
+      if (txt.includes('\uFFFD')) txt = new TextDecoder('windows-1252').decode(bytes);
+      return parseCsv(txt.replace(/^\uFEFF/, ''));
+    }
     if (u[0] === 0xD0 && u[1] === 0xCF && window.XLSX) {
       const wb = window.XLSX.read(buf);
       return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null, raw: true });
@@ -487,10 +506,13 @@ export function crearModulos(c) {
       const a = (op, t) => `<button class="pill" data-act="m-fc" data-op="${op}" data-s="${s}" data-k="${esc(claveL(l))}">${t}</button>`;
       return `${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}`;
     };
+    // cada campo del libro es editable (se guarda en el propio libro de la empresa)
+    const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
+    const ci = (l, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-fce="${s}|${idx.get(l)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
     const filas = f.map((l) => { // todas las líneas del periodo, sin límite
       const p = paisDe(l.nif);
-      return `<tr class="fc"><td>${fmt(s === 'E' ? l.ff : l.fecha)}</td><td>${esc(l.factura)}</td><td class="${p !== 'ES' ? 'nif-ext' : ''}">${esc(l.nif)}</td><td>${esc(l.nombre)}</td>
-        <td>${p}</td><td>${esc(l.codigo)}</td>${celdasNum(l.base)}<td class="num">${Number(l.pct).toFixed(2).replace('.', ',')}</td>${celdasNum(l.cuota)}
+      return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
+        <td>${p}</td>${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
         <td class="num">${/^R\.RC\./.test(l.codigo) ? eur(l.cuota) : ''}</td><td>${esc(clasif(l.codigo))}</td><td class="acc">${acc(l)}</td></tr>`;
     }).join('');
     const tot = `<tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td colspan="3"></td></tr>`;
@@ -525,6 +547,35 @@ export function crearModulos(c) {
     const t = document.getElementById('fcTabla'), n = document.getElementById('fcCuenta');
     if (t) t.innerHTML = c.html;
     if (n) n.textContent = `${c.n} facturas`;
+  }
+  async function editarFc(clave, valor) {
+    const [s, i, campo] = clave.split('|'), tipo = `fact-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
+    if (!l) return;
+    const nl = { ...l };
+    if (campo === 'fecha') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); if (s === 'E') nl.ff = f; else nl.fecha = f; }
+    else if (['base', 'cuota', 'pct'].includes(campo)) nl[campo] = parseES(valor);
+    else if (campo === 'nif' || campo === 'codigo') nl[campo] = valor.trim().toUpperCase();
+    else nl[campo] = valor.trim();
+    await reemplazarGrande(tipo, S.sel, arr.map((x, j) => (j === +i ? nl : x)));
+    render();
+  }
+  // SII: cada campo de la consulta es editable y cada registro se puede quitar
+  async function editarSii(clave, valor) {
+    const [s, i, campo] = clave.split('|'), tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
+    if (!l) return;
+    const nl = { ...l };
+    if (campo === 'fecha') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); nl.fecha = f; }
+    else if (['base', 'cuota', 'deducible'].includes(campo)) nl[campo] = parseES(valor);
+    else if (campo === 'nif') nl.nif = valor.trim().toUpperCase();
+    else nl[campo] = valor.trim();
+    await reemplazarGrande(tipo, S.sel, arr.map((x, j) => (j === +i ? nl : x)));
+    render();
+  }
+  async function quitarSii(s, i) {
+    const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`);
+    if (!arr?.[+i] || !confirm(`¿Quitar la factura ${arr[+i].factura} del SII?`)) return;
+    await reemplazarGrande(tipo, S.sel, arr.filter((_, j) => j !== +i));
+    render();
   }
   function setFc(campo, valor) { if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
 
@@ -582,39 +633,68 @@ export function crearModulos(c) {
     const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
     const f = datos.filter((x) => (s === 'E' ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === Number(S.ejercicio) && (!S.periodo || x.per === S.periodo)));
     const cab = s === 'E' ? ['Factura', 'Fecha expedición', SENT.E.nif, 'Nombre', 'Tipo', 'Estado'] : ['Factura', 'Fecha expedición', SENT.R.nif, 'Nombre', 'Tipo', 'Estado'];
-    return `<div class="bar"><span class="space"></span><span class="chip">${f.length} facturas</span></div>
+    const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
+    const ci = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-sie="${s}|${idx.get(x)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
+    return `${dz('sii', `Suelta aquí la descarga del SII de facturas ${s === 'E' ? 'emitidas' : 'recibidas'}`, '(.xlsx, .xls o .csv de la sede) o haz clic para elegirla')}
+      <div class="bar"><span class="space"></span><span class="chip">${f.length} facturas · base ${fnum(suma(f, 'base'))} · ${SENT[s].cuota.toLowerCase()} ${fnum(suma(f, 'cuota'))}</span></div>
       <div class="wrap"><table class="tabla"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join('')}<th class="num">Base total</th><th class="num">${SENT[s].cuota}</th>
-      ${s === 'R' ? '<th class="num">Cuota deducible</th>' : ''}</tr></thead><tbody>
-      ${f.map((x) => `<tr><td>${esc(x.factura)}</td><td>${fmt(x.fecha)}</td><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td><td>${esc(x.tipo)}</td><td>${esc(x.estado)}</td>
-        ${celdasNum(x.base)}${celdasNum(x.cuota)}${s === 'R' ? celdasNum(x.deducible) : ''}</tr>`).join('')}
-      <tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}${celdasNum(suma(f, 'cuota'))}${s === 'R' ? celdasNum(suma(f, 'deducible')) : ''}</tr></tbody></table></div>`;
+      ${s === 'R' ? '<th class="num">Cuota deducible</th>' : ''}<th></th></tr></thead><tbody>
+      ${f.map((x) => `<tr>${ci(x, 'factura', x.factura)}${ci(x, 'fecha', fmt(x.fecha))}${ci(x, 'nif', x.nif)}${ci(x, 'nombre', x.nombre)}${ci(x, 'tipo', x.tipo)}${ci(x, 'estado', x.estado)}
+        ${ci(x, 'base', fnum(x.base), 'num')}${ci(x, 'cuota', fnum(x.cuota), 'num')}${s === 'R' ? ci(x, 'deducible', fnum(x.deducible), 'num') : ''}
+        <td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('')}
+      <tr><td colspan="6"><b>Total</b></td>${celdasNum(suma(f, 'base'))}${celdasNum(suma(f, 'cuota'))}${s === 'R' ? celdasNum(suma(f, 'deducible')) : ''}<td></td></tr></tbody></table></div>`;
   }
 
+  // ---- Conciliación SII vs contabilidad (clon de la otra aplicación) ----
+  let siiCod = { E: '', R: '' }, siiTodo = false;
   function vistaConcSII(s) {
     if (!S.sel) return sinEmpresa;
     const lib = grande('fact-' + s), sii = grande('sii-' + s);
     if (!lib || !sii) return cargandoTxt;
-    if (!lib.length || !sii.length) {
-      return `<p class="vacio">Faltan datos para conciliar: ${[!lib.length && `el libro de IVA (${SENT[s].boton})`, !sii.length && 'la consulta del SII (SII)'].filter(Boolean).join(' y ')}.</p>`;
-    }
-    const r = conciliarSII(s, lib, sii, Number(S.ejercicio), S.periodo);
-    const x = r.resumen;
-    const fila = (t, c, d, esN) => `<tr><td><b>${t}</b></td><td class="num">${esN ? c : eur(c)}</td><td class="num">${esN ? d : eur(d)}</td>
-      <td class="num">${esN ? c - d : eur(Math.round((c - d) * 100) / 100)}</td></tr>`;
-    const detalle = (tit, cols, filas, pinta) => `<h4 class="it-sec">${tit} <span class="chip">${filas.length}</span></h4>${filas.length ? `<div class="wrap"><table class="tabla">
-      <thead><tr>${cols.map((c, i) => `<th${i > 2 ? ' class="num"' : ''}>${c}</th>`).join('')}</tr></thead><tbody>${filas.slice(0, 200).map(pinta).join('')}</tbody></table></div>
-      ${filas.length > 200 ? `<p class="hint">Se muestran 200 de ${filas.length}.</p>` : ''}` : '<p class="hint">Ninguna.</p>'}`;
-    const base = (q) => `<td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td>`;
-    return `<div class="conc-estado ${r.cuadra ? 'conc-ok' : 'conc-ko'}">${r.cuadra ? 'CUADRA' : 'DESCUADRE · revisar el detalle'}
-        <small>${r.desde.split('-').reverse().join('/')} – ${r.hasta.split('-').reverse().join('/')}</small></div>
-      <div class="wrap"><table class="tabla"><thead><tr><th>Resumen del periodo</th><th class="num">Contabilizado</th><th class="num">Declarado SII</th><th class="num">Diferencia</th></tr></thead><tbody>
-      ${fila('Nº de facturas', x.nC, x.nS, true)}${fila('Base imponible', x.baseC, x.baseS)}${fila(SENT[s].cuota, x.cuotaC, x.cuotaS)}
-      ${s === 'R' ? `<tr><td><b>Cuota deducible declarada (solo SII)</b></td><td></td>${celdasNum(x.dedS)}<td></td></tr>` : ''}</tbody></table></div>
-      ${detalle('A. Contabilizadas que no están en el SII', ['Factura', 'NIF', 'Nombre', 'Base contab.', 'Cuota contab.'], r.a, (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.cuota)}</tr>`)}
-      ${detalle('B. Declaradas en el SII que no están contabilizadas', ['Factura', 'NIF', 'Nombre', 'Base SII', 'Cuota SII'], r.b, (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.cuota)}</tr>`)}
-      ${detalle('C. Facturas en ambos con importes distintos', ['Factura', 'NIF', 'Nombre', 'Base contab.', 'Base SII', 'Dif. base', 'Cuota contab.', 'Cuota SII', 'Dif. cuota'], r.c,
-        (q) => `<tr>${base(q)}${celdasNum(q.base)}${celdasNum(q.baseS)}${celdasNum(Math.round((q.base - q.baseS) * 100) / 100)}${celdasNum(q.cuota)}${celdasNum(q.cuotaS)}${celdasNum(Math.round((q.cuota - q.cuotaS) * 100) / 100)}</tr>`)}
-      <p class="hint">Reglas de tu Excel: en emitidas se dejan fuera las líneas de inversión del sujeto pasivo, intracomunitarias y RC, y los importes de las facturas «no sujetas / intereses / alquileres»; en recibidas, los códigos que no son IVA (I.PR.*, I.ALQ, I.INT, I.DV…).</p>`;
+    const e = s === 'E', ej = Number(S.ejercicio);
+    const av = [];
+    if (!lib.length) av.push(`Falta el libro de IVA ${e ? 'repercutido' : 'soportado'} (contabilidad): suéltalo en la pestaña Facturas ${e ? 'emitidas' : 'recibidas'}.`);
+    if (!sii.length) av.push(`Falta la descarga del SII de facturas ${e ? 'emitidas' : 'recibidas'}: suéltala en la franja de arriba.`);
+    av.push(e ? 'Se cruza por número de factura. En la contabilidad no cuentan las autorepercutidas, el recargo de equivalencia ni las retenciones.' : 'Se cruza por número de factura + NIF del emisor. En la contabilidad no cuentan los códigos de retenciones (I.*).');
+    const cab = `${dz('sii', 'Suelta aquí las descargas del SII', '(facturas emitidas y recibidas, .xlsx, .xls o .csv) o pulsa para elegirlas')}<div class="aviso">${av.map((a) => `<p>⚠ ${esc(a)}</p>`).join('')}</div>`;
+    if (!lib.length || !sii.length) return cab;
+    const D = conciliarSiiCompleta(s, lib, sii, ej, S.periodo), x = D.tc, y = D.ts;
+    const dif = (a, b) => rr(a - b), ko = (d) => (Math.abs(d) > 0.10 + 1e-9 ? 'dif-ko' : 'est-ok');
+    const nomC = e ? 'Contabilizado (IVA repercutido)' : 'Contabilizado (IVA soportado)', nomS = e ? 'Declarado SII (SII-LRFE)' : 'Declarado SII (SII-LRFR)';
+    const TOPE_C = siiTodo ? 1e9 : 200;
+    const mas = (n, cs) => (n > TOPE_C ? `<tr><td colspan="${cs}" class="c"><button class="small" data-act="m-siitodo">Se ven ${TOPE_C} de ${n} · mostrar todas</button></td></tr>` : '');
+    const lst = (arr, cols) => `<div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr>${cols.map((c) => `<th>${c[0]}</th>`).join('')}</tr></thead>
+      <tbody>${arr.slice(0, TOPE_C).map((q) => `<tr>${cols.map((c) => `<td class="${c[2] === 'n' ? 'num' : ''}">${c[2] === 'n' ? fnum(q[c[1]] || 0) : esc(q[c[1]] || '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="vacio">Ninguna</td></tr>`}
+      ${arr.length ? `<tr class="ttot"><td>TOTAL</td>${cols.slice(1).map((c) => `<td class="num">${c[2] === 'n' ? fnum(rr(arr.reduce((t, q) => t + (q[c[1]] || 0), 0))) : ''}</td>`).join('')}</tr>` : ''}${mas(arr.length, cols.length)}</tbody></table></div>`;
+    const fd = D.facDesc.filter((q) => !siiCod[s] || q.cod === siiCod[s]);
+    const filasCod = D.cods.map((o) => `<tr class="${siiCod[s] === o.cod ? 'sel-cod' : ''}" data-act="m-siicod" data-t="${s}" data-cod="${esc(o.cod)}" style="cursor:pointer" title="Ver sus facturas que descuadran"><td>${esc(o.cod)}</td><td class="num">${o.n}</td><td class="num">${fnum(o.bc)}</td><td class="num">${fnum(o.bs)}</td>
+      <td class="num ${Math.abs(o.db) > 0.01 ? 'dif-ko' : ''}">${fnum(o.db)}</td><td class="num">${fnum(o.cc)}</td><td class="num">${fnum(o.cs)}</td><td class="num ${Math.abs(o.dc) > 0.01 ? 'dif-ko' : ''}">${fnum(o.dc)}</td></tr>`).join('');
+    return `${cab}
+      <section class="prs-card"><div class="prs-h">CONCILIACIÓN SII vs CONTABILIDAD - FACTURAS ${e ? 'EMITIDAS' : 'RECIBIDAS'} · ${D.desde.split('-').reverse().join('/')} – ${D.hasta.split('-').reverse().join('/')}</div>
+      <div class="wrap"><table class="tprs tnom conc-t" style="width:auto;min-width:40em"><thead><tr><th></th><th>${nomC}</th><th>${nomS}</th><th>Diferencia</th></tr></thead><tbody>
+        <tr><td>Nº de facturas</td><td class="num">${x.n}</td><td class="num">${y.n}</td><td class="num ${x.n !== y.n ? 'dif-ko' : ''}">${x.n - y.n}</td></tr>
+        <tr><td>Base imponible</td><td class="num">${fnum(x.base)}</td><td class="num">${fnum(y.base)}</td><td class="num ${ko(dif(x.base, y.base))}">${fnum(dif(x.base, y.base))}</td></tr>
+        <tr><td>Cuota ${e ? 'repercutida' : 'soportada'}</td><td class="num">${fnum(x.cuota)}</td><td class="num">${fnum(y.cuota)}</td><td class="num ${ko(dif(x.cuota, y.cuota))}">${fnum(dif(x.cuota, y.cuota))}</td></tr>
+        ${e ? '' : `<tr><td>Cuota deducible declarada (solo SII)</td><td></td><td class="num">${fnum(y.deduc)}</td><td></td></tr>`}
+        <tr class="${D.cuadra ? 'cf-ok' : 'cf-ko'}"><td>Situación</td><td colspan="3"><b>${D.cuadra ? `CUADRA${D.ceros ? ` (hay ${D.ceros} factura(s) a cero solo en un lado: no afectan a los importes)` : ''}` : 'DESCUADRE - revisar el detalle'}</b></td></tr></tbody></table></div>
+      <div class="css-flex" style="align-items:flex-start;flex-wrap:wrap">
+        <div><div class="css-4760-t">Descuadre por código de impuesto</div><div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código de impuesto (contabilidad)</th><th>Nº facturas</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th></tr></thead>
+          <tbody>${filasCod || '<tr><td colspan="8" class="vacio">Sin datos</td></tr>'}${D.cods.length ? `<tr class="ttot"><td>TOTAL</td><td class="num">${D.cods.reduce((t, o) => t + o.n, 0)}</td>${['bc', 'bs', 'db', 'cc', 'cs', 'dc'].map((k) => `<td class="num">${fnum(rr(D.cods.reduce((t, o) => t + o[k], 0)))}</td>`).join('')}</tr>` : ''}</tbody></table></div></div>
+        <div><div class="css-4760-t">Facturas que descuadran${siiCod[s] ? ` · ${esc(siiCod[s])} <button class="small" data-act="m-siicod" data-t="${s}" data-cod="">(ver todas)</button>` : ''} · ${fd.filter((q) => !q.anula).length}${D.anuladas ? ` <span class="est-ok" style="font-weight:400">· ${D.anuladas} que se anulan entre sí (cuadran)</span>` : ''}</div>
+          <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th></tr></thead>
+          <tbody>${fd.slice(0, TOPE_C).map((q) => `<tr${q.anula ? ' class="cf-ok" title="Se anula con otra factura del mismo NIF y código: cuadra"' : ''}><td>${esc(q.cod)}${q.anula ? ' ✓' : ''}</td><td>${esc(q.fac || '')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td class="num">${fnum(q.bc)}</td><td class="num">${fnum(q.bs)}</td>
+            <td class="num ${q.anula ? 'est-ok' : Math.abs(q.db) > 0.01 ? 'dif-ko' : ''}">${fnum(q.db)}</td><td class="num">${fnum(q.cc)}</td><td class="num">${fnum(q.cs)}</td><td class="num ${q.anula ? 'est-ok' : Math.abs(q.dc) > 0.01 ? 'dif-ko' : ''}">${fnum(q.dc)}</td></tr>`).join('') || '<tr><td colspan="10" class="vacio">Ninguna factura descuadra</td></tr>'}${mas(fd.length, 10)}</tbody></table></div></div></div>
+      <div class="css-4760-t" style="margin:.8em 1em 0">Facturas declaradas en el SII de forma distinta a su código de impuesto · ${D.malSii.length}</div>
+      <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código (contabilidad)</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Debería estar en el SII como</th><th>Está declarada en el SII como</th></tr></thead>
+        <tbody>${D.malSii.slice(0, TOPE_C).map((q) => `<tr><td>${esc(q.cods)}</td><td>${esc(q.fac || '')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td>${esc(q.esp)}</td><td class="dif-ko">${esc(q.dec)}</td></tr>`).join('') || '<tr><td colspan="6" class="vacio">Todas las facturas están declaradas en el SII como corresponde a su código</td></tr>'}${mas(D.malSii.length, 6)}</tbody></table></div>
+      <p class="hint">${e ? 'R.EX → exenta E2 · R.UE → exenta E5 · R.UE.S → no sujeta por localización · R.NC/R.RC → S1 al tipo del código · R.NC.EX → exenta con causa · R.NAC.NS → no sujeta · R.ISP → S2'
+        : 'S.UE → adquisición intracomunitaria (clave de régimen 09) al tipo del código · S.ISP → ISP · S.NC → sin ISP al tipo del código · IN → sin ISP al tipo del código y bien de inversión SÍ'}. Los códigos sin regla (DUA, retenciones…) no se revisan. Así se ve qué factura corregir en el SII para que la predeclaración del 303 salga bien.</p>
+      <p class="hint">Pulsa un código para ver solo sus facturas. Cada factura se asigna al código (o combinación de códigos) con que está contabilizada; el SII no trae código, así que las declaradas que no están en la contabilidad salen aparte. Ordenado de mayor a menor descuadre. Margen para dar por cuadrado: ±0,10 €.</p>
+      <div class="css-flex" style="align-items:flex-start;flex-wrap:wrap">
+        <div><div class="css-4760-t">A. Contabilizadas que no están en el SII · ${D.A.length}</div>${lst(D.A, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base contab.', 'base', 'n'], ['Cuota contab.', 'cuota', 'n']])}</div>
+        <div><div class="css-4760-t">B. Declaradas en el SII que no están contabilizadas · ${D.B.length}</div>${lst(D.B, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base SII', 'base', 'n'], ['Cuota SII', 'cuota', 'n']])}</div>
+        <div><div class="css-4760-t">C. En ambos con importes distintos · ${D.C.length}</div>${lst(D.C.map((q) => ({ ...q, db: rr(q.bc - q.bs), dc: rr(q.cc - q.cs) })), [['Factura', 'fac'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}</div>
+      </div></section>`;
   }
 
   // ---------- Bloque 4: modelos tributarios ----------
@@ -2180,6 +2260,9 @@ export function crearModulos(c) {
       'm-retprint': () => imprimirRet(d.m),
       'm-fundaedel': () => quitarFundae(d.y),
       'm-ctavis': () => accionCta('compvis', '', ''),
+      'm-siicod': () => { siiCod[d.t] = d.cod; render(); },
+      'm-siitodo': () => { siiTodo = true; render(); },
+      'm-siidel': () => quitarSii(d.s, d.i),
       'm-ctamas': () => { ctaMas += 300; render(); },
       'm-ctaquit': () => accionCta('quit', d.id, ''),
       'm-ctanv': () => { ctaNueva = { fecha: ctaUlt.fecha, cuenta: ctaUlt.cuenta, asiento: '', desc: '', debe: '', haber: '' }; render(); },
@@ -2314,5 +2397,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { editarFc, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }
