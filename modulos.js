@@ -670,6 +670,7 @@ export function crearModulos(c) {
     const sumB = rr(cumple.reduce((t, x) => t + x.base, 0)), sumC = rr(cumple.reduce((t, x) => t + x.cuota, 0));
     // solo las columnas de la descarga que tienen algún dato en lo que se ve
     const cols = cab.map((_, i) => i); // todas las columnas de la descarga, con o sin datos
+    const conRaw = todos.filter((x) => raw.has(siiKey(x))).length, aviso = conRaw < todos.length ? `<div class="aviso"><p>⚠ Solo ${conRaw} de ${todos.length} facturas de este periodo traen todas las columnas de la descarga: suelta de nuevo el CSV de ese periodo para completarlas (no se duplican).</p></div>` : '';
     const nOcultas = 0;
     const celdaRaw = (v) => { const t = v === undefined ? '' : String(v); return `<td class="${/^-?[\d.]+,\d+$/.test(t) ? 'num' : ''}">${esc(t)}</td>`; };
     const fil = (k, lbl, ph = '') => `<label>${lbl}<input class="emp-in" style="width:7em" data-siifil="${s}|${k}" value="${esc(F[k] ?? '')}" placeholder="${esc(ph)}"></label>`;
@@ -679,9 +680,9 @@ export function crearModulos(c) {
       <td class="c">${ok(x) ? 'VERDADERO' : 'FALSO'}</td><td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('');
     const quitados = Q.length ? `<div class="aviso"><b>Facturas quitadas del SII (${Q.length})</b> ${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${Q.length - 1}">↩ Deshacer la última (${esc(Q[Q.length - 1].factura)})</button> <button class="small" data-act="m-siirec" data-s="${s}" data-i="todas">Recuperar todas</button>` : ''}
       <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
-    return `${dropz}
+    return `${dropz}${aviso}
       <section class="prs-card"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
-      <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas de la descarga (barra de desplazamiento lateral)</p>
+      <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas de la descarga (desliza la tabla hacia los lados para verlas todas)</p>
       <div class="css-flex" style="gap:2em;flex-wrap:wrap;padding-bottom:.2em"><table class="tprs tnom" style="width:auto"><tbody>
         <tr><td>NIF Titular</td><td class="amar"><b>${esc(e.cif)}</b></td></tr><tr><td>Nombre / Razón social</td><td class="amar"><b>${esc(e.nombre)}</b></td></tr>
         <tr><td>Libro registro</td><td class="amar"><b>Facturas ${emit ? 'Emitidas' : 'Recibidas'}</b></td></tr><tr><td>Ejercicio</td><td class="amar"><b>${ej}</b></td></tr>

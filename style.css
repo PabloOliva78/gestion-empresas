@@ -615,3 +615,9 @@ td.amar { background: #fff3a8; }
 .sii-t th { position: sticky; top: 0; z-index: 2; white-space: nowrap; min-width: 0; font-size: .8rem; padding: .35em .6em; background: #143a7b; color: #fff; text-align: center; }
 .sii-t td { white-space: nowrap; font-size: .82rem; padding: .25em .6em; }
 .sii-t td.in input { width: 100%; min-width: 6em; field-sizing: content; }
+
+/* SII: la barra de desplazamiento lateral debe quedar a la vista */
+.siiwrap { max-height: calc(100vh - 12rem); min-height: 16rem; overflow: auto; border: 1px solid #cfd6e6; }
+.siiwrap::-webkit-scrollbar { height: 14px; width: 14px; }
+.siiwrap::-webkit-scrollbar-thumb { background: #7f9bd8; border-radius: 8px; }
+.siiwrap::-webkit-scrollbar-track { background: #eef3ff; }
