@@ -1553,7 +1553,7 @@ export function crearModulos(c) {
       const p = pag[ymP] !== undefined ? pag[ymP] : (!hayMayor && x.c_pagos !== undefined ? Number(x.c_pagos) : null);
       const it = hayMayor ? -(rit[ymN] || 0) : -Math.abs(Number(x.c_it) || 0);
       const cur = F.M[ymN] ? -rr(F.M[ymN].reduce((a, c) => a + (c.coste || 0), 0)) : (Object.keys(F.M).length ? 0 : -Math.abs(Number(x.c_bonif) || 0));
-      const dsn = p === null && ss === null ? null : rr((p || 0) - (ss || 0)), dif = dsn === null ? null : rr(dsn - it - cur), ok = dif !== null && Math.abs(dif) <= 1;
+      const dsn = p === null && ss === null ? null : rr((p || 0) - (ss || 0)), dif = dsn === null ? null : rr(dsn - it - cur), ok = dif !== null && Math.abs(dif) <= 0.9;
       T.p += p || 0; T.ss += ss || 0; T.dsn += dsn || 0; T.it += it; T.cur += cur; T.d += dif || 0;
       const tit = (F.M[ymN] ?? []).map((c) => `${c.k} ${c.den} (${c.fin}): ${fnum(c.coste)}`).join('\n');
       const pagoCel = !hayMayor && ed ? celdaNom(mm, 'c_pagos', y, ed) : `<td class="num" title="Pagados en ${MESES[+ymP.slice(5) - 1]} ${ymP.slice(0, 4)}">${p === null ? '-' : fnum(p)}</td>`;
@@ -1598,7 +1598,7 @@ export function crearModulos(c) {
     const n = (v) => (v === null || v === undefined || isNaN(v) ? '—' : fnum(rr(v)));
     const pc = (v) => (v === null || !isFinite(v) ? '—' : `${(v * 100).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`);
     const dd = (a, b) => (a === null || a === undefined || b === null || b === undefined ? '<td class="num" style="color:#777">—</td>'
-      : `<td class="num" style="font-weight:600;color:${Math.abs(a - b) <= 1 ? '#1a7f37' : '#b42318'}">${Math.abs(a - b) <= 1 ? '✓' : fnum(rr(a - b))}</td>`);
+      : `<td class="num" style="font-weight:600;color:${Math.abs(a - b) <= 0.9 ? '#1a7f37' : '#b42318'}">${Math.abs(a - b) <= 0.9 ? '✓' : fnum(rr(a - b))}</td>`);
     const base = (x) => (x ? (Number(x.salarios) || 0) + (Number(x.indem) || 0) : null); // sujeto: salarios + indemnizaciones (km y dietas exentos)
     const pers = trim ? ['1T', '2T', '3T', '4T'].map((p) => ({ p, l: p, ix: [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i) })) : MM12.map((p, i) => ({ p, l: MESES[i], ix: [i] }));
     let t = { b: 0, r: 0 };
@@ -1626,7 +1626,7 @@ export function crearModulos(c) {
     const f4 = R.map((r) => `<tr><td class="pp">${r.m[0].toUpperCase() + r.m.slice(1)}</td><td class="num">${pc(r.tIrpf)}</td><td class="num">${pc(r.tSS)}</td><td class="num">${pc(r.ssTrab)}</td><td class="num">${n(r.coste)}</td></tr>`).join('');
     const tabla = (tit, cab, cuerpo) => `<section class="prs-card"><div class="prs-h">${tit}</div><div class="wrap"><table class="tprs tnom"><thead><tr>${cab.map((c, i) => `<th${i ? '' : ' class="pp"'}>${c}</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div></section>`;
     return `${cabNom(e, y)}
-      <p class="hint">Control del cuadrante de la gestoría (pestaña Nóminas) frente al 111 y al 190 presentados (pestaña Impuestos Presentados). Base sujeta = devengado − kilometraje − dietas (exentos); las indemnizaciones se toman como sujetas. ✓ = cuadra (±1 €).${hay ? '' : ` <b>No hay nóminas de ${y}: rellénalas en 9.- Nóminas.</b>`}</p>
+      <p class="hint">Control del cuadrante de la gestoría (pestaña Nóminas) frente al 111 y al 190 presentados (pestaña Impuestos Presentados). Base sujeta = devengado − kilometraje − dietas (exentos); las indemnizaciones se toman como sujetas. ✓ = cuadra (±0,90 €).${hay ? '' : ` <b>No hay nóminas de ${y}: rellénalas en 9.- Nóminas.</b>`}</p>
       ${tabla(`1 · Cuadrante frente al modelo 111 (rendimientos del trabajo) · ${y}`, [trim ? 'Trimestre' : 'Mes', 'Base cuadrante', '111 percepciones [02+05]', 'Dif.', 'IRPF cuadrante', '111 retenciones [03+06]', 'Dif.', 'Tipo medio'],
         f1 || '<tr><td colspan="8" class="vacio">Sin datos</td></tr>')}
       ${tabla(`2 · Cuadrante frente al modelo 190 · ${y}`, ['Concepto', 'Cuadrante + profesionales 111', 'Modelo 190', 'Dif.'],

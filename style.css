@@ -390,3 +390,6 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .css-flex .tnom td.pp, .css-flex .tnom th.pp { min-width: 0; width: auto; }
 .aviso { background: #fff8e1; border: 1px solid #f0d58a; border-radius: 8px; padding: .4rem .9rem; margin: .5rem 0; font-size: .85rem; }
 .aviso p { margin: .2rem 0; }
+
+.tnom tr.cf-ok td { background: #d6f2d6 !important; color: #14631f; }
+.tnom tr.cf-ko td { background: #fbdada !important; color: #a11212; }
