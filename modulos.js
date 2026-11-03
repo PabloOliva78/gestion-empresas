@@ -407,9 +407,18 @@ export function crearModulos(c) {
     GR.set(`${tipo}|${empresaId}`, filas);
     return filas.length;
   }
+  // Excel moderno (.xlsx) con el lector propio; los .xls antiguos (FUNDAE, algunos extractos) con SheetJS
+  async function filasExcel(f) {
+    const buf = await f.arrayBuffer(), u = new Uint8Array(buf, 0, 4);
+    if (u[0] === 0xD0 && u[1] === 0xCF && window.XLSX) {
+      const wb = window.XLSX.read(buf);
+      return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null, raw: true });
+    }
+    return leerXlsx(buf, window.JSZip);
+  }
   // Libro de IVA del ERP o consulta del SII: se reconoce por las cabeceras
   async function ingestaIVA(f, empresaId) {
-    const filas = await leerXlsx(await f.arrayBuffer(), window.JSZip);
+    const filas = await filasExcel(f);
     const sii = leerSII(filas);
     if (sii) {
       const s = sii[0].sentido;
@@ -1309,7 +1318,7 @@ export function crearModulos(c) {
         const e = porNombre(f.name) ?? empresa();
         if (!e) { informe.push(`⚠ ${f.name}: elige la empresa (no la reconozco por el nombre)`); continue; }
         const ej = parseInt((/\b(20\d\d)\b/.exec(f.name) || [])[1] ?? '', 10) || Number(S.ejercicio);
-        const cuentas = leerSYS(await leerXlsx(await f.arrayBuffer(), window.JSZip));
+        const cuentas = leerSYS(await filasExcel(f));
         if (!cuentas) { informe.push(`❔ ${f.name}: no parece un balance de sumas y saldos`); continue; }
         const nom = e.siglas || e.nombre;
         const ref = `${f.name}|${f.size}`;
@@ -1453,7 +1462,7 @@ export function crearModulos(c) {
           anio = Number((texto.match(/A[ñn]o:\s*(\d{4})/) || [])[1]) || null;
           nif = (texto.match(/NIF empresa:\s*([A-Z0-9]{9})/i) || [])[1] || null;
         } else {
-          const rows = await leerXlsx(await f.arrayBuffer(), window.JSZip);
+          const rows = await filasExcel(f);
           rows.forEach((r) => { if (r && /^NIF:?$/i.test(String(r[0] ?? '').trim())) { const v = r.slice(1).find((x) => x && String(x).trim()); if (v) nif = String(v).trim(); } });
           const hr = rows.findIndex((r) => r && r.some((v) => /C[oó]digo|Id Grupo|AAFF/i.test(String(v ?? ''))));
           if (hr >= 0) {
@@ -1493,7 +1502,7 @@ export function crearModulos(c) {
     await cargar(); render();
   }
   async function ingestaMayor(f, empresaId) {
-    const filas = await leerXlsx(await f.arrayBuffer(), window.JSZip);
+    const filas = await filasExcel(f);
     const mv = leerMayor(filas);
     if (!mv) return `❔ ${f.name}: guardado, pero no reconozco el extracto (hacen falta fecha, cuenta, debe y haber)`;
     const n = await guardarGrande('may-mov', empresaId, mv, (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
