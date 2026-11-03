@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=39';
+import { crearModulos } from './modulos.js?v=40';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -247,6 +247,7 @@ function render() {
 // El panel de pestañas se abre justo debajo de la pastilla de su grupo (sin salirse por la derecha)
 function alinearPanel() {
   const p = root.querySelector('.gpanel'), pill = root.querySelector('.gpill.abierto'), wrap = root.querySelector('.tabs-wrap');
+  if (wrap) { const h = () => document.documentElement.style.setProperty('--tabsH', `${wrap.offsetHeight}px`); h(); window.addEventListener('resize', h, { once: true }); }
   if (!p?.style || !pill || !wrap) return;
   const ancho = Math.min(wrap.clientWidth - 48, 1100);
   p.style.width = `${ancho}px`;
