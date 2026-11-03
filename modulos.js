@@ -265,6 +265,9 @@ export function crearModulos(c) {
   const D = (id) => () => vistaDocs(id);
   const tabs = {
     cmg: ['Cuadro de mando del grupo', 'Empresa × modelo × periodo', vistaCmg],
+    nom: ['Nóminas', 'Cuadrante de la gestoría (a mano)', () => vistaNom()],
+    cssoc: ['Conciliación Seguridad Social', 'Pagos · nóminas · IT · FUNDAE', () => vistaCssoc()],
+    cnom: ['Control de nóminas', 'Cuadrante · 111 · 190 · ratios', () => vistaCnom()],
     it: ['Datos Identificativos Censales', 'Censo AEAT', () => vistaIT()],
     r111: ['Retenciones Modelo 111', 'Nóminas y profesionales', () => vistaListadoRet('111')],
     r115: ['Retenciones Modelo 115', 'Arrendamientos', () => vistaListadoRet('115')],
@@ -1304,6 +1307,118 @@ export function crearModulos(c) {
       <p class="hint">«Saldo antes del cierre» = apertura + débito − crédito + ajustes. El saldo de cierre sale a cero porque el ejercicio ya está regularizado.</p>`;
   }
 
+  // ---- Bloque 9 · Nóminas (a mano), conciliación de la Seguridad Social y control de nóminas ----
+  // Un registro «nominas» por empresa y ejercicio: datos[mes 01..12][campo]; los campos c_* son de la conciliación de la SS
+  const NOM_CONC = [['salarios', 'Total devengado (T. devengado − kilometraje − dietas − indemnizaciones)'], ['km', 'Kilometraje exento'], ['dietas', 'Dietas y manutención'], ['indem', 'Indemnizaciones'],
+    ['ssEmp', 'SS empresa'], ['ssTrab', 'SS trabajador'], ['ssTot', 'SS empresa + trabajador (SS empresa + SS trabajador)', 1], ['ret', 'Retenciones'], ['anticipos', 'Anticipos'], ['embargos', 'Embargos'],
+    ['seguro', 'Seguro'], ['liquido', 'Líquido'], ['dif', 'Diferencias', 1]];
+  const NOM_DIF = 'Salarios + kilometraje + indemnizaciones + SS empresa − SS empresa y trabajador − retenciones − anticipos − embargos − seguro − líquido';
+  const MM12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+  const rr = (x) => Math.round(x * 100) / 100 + 0;
+  const nomReg = (y) => S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === S.sel && r.ejercicio === y);
+  const nomCalc = (x) => {
+    if (!x || !Object.keys(x).some((k) => !k.startsWith('c_'))) return null;
+    const n = (k) => Number(x[k]) || 0, ssTot = n('ssEmp') + n('ssTrab');
+    return { ...x, ssTot: rr(ssTot), dif: rr(n('salarios') + n('km') + n('indem') + n('ssEmp') - ssTot - n('ret') - n('anticipos') - n('embargos') - n('seguro') - n('liquido')) };
+  };
+  const nomMes = (y, mm) => nomCalc(nomReg(y)?.datos?.[mm]);
+  async function guardarNom(clave, valor) {
+    const [mm, campo, y] = clave.split('|');
+    const reg = nomReg(+y);
+    const datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+    datos[mm] ??= {};
+    if (String(valor).trim() === '') delete datos[mm][campo]; else datos[mm][campo] = parseES(valor);
+    if (!Object.keys(datos[mm]).length) delete datos[mm];
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'nominas', ejercicio: +y, datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  const celdaNom = (mm, campo, y, ed) => {
+    const v = nomReg(y)?.datos?.[mm]?.[campo];
+    return ed ? `<td class="in"><input data-nom="${mm}|${campo}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`;
+  };
+  const cabNom = (e, y, extra = '') => `<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · Ejercicio ${y}${extra}</span></div>`;
+
+  function vistaNom() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), y = Number(S.ejercicio), ed = puede();
+    const dat = MM12.map((mm) => nomMes(y, mm));
+    const mal = MM12.filter((mm, i) => dat[i] && Math.abs(dat[i].dif) > 0.01).map((mm) => MESES[+mm - 1]);
+    const filas = NOM_CONC.map(([k, t, der]) => {
+      const tot = rr(dat.reduce((a, x) => a + (x ? Number(x[k]) || 0 : 0), 0));
+      const cel = MM12.map((mm, i) => (der ? (dat[i] ? `<td class="num${k === 'dif' && Math.abs(dat[i][k]) > 0.01 ? ' dif-ko' : ''}">${fnum(dat[i][k])}</td>` : '<td class="num vacio">—</td>') : celdaNom(mm, k, y, ed))).join('');
+      return `<tr class="${k === 'liquido' ? 'sub' : k === 'dif' ? 'verde' : der ? 'cmp' : ''}"><td class="pp" ${k === 'dif' ? `title="${esc(NOM_DIF)}"` : ''}>${esc(t)}</td>${cel}<td class="num ejer">${fnum(tot)}</td></tr>`;
+    }).join('');
+    return `${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
+      <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda). «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
+      <section class="prs-card"><div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
+  }
+
+  function vistaCssoc() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), y = Number(S.ejercicio), ed = puede(), T = { p: 0, ss: 0, dsn: 0, it: 0, cur: 0, d: 0 };
+    const z = (v) => (Math.abs(v) < 0.005 ? '—' : fnum(v));
+    const filas = MM12.map((mm, i) => {
+      const N = nomMes(y, mm), x = nomReg(y)?.datos?.[mm] ?? {};
+      const ss = N ? N.ssTot : null, p = x.c_pagos !== undefined ? Number(x.c_pagos) : null;
+      const it = -Math.abs(Number(x.c_it) || 0), cur = -Math.abs(Number(x.c_bonif) || 0);
+      const dsn = p === null && ss === null ? null : rr((p || 0) - (ss || 0)), dif = dsn === null ? null : rr(dsn - it - cur), ok = dif !== null && Math.abs(dif) <= 1;
+      T.p += p || 0; T.ss += ss || 0; T.dsn += dsn || 0; T.it += it; T.cur += cur; T.d += dif || 0;
+      return `<tr class="${dif === null ? '' : ok ? 'cf-ok' : 'cf-ko'}"><td class="pp">${MESES[i][0].toUpperCase() + MESES[i].slice(1)} ${y}</td>${celdaNom(mm, 'c_pagos', y, ed)}<td class="num">${ss === null ? '—' : fnum(ss)}</td>
+        <td class="num">${dsn === null ? '—' : fnum(dsn)}</td>${celdaNom(mm, 'c_it', y, ed)}${celdaNom(mm, 'c_bonif', y, ed)}<td class="num"><b>${dif === null ? '—' : fnum(dif)}</b></td><td>${dif === null ? 'Sin datos' : ok ? '✓ Cuadra' : p === null ? '✖ Sin pago' : '✖ Descuadra'}</td></tr>`;
+    }).join('');
+    return `${cabNom(e, y)}
+      <p class="hint">Seguros Sociales pagados (los del mes siguiente, asientos PS de la 4760.01) − Seguridad Social de las nóminas (pestaña Nóminas) = Diferencias; menos IT y menos Bonificaciones (cursos FUNDAE), ambas en negativo = Dif. mes Seg. Social. Cero = verde; si no, rojo. Escribe pagos, IT y bonificaciones a mano en cada mes.</p>
+      <section class="prs-card"><div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">Mes</th><th>Seguros Sociales pagados</th><th>Seguridad Social Nóminas</th><th>Diferencias SS − Nóminas</th><th>IT</th><th>Bonificaciones</th><th>Dif. mes Seg. Social</th><th>Estado</th></tr></thead>
+      <tbody>${filas}<tr class="ttot"><td class="pp">TOTAL</td><td class="num">${fnum(T.p)}</td><td class="num">${fnum(T.ss)}</td><td class="num">${fnum(rr(T.dsn))}</td><td class="num">${z(T.it)}</td><td class="num">${z(T.cur)}</td><td class="num">${fnum(rr(T.d))}</td><td></td></tr></tbody></table></div></section>`;
+  }
+
+  function vistaCnom() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), y = Number(S.ejercicio), trim = e.tipo === 'PYME';
+    const N = MM12.map((mm) => nomMes(y, mm));
+    const hay = N.some(Boolean);
+    const n = (v) => (v === null || v === undefined || isNaN(v) ? '—' : fnum(rr(v)));
+    const pc = (v) => (v === null || !isFinite(v) ? '—' : `${(v * 100).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`);
+    const dd = (a, b) => (a === null || a === undefined || b === null || b === undefined ? '<td class="num" style="color:#777">—</td>'
+      : `<td class="num" style="font-weight:600;color:${Math.abs(a - b) <= 1 ? '#1a7f37' : '#b42318'}">${Math.abs(a - b) <= 1 ? '✓' : fnum(rr(a - b))}</td>`);
+    const base = (x) => (x ? (Number(x.salarios) || 0) + (Number(x.indem) || 0) : null); // sujeto: salarios + indemnizaciones (km y dietas exentos)
+    const pers = trim ? ['1T', '2T', '3T', '4T'].map((p) => ({ p, l: p, ix: [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i) })) : MM12.map((p, i) => ({ p, l: MESES[i], ix: [i] }));
+    let t = { b: 0, r: 0 };
+    const f1 = pers.map(({ p, l, ix }) => {
+      const xs = ix.map((i) => N[i]).filter(Boolean);
+      const b = xs.length ? rr(xs.reduce((s, x) => s + base(x), 0)) : null, r = xs.length ? rr(xs.reduce((s, x) => s + (Number(x.ret) || 0), 0)) : null;
+      const pb = prsVal(y, '111', p, 'base'), pr = prsVal(y, '111', p, 'retN');
+      if (b === null && pb === undefined) return '';
+      t.b += b || 0; t.r += r || 0;
+      return `<tr><td class="pp">${l[0].toUpperCase() + l.slice(1)}</td><td class="num">${n(b)}</td><td class="num">${n(pb)}</td>${dd(b, pb)}<td class="num">${n(r)}</td><td class="num">${n(pr)}</td>${dd(r, pr)}<td class="num">${b ? pc(r / b) : '—'}</td></tr>`;
+    }).join('');
+    const anual = (k) => rr(N.reduce((s, x) => s + (x ? Number(x[k]) || 0 : 0), 0));
+    const sumP = (c) => rr(pers.reduce((s, { p }) => s + (Number(prsVal(y, '111', p, c)) || 0), 0));
+    const b190 = prsVal(y, '190', 'A', 'base'), r190 = prsVal(y, '190', 'A', 'retN');
+    const bEsp = rr(anual('salarios') + anual('indem') + sumP('baseP')), rEsp = rr(anual('ret') + sumP('retP'));
+    const R = MM12.map((mm, i) => ({ m: MESES[i], x: N[i] })).filter((o) => o.x).map(({ m, x }) => { const b = base(x) || 0, s = Number(x.salarios) || 0;
+      return { m, tIrpf: b ? (Number(x.ret) || 0) / b : null, tSS: s ? (Number(x.ssEmp) || 0) / s : null, ssTrab: s ? (Number(x.ssTrab) || 0) / s : null, coste: rr(s + (Number(x.indem) || 0) + (Number(x.ssEmp) || 0)) }; });
+    const al = [];
+    R.forEach((r, i) => { const a = R[i - 1];
+      if (r.tSS !== null && r.tSS < 0.25) al.push(`${r.m}: Seguridad Social de la empresa ${pc(r.tSS)} del salario (normal ≈ 30 %): ¿bonificaciones, bases máximas, IT o error de la gestoría?`);
+      if (a) {
+        if (r.tIrpf !== null && a.tIrpf !== null && Math.abs(r.tIrpf - a.tIrpf) > 0.03) al.push(`${r.m}: el tipo medio de IRPF pasa de ${pc(a.tIrpf)} a ${pc(r.tIrpf)} (revisar regularizaciones, altas/bajas o paga extra)`);
+        if (a.coste && Math.abs(r.coste - a.coste) / a.coste > 0.2) al.push(`${r.m}: el coste de personal varía ${pc((r.coste - a.coste) / a.coste)} frente a ${a.m} (${n(a.coste)} → ${n(r.coste)})`);
+      } });
+    const f4 = R.map((r) => `<tr><td class="pp">${r.m[0].toUpperCase() + r.m.slice(1)}</td><td class="num">${pc(r.tIrpf)}</td><td class="num">${pc(r.tSS)}</td><td class="num">${pc(r.ssTrab)}</td><td class="num">${n(r.coste)}</td></tr>`).join('');
+    const tabla = (tit, cab, cuerpo) => `<section class="prs-card"><div class="prs-h">${tit}</div><div class="wrap"><table class="tprs tnom"><thead><tr>${cab.map((c, i) => `<th${i ? '' : ' class="pp"'}>${c}</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div></section>`;
+    return `${cabNom(e, y)}
+      <p class="hint">Control del cuadrante de la gestoría (pestaña Nóminas) frente al 111 y al 190 presentados (pestaña Impuestos Presentados). Base sujeta = devengado − kilometraje − dietas (exentos); las indemnizaciones se toman como sujetas. ✓ = cuadra (±1 €).${hay ? '' : ` <b>No hay nóminas de ${y}: rellénalas en 9.- Nóminas.</b>`}</p>
+      ${tabla(`1 · Cuadrante frente al modelo 111 (rendimientos del trabajo) · ${y}`, [trim ? 'Trimestre' : 'Mes', 'Base cuadrante', '111 percepciones [02+05]', 'Dif.', 'IRPF cuadrante', '111 retenciones [03+06]', 'Dif.', 'Tipo medio'],
+        f1 || '<tr><td colspan="8" class="vacio">Sin datos</td></tr>')}
+      ${tabla(`2 · Cuadrante frente al modelo 190 · ${y}`, ['Concepto', 'Cuadrante + profesionales 111', 'Modelo 190', 'Dif.'],
+        `<tr><td class="pp">Percepciones</td><td class="num">${n(hay ? bEsp : null)}</td><td class="num">${n(b190)}</td>${dd(hay ? bEsp : null, b190)}</tr>
+         <tr><td class="pp">Retenciones</td><td class="num">${n(hay ? rEsp : null)}</td><td class="num">${n(r190)}</td>${dd(hay ? rEsp : null, r190)}</tr>`)}
+      ${tabla('3 · Ratios del cuadrante', ['Mes', 'Tipo medio IRPF', 'SS empresa / salario', 'SS trabajador / salario', 'Coste de personal'], f4 || '<tr><td colspan="5" class="vacio">Sin datos</td></tr>')}
+      ${al.length ? `<section class="prs-card"><div class="prs-h">Alertas</div><ul class="hint" style="margin:.6rem 1.2rem">${al.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></section>` : ''}`;
+  }
+
   // PDF de declaraciones presentadas: se guardan en la empresa (por el NIF del PDF, o la elegida) con modelo, ejercicio y periodo detectados
   async function cargarPresentados(files) {
     const informe = [], regs = new Map(); // regs: «prs» por empresa y ejercicio, acumulado mientras dura la carga
@@ -1657,5 +1772,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }

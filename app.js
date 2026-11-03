@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=46';
+import { crearModulos } from './modulos.js?v=47';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -136,7 +136,7 @@ const GRUPOS = [
   ['5.- CUENTAS CONTABLES', ['bss', 'c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['8.- CONCILIACIONES FISCALES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
-  ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['ssconc', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
+  ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['11.- ADMINISTRACIÓN', ['usuarios'], '', 'Usuarios, roles y acceso a las empresas.'],
 ];
 const TABS = {
@@ -227,9 +227,7 @@ function render() {
         <input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>
-        <details class="arch-det"><summary>Archivos cargados</summary>${M.listaArchivos()}</details>
-        <div class="bot-izq"><button data-act="buscar">🔍 Buscar pestaña (Ctrl+K)</button><button data-act="inicio">🏠 Inicio</button>
-          <button data-act="m-carpeta">📁 Elegir carpeta y buscar…</button></div>` : ''}
+        <details class="arch-det"><summary>Archivos cargados</summary>${M.listaArchivos()}</details>` : ''}
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -648,6 +646,7 @@ root.addEventListener('change', (ev) => {
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
+  if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
   if (t.dataset.prsver !== undefined) return void M.setPrsVer(t.value);
   if (t.dataset.man) return void M.guardarMan303(t.dataset.man, t.value);
   if (t.dataset.iban !== undefined) return void M.guardarIban(t.value);
