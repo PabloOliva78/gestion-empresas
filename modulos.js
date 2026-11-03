@@ -990,7 +990,7 @@ export function crearModulos(c) {
   }
 
   // Columnas y casillas de cada modelo, como en la aplicación de impuestos: [clave, título, casilla]
-  const CAS = (c) => (/^\d+(\+\d+)?$/.test(c) || /^0\d{4}$/.test(c) ? `casilla ${c}` : /^[EASIC]$/.test(c) ? `clave ${c}` : '');
+  const CAS = (c) => (c === '' ? 'a mano' : /^[EASI]$/.test(c) ? `suma clave ${c}` : `casilla ${c}`);
   const PRS = [
     { t: 'Retenciones · 111, 115 y 123', tipo: 'per', ms: [
       ['111', [['base', 'Base Imponible', '02+05'], ['retN', 'Retenciones Nóminas', '03+06'], ['baseP', 'Bases Profesionales', '08'], ['retP', 'Retenciones Profesionales', '09']]],
@@ -1027,8 +1027,8 @@ export function crearModulos(c) {
       const filas = tipo === 'ano' ? anios.map((a) => [String(a), a, 'A']) : per(tipo).map(([p, l]) => [l, y, p]);
       const cuerpo = filas.map(([l, yy, p]) => `<tr><td class="pp">${esc(l)}</td>${cols.map(([c]) => celda(yy, m, p, c)).join('')}</tr>`).join('');
       const tot = tipo === 'ano' ? '' : `<tr class="ttot"><td class="pp">Total ${y}</td>${cols.map(([c]) => `<td class="num">${fnum(per(tipo).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')}</tr>`;
-      return `<table class="tprs"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">MODELO ${m}</th></tr>
-        <tr>${cols.map(([, l, c]) => `<th class="ch">${l}${CAS(c) ? `<small>${CAS(c)}</small>` : ''}</th>`).join('')}</tr></thead><tbody>${cuerpo}${tot}</tbody></table>`;
+      return `<table class="tprs"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">${m === 'INT' ? 'INTRASTAT' : `MODELO ${m}`}</th></tr>
+        <tr>${cols.map(([, l, c]) => `<th class="ch">${l}<small>${CAS(c)}</small></th>`).join('')}</tr></thead><tbody>${cuerpo}${tot}</tbody></table>`;
     };
     const fila = (g, y) => `<div class="prs-row">${g.ms.map(([m, cols, t]) => tablaM(m, cols, t ?? g.tipo, y)).join('')}</div>`;
     const grupos = PRS.map((g) => `<section class="prs-card"><div class="prs-h">${g.t}</div>${g.tipo === 'ano' ? fila(g, ej)
