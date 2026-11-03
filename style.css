@@ -397,3 +397,35 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .tnom th.xdif, .tnom td.xdif { background: #f3f6fd; }
 .tnom td.pdfok { color: #14631f; }
 .tnom td.in input { text-align: right; }
+
+/* extracto de cuenta contable: cabecera azul con indicadores */
+.xc-cab{position:relative;overflow:hidden;background:linear-gradient(120deg,#0f2250 0%,#16347a 60%,#1f4fb5 100%);color:#fff;padding:14px 18px 18px;border-radius:0 0 22px 22px;margin:0 0 12px}
+.xc-glow{position:absolute;right:-40px;top:-70px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(96,165,250,.45),transparent 70%)}
+.xc-ruta{position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-bottom:10px}
+.xc-p{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid rgba(255,255,255,.4);border-radius:999px;background:rgba(255,255,255,.1);font-size:12px}
+.xc-pa{padding:4px 12px;border-radius:999px;background:#2f6df0;font-weight:500}
+.xc-s{opacity:.7}
+.xc-emp{margin-left:auto;padding:4px 12px;border-radius:999px;background:#fff;color:#0b1736;font-weight:600}
+.xc-emp span{font-weight:400;color:#697080}
+.xc-fila{position:relative;display:flex;gap:18px;align-items:stretch;flex-wrap:wrap}
+.xc-izq{flex:1 1 380px}
+.xc-tit{font-size:24px;font-weight:600;line-height:1.1}
+.xc-sub{font-size:12px;opacity:.85;margin-top:3px}
+.xc-sel{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.xc-cta{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35)}
+.xc-pref{width:104px;padding:3px 10px;border-radius:999px;border:0;background:#2f6df0;color:#fff;font-weight:600;letter-spacing:.3px;font:inherit}
+.xc-desc{font-weight:500;font-size:13px}
+.xc-p select{border-radius:999px;border:0;padding:2px 6px;font-size:12px}
+.xc-per{margin-top:8px;font-size:12px;opacity:.9}
+.xc-sc{margin-left:8px;opacity:.75}
+.xc-rev{flex:0 0 250px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:18px;padding:10px 14px;display:flex;align-items:center;gap:12px}
+.xc-rt{font-size:12px;line-height:1.5}
+.xc-kg{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px}
+.xc-k{background:#fff;color:#0b1736;border-radius:16px;padding:7px 12px 8px;border-top:4px solid #98a2b3;box-shadow:0 2px 12px rgba(11,23,54,.15)}
+.xc-kt{color:#697080;font-size:12px;line-height:1.2}
+.xc-kv{font-size:28px;line-height:1.15;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+.xc-balin{width:100px;border:0;border-radius:999px;padding:2px 8px;font-size:12px;text-align:right}
+.xc-est{display:inline-block;margin-top:2px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:500}
+.xc-est.ok{background:#e3f6ea;color:#17703a}
+.xc-est.ko{background:#fdecec;color:#a32b2b}
+.xc-tog{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#697080;cursor:pointer}

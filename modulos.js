@@ -1495,11 +1495,12 @@ export function crearModulos(c) {
     if (tipo === 'comp') return guardarCta((d) => setIn(d, 'comp', a, valor));
     if (tipo === 'clase') return guardarCta((d) => setIn(d, 'clases', id, valor));
     if (tipo === 'compvis') return guardarCta((d) => { (ctaVis ?? []).forEach((f) => setIn(d, 'comp', f, 'Sí')); });
+    if (tipo === 'vertp') { ctaVerTp = valor === '1'; return render(); }
     if (tipo === 'filtro') { ctaFil.comp = valor; ctaMas = 300; return render(); }
     if (tipo === 'buscar') { ctaFil.q = valor; ctaMas = 300; return render(); }
     return undefined;
   }
-  let ctaFil = { comp: 'todos', q: '' }, ctaMas = 300, ctaVis = [];
+  let ctaFil = { comp: 'todos', q: '' }, ctaMas = 300, ctaVis = [], ctaVerTp = false; // las columnas Tipo y Periodo van ocultas hasta que se pidan
   const ctaPref = (k) => ctaCfg().pref?.[k] || ctaDe(k).cta;
 
   // periodos
@@ -1611,16 +1612,22 @@ export function crearModulos(c) {
     const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}"><td class="c">${fdate(x.l.ms)}</td><td>${esc(x.l.asiento)}</td><td>${esc(x.l.desc)}</td>
       <td class="num">${x.l.debe ? fnum(x.l.debe) : ''}</td><td class="num">${x.l.haber ? fnum(x.l.haber) : ''}</td><td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
       <td class="c">${ed ? `<select data-cta="comp" data-id="${esc(x.l.firma)}"><option value=""></option><option${x.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${x.comp === 'No' ? ' selected' : ''}>No</option></select>` : esc(x.comp)}</td>
-      <td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td></tr>`).join('');
-    const kv = (t, v) => `<tr><td>${t}</td><td class="num">${v}</td></tr>`;
-    const control = `<table class="tprs tnom"><tbody>${kv('<b>Nº de partidas del extracto</b>', c.n)}${kv('Partidas comprobadas', c.comp || '-')}${kv('Partidas pendientes', c.pend || '-')}${kv('Partidas con excepción (No)', c.exc || '-')}
-      ${kv('Importe comprobado', z(c.impComp))}${kv('Cobertura de la muestra', `${fnum(c.cobertura * 100)} %`)}</tbody></table>
-      <table class="tprs tnom"><tbody>${kv('<b>Saldo inicial del periodo</b>', z(c.saldoIni))}${kv('Total Debe', z(c.tD))}${kv('Total Haber', z(c.tH))}${kv('Movimiento neto del periodo', z(c.neto))}${kv('<b>Saldo final calculado</b>', `<b>${z(c.saldoFin)}</b>`)}
-      <tr><td>Saldo según balance de sumas y saldos</td><td class="num">${ed ? `<input class="emp-in" style="width:7.5rem;text-align:right" data-cta="balance" data-id="${k}-${D.ej}" value="${c.balance === null ? '' : fnum(c.balance)}" placeholder="-">` : (c.balance === null ? '-' : fnum(c.balance))}</td></tr>
-      ${kv('<b>DIFERENCIA (control de cuadre)</b>', `<b>${fnum(c.dif)}</b>`)}<tr class="${c.estado === 'CUADRA' ? 'cf-ok' : 'cf-ko'}"><td>Estado del cuadre</td><td class="num"><b>${c.estado}</b></td></tr></tbody></table>`;
-    const info = `<div class="css-4760-t">EXTRACTO DE CUENTA CONTABLE · ${esc(e.nombre)} · ${esc(e.cif)}</div>
-      <p class="hint" style="margin:.2rem 0"><b>Cuenta contable:</b> <input class="emp-in" style="width:6.5rem" data-cta="pref" data-id="${k}" value="${esc(D.pref)}"> ${esc(D.subcuentas.join(', ') || 'sin movimientos')} · <b>Descripción:</b> ${esc(C.desc)} · <b>Ejercicio:</b> ${D.ej}
-      · <b>Periodo:</b> <select data-cta="ambito" data-id="${k}"><option value="todo"${D.ambito === 'todo' ? ' selected' : ''}>Todo el extracto</option><option value="ej"${D.ambito !== 'todo' ? ' selected' : ''}>Año completo ${D.ej}</option></select> · <b>Desde ${D.desde} hasta ${D.hasta}</b></p>`;
+      ${ctaVerTp ? `<td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td>` : ''}</tr>`).join('');
+    const nCom = c.comp || 0, nPen = c.pend || 0, nExc = c.exc || 0, cobPct = Math.round((c.cobertura || 0) * 1000) / 10, circ = 2 * Math.PI * 26, arco = Math.max(0, Math.min(1, c.cobertura || 0)) * circ;
+    const kp = (tit, val, col, extra = '') => `<div class="xc-k" style="border-top-color:${col}"><div class="xc-kt">${tit}</div><div class="xc-kv">${val}</div>${extra}</div>`;
+    const banner = `<div class="xc-cab"><div class="xc-glow"></div>
+      <div class="xc-ruta"><span class="xc-p">5. Cuentas contables</span><span class="xc-s">›</span><span class="xc-pa">Extracto · ${esc(D.pref)}</span><span class="xc-emp">${esc(e.nombre)} <span>· ${esc(e.cif)}</span></span></div>
+      <div class="xc-fila"><div class="xc-izq"><div class="xc-tit">Extracto de cuenta contable</div><div class="xc-sub">Formato auditoría · papel de trabajo: movimientos, saldo acumulado y controles de revisión</div>
+        <div class="xc-sel"><span class="xc-cta"><input class="xc-pref" data-cta="pref" data-id="${k}" value="${esc(D.pref)}" aria-label="Cuenta"${ed ? '' : ' disabled'}><span class="xc-desc">${esc(C.desc)}</span></span>
+          <span class="xc-p">Ejercicio <b>${D.ej}</b></span>
+          <span class="xc-p">Periodo <select data-cta="ambito" data-id="${k}"><option value="todo"${D.ambito === 'todo' ? ' selected' : ''}>Todo el extracto</option><option value="ej"${D.ambito !== 'todo' ? ' selected' : ''}>Año completo ${D.ej}</option></select></span>
+          <span class="xc-p">Saldo según balance <input class="xc-balin" type="text" inputmode="decimal" data-cta="balance" data-id="${k}-${D.ej}" value="${c.balance === null ? '' : fnum(c.balance)}" placeholder="-"${ed ? '' : ' disabled'}></span></div>
+        <div class="xc-per">Periodo del extracto: <b>${D.desde}</b> → <b>${D.hasta}</b> <span class="xc-sc">${esc(D.subcuentas.join(', ') || 'sin movimientos')}</span></div></div>
+        <div class="xc-rev"><svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Cobertura de la revisión ${cobPct} por ciento"><title>Cobertura de la revisión</title><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="#7be0b4" stroke-width="7" stroke-linecap="round" stroke-dasharray="${arco.toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">${cobPct} %</text></svg>
+          <div class="xc-rt"><b>Revisión</b><div>${nCom} de ${c.n} comprobadas</div><div>${nPen} pendientes</div><div>${nExc} con excepción</div></div></div></div>
+      <div class="xc-kg">${kp('Saldo inicial', z(c.saldoIni), '#98a2b3')}${kp('Total debe', `<span style="color:#1d4ed8">${z(c.tD)}</span>`, '#2f6df0')}${kp('Total haber', `<span style="color:#5b3fd0">${z(c.tH)}</span>`, '#7a5af8')}
+        ${kp('Saldo final calculado', `<span style="color:#17703a">${z(c.saldoFin)}</span>`, '#19b36b')}${kp('Frente al balance', `<span style="color:${c.estado === 'CUADRA' ? '#17703a' : '#a32b2b'}">${fnum(c.dif)}</span>`, c.estado === 'CUADRA' ? '#19b36b' : '#e0334c',
+          `<span class="xc-est ${c.estado === 'CUADRA' ? 'ok' : 'ko'}">${c.estado === 'CUADRA' ? 'Cuadra' : 'Revisar diferencia'}</span>`)}</div></div>`;
     // resumen por periodo
     const cols = C.cols, xc = (cc) => (cc[0] === 'f' || cc[1] === 'DA' ? ' xdif' : '');
     const celda = (cc, fila) => {
@@ -1645,12 +1652,13 @@ export function crearModulos(c) {
       <tbody>${cuerpo || `<tr><td colspan="${cols.length + 1}" class="vacio">Sin movimientos</td></tr>`}</tbody></table></div>`;
     const av = D.avisos.map((a) => `<p>⚠ ${esc(a)}</p>`).join('');
     return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel de la cuenta o de varias cuentas) o pulsa para elegirlo')}
-      <section class="prs-card"><div class="css-flex" style="padding-bottom:0">${control}</div><div style="padding:0 1rem">${info}</div></section>
+      ${banner}
       <section class="prs-card"><div class="css-flex"><div>
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
         <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
-        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}</div>
-        <div class="wrap" style="max-height:70vh;overflow:auto"><table class="tprs tnom"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th><th>Tipo</th><th>Periodo</th></tr></thead>
+        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}
+        <label class="xc-tog"><input type="checkbox" data-cta="vertp" data-id="x"${ctaVerTp ? ' checked' : ''}> Mostrar tipo y periodo</label></div>
+        <div class="wrap" style="max-height:70vh;overflow:auto"><table class="tprs tnom"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th>${ctaVerTp ? '<th>Tipo</th><th>Periodo</th>' : ''}</tr></thead>
         <tbody>${filas || '<tr><td colspan="9" class="vacio">Sin movimientos</td></tr>'}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
         <div>${resumen}</div></div></section>
