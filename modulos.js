@@ -2102,14 +2102,18 @@ export function crearModulos(c) {
     for (const f of files) {
       try {
         const ref = `${f.name}|${f.size}`;
-        if (vistos.has(ref) || archivosDe(archKind).some((r) => r.datos.ref === ref)) { informe.push(`↩ ${f.name}: repetido`); continue; }
+        const leible = ['emitidas', 'recibidas', 'sii', 'extractos'].includes(archKind); // estos se vuelven a leer aunque el archivo ya esté guardado (puede que la lectura anterior fallara)
+        const yaGuardado = archivosDe(archKind).some((r) => r.datos.ref === ref);
+        if (vistos.has(ref) || (yaGuardado && !leible)) { informe.push(`↩ ${f.name}: repetido`); continue; }
         vistos.add(ref);
-        const id = crypto.randomUUID();
-        const sub = await subir(S.sel, 'arch-' + archKind, id, 'archivo', f);
-        if (sub.error) throw new Error(sub.error);
-        const err = await guardarRegistro(null, { id, empresa_id: S.sel, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
-          datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
-        if (err) throw new Error(err);
+        if (!yaGuardado) {
+          const id = crypto.randomUUID();
+          const sub = await subir(S.sel, 'arch-' + archKind, id, 'archivo', f);
+          if (sub.error) throw new Error(sub.error);
+          const err = await guardarRegistro(null, { id, empresa_id: S.sel, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
+            datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
+          if (err) throw new Error(err);
+        }
         informe.push(['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, S.sel) : archKind === 'extractos' ? await ingestaMayor(f, S.sel) : `✔ ${f.name}`);
       } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
     }
