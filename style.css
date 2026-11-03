@@ -503,3 +503,11 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 /* cuentas: tamaño proporcional al ancho de la pantalla sin tope, y cabecera de la primera columna visible */
 .ctas, .xc-cab { font-size: max(12px, 1.05vw); }
 .ctas .css-flex .tnom th.pp, .ctas .css-flex .tnom thead th:first-child { background: #143a7b; color: #fff; position: sticky; top: 0; z-index: 4; text-align: center; font-weight: 600; }
+
+/* cabecera azul del extracto: más pequeña */
+.xc-cab { font-size: max(11px, 0.72vw); padding: 10px 16px 14px; }
+.xc-tit { font-size: 1.7em; }
+.xc-kv { font-size: 1.75em; }
+.xc-kg { margin-top: 10px; gap: 6px; }
+.xc-k { padding: 5px 10px 6px; }
+.xc-rev { flex: 0 0 15em; }
