@@ -319,3 +319,13 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .tprs th.ch small { display: block; font-weight: 400; color: #6b7ea8; font-size: .72rem; margin-top: .15rem; }
 .tprs td.pp, .tprs th.pp { position: static; min-width: 110px; }
 .tprs { width: auto; flex: none; }
+/* Presentados: los modelos de cada tarjeta caben en pantalla, sin barra de desplazamiento */
+.prs-row { overflow: visible; gap: .55rem; padding: .7rem .7rem; }
+.tprs { table-layout: fixed; min-width: 0; width: auto; }
+.tprs td.pp, .tprs th.pp { min-width: 0; width: 66px; padding-left: .45rem; padding-right: .2rem; font-size: .75rem; }
+.tprs th.ch { font-size: .7rem; padding: .35rem .2rem; max-width: none; overflow-wrap: anywhere; line-height: 1.15; }
+.tprs th.ch small { font-size: .64rem; }
+.tprs th.mh { font-size: .74rem; padding: .35rem .2rem; }
+.tprs td.in { padding: .15rem .1rem; }
+.tprs td.in input { min-width: 0; padding: .22rem .2rem; font-size: .74rem; }
+.tprs td.num { font-size: .74rem; padding: .2rem .35rem; white-space: nowrap; }
