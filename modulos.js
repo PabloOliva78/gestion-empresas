@@ -941,7 +941,7 @@ export function crearModulos(c) {
   // ---- Impuestos presentados: cuadrícula por modelo y periodo (importes presentados, editables; un registro «prs» por empresa y ejercicio) ----
   let prsVer = 'ej';
   const prsRegs = () => S.registros.filter((r) => r.tipo === 'prs' && r.empresa_id === S.sel);
-  const PRS = [
+  const PRS_VIEJO = [
     { t: 'Retenciones · 111, 115 y 123', tipo: 'per', ms: [['111', 'Modelo 111', [['retN', 'Nóminas (03+06)'], ['retP', 'Profesionales (09)']]], ['115', 'Modelo 115', [['ret', 'Retenciones (03)']]], ['123', 'Modelo 123', [['ret', 'Retenciones (09)']]]] },
     { t: 'IVA · 303, 349 e Intrastat', tipo: 'per', ms: [['303', 'Modelo 303', [['res', 'Resultado (71)']]], ['349', 'Modelo 349', [['imp', 'Importe (€)']]], ['INT', 'Intrastat', [['imp', 'Importe (€)']]]] },
     { t: 'Anuales · 180, 190, 193, 200 y 232', tipo: 'ano', ms: [['180', 'Modelo 180', [['perc', 'Percepciones (02)'], ['ret', 'Retenciones (03)']]], ['190', 'Modelo 190', [['perc', 'Percepciones (02)'], ['ret', 'Retenciones (03)']]],
@@ -966,7 +966,7 @@ export function crearModulos(c) {
   }
   const setPrsVer = (v) => { prsVer = v; render(); };
 
-  function vistaPrs() {
+  function vistaPrsViejo() {
     if (!S.sel) return sinEmpresa;
     const e = empresa(), ej = Number(S.ejercicio), ed = puede();
     const anios = prsVer === 'todo' ? [...new Set([...prsRegs().map((r) => r.ejercicio), ej])].sort((a, b) => b - a) : [ej];
@@ -987,6 +987,55 @@ export function crearModulos(c) {
     return `${dz('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '(uno o varios) o haz clic para elegirlos', '.pdf')}<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
       <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
       <p class="hint">Importes de las declaraciones presentadas. Se escriben a mano en cada celda (se guardan al salir) y alimentan la comprobación de las pestañas de retenciones y el cuadro de mando. La lectura automática de las casillas de los PDF está pendiente.</p>${listaPrsPdf()}${grupos}`;
+  }
+
+  // Columnas y casillas de cada modelo, como en la aplicación de impuestos: [clave, título, casilla]
+  const CAS = (c) => (/^\d+(\+\d+)?$/.test(c) || /^0\d{4}$/.test(c) ? `casilla ${c}` : /^[EASIC]$/.test(c) ? `clave ${c}` : '');
+  const PRS = [
+    { t: 'Retenciones · 111, 115 y 123', tipo: 'per', ms: [
+      ['111', [['base', 'Base Imponible', '02+05'], ['retN', 'Retenciones Nóminas', '03+06'], ['baseP', 'Bases Profesionales', '08'], ['retP', 'Retenciones Profesionales', '09']]],
+      ['115', [['base', 'Bases Alquileres', '02'], ['ret', 'Retenciones Alquileres', '03']]],
+      ['123', [['based', 'Base dividendos', '04'], ['retd', 'Retenciones dividendos', '07'], ['baser', 'Base resto de rentas', '05'], ['retr', 'Retenciones resto de rentas', '08'],
+        ['base', 'Base total', '06'], ['ret', 'Retenciones total', '09']]]] },
+    { t: 'IVA · 303, 349 e Intrastat', tipo: 'per', ms: [
+      ['303', [['res', 'Resultado IVA', '46'], ['adu', 'IVA Aduanas', '77'], ['comp', 'IVA Compensar', '110'], ['apl', 'Cuotas Compensar Aplicadas', '78'],
+        ['c87', 'Cuotas a compensar para periodos posteriores', '87'], ['liq', 'Resultado liquidación', '71']]],
+      ['349', [['imp', 'Importe operaciones', '02'], ['E', 'Entregas (clave E)', 'E'], ['A', 'Adquisiciones (clave A)', 'A'], ['S', 'Servicios prestados (clave S)', 'S'],
+        ['I', 'Servicios adquiridos (clave I)', 'I'], ['rect', 'Importe rectificaciones', '04']]],
+      ['INT', [['exp', 'Expediciones (distribuciones) · importe', 'EXP'], ['kgE', 'Expediciones · masa neta kg', 'KGE'], ['int', 'Introducciones (llegadas) · importe', 'INT'], ['kgI', 'Llegadas · masa neta kg', 'KGI']]]] },
+    { t: 'Anuales · 180, 190, 193, 200, 202 y 232', tipo: 'ano', ms: [
+      ['180', [['base', 'Bases Alquileres', '02'], ['ret', 'Retenciones Alquileres', '03']]],
+      ['190', [['base', 'Importe total de las percepciones relacionadas', '02'], ['retN', 'Importe total de las retenciones e ingresos a cuenta relacionados', '03']]],
+      ['193', [['base', 'Bases Intereses + dividendos', '02'], ['ret', 'Retenciones Intereses', '03']]],
+      ['200', [['cuota', 'Cuota Íntegra', '00562'], ['res', 'A devolver / A ingresar', '00621']]],
+      ['232', [['ing', 'Total ingresos (I)', 'ING'], ['pag', 'Total pagos (P)', 'PAG'], ['nreg', 'Nº registros', 'NREG']]],
+      ['202', [['res', 'A devolver / A ingresar', '34']], 'p202']] },
+    { t: 'Impuestos especiales · 583, 592 y A22', tipo: 'per', ms: [
+      ['583', [['base', 'Base imponible', ''], ['cuota', 'Cuota íntegra', ''], ['pagos', 'Pagos fraccionados anteriores', ''], ['res', 'A ingresar / A devolver', '']]],
+      ['592', [['kg', 'Cantidad kg (2)', '2'], ['base', 'Base imponible kg (3)', '3'], ['cuota', 'Cuota íntegra (5)', '5'], ['ded', 'Deducción (6)', '6'], ['res', 'Cuota íntegra total a ingresar (8)', '8']]],
+      ['A22', [['imp', 'Importe solicitado', 'IMP'], ['kgV', 'Kg no reciclado vendido', 'KGV'], ['qV', 'Unidades vendidas', 'QV'], ['sop', 'IIEE soportado en adquisiciones', 'SOP']]]] },
+  ];
+
+  function vistaPrs() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), ej = Number(S.ejercicio), ed = puede();
+    const anios = prsVer === 'todo' ? [...new Set([...prsRegs().map((r) => r.ejercicio), ej])].sort((a, b) => b - a) : [ej];
+    const per = (tipo) => (tipo === 'p202' ? [['1P', 'Abril (1P)'], ['2P', 'Octubre (2P)'], ['3P', 'Diciembre (3P)']]
+      : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((q) => [q, `${q} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m[0].toUpperCase() + m.slice(1)]));
+    const celda = (y, m, p, c) => { const v = prsVal(y, m, p, c); return ed ? `<td class="in"><input data-prs="${m}|${p}|${c}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`; };
+    const tablaM = (m, cols, tipo, y) => {
+      const filas = tipo === 'ano' ? anios.map((a) => [String(a), a, 'A']) : per(tipo).map(([p, l]) => [l, y, p]);
+      const cuerpo = filas.map(([l, yy, p]) => `<tr><td class="pp">${esc(l)}</td>${cols.map(([c]) => celda(yy, m, p, c)).join('')}</tr>`).join('');
+      const tot = tipo === 'ano' ? '' : `<tr class="ttot"><td class="pp">Total ${y}</td>${cols.map(([c]) => `<td class="num">${fnum(per(tipo).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')}</tr>`;
+      return `<table class="tprs"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">MODELO ${m}</th></tr>
+        <tr>${cols.map(([, l, c]) => `<th class="ch">${l}${CAS(c) ? `<small>${CAS(c)}</small>` : ''}</th>`).join('')}</tr></thead><tbody>${cuerpo}${tot}</tbody></table>`;
+    };
+    const fila = (g, y) => `<div class="prs-row">${g.ms.map(([m, cols, t]) => tablaM(m, cols, t ?? g.tipo, y)).join('')}</div>`;
+    const grupos = PRS.map((g) => `<section class="prs-card"><div class="prs-h">${g.t}</div>${g.tipo === 'ano' ? fila(g, ej)
+      : anios.map((y) => `${anios.length > 1 ? `<div class="prs-y">Ejercicio ${y}</div>` : ''}${fila(g, y)}`).join('')}</section>`).join('');
+    return `${dz('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '(uno o varios) o haz clic para elegirlos', '.pdf')}<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
+      <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
+      <p class="hint">Importes de las declaraciones presentadas, con las casillas de cada modelo. Se escriben a mano en cada celda (se guardan al salir). La lectura automática de las casillas de los PDF está pendiente.</p>${listaPrsPdf()}${grupos}`;
   }
 
   // ---- Bloque 1 · Retenciones Modelo 111 / 115 / 123: listado justificativo del periodo, desde el libro de recibidas ----

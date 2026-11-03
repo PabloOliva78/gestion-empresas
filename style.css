@@ -311,3 +311,11 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .tprs td.in input:hover { border-color: #cfd6e6; background: #fff; }
 .tprs td.in input:focus { outline: 0; border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 2px rgba(59, 130, 246, .2); }
 .tprs tr.ttot td { background: #eef2fb; font-weight: 700; border-top: 2px solid #cfd6e6; }
+/* Presentados: cada modelo en su tabla, cabecera gris con la casilla debajo del título */
+.prs-row { display: flex; gap: 1.4rem; align-items: flex-start; overflow-x: auto; padding: .9rem 1rem; }
+.tprs th, .tprs th.mh { background: #d9dce2; color: #1f3a7a; border-bottom: 0; border-left: 1px solid #c7ccd6; }
+.tprs th.mh { letter-spacing: .04em; }
+.tprs th.ch { vertical-align: top; max-width: 150px; line-height: 1.2; }
+.tprs th.ch small { display: block; font-weight: 400; color: #6b7ea8; font-size: .72rem; margin-top: .15rem; }
+.tprs td.pp, .tprs th.pp { position: static; min-width: 110px; }
+.tprs { width: auto; flex: none; }
