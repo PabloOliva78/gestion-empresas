@@ -471,6 +471,10 @@ export function casillasPDF(pags) {
           else vals.forEach((v) => { const c = cs.reduce((m, x) => (Math.abs(x.x - v.x) < Math.abs(m.x - v.x) ? x : m)); poner(c.str.trim(), v.str.trim()); });
         }
       }
+      // d) «01 3 02 338.917,83 03 64.394,36»: pares casilla–valor seguidos (resúmenes del 180, 190, 193)
+      const tk = its.map((x) => x.str.trim()).join(' ').split(/\s+/).filter(Boolean);
+      if (tk.length >= 4 && tk.length % 2 === 0 && tk.every((x, k) => (k % 2 === 0 ? /^\d{2,5}$/.test(x) : MONEY.test(x) || ENTERO.test(x)))
+        && tk.filter((_, k) => k % 2 === 0).every((x, k, a) => !k || +x > +a[k - 1])) for (let k = 0; k < tk.length; k += 2) poner(tk[k], tk[k + 1]);
       // b) línea con solo la casilla; la siguiente trae «etiqueta … importe»
       if (ss.length === 1 && /^\d{1,3}$/.test(ss[0]) && sig && sig.some((x) => /[A-Za-zÁ-ú]/.test(x.str))) {
         const u = sig[sig.length - 1].str.trim();
