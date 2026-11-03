@@ -501,16 +501,15 @@ export const MARGEN_SII = 0.10 + 1e-9;
 export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const r = rangoPeriodo(ej, periodo), emit = sentido === 'E';
   const clave = (fac, nif) => (emit ? normFac(fac) : `${normFac(fac)}|${normNif(nif)}`);
-  const fuera = emit ? new Set(libro.filter((l) => FACT_FUERA_E.includes(l.codigo)).map((l) => l.factura)) : new Set();
   // las retenciones (I.ALQ, R.I.ALQ, I.PR…) llevan la misma base que la factura y no son IVA: no se cuentan en emitidas (en recibidas ya están en EXC_RECIBIDAS)
-  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo)
+  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && l.codigo !== 'R.NAC.NS'
     : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const ls = sii.filter((s) => s.sentido === sentido && (emit ? s.fecha >= r.desde && s.fecha <= r.hasta : s.ej === ej && (!periodo || s.per === periodo)));
   const cont = new Map();
   for (const l of lc) {
     const k = clave(l.factura, l.nif);
     const o = cont.get(k) ?? { fac: l.factura, nif: l.nif, nom: l.nombre, base: 0, cuota: 0, cods: new Set(), esp: {}, txt: {}, sinRegla: false };
-    if (!fuera.has(l.factura)) { o.base = r2n(o.base + l.base); o.cuota = r2n(o.cuota + l.cuota); }
+    o.base = r2n(o.base + l.base); o.cuota = r2n(o.cuota + l.cuota);
     o.cods.add(String(l.codigo || '').trim().toUpperCase() || '(sin código)');
     const e = catEsperadaSii(sentido, l.codigo);
     if (e) { o.esp[e.k] = r2n((o.esp[e.k] || 0) + l.base); o.txt[e.k] = e.txt; } else o.sinRegla = true;
