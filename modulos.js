@@ -1026,10 +1026,10 @@ export function crearModulos(c) {
       : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((q) => [q, `${q} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m[0].toUpperCase() + m.slice(1)]));
     const celda = (y, m, p, c) => { const v = prsVal(y, m, p, c); return ed ? `<td class="in"><input data-prs="${m}|${p}|${c}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`; };
     const tablaM = (m, cols, tipo, y) => {
-      const filas = tipo === 'ano' ? anios.map((a) => [String(a), a, 'A']) : per(tipo, y).map(([p, l, yy]) => [l, yy ?? y, p]);
+      const filas = tipo === 'ano' ? anios.map((a) => [m === '200' ? `${a} · IS ${a - 1}` : String(a), a, 'A']) : per(tipo, y).map(([p, l, yy]) => [l, yy ?? y, p]);
       const cuerpo = filas.map(([l, yy, p]) => `<tr><td class="pp">${esc(l)}</td>${cols.map(([c]) => celda(yy, m, p, c)).join('')}</tr>`).join('');
       const tot = tipo === 'ano' || tipo === 'p583' ? '' : `<tr class="ttot"><td class="pp">Total ${y}</td>${cols.map(([c]) => `<td class="num">${fnum(per(tipo, y).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')}</tr>`;
-      return `<table class="tprs" style="flex:${cols.length + 1} 1 0"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">${m === 'INT' ? 'INTRASTAT' : `MODELO ${m}`}</th></tr>
+      return `<table class="tprs" style="flex:${cols.length + 1} 1 0"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">${m === 'INT' ? 'INTRASTAT' : m === '200' ? 'MODELO 200 · IS' : `MODELO ${m}`}</th></tr>
         <tr>${cols.map(([, l, c]) => `<th class="ch">${l}<small>${CAS(c)}</small></th>`).join('')}</tr></thead><tbody>${cuerpo}${tot}</tbody></table>`;
     };
     const fila = (g, y) => `<div class="prs-row">${g.ms.map(([m, cols, t]) => tablaM(m, cols, t ?? g.tipo, y)).join('')}</div>`;
@@ -1316,7 +1316,9 @@ export function crearModulos(c) {
         if (!e) { informe.push(`⚠ ${f.name}: elige la empresa`); continue; }
         const h = cabeceraPresentado(t);
         const modelo = h.modelo || (/\b(A22|\d{3})\b/.exec(f.name) || [])[1] || '';
-        const ej = h.ej || Number(S.ejercicio);
+        const ejDecl = h.ej || Number(S.ejercicio);
+        // el 200 (Impuesto sobre Sociedades) se presenta al año siguiente: se guarda en el año de presentación
+        const ej = modelo === '200' ? (Number((/(?:realizada el|presentada el d[ií]a):?\s*\d\d-\d\d-(20\d\d)/i.exec(t) || [])[1]) || ejDecl + 1) : ejDecl;
         let per = h.per;
         if (ANUALES.includes(modelo)) per = 'A';
         else if (!['583', '202', 'A22'].includes(modelo) && per) per = perEf(e, per);
