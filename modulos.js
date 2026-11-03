@@ -1013,7 +1013,7 @@ export function crearModulos(c) {
     { t: 'Impuestos especiales · 583, 592 y A22', tipo: 'per', ms: [
       ['583', [['base', 'Base imponible', ''], ['cuota', 'Cuota íntegra', ''], ['pagos', 'Pagos fraccionados anteriores', ''], ['res', 'A ingresar / A devolver', '']], 'p583'],
       ['592', [['kg', 'Cantidad kg (2)', '2'], ['base', 'Base imponible kg (3)', '3'], ['cuota', 'Cuota íntegra (5)', '5'], ['ded', 'Deducción (6)', '6'], ['res', 'Cuota íntegra total a ingresar (8)', '8']]],
-      ['A22', [['imp', 'Importe solicitado', 'IMP'], ['kgV', 'Kg no reciclado vendido', 'KGV'], ['qV', 'Unidades vendidas', 'QV'], ['sop', 'IIEE soportado en adquisiciones', 'SOP']]]] },
+      ['A22', [['imp', 'Importe solicitado', 'IMP'], ['kgV', 'Kg no reciclado vendido', 'KGV'], ['qV', 'Unidades vendidas', 'QV'], ['sop', 'IIEE soportado en adquisiciones', 'SOP']], 'pq']] },
   ];
 
   function vistaPrs() {
@@ -1021,6 +1021,7 @@ export function crearModulos(c) {
     const e = empresa(), ej = Number(S.ejercicio), ed = puede();
     const anios = prsVer === 'todo' ? [...new Set([...prsRegs().map((r) => r.ejercicio), ej])].sort((a, b) => b - a) : [ej];
     const per = (tipo, y) => (tipo === 'p202' ? [['1P', 'Abril (1P)'], ['2P', 'Octubre (2P)'], ['3P', 'Diciembre (3P)']]
+      : tipo === 'pq' ? ['1T', '2T', '3T', '4T'].map((q) => [q, `${q} trimestre`])
       : tipo === 'p583' ? [['3T', `3T ${y} · enero–septiembre`, y], ['0A', `Anual 0A ${y - 1} · enero–diciembre`, y - 1]]
       : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((q) => [q, `${q} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m[0].toUpperCase() + m.slice(1)]));
     const celda = (y, m, p, c) => { const v = prsVal(y, m, p, c); return ed ? `<td class="in"><input data-prs="${m}|${p}|${c}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`; };
@@ -1318,7 +1319,7 @@ export function crearModulos(c) {
         const ej = h.ej || Number(S.ejercicio);
         let per = h.per;
         if (ANUALES.includes(modelo)) per = 'A';
-        else if (!['583', '202'].includes(modelo) && per) per = perEf(e, per);
+        else if (!['583', '202', 'A22'].includes(modelo) && per) per = perEf(e, per);
         const val = valoresPresentado(modelo, casillasPDF(pags), t);
         const ref = `${f.name}|${f.size}`;
         let aviso = '';

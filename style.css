@@ -333,3 +333,9 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .prs-pdf > summary::-webkit-details-marker { display: none; }
 .prs-pdf > summary::before { content: '▸ '; }
 .prs-pdf[open] > summary::before { content: '▾ '; }
+
+/* cifras de impuestos presentados más grandes */
+.tprs td.in input, .tprs td.num { font-size: .9rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tprs td.in input { padding: .3rem .25rem; }
+.tprs td.pp, .tprs th.pp { font-size: .8rem; width: 72px; }
+.prs-row { overflow-x: auto; }
