@@ -499,3 +499,7 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom.mov th:nth-child(4), .ctas .css-flex .tnom.mov th:nth-child(5) { width: 7.6em; } .ctas .css-flex .tnom.mov th:nth-child(6) { width: 8em; } .ctas .css-flex .tnom.mov th:nth-child(7) { width: 6.6em; }
 .ctas .fc-cab { font-size: 1em; }
 .ctas .css-4760-t { font-size: 1.05em; }
+
+/* cuentas: tamaño proporcional al ancho de la pantalla sin tope, y cabecera de la primera columna visible */
+.ctas, .xc-cab { font-size: max(12px, 1.05vw); }
+.ctas .css-flex .tnom th.pp, .ctas .css-flex .tnom thead th:first-child { background: #143a7b; color: #fff; position: sticky; top: 0; z-index: 4; text-align: center; font-weight: 600; }
