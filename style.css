@@ -576,3 +576,9 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom td.cto, .ctas .css-flex .tnom td.in.cto { white-space: nowrap; }
 .ctas .css-flex .tnom.mov th:nth-child(8) { width: 2.4em; }
 .ctas .css-flex .tnom td button.small { padding: 0 .35em; font-size: .9em; }
+
+/* extracto y resumen: cabeceras con la misma altura exacta y fecha/asiento dentro de su columna */
+.ctas .css-flex .tnom thead th { height: 6.4em; font-size: .82em; line-height: 1.12; padding: .2em .15em; vertical-align: middle; box-sizing: border-box; }
+.ctas .css-flex .tnom.mov th:nth-child(1) { width: 6.6em; } .ctas .css-flex .tnom.mov th:nth-child(2) { width: 8em; }
+.ctas .css-flex .tnom.mov td:nth-child(1) input, .ctas .css-flex .tnom.mov td:nth-child(2) input { font-size: .9em; padding: .2em .1em; letter-spacing: -.01em; }
+.ctas .css-flex .tnom.mov td:nth-child(1), .ctas .css-flex .tnom.mov td:nth-child(2) { padding-left: 0; padding-right: 0; }
