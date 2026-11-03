@@ -519,3 +519,13 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom td, .ctas .css-flex .tnom td.num, .ctas .css-flex .tnom td.in input, .ctas .css-flex .tnom td select { font-size: 1em; }
 .ctas .css-flex .tnom th { font-size: .82em; }
 .ctas .css-4760-t { font-size: 1em; }
+
+/* cuentas: tamaño intermedio para que extracto y resumen quepan a la vez */
+.ctas .css-flex .tnom { font-size: max(11px, 0.74vw); }
+.ctas .css-flex .tnom.res th:not(.pp) { width: 6.8em; }
+.ctas .css-flex .tnom.res { width: calc(var(--ncol, 12) * 6.8em + 5.4em); }
+.ctas .css-flex .tnom td.pp, .ctas .css-flex .tnom th.pp { width: 5.4em; }
+.ctas .css-flex .tnom.mov th:nth-child(1) { width: 5.8em; } .ctas .css-flex .tnom.mov th:nth-child(2) { width: 7.4em; }
+.ctas .css-flex .tnom.mov th:nth-child(4), .ctas .css-flex .tnom.mov th:nth-child(5) { width: 6.8em; } .ctas .css-flex .tnom.mov th:nth-child(6) { width: 7em; } .ctas .css-flex .tnom.mov th:nth-child(7) { width: 5.6em; }
+.ctas .css-flex .tnom td.cto { white-space: normal; max-width: 17em; min-width: 12em; }
+.ctas .css-flex .tnom td { padding: .22em .4em; }
