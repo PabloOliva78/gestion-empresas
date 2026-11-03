@@ -267,9 +267,9 @@ export function crearModulos(c) {
   const tabs = {
     cmg: ['Cuadro de mando del grupo', 'Empresa × modelo × periodo', vistaCmg],
     it: ['Datos Identificativos Censales', 'Censo AEAT', () => vistaIT()],
-    r111: ['Retenciones Modelo 111', 'Nóminas y profesionales', L('r111')],
-    r115: ['Retenciones Modelo 115', 'Arrendamientos', L('r115')],
-    r123: ['Retenciones Modelo 123', 'Capital mobiliario', L('r123')],
+    r111: ['Retenciones Modelo 111', 'Nóminas y profesionales', () => vistaListadoRet('111')],
+    r115: ['Retenciones Modelo 115', 'Arrendamientos', () => vistaListadoRet('115')],
+    r123: ['Retenciones Modelo 123', 'Capital mobiliario', () => vistaListadoRet('123')],
     pres: ['Impuestos Presentados', 'Justificantes y PDF', L('pres')],
     liq: ['Liquidaciones Presentar', 'Todas las empresas', L('liq')],
     venc: ['Pagos Domiciliados Impuestos', 'Todas las empresas', L('venc')],
@@ -939,6 +939,80 @@ export function crearModulos(c) {
       <p class="hint">Borrador de trabajo. Las cuotas conservan el signo negativo del libro registro y en las casillas figuran en positivo. ${modelo === '111' ? 'La parte de nóminas (casillas 1 a 3) se introduce a mano hasta que se carguen las nóminas.' : ''}</p>`;
   }
 
+  // ---- Bloque 1 · Retenciones Modelo 111 / 115 / 123: listado justificativo del periodo, desde el libro de recibidas ----
+  const CLAVE_RET = (cod) => (/^I\.PR\./.test(cod) ? ['111', '111 · Actividades económicas'] : /^I\.NM/.test(cod) ? ['111T', '111 · Rendimientos del trabajo']
+    : /^I\.ALQ/.test(cod) ? ['115', '115 · Arrendamientos'] : /^I\.(INT|DV)/.test(cod) ? ['123', '123 · Capital mobiliario'] : null);
+  const trimDe = (mm) => `${Math.ceil(+mm / 3)}T`;
+  // gran empresa → por meses; pyme → por trimestres (el trimestre figura en su último mes)
+  const perEf = (e, per) => (e?.tipo === 'PYME' ? (/^\d\d$/.test(per) ? trimDe(per) : per) : (/^[1-4]T$/.test(per) ? String(+per[0] * 3).padStart(2, '0') : per));
+  function lineasListado(mod, R, ej, per) {
+    const r = rangoPeriodo(ej, per);
+    const claves = { 111: ['111', '111T'], 115: ['115'], 123: ['123'] }[mod];
+    return R.filter((l) => {
+      const k = CLAVE_RET(l.codigo);
+      return k && claves.includes(k[0]) && l.fecha >= r.desde && l.fecha <= r.hasta && (Math.abs(l.cuota) > 0.0049 || /^I\.DV\.E/.test(l.codigo)); // dividendos exentos se listan sin retención
+    }).map((l) => ({ f: l.fecha, fa: l.factura, ni: l.nif, no: l.nombre, b: l.base, re: -l.cuota + 0, t: l.base ? Math.round((-l.cuota / l.base) * 10000) / 100 : 0, k: CLAVE_RET(l.codigo) }))
+      .sort((a, b) => a.f.localeCompare(b.f));
+  }
+  // lo presentado: importes de «Impuestos Presentados» para ese modelo y periodo (null = sin presentar)
+  const presentadoRet = (mod, ej, per) => {
+    const fs = S.registros.filter((r) => r.tipo === 'pres' && r.empresa_id === S.sel && r.ejercicio === ej && r.datos.modelo === mod && r.datos.periodo === per);
+    return fs.length ? Math.round(fs.reduce((a, r) => a + (Number(r.datos.importe) || 0), 0) * 100) / 100 : null;
+  };
+  const nominasMan = (per0, per) => { const d = manDe('m111')?.datos ?? {}; return d[per] ?? d[per0] ?? {}; };
+
+  function vistaListadoRet(mod) {
+    if (!S.sel) return sinEmpresa;
+    const R = grande('fact-R');
+    if (!R) return cargandoTxt;
+    const e = empresa(), ej = Number(S.ejercicio), per0 = S.periodo || '01', per = perEf(e, per0);
+    const lis = lineasListado(mod, R, ej, per);
+    const mn = mod === '111' ? nominasMan(per0, per) : {};
+    const nom = (Number(mn.t2) || Number(mn.t3)) ? [{ s: Number(mn.t2) || 0, r: Number(mn.t3) || 0 }] : [];
+    const sumaL = (a, k) => Math.round(a.reduce((t, x) => t + x[k], 0) * 100) / 100;
+    const lT = lis.filter((x) => x.k[0] === '111T'), lP = lis.filter((x) => x.k[0] === '111');
+    const tN = Math.round((nom.reduce((a, n) => a + n.r, 0) + sumaL(lT, 're')) * 100) / 100, tP = sumaL(lP, 're');
+    const tR = Math.round((sumaL(lis, 're') + nom.reduce((a, n) => a + n.r, 0)) * 100) / 100;
+    const tB = Math.round((sumaL(lis, 'b') + nom.reduce((a, n) => a + n.s, 0)) * 100) / 100;
+    const f = (d) => d.split('-').reverse().join('/');
+    const ops = (e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((v) => [v, `${v} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), `${String(i + 1).padStart(2, '0')} ${m}`]))
+      .map(([v, t]) => `<option value="${v}"${v === per ? ' selected' : ''}>${t}</option>`).join('');
+    const barra = `<div class="fc-cab"><label>Empresa <select data-glob="sel">${S.empresas.map((x) => `<option value="${x.id}"${x.id === S.sel ? ' selected' : ''}>${esc(x.nombre)} (${x.tipo === 'PYME' ? 'trim.' : 'mens.'})</option>`).join('')}</select></label>
+      <label>Periodo <select data-glob="periodo">${ops}</select></label></div>
+      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS).</p>`;
+    const fl = (x, clave) => `<tr><td class="c">${f(x.f)}</td><td>${esc(x.fa)}</td><td>${esc(x.ni)}</td><td>${esc(x.no)}</td><td class="num">${fnum(x.b)}</td><td class="num">${x.t ? fnum(x.t) : ''}</td><td class="num">${fnum(x.re)}</td>${clave ? `<td>${esc(x.k[1])}</td>` : ''}</tr>`;
+    const th = (clave) => `<thead><tr><th>Fecha</th><th>Factura</th><th>NIF</th><th>Perceptor</th><th>Base</th><th>% ret.</th><th>Retención</th>${clave ? '<th>Clave</th>' : ''}</tr></thead>`;
+    const nomFila = (n) => `<tr><td class="c">${esc(per)}/${ej}</td><td colspan="3">Nóminas del periodo (devengado e IRPF)</td><td class="num">${fnum(n.s)}</td><td></td><td class="num">${fnum(n.r)}</td></tr>`;
+    let cuerpo;
+    if (!lis.length && !nom.length) cuerpo = '<p class="hint">Sin líneas de retención en el periodo.</p>';
+    else if (mod === '111') {
+      const bN = Math.round((nom.reduce((a, n) => a + n.s, 0) + sumaL(lT, 'b')) * 100) / 100, bP = sumaL(lP, 'b');
+      cuerpo = `<h4 class="cu-t">1. Rendimientos del trabajo · Nóminas (casillas 02-03 / 05-06)</h4>
+        ${nom.length || lT.length ? `<div class="wrap"><table class="tabla-cu">${th(false)}<tbody>${nom.map(nomFila).join('')}${lT.map((x) => fl(x, false)).join('')}
+          <tr class="tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num">${fnum(bN)}</td><td></td><td class="num">${fnum(tN)}</td></tr></tbody></table></div>` : '<p class="hint">Sin nóminas en el periodo (se introducen a mano en la pestaña del modelo 111, «Ajustes manuales»).</p>'}
+        <h4 class="cu-t">2. Actividades económicas · Profesionales (casillas 08-09)</h4>
+        ${lP.length ? `<div class="wrap"><table class="tabla-cu">${th(false)}<tbody>${lP.map((x) => fl(x, false)).join('')}
+          <tr class="tot"><td colspan="4">Subtotal profesionales (${lP.length} líneas)</td><td class="num">${fnum(bP)}</td><td></td><td class="num">${fnum(tP)}</td></tr></tbody></table></div>` : '<p class="hint">Sin profesionales en el periodo.</p>'}
+        <h4 class="cu-t">3. Resumen</h4>
+        <div class="wrap"><table class="tabla-cu"><thead><tr><th>Concepto</th><th>Base</th><th>Retención</th></tr></thead><tbody>
+          <tr><td>Nóminas / trabajo</td><td class="num">${fnum(bN)}</td><td class="num">${fnum(tN)}</td></tr><tr><td>Profesionales</td><td class="num">${fnum(bP)}</td><td class="num">${fnum(tP)}</td></tr>
+          <tr class="tot"><td>Total Modelo 111</td><td class="num">${fnum(Math.round((bN + bP) * 100) / 100)}</td><td class="num">${fnum(tR)}</td></tr></tbody></table></div>`;
+    } else {
+      cuerpo = `<div class="wrap"><table class="tabla-cu">${th(true)}<tbody>${lis.map((x) => fl(x, true)).join('')}
+        <tr class="tot"><td colspan="4">Total listado (${lis.length} líneas)</td><td class="num">${fnum(tB)}</td><td></td><td class="num">${fnum(tR)}</td><td></td></tr></tbody></table></div>`;
+    }
+    const P = presentadoRet(mod, ej, per);
+    const d = P === null ? null : Math.round((tR - P) * 100) / 100, ok = d !== null && Math.abs(d) <= 0.01;
+    const lbl = mod === '111' ? '<b>Total 111</b>' : `Retenciones (${mod === '115' ? '03' : '09'})`;
+    const comp = `<h4 class="cu-t">Comprobación con lo presentado</h4><div class="wrap"><table class="tabla-cu"><thead><tr><th>Casilla</th><th>Listado</th><th>Presentado</th><th>Diferencia</th><th>Estado</th></tr></thead><tbody>
+      <tr><td>${lbl}</td><td class="num">${fnum(tR)}</td><td class="num">${P === null ? '—' : fnum(P)}</td><td class="num"${d !== null && !ok ? ' style="color:#b00"' : ''}>${d === null ? '—' : fnum(d)}</td>
+        <td class="c"><b style="color:${P === null ? '#888' : ok ? '#070' : '#b00'}">${P === null ? 'Sin presentar' : ok ? 'Cuadra' : 'Descuadre'}</b></td></tr></tbody></table></div>
+      <p class="hint">Lo presentado sale de «Impuestos Presentados» (modelo ${mod}, periodo ${esc(per)}, importe del resultado).</p>`;
+    return `<h4 class="cu-t gr">Listado justificativo Mod. ${mod}</h4>${barra}
+      <div class="rl-cab"><b>${esc(e.nombre)}</b> · NIF ${esc(e.cif)} · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}<br>Modelo ${mod} · Periodo ${esc(per)}/${ej}${per !== per0 ? ' <small>(periodo de la empresa para el mes elegido)</small>' : ''}</div>
+      ${cuerpo}${comp}`;
+  }
+
   // Resúmenes anuales por perceptor: 180 (115), 193 (123) y 190 (111, actividades económicas)
   function vistaRetAnual(modelo) {
     if (!S.sel) return sinEmpresa;
@@ -1376,6 +1450,17 @@ export function crearModulos(c) {
     const man = regMan()?.datos ?? {};
     return { t: fnum(ps.reduce((a, p) => a + calcular303(l.E, l.R, Number(S.ejercicio), p, man[p] ?? {}, { rectif: rectif303 }).c71, 0)), c: 'amar' };
   };
+  ['111', '115', '123'].forEach((m) => {
+    badges['r' + m] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const R = peek('fact-R');
+      if (!R) return { t: '…' };
+      const per0 = S.periodo || '01', per = perEf(empresa(), per0);
+      const lis = lineasListado(m, R, Number(S.ejercicio), per);
+      const tot = lis.reduce((a, x) => a + x.re, 0) + (m === '111' ? Number(nominasMan(per0, per).t3) || 0 : 0);
+      return lis.length || tot ? { t: fnum(tot), c: 'amar' } : { t: 'Sin líneas' };
+    };
+  });
   badges.mod349 = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const l = libros();
