@@ -374,3 +374,5 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 .sel-btn span { font-size: .8rem; text-align: left; line-height: 1.2; white-space: normal; }
 .sel-op b { font-size: .85rem; }
+
+.tret select { font: inherit; padding: .15rem .3rem; border: 1px solid #cfd6e6; border-radius: 6px; background: #fff; }

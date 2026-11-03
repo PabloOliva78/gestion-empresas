@@ -1053,11 +1053,25 @@ export function crearModulos(c) {
   function lineasListado(mod, R, ej, per) {
     const r = rangoPeriodo(ej, per);
     const claves = { 111: ['111', '111T'], 115: ['115'], 123: ['123'] }[mod];
+    const ov = retOv(); // clave elegida a mano por línea (111T, 111, 115, 123 o «-» = no declarar)
+    const modelo = (l) => { const n = CLAVE_RET(l.codigo), o = ov[claveLinea(l)]; return { n, o, m: o && o !== '-' ? o : n?.[0] }; };
     return R.filter((l) => {
-      const k = CLAVE_RET(l.codigo);
-      return k && claves.includes(k[0]) && l.fecha >= r.desde && l.fecha <= r.hasta && (Math.abs(l.cuota) > 0.0049 || /^I\.DV\.E/.test(l.codigo)); // dividendos exentos se listan sin retención
-    }).map((l) => ({ f: l.fecha, fa: l.factura, ni: l.nif, no: l.nombre, b: l.base, re: -l.cuota + 0, t: l.base ? Math.round((-l.cuota / l.base) * 10000) / 100 : 0, k: CLAVE_RET(l.codigo) }))
+      const { n, m } = modelo(l);
+      return n && claves.includes(m) && l.fecha >= r.desde && l.fecha <= r.hasta && (Math.abs(l.cuota) > 0.0049 || /^I\.DV\.E/.test(l.codigo)); // dividendos exentos se listan sin retención
+    }).map((l) => { const { n, o } = modelo(l);
+      return { id: claveLinea(l), f: l.fecha, fa: l.factura, ni: l.nif, no: l.nombre, b: l.base, re: -l.cuota + 0, t: l.base ? Math.round((-l.cuota / l.base) * 10000) / 100 : 0, k: o ? [o, RET_MODELOS[o]] : n }; })
       .sort((a, b) => a.f.localeCompare(b.f));
+  }
+  const RET_MODELOS = { '111T': '111 · Rendimientos del trabajo', 111: '111 · Actividades económicas', 115: '115 · Arrendamientos', 123: '123 · Capital mobiliario', '-': 'No declarar' };
+  const retOv = () => S.registros.find((r) => r.tipo === 'retclave' && r.empresa_id === S.sel)?.datos ?? {};
+  const claveLinea = (l) => `${l.factura}|${l.nif}|${l.fecha}|${l.codigo}|${l.base}`;
+  async function guardarRetClave(id, v) {
+    const reg = S.registros.find((r) => r.tipo === 'retclave' && r.empresa_id === S.sel);
+    const datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+    if (v) datos[id] = v; else delete datos[id];
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'retclave', ejercicio: null, datos });
+    if (err) return void alert(err);
+    await cargar(); render();
   }
   // lo presentado: importes de «Impuestos Presentados» para ese modelo y periodo (null = sin presentar)
   const presentadoRet = (mod, ej, per) => {
@@ -1068,58 +1082,94 @@ export function crearModulos(c) {
   };
   const nominasMan = (per0, per) => { const d = manDe('m111')?.datos ?? {}; return d[per] ?? d[per0] ?? {}; };
 
+  // Listado justificativo de una empresa (la actual, S.sel). modo: 'pantalla' (una tabla con la clave editable) o 'imprimir' (111 por apartados)
+  function listadoRetHtml(mod, e, R, modo) {
+    const ej = Number(S.ejercicio), per0 = S.periodo || '01', per = perEf(e, per0), ed = modo === 'pantalla' && puede();
+    const todas = lineasListado(mod, R, ej, per), lis = todas.filter((x) => x.k[0] !== '-');
+    const mn = mod === '111' ? nominasMan(per0, per) : {};
+    const np = mod === '111' ? nomPer(ej, per) : null; // nóminas: cuadrante de la pestaña Nóminas (devengado + indemnizaciones, e IRPF)
+    const nom = np ? [{ ...np, cuad: true }] : (Number(mn.t2) || Number(mn.t3)) ? [{ s: Number(mn.t2) || 0, r: Number(mn.t3) || 0 }] : [];
+    const sumaL = (a, k) => rr(a.reduce((t, x) => t + x[k], 0));
+    const lT = lis.filter((x) => x.k[0] === '111T'), lP = lis.filter((x) => x.k[0] === '111');
+    const nR = rr(nom.reduce((a, n) => a + n.r, 0)), nS = rr(nom.reduce((a, n) => a + n.s, 0));
+    const tN = rr(nR + sumaL(lT, 're')), tP = sumaL(lP, 're'), tR = rr(sumaL(lis, 're') + nR), tB = rr(sumaL(lis, 'b') + nS);
+    const f = (d) => d.split('-').reverse().join('/');
+    const nomFila = (n, clave) => `<tr><td class="c">${esc(per)}/${ej}</td><td colspan="3">${n.cuad ? 'Nóminas del periodo (devengado e IRPF)' : 'Nóminas del periodo (ajustes manuales: devengado e IRPF)'}</td><td class="num n">${fnum(n.s)}</td><td></td><td class="num n">${fnum(n.r)}</td>${clave ? '<td>111 · Trabajo (nómina)</td>' : ''}</tr>`;
+    const sel = (x) => (ed ? `<select data-retclave="${esc(x.id)}">${Object.keys(RET_MODELOS).map((k) => `<option value="${k}"${x.k[0] === k ? ' selected' : ''}>${esc(RET_MODELOS[k])}</option>`).join('')}</select>` : esc(x.k[1] ?? RET_MODELOS[x.k[0]] ?? x.k[0]));
+    const fl = (x, clave) => `<tr${x.k[0] === '-' ? ' style="opacity:.55"' : ''}><td class="c">${f(x.f)}</td><td>${esc(x.fa)}</td><td>${esc(x.ni)}</td><td>${esc(x.no)}</td><td class="num n">${fnum(x.b)}</td><td class="num n">${x.t ? fnum(x.t) : ''}</td><td class="num n">${fnum(x.re)}</td>${clave ? `<td>${sel(x)}</td>` : ''}</tr>`;
+    const th = (clave) => `<thead><tr><th>Fecha</th><th>Factura</th><th>NIF</th><th>Perceptor</th><th>Base</th><th>% ret.</th><th>Retención</th>${clave ? '<th>Clave</th>' : ''}</tr></thead>`;
+    let tabla;
+    if (!todas.length && !nom.length) tabla = '<p class="hint">Sin líneas de retención en el periodo.</p>';
+    else if (mod === '111' && modo === 'imprimir') {
+      const bN = rr(nS + sumaL(lT, 'b')), bP = sumaL(lP, 'b');
+      tabla = `<h4>1. Rendimientos del trabajo · Nóminas (casillas 02-03 / 05-06)</h4>${nom.length || lT.length ? `<table>${th(false)}<tbody>${nom.map((n) => nomFila(n, false)).join('')}${lT.map((x) => fl(x, false)).join('')}
+        <tr class="total tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num n">${fnum(bN)}</td><td></td><td class="num n">${fnum(tN)}</td></tr></tbody></table>` : '<p class="hint">Sin nóminas en el periodo.</p>'}
+        <h4>2. Actividades económicas · Profesionales (casillas 08-09)</h4>${lP.length ? `<table>${th(false)}<tbody>${lP.map((x) => fl(x, false)).join('')}
+        <tr class="total tot"><td colspan="4">Subtotal profesionales (${lP.length} líneas)</td><td class="num n">${fnum(bP)}</td><td></td><td class="num n">${fnum(tP)}</td></tr></tbody></table>` : '<p class="hint">Sin profesionales en el periodo.</p>'}
+        <h4>3. Resumen</h4><table><thead><tr><th>Concepto</th><th>Base</th><th>Retención</th></tr></thead><tbody>
+        <tr><td>Nóminas / trabajo</td><td class="num n">${fnum(bN)}</td><td class="num n">${fnum(tN)}</td></tr><tr><td>Profesionales</td><td class="num n">${fnum(bP)}</td><td class="num n">${fnum(tP)}</td></tr>
+        <tr class="total tot"><td>Total Modelo 111</td><td class="num n">${fnum(rr(bN + bP))}</td><td class="num n">${fnum(tR)}</td></tr></tbody></table>`;
+    } else {
+      tabla = `<table class="tabla-cu tret">${th(true)}<tbody>${nom.map((n) => nomFila(n, true)).join('')}${todas.map((x) => fl(x, true)).join('')}
+        <tr class="total tot"><td colspan="4">Total listado (${lis.length + nom.length} líneas)</td><td class="num n">${fnum(tB)}</td><td></td><td class="num n">${fnum(tR)}</td><td></td></tr></tbody></table>`;
+      if (modo === 'pantalla') tabla = `<div class="wrap">${tabla}</div>`;
+    }
+    // lo presentado (Impuestos Presentados) frente al listado
+    const comp = (lbl, lisv, pr) => { const d = pr === null ? null : rr(lisv - pr), ok = d !== null && Math.abs(d) <= 0.01;
+      return `<tr><td>${lbl}</td><td class="num n">${fnum(lisv)}</td><td class="num n">${pr === null ? '—' : fnum(pr)}</td><td class="num n"${d !== null && !ok ? ' style="color:#b00"' : ''}>${d === null ? '—' : fnum(d)}</td>
+        <td class="c"><b style="color:${pr === null ? '#888' : ok ? '#070' : '#b00'}">${pr === null ? 'Sin presentar' : ok ? 'Cuadra' : 'Descuadre'}</b></td></tr>`; };
+    const P = presentadoRet(mod, ej, per), pN = prsVal(ej, '111', per, 'retN'), pP = prsVal(ej, '111', per, 'retP');
+    const filas = mod === '111'
+      ? comp('Nóminas / trabajo (03+06)', tN, pN === undefined ? null : Number(pN)) + comp('Profesionales (09)', tP, pP === undefined ? null : Number(pP)) + comp('<b>Total 111</b>', tR, P)
+      : comp(`Retenciones (${mod === '115' ? '03' : '09'})`, tR, P);
+    const cab = `<div class="rl-cab"><b>${esc(e.nombre)}</b> · NIF ${esc(e.cif)} · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}<br>Modelo ${mod} · Periodo ${esc(per)}/${ej}${per !== per0 ? ' <small>(periodo de la empresa para el mes elegido)</small>' : ''}</div>`;
+    return `${cab}${tabla}<h4 class="cu-t">Comprobación con lo presentado</h4><div class="wrap"><table class="tabla-cu tret"><thead><tr><th>Casilla</th><th>Listado</th><th>Presentado</th><th>Diferencia</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+  }
+
   function vistaListadoRet(mod) {
     if (!S.sel) return sinEmpresa;
     const R = grande('fact-R');
     if (!R) return cargandoTxt;
-    const e = empresa(), ej = Number(S.ejercicio), per0 = S.periodo || '01', per = perEf(e, per0);
-    const lis = lineasListado(mod, R, ej, per);
-    // nóminas del periodo: del cuadrante de la pestaña Nóminas (base = devengado + indemnizaciones, y retenciones); si no hay, lo escrito a mano en los ajustes del 111
-    const mn = mod === '111' ? nominasMan(per0, per) : {};
-    const np = mod === '111' ? nomPer(ej, per) : null;
-    const nom = np ? [{ ...np, cuad: true }] : (Number(mn.t2) || Number(mn.t3)) ? [{ s: Number(mn.t2) || 0, r: Number(mn.t3) || 0 }] : [];
-    const sumaL = (a, k) => Math.round(a.reduce((t, x) => t + x[k], 0) * 100) / 100;
-    const lT = lis.filter((x) => x.k[0] === '111T'), lP = lis.filter((x) => x.k[0] === '111');
-    const tN = Math.round((nom.reduce((a, n) => a + n.r, 0) + sumaL(lT, 're')) * 100) / 100, tP = sumaL(lP, 're');
-    const tR = Math.round((sumaL(lis, 're') + nom.reduce((a, n) => a + n.r, 0)) * 100) / 100;
-    const tB = Math.round((sumaL(lis, 'b') + nom.reduce((a, n) => a + n.s, 0)) * 100) / 100;
-    const f = (d) => d.split('-').reverse().join('/');
+    const e = empresa(), per0 = S.periodo || '01', per = perEf(e, per0);
     const ops = (e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((v) => [v, `${v} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), `${String(i + 1).padStart(2, '0')} ${m}`]))
       .map(([v, t]) => `<option value="${v}"${v === per ? ' selected' : ''}>${t}</option>`).join('');
     const barra = `<div class="fc-cab"><label>Empresa <select data-glob="sel">${S.empresas.map((x) => `<option value="${x.id}"${x.id === S.sel ? ' selected' : ''}>${esc(x.nombre)} (${x.tipo === 'PYME' ? 'trim.' : 'mens.'})</option>`).join('')}</select></label>
-      <label>Periodo <select data-glob="periodo">${ops}</select></label></div>
-      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS).</p>`;
-    const fl = (x, clave) => `<tr><td class="c">${f(x.f)}</td><td>${esc(x.fa)}</td><td>${esc(x.ni)}</td><td>${esc(x.no)}</td><td class="num">${fnum(x.b)}</td><td class="num">${x.t ? fnum(x.t) : ''}</td><td class="num">${fnum(x.re)}</td>${clave ? `<td>${esc(x.k[1])}</td>` : ''}</tr>`;
-    const th = (clave) => `<thead><tr><th>Fecha</th><th>Factura</th><th>NIF</th><th>Perceptor</th><th>Base</th><th>% ret.</th><th>Retención</th>${clave ? '<th>Clave</th>' : ''}</tr></thead>`;
-    const nomFila = (n) => `<tr><td class="c">${esc(per)}/${ej}</td><td colspan="3">${n.cuad ? 'Nóminas del periodo (pestaña Nóminas: devengado + indemnizaciones e IRPF)' : 'Nóminas del periodo (ajustes manuales: devengado e IRPF)'}</td><td class="num">${fnum(n.s)}</td><td></td><td class="num">${fnum(n.r)}</td></tr>`;
-    let cuerpo;
-    if (!lis.length && !nom.length) cuerpo = '<p class="hint">Sin líneas de retención en el periodo.</p>';
-    else if (mod === '111') {
-      const bN = Math.round((nom.reduce((a, n) => a + n.s, 0) + sumaL(lT, 'b')) * 100) / 100, bP = sumaL(lP, 'b');
-      cuerpo = `<h4 class="cu-t">1. Rendimientos del trabajo · Nóminas (casillas 02-03 / 05-06)</h4>
-        ${nom.length || lT.length ? `<div class="wrap"><table class="tabla-cu">${th(false)}<tbody>${nom.map(nomFila).join('')}${lT.map((x) => fl(x, false)).join('')}
-          <tr class="tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num">${fnum(bN)}</td><td></td><td class="num">${fnum(tN)}</td></tr></tbody></table></div>` : '<p class="hint">Sin nóminas en el periodo: rellénalas en 9.- Nóminas (o a mano en los «Ajustes manuales» del modelo 111).</p>'}
-        <h4 class="cu-t">2. Actividades económicas · Profesionales (casillas 08-09)</h4>
-        ${lP.length ? `<div class="wrap"><table class="tabla-cu">${th(false)}<tbody>${lP.map((x) => fl(x, false)).join('')}
-          <tr class="tot"><td colspan="4">Subtotal profesionales (${lP.length} líneas)</td><td class="num">${fnum(bP)}</td><td></td><td class="num">${fnum(tP)}</td></tr></tbody></table></div>` : '<p class="hint">Sin profesionales en el periodo.</p>'}
-        <h4 class="cu-t">3. Resumen</h4>
-        <div class="wrap"><table class="tabla-cu"><thead><tr><th>Concepto</th><th>Base</th><th>Retención</th></tr></thead><tbody>
-          <tr><td>Nóminas / trabajo</td><td class="num">${fnum(bN)}</td><td class="num">${fnum(tN)}</td></tr><tr><td>Profesionales</td><td class="num">${fnum(bP)}</td><td class="num">${fnum(tP)}</td></tr>
-          <tr class="tot"><td>Total Modelo 111</td><td class="num">${fnum(Math.round((bN + bP) * 100) / 100)}</td><td class="num">${fnum(tR)}</td></tr></tbody></table></div>`;
-    } else {
-      cuerpo = `<div class="wrap"><table class="tabla-cu">${th(true)}<tbody>${lis.map((x) => fl(x, true)).join('')}
-        <tr class="tot"><td colspan="4">Total listado (${lis.length} líneas)</td><td class="num">${fnum(tB)}</td><td></td><td class="num">${fnum(tR)}</td><td></td></tr></tbody></table></div>`;
-    }
-    const P = presentadoRet(mod, ej, per);
-    const d = P === null ? null : Math.round((tR - P) * 100) / 100, ok = d !== null && Math.abs(d) <= 0.01;
-    const lbl = mod === '111' ? '<b>Total 111</b>' : `Retenciones (${mod === '115' ? '03' : '09'})`;
-    const comp = `<h4 class="cu-t">Comprobación con lo presentado</h4><div class="wrap"><table class="tabla-cu"><thead><tr><th>Casilla</th><th>Listado</th><th>Presentado</th><th>Diferencia</th><th>Estado</th></tr></thead><tbody>
-      <tr><td>${lbl}</td><td class="num">${fnum(tR)}</td><td class="num">${P === null ? '—' : fnum(P)}</td><td class="num"${d !== null && !ok ? ' style="color:#b00"' : ''}>${d === null ? '—' : fnum(d)}</td>
-        <td class="c"><b style="color:${P === null ? '#888' : ok ? '#070' : '#b00'}">${P === null ? 'Sin presentar' : ok ? 'Cuadra' : 'Descuadre'}</b></td></tr></tbody></table></div>
-      <p class="hint">Lo presentado sale de «Impuestos Presentados» (modelo ${mod}, periodo ${esc(per)}, importe del resultado).</p>`;
-    return `<h4 class="cu-t gr">Listado justificativo Mod. ${mod}</h4>${barra}
-      <div class="rl-cab"><b>${esc(e.nombre)}</b> · NIF ${esc(e.cif)} · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}<br>Modelo ${mod} · Periodo ${esc(per)}/${ej}${per !== per0 ? ' <small>(periodo de la empresa para el mes elegido)</small>' : ''}</div>
-      ${cuerpo}${comp}`;
+      <label>Periodo <select data-glob="periodo">${ops}</select></label>
+      <button data-act="m-retprint" data-m="${mod}">Imprimir PDF Mod. ${mod} · todas las empresas</button><button data-act="m-retprint" data-m="todos">Imprimir PDF 111+115+123 · todas las empresas</button></div>
+      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS). En la impresión cada empresa va en un folio vertical (gran empresa por el mes, pyme por su trimestre). Cambia la clave de una línea para pasarla a otro modelo o dejarla sin declarar.</p>`;
+    return `<h4 class="cu-t gr">Listado justificativo Mod. ${mod}</h4>${barra}${listadoRetHtml(mod, e, R, 'pantalla')}`;
+  }
+
+  // Libro de recibidas de cualquier empresa (en memoria si ya se pidió)
+  async function datosR(empresaId) {
+    const k = `fact-R|${empresaId}`;
+    if (Array.isArray(GR.get(k))) return GR.get(k);
+    const { data } = await db.from('registros').select('datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').maybeSingle();
+    GR.set(k, data?.datos?.filas ?? []);
+    return GR.get(k);
+  }
+  // PDF con una hoja vertical por empresa (el periodo elegido; trimestre en las pymes)
+  async function imprimirRet(mod) {
+    const w = window.open('', '_blank');
+    if (!w) return void alert('Permite las ventanas emergentes para imprimir');
+    w.document.write('<p style="font:14px system-ui">Preparando el listado de todas las empresas…</p>');
+    const mods = mod === 'todos' ? ['111', '115', '123'] : [mod], sel0 = S.sel, per0 = S.periodo || '01';
+    const pags = [];
+    try {
+      for (const e of S.empresas) {
+        const R = await datosR(e.id);
+        S.sel = e.id;
+        pags.push(`<div class="pag">${mods.map((m) => listadoRetHtml(m, e, R, 'imprimir')).join('<div style="height:14px"></div>')}</div>`);
+      }
+    } finally { S.sel = sel0; }
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Retenciones ${mod === 'todos' ? '111-115-123' : `Mod. ${mod}`} - ${per0}-${S.ejercicio}</title>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600&display=swap"><style>
+      @page{size:A4 portrait;margin:10mm} body{font:10.5pt 'Bricolage Grotesque',Arial,sans-serif;color:#000} .pag+.pag{break-before:page;page-break-before:always} tr{break-inside:avoid} h4{break-after:avoid;font-size:11.5pt;margin:10px 0 4px}
+      .rl-cab{font-size:13pt;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px} table{width:100%;border-collapse:collapse;margin-bottom:6px}
+      th,td{border:1px solid #999;padding:3px 5px;font-size:10pt} th{background:#eee} td.n{text-align:right;white-space:nowrap} td.c{text-align:center} tr.total td{font-weight:bold;background:#f4f4f4} .hint{color:#555}
+      select{border:0;background:none;font:inherit;appearance:none}</style></head><body>${pags.join('')}<script>onload=()=>setTimeout(()=>print(),400)<\/script></body></html>`);
+    w.document.close();
   }
 
   // Resúmenes anuales por perceptor: 180 (115), 193 (123) y 190 (111, actividades económicas)
@@ -1652,6 +1702,7 @@ export function crearModulos(c) {
       'm-man303': () => formMan303(),
       'm-fc': () => opFc(d.s, d.op, d.k),
       'm-manret': () => formManRet(d.m),
+      'm-retprint': () => imprimirRet(d.m),
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
@@ -1746,7 +1797,7 @@ export function crearModulos(c) {
       const R = peek('fact-R');
       if (!R) return { t: '…' };
       const per0 = S.periodo || '01', per = perEf(empresa(), per0);
-      const lis = lineasListado(m, R, Number(S.ejercicio), per);
+      const lis = lineasListado(m, R, Number(S.ejercicio), per).filter((x) => x.k[0] !== '-');
       const tot = lis.reduce((a, x) => a + x.re, 0) + (m === '111' ? (nomPer(Number(S.ejercicio), per)?.r ?? (Number(nominasMan(per0, per).t3) || 0)) : 0);
       return lis.length || tot ? { t: fnum(tot), c: 'amar' } : { t: 'Sin líneas' };
     };
@@ -1781,5 +1832,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }
