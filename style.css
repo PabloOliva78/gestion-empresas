@@ -458,3 +458,13 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas td.cto { overflow: visible; text-overflow: clip; max-width: none; white-space: nowrap; }
 .ctas table.res th:not(.pp) { width: 7.2rem; font-size: .72rem; }
 .ctas table.res { width: calc(var(--ncol, 12) * 7.2rem + 5rem); }
+
+/* cuentas: cifras y letras más grandes */
+.ctas td, .ctas td.num, .ctas td.in input { font-size: .95rem; }
+.ctas th { font-size: .85rem; }
+.ctas td { padding: .3rem .5rem; }
+.ctas table.res th:not(.pp) { width: 8rem; font-size: .84rem; }
+.ctas table.res { width: calc(var(--ncol, 12) * 8rem + 5.5rem); }
+.ctas table.res th.pp, .ctas table.res td.pp { width: 5.5rem; font-size: .9rem; }
+.ctas table.mov th:nth-child(1) { width: 6rem; } .ctas table.mov th:nth-child(2) { width: 7rem; }
+.ctas table.mov th:nth-child(4), .ctas table.mov th:nth-child(5) { width: 7rem; } .ctas table.mov th:nth-child(6) { width: 7.4rem; } .ctas table.mov th:nth-child(7) { width: 6rem; }
