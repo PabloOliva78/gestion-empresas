@@ -339,3 +339,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .tprs td.in input { padding: .3rem .25rem; }
 .tprs td.pp, .tprs th.pp { font-size: .8rem; width: 72px; }
 .prs-row { overflow-x: auto; }
+
+.tprs th.ch, .tprs th.mh, .tprs td.pp, .tprs th.pp { font-size: .9rem; }
+.tprs th.ch small { font-size: .78rem; }
+.tprs td.pp, .tprs th.pp { width: 96px; font-weight: 600; }

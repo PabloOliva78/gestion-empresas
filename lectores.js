@@ -496,7 +496,26 @@ export function valoresPresentado(modelo, cas, texto = '') {
   else if (modelo === '193') { pon('base', g(2)); pon('ret', g(3)); }
   else if (modelo === '123') { pon('based', g(4)); pon('baser', g(5)); pon('base', g(6)); pon('retd', g(7)); pon('retr', g(8)); pon('ret', g(9)); }
   else if (modelo === '303') { pon('res', g(46)); pon('adu', g(77)); pon('comp', g(110)); pon('apl', g(78)); pon('c87', g(87) ?? (n[110] !== undefined ? r2n(n[110] - (n[78] ?? 0)) : undefined)); pon('liq', g(71)); }
-  else if (modelo === '349') { pon('imp', g(2)); pon('rect', g(4)); }
+  else if (modelo === '349') {
+    pon('imp', g(2)); pon('rect', g(4) ?? (n[2] !== undefined ? 0 : undefined));
+    // hojas interiores: cada «Operador N» trae la clave (E, A, S, I…) y la base imponible; se suman por clave (sin las hojas de rectificaciones)
+    const i0 = lineas.findIndex((l) => /^Operador 1$/.test(l));
+    const iR = lineas.findIndex((l, i) => i > i0 && /rectificaci[oó]n|rectificada/i.test(l) && !/^Operador/.test(l));
+    const blq = []; let cur = null;
+    for (const l of lineas.slice(i0 < 0 ? lineas.length : i0, iR < 0 ? lineas.length : iR)) {
+      if (/^Operador \d+$/.test(l)) { cur = []; blq.push(cur); continue; }
+      if (cur && !/Código país|A cumplimentar|Datos del operador|^---/.test(l)) cur.push(l);
+    }
+    const sum = { E: 0, A: 0, S: 0, I: 0 }; let hay = false;
+    for (const b of blq) {
+      const txt = b.join(' ');
+      const m = [...txt.matchAll(new RegExp(MON, 'g'))].pop();
+      const c = (/(?:^|\s)([EASI])\s+-?\d{1,3}(?:\.\d{3})*,\d{2}(?:\s|$)/.exec(txt) || b.map((x) => /^([EASI])$/.exec(x)).find(Boolean)
+        || b.map((x) => /^[A-Z]{2}\s+([EASI])$/.exec(x)).find(Boolean) || [...txt.matchAll(/(?:^|\s)([EASI])(?=\s|$)/g)].pop() || [])[1];
+      if (m && c) { sum[c] += num(m[1]); hay = true; }
+    }
+    if (hay) for (const c of 'EASI') pon(c, r2n(sum[c]));
+  }
   else if (modelo === '200') { pon('cuota', g(562)); pon('res', g(621)); }
   else if (modelo === '202') { pon('res', g(34) ?? g(3)); }
   else if (modelo === 'INT') {
