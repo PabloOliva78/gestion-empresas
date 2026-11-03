@@ -485,3 +485,17 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .xc-ruta, .xc-p, .xc-sub, .xc-per, .xc-rt, .xc-desc, .xc-kt, .xc-balin, .xc-est, .xc-tog, .xc-p select { font-size: 1em; }
 .xc-tit { font-size: 2em; }
 .xc-kv { font-size: 2.3em; }
+
+/* cuentas: tamaño base que sigue a la pantalla (más grande) y reglas con prioridad sobre las de la conciliación de la SS */
+.ctas { font-size: clamp(12px, 1.02vw, 24px); }
+.xc-cab { font-size: clamp(12px, 1.02vw, 24px); }
+.ctas .css-flex .tnom td, .ctas .css-flex .tnom td.num, .ctas .css-flex .tnom td.in input, .ctas .css-flex .tnom td select { font-size: 1em; white-space: nowrap; padding: .28em .5em; }
+.ctas .css-flex .tnom th { font-size: .86em; white-space: normal; overflow-wrap: normal; word-break: normal; line-height: 1.2; padding: .4em .3em; }
+.ctas .css-flex .tnom td.pp, .ctas .css-flex .tnom th.pp { width: 6em; min-width: 0; font-size: .95em; }
+.ctas .css-flex .tnom.res th:not(.pp) { width: 9em; }
+.ctas .css-flex .tnom.res { width: calc(var(--ncol, 12) * 9em + 6em); table-layout: fixed; }
+.ctas .css-flex .tnom.mov { table-layout: auto; width: max-content; }
+.ctas .css-flex .tnom.mov th:nth-child(1) { width: 6.6em; } .ctas .css-flex .tnom.mov th:nth-child(2) { width: 8em; } .ctas .css-flex .tnom.mov th:nth-child(3) { width: auto; }
+.ctas .css-flex .tnom.mov th:nth-child(4), .ctas .css-flex .tnom.mov th:nth-child(5) { width: 7.6em; } .ctas .css-flex .tnom.mov th:nth-child(6) { width: 8em; } .ctas .css-flex .tnom.mov th:nth-child(7) { width: 6.6em; }
+.ctas .fc-cab { font-size: 1em; }
+.ctas .css-4760-t { font-size: 1.05em; }

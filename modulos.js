@@ -1612,7 +1612,7 @@ export function crearModulos(c) {
     const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}"><td class="c">${fdate(x.l.ms)}</td><td>${esc(x.l.asiento)}</td><td title="${esc(x.l.desc)}" class="cto">${esc(x.l.desc)}</td>
       <td class="num">${x.l.debe ? fnum(x.l.debe) : ''}</td><td class="num">${x.l.haber ? fnum(x.l.haber) : ''}</td><td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
       <td class="c">${ed ? `<select data-cta="comp" data-id="${esc(x.l.firma)}"><option value=""></option><option${x.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${x.comp === 'No' ? ' selected' : ''}>No</option></select>` : esc(x.comp)}</td>
-      ${ctaVerTp ? `<td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td>` : ''}</tr>`).join('');
+      ${false ? `<td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td>` : ''}</tr>`).join('');
     const nCom = c.comp || 0, nPen = c.pend || 0, nExc = c.exc || 0, cobPct = Math.round((c.cobertura || 0) * 1000) / 10, circ = 2 * Math.PI * 26, arco = Math.max(0, Math.min(1, c.cobertura || 0)) * circ;
     const kp = (tit, val, col, extra = '') => `<div class="xc-k" style="border-top-color:${col}"><div class="xc-kt">${tit}</div><div class="xc-kv">${val}</div>${extra}</div>`;
     const banner = `<div class="xc-cab"><div class="xc-glow"></div>
@@ -1656,9 +1656,8 @@ export function crearModulos(c) {
       <section class="prs-card ctas"><div class="css-flex"><div class="mov-wrap">
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
         <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
-        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}
-        <label class="xc-tog"><input type="checkbox" data-cta="vertp" data-id="x"${ctaVerTp ? ' checked' : ''}> Mostrar tipo y periodo</label></div>
-        <div class="wrap"><table class="tprs tnom mov${ctaVerTp ? ' vtp' : ''}"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th>${ctaVerTp ? '<th>Tipo</th><th>Periodo</th>' : ''}</tr></thead>
+        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}</div>
+        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th></tr></thead>
         <tbody>${filas || '<tr><td colspan="9" class="vacio">Sin movimientos</td></tr>'}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
         <div class="res-wrap">${resumen}</div></div></section>
