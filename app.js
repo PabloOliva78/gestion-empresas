@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=49';
+import { crearModulos } from './modulos.js?v=50';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -257,7 +257,46 @@ function render() {
       <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   alinearPanel();
+  restaurarFoco();
 }
+
+// Celdas de importes editables: el foco sobrevive a los redibujados y se navega con flechas, Intro y tabulador
+let focoCelda = null;
+const ATTR_CELDA = ['data-prs', 'data-nom'];
+function restaurarFoco() {
+  if (!focoCelda || (document.activeElement && document.activeElement !== document.body)) return;
+  const i = root.querySelector(`input[${focoCelda.a}="${focoCelda.v}"]`);
+  if (i) { i.focus({ preventScroll: true }); i.select?.(); }
+}
+root.addEventListener('focusin', (ev) => {
+  const i = ev.target;
+  const a = i?.matches?.('td.in input') ? ATTR_CELDA.find((x) => i.hasAttribute(x)) : null;
+  focoCelda = a ? { a, v: i.getAttribute(a) } : null;
+});
+function celdaVecina(inp, dr, dc) {
+  const td = inp.closest('td'), tr = td.parentElement, filas = [...tr.parentElement.rows];
+  let r = filas.indexOf(tr), c = td.cellIndex;
+  for (;;) {
+    if (dr) r += dr; else c += dc;
+    const f = filas[r];
+    if (!f || c < 0 || c >= f.cells.length) return null;
+    const x = f.cells[c].querySelector('input');
+    if (x) return x;
+  }
+}
+root.addEventListener('keydown', (ev) => {
+  const i = ev.target;
+  if (!i?.matches?.('td.in input') || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+  const k = ev.key;
+  let dest = null;
+  if (k === 'ArrowDown' || (k === 'Enter' && !ev.shiftKey)) dest = celdaVecina(i, 1, 0);
+  else if (k === 'ArrowUp' || (k === 'Enter' && ev.shiftKey)) dest = celdaVecina(i, -1, 0);
+  else if (k === 'ArrowRight' && i.selectionStart === i.value.length) dest = celdaVecina(i, 0, 1);
+  else if (k === 'ArrowLeft' && i.selectionEnd === 0) dest = celdaVecina(i, 0, -1);
+  else return;
+  ev.preventDefault();
+  if (dest) { dest.focus(); dest.select?.(); }
+});
 
 function refrescarTabs() {
   const w = root.querySelector('.tabs-wrap');
