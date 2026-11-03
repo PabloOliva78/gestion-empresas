@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=47';
+import { crearModulos } from './modulos.js?v=48';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -27,14 +27,20 @@ const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? '—';
 const logoHtml = (e, cls = 'logo') => (e?.cif
   ? `<img class="${cls}" src="logos/${esc(e.cif)}.jpg?v=6" alt="" onerror="this.style.visibility='hidden'">` : `<span class="${cls}"></span>`);
 
+// Orden y nombre con que se muestran las empresas en el desplegable (se reconocen por el nombre guardado)
+const ORDEN_EMP = [['HEROGRA FERTILIZANTES S.A.', /herogra\s+fertiliz/i], ['HEROGRA ESPECIALES', /herogra\s+especiales/i], ['HISPALENSE DE LIQUIDOS S.L', /hispalense/i],
+  ['MAXLOGTRANS S.L.', /maxlogtrans/i], ['LYS DEL SUR S.L.', /lys\s*del\s*sur|lysur/i], ['GESUFER S.L.', /gesufer|gesti[oó]n unificada/i], ['FERTINOVA S.L.', /fertinova/i],
+  ['PRODUFER S.L.', /produfer/i], ['FERTICRONOS S.L.', /ferticronos/i], ['TECNOPLUS SOLUBLES S.L.', /tecnoplus/i], ['BISAR AGROINNOVATION S.L.', /bisar/i],
+  ['MOTRILEÑA DE LIQUIDOS S.L.', /motrile/i], ['FARM CHEMICALS FGA S.L.', /farm\s*chemicals/i], ['PASEO DE CENES S.L.', /paseo\s*(de\s*)?cenes/i]];
+const idxEmp = (e) => ORDEN_EMP.findIndex(([, re]) => re.test(e?.nombre ?? ''));
+const etiquetaEmp = (e) => { const i = idxEmp(e); return i < 0 ? e.nombre : `${i + 1}.- ${ORDEN_EMP[i][0]}`; };
+
 function empresaSelector() {
   const e = S.empresas.find((x) => x.id === S.sel);
-  const item = (x) => `<button class="sel-op${x?.id === S.sel || (!x && !S.sel) ? ' on' : ''}" data-sel="${x ? x.id : ''}">
-    ${x ? logoHtml(x) : '<span class="logo"></span>'}<span><b>${esc(x ? (x.siglas || x.nombre) : 'Todas las empresas')}</b>
-    ${x ? `<small>${esc(x.nombre)}</small>` : ''}</span></button>`;
-  return `<div class="sel"><button class="sel-btn" data-act="menu">${e ? logoHtml(e) : ''}
-    <span>${esc(e ? (e.siglas || e.nombre) : 'Todas las empresas')}</span> ▾</button>
-    ${S.menu ? `<div class="sel-menu">${item(null)}${S.empresas.map(item).join('')}</div>` : ''}</div>`;
+  const lista = [...S.empresas].sort((a, b) => (idxEmp(a) < 0 ? 99 : idxEmp(a)) - (idxEmp(b) < 0 ? 99 : idxEmp(b)));
+  const item = (x) => `<button class="sel-op${x?.id === S.sel || (!x && !S.sel) ? ' on' : ''}" data-sel="${x ? x.id : ''}"><span><b>${esc(x ? etiquetaEmp(x) : 'Todas las empresas')}</b></span></button>`;
+  return `<div class="sel"><button class="sel-btn" data-act="menu"><span>${esc(e ? etiquetaEmp(e) : 'Todas las empresas')}</span> ▾</button>
+    ${S.menu ? `<div class="sel-menu">${item(null)}${lista.map(item).join('')}</div>` : ''}</div>`;
 }
 
 const opts = (obj, sel) => Object.entries(obj)

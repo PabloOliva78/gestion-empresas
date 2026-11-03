@@ -371,3 +371,6 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .tnom tr.cf-ok td { background: #e7f7e7 !important; }
 .tnom tr.cf-ko td { background: #fde8e8 !important; }
 .tnom td.vacio { color: #999; text-align: center; }
+
+.sel-btn span { font-size: .8rem; text-align: left; line-height: 1.2; white-space: normal; }
+.sel-op b { font-size: .85rem; }
