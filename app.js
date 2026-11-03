@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=74';
+import { crearModulos } from './modulos.js?v=75';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -258,10 +258,10 @@ function render() {
 
 // Celdas de importes editables: el foco sobrevive a los redibujados y se navega con flechas, Intro y tabulador
 let focoCelda = null;
-const ATTR_CELDA = ['data-prs', 'data-nom'];
+const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id'];
 function restaurarFoco() {
   if (!focoCelda || (document.activeElement && document.activeElement !== document.body)) return;
-  const i = root.querySelector(`input[${focoCelda.a}="${focoCelda.v}"]`);
+  const i = [...root.querySelectorAll(`input[${focoCelda.a}]`)].find((x) => x.getAttribute(focoCelda.a) === focoCelda.v);
   if (i) { i.focus({ preventScroll: true }); i.select?.(); }
 }
 root.addEventListener('focusin', (ev) => {

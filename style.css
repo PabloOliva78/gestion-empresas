@@ -560,3 +560,19 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom td.cto { white-space: normal; max-width: none; min-width: 0; }
 .ctas .css-flex .tnom td.in input { padding: .15em .2em; }
 .ctas .css-flex .tnom thead th { height: 5em; overflow: hidden; font-size: .9em; padding: .2em .15em; line-height: 1.15; }
+
+/* extracto editable: celdas como cajas transparentes, concepto en una línea, línea nueva resaltada */
+.ctas .css-flex .tnom { font-size: max(8.5px, 0.56vw); }
+.ctas .mov-wrap { flex: 0 0 44%; }
+.ctas .css-flex .tnom td.in { padding: 0 .1em; }
+.ctas .css-flex .tnom td.in input { width: 100%; box-sizing: border-box; border: 1px solid transparent; background: transparent; font: inherit; padding: .2em .25em; color: inherit; }
+.ctas .css-flex .tnom td.in input:hover { border-color: #cfd6e6; background: #fff; }
+.ctas .css-flex .tnom td.in input:focus { outline: 0; border-color: #3b82f6; background: #fff; }
+.ctas .css-flex .tnom td.in.num input { text-align: right; }
+.ctas .css-flex .tnom td.in.c input { text-align: center; }
+.ctas .css-flex .tnom td.in.tl input { text-align: left; }
+.ctas .css-flex .tnom td.in input.ed { background: #fff7c2; }
+.ctas .css-flex .tnom tr.nueva td { background: #fffbdd; }
+.ctas .css-flex .tnom td.cto, .ctas .css-flex .tnom td.in.cto { white-space: nowrap; }
+.ctas .css-flex .tnom.mov th:nth-child(8) { width: 2.4em; }
+.ctas .css-flex .tnom td button.small { padding: 0 .35em; font-size: .9em; }

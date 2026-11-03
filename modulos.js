@@ -1495,12 +1495,26 @@ export function crearModulos(c) {
     if (tipo === 'comp') return guardarCta((d) => setIn(d, 'comp', a, valor));
     if (tipo === 'clase') return guardarCta((d) => setIn(d, 'clases', id, valor));
     if (tipo === 'compvis') return guardarCta((d) => { (ctaVis ?? []).forEach((f) => setIn(d, 'comp', f, 'Sí')); });
+    if (tipo === 'ov') {
+      const v = b === 'fecha' ? fIsoCta(valor) : b === 'debe' || b === 'haber' ? (valor.trim() === '' ? 0 : parseES(valor)) : valor.trim();
+      if (b === 'fecha' && !v) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.');
+      return guardarCta((d) => { if (a.startsWith('m:')) { const l = (d.lineas ?? []).find((x) => `m:${x.id}` === a); if (l) l[b] = v; } else ((d.ov ??= {})[a] ??= {})[b] = v; });
+    }
+    if (tipo === 'quit') return guardarCta((d) => { if (id.startsWith('m:')) d.lineas = (d.lineas ?? []).filter((x) => `m:${x.id}` !== id); else (d.quit ??= {})[id] = 1; });
+    if (tipo === 'nv') { ctaNueva = { ...(ctaNueva ?? {}), [id]: valor }; return undefined; }
     if (tipo === 'vertp') { ctaVerTp = valor === '1'; return render(); }
     if (tipo === 'filtro') { ctaFil.comp = valor; ctaMas = 300; return render(); }
     if (tipo === 'buscar') { ctaFil.q = valor; ctaMas = 300; return render(); }
     return undefined;
   }
-  let ctaFil = { comp: 'todos', q: '' }, ctaMas = 300, ctaVis = [], ctaVerTp = false; // las columnas Tipo y Periodo van ocultas hasta que se pidan
+  let ctaFil = { comp: 'todos', q: '' }, ctaMas = 300, ctaVis = [], ctaVerTp = false, ctaNueva = null, ctaUlt = { fecha: '', cuenta: '' }; // las columnas Tipo y Periodo van ocultas hasta que se pidan
+  const fIsoCta = (s) => { const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(String(s).trim()); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : /^\d{4}-\d{2}-\d{2}$/.test(String(s).trim()) ? String(s).trim() : ''; };
+  function ctaNvOk() {
+    const N = ctaNueva ?? {}, f = fIsoCta(N.fecha ?? ''), cuenta = (N.cuenta ?? '').trim(), debe = parseES(N.debe), haber = parseES(N.haber);
+    if (!f || !cuenta || (!debe && !haber)) return void alert('Rellena la fecha (dd/mm/aaaa), la cuenta y un importe en debe o en haber.');
+    ctaNueva = null;
+    return guardarCta((d) => { (d.lineas ??= []).push({ id: crypto.randomUUID(), fecha: f, cuenta, asiento: (N.asiento ?? '').trim(), desc: (N.desc ?? '').trim(), debe, haber }); });
+  }
   const ctaPref = (k) => ctaCfg().pref?.[k] || ctaDe(k).cta;
 
   // periodos
@@ -1526,7 +1540,10 @@ export function crearModulos(c) {
   function calcCuenta(k, M) {
     const C = ctaDe(k), e = empresa(), cfg = ctaCfg(), ej = Number(S.ejercicio), pref = ctaPref(k), sigla = e?.siglas ?? '';
     const firma = (l) => [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
-    const todos = M.filter((l) => casaCta(pref, l.digitos)).map((l) => ({ ...l, ms: Date.parse(l.fecha), firma: firma(l) }))
+    const quit = cfg.quit ?? {}, ovs = cfg.ov ?? {};
+    const originales = M.map((l) => ({ ...l, firma: firma(l) })).filter((l) => !quit[l.firma]).map((l) => { const o = ovs[l.firma]; return o ? { ...l, ...o, digitos: l.digitos, editado: Object.keys(o) } : l; });
+    const manuales = (cfg.lineas ?? []).map((l) => ({ fecha: l.fecha, cuenta: l.cuenta, digitos: String(l.cuenta).replace(/\D/g, ''), debe: +l.debe || 0, haber: +l.haber || 0, asiento: l.asiento || '', desc: l.desc || '', firma: `m:${l.id}`, manual: true }));
+    const todos = [...originales, ...manuales].filter((l) => casaCta(pref, l.digitos)).map((l) => ({ ...l, ms: Date.parse(l.fecha) }))
       .sort((a, b) => a.ms - b.ms || String(a.asiento).localeCompare(String(b.asiento)));
     todos.forEach((l) => { l._tipo = cfg.clases?.[`${k}§${l.firma}`] ?? C.tipo(String(l.asiento || '').trim().toUpperCase(), !!l.debe, !!l.haber, sigla); });
     const ambito = cfg.ambito?.[k] || 'todo';
@@ -1609,10 +1626,16 @@ export function crearModulos(c) {
     ctaVis = movs.map((x) => x.l.firma);
     const opts = (t) => C.codes.map((cc) => `<option value="${cc}"${t === cc ? ' selected' : ''}>${esc(cc === 'S' ? sigla : cc)}</option>`).join('');
     const vis = movs.slice(0, ctaMas);
-    const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}"><td class="c">${fdate(x.l.ms)}</td><td>${esc(x.l.asiento)}</td><td title="${esc(x.l.desc)}" class="cto">${esc(x.l.desc)}</td>
-      <td class="num">${x.l.debe ? fnum(x.l.debe) : ''}</td><td class="num">${x.l.haber ? fnum(x.l.haber) : ''}</td><td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
+    ctaUlt = { fecha: movs.length ? fdate(movs[movs.length - 1].l.ms) : fdate(Date.now()), cuenta: D.subcuentas[0] || D.pref };
+    // cada campo del extracto es editable (se guarda como corrección sobre el apunte original); los apuntes a mano también
+    const cel = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input class="${(x.l.editado ?? []).includes(campo) ? 'ed' : ''}" data-cta="ov" data-id="${esc(x.l.firma)}§${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
+    const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}${x.l.manual ? ' manual' : ''}">${cel(x, 'fecha', fdate(x.l.ms), 'c')}${cel(x, 'asiento', x.l.asiento, 'tl')}${cel(x, 'desc', x.l.desc, 'tl cto')}
+      ${cel(x, 'debe', x.l.debe ? fnum(x.l.debe) : '', 'num')}${cel(x, 'haber', x.l.haber ? fnum(x.l.haber) : '', 'num')}<td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
       <td class="c">${ed ? `<select data-cta="comp" data-id="${esc(x.l.firma)}"><option value=""></option><option${x.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${x.comp === 'No' ? ' selected' : ''}>No</option></select>` : esc(x.comp)}</td>
-      ${false ? `<td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td>` : ''}</tr>`).join('');
+      <td class="c">${ed ? `<button class="small" data-act="m-ctaquit" data-id="${esc(x.l.firma)}" title="Quitar este apunte de la cuenta${x.l.manual ? ' (línea a mano)' : ''}">✖</button>` : ''}</td></tr>`).join('');
+    const nv = ctaNueva ? (() => { const ni = (c, ph, cls = '') => `<td class="in ${cls}"><input data-cta="nv" data-id="${c}" value="${esc(ctaNueva[c] ?? '')}" placeholder="${ph}"></td>`;
+      return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}${ni('asiento', 'asiento', 'tl')}<td class="in tl cto"><input data-cta="nv" data-id="desc" value="${esc(ctaNueva.desc ?? '')}" placeholder="concepto"></td>${ni('debe', 'debe', 'num')}${ni('haber', 'haber', 'num')}${ni('cuenta', 'cuenta', 'tl')}
+        <td class="c" colspan="2"><button class="small" data-act="m-ctanvok">Registrar</button> <button class="small" data-act="m-ctanvx">Cancelar</button></td></tr>`; })() : '';
     const nCom = c.comp || 0, nPen = c.pend || 0, nExc = c.exc || 0, cobPct = Math.round((c.cobertura || 0) * 1000) / 10, circ = 2 * Math.PI * 26, arco = Math.max(0, Math.min(1, c.cobertura || 0)) * circ;
     const kp = (tit, val, col, extra = '') => `<div class="xc-k" style="border-top-color:${col}"><div class="xc-kt">${tit}</div><div class="xc-kv">${val}</div>${extra}</div>`;
     const banner = `<div class="xc-cab"><div class="xc-glow"></div>
@@ -1656,9 +1679,9 @@ export function crearModulos(c) {
       <section class="prs-card ctas"><div class="css-flex"><div class="mov-wrap">
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
         <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
-        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}</div>
-        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th></tr></thead>
-        <tbody>${filas || '<tr><td colspan="9" class="vacio">Sin movimientos</td></tr>'}</tbody></table></div>
+        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button> <button class="small" data-act="m-ctanv">＋ Añadir línea</button>` : ''}</div>
+        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th><th></th></tr></thead>
+        <tbody>${filas || '<tr><td colspan="8" class="vacio">Sin movimientos</td></tr>'}${nv}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
         <div class="res-wrap">${resumen}</div></div></section>
       ${av ? `<div class="aviso">${av}</div>` : ''}`;
@@ -2158,6 +2181,10 @@ export function crearModulos(c) {
       'm-fundaedel': () => quitarFundae(d.y),
       'm-ctavis': () => accionCta('compvis', '', ''),
       'm-ctamas': () => { ctaMas += 300; render(); },
+      'm-ctaquit': () => accionCta('quit', d.id, ''),
+      'm-ctanv': () => { ctaNueva = { fecha: ctaUlt.fecha, cuenta: ctaUlt.cuenta, asiento: '', desc: '', debe: '', haber: '' }; render(); },
+      'm-ctanvok': () => ctaNvOk(),
+      'm-ctanvx': () => { ctaNueva = null; render(); },
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
