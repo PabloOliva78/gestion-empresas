@@ -376,3 +376,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .sel-op b { font-size: .85rem; }
 
 .tret select { font: inherit; padding: .15rem .3rem; border: 1px solid #cfd6e6; border-radius: 6px; background: #fff; }
+
+.emp-in { width: 5.5rem; padding: .25rem .4rem; border: 1px solid #cfd6e6; border-radius: 6px; font: inherit; }
+td select[data-empf] { font: inherit; padding: .25rem .4rem; border: 1px solid #cfd6e6; border-radius: 999px; background: #fff; }
+td .emp-in[data-empf$='banco'] { width: 9rem; }

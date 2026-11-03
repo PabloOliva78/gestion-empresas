@@ -285,6 +285,52 @@ export function leerLibroIVA(filas) {
   return out.length ? out : null;
 }
 
+// ---------- Business Central (Fertinova): un solo libro de movimientos de IVA con ventas y compras ----------
+// Se reparte en repercutido (Venta, Venta Autorepercutida) y soportado (Compra, Compra Autorepercutida); el código de impuestos es la columna
+// «Conversion D365» y, si el archivo no la trae, se calcula con la tabla de equivalencias.
+const EQ_BC = [["NAC", "IRPF.ALQ", "Compra", "I.ALQ"], ["NAC", "IRPF.INT", "Compra", "I.INT"], ["NAC", "IRPF.PROF", "Compra", "I.PR.GN"], ["NAC", "I.PR.PA", "Compra", "I.PR.PRA"], ["NAC", "I.PR.SR", "Compra", "I.PR.SR"],
+  ["NAC", "BI21", "Compra", "IN.NR"], ["NAC", "BI10", "Compra", "IN.RD"], ["EXPORT.", "EXENTO", "Venta", "R.EX"], ["NAC", "ISP21", "Venta Autorepercutida", "R.ISP.NR"], ["NAC", "ISP10", "Venta Autorepercutida", "R.ISP.RD"],
+  ["NAC", "NO SUJETO", "Venta", "R.NAC.NS"], ["NAC", "EXENTO", "Venta", "R.NC.EX"], ["NAC", "IVA21", "Venta", "R.NC.NR"], ["NAC", "S21", "Venta", "R.NC.NR.SR"], ["NAC", "IVA10", "Venta", "R.NC.RD"], ["NAC", "S10", "Venta", "R.NC.RD.SR"],
+  ["NAC", "IVA4", "Venta", "R.NC.SR"], ["NAC", "S4", "Venta", "R.NC.SR.SR"], ["NACIONAL RE", "IVA21", "Venta", "R.RC.NR"], ["NACIONAL RE", "IVA10", "Venta", "R.RC.RD"], ["NACIONAL RE", "IVA4", "Venta", "R.RC.SR"],
+  ["UE", "IVA21", "Venta Autorepercutida", "R.UE.NR"], ["UE", "S21", "Venta Autorepercutida", "R.UE.NR.SR"], ["UE", "IVA10", "Venta Autorepercutida", "R.UE.RD"], ["UE", "S10", "Venta Autorepercutida", "R.UE.RD.SR"],
+  ["UE", "IVA4", "Venta Autorepercutida", "R.UE.SR"], ["EXPORT.", "IVA21", "Compra", "S.EX.NR"], ["EXPORT.", "S21", "Compra", "S.EX.NR.SR"], ["EXPORT.", "IVA10", "Compra", "S.EX.RD"],
+  ["NAC", "ISP21", "Compra Autorepercutida", "S.ISP.NR"], ["NAC", "ISP10", "Compra Autorepercutida", "S.ISP.RD"], ["NAC", "IVA21", "Compra", "S.NC.NR"], ["NAC", "S21", "Compra", "S.NC.NR.SR"], ["NAC", "IVA10", "Compra", "S.NC.RD"],
+  ["NAC", "S10", "Compra", "S.NC.RD.SR"], ["NAC", "IVA5", "Compra", "S.NC.RDN"], ["NAC", "IVA4", "Compra", "S.NC.SR"], ["UE", "IVA21", "Compra Autorepercutida", "S.UE.NR"], ["UE", "S21", "Compra Autorepercutida", "S.UE.NR.SR"],
+  ["UE", "IVA10", "Compra Autorepercutida", "S.UE.RD"], ["UE", "S10", "Compra Autorepercutida", "S.UE.RD.SR"], ["UE", "IVA4", "Compra Autorepercutida", "S.UE.SR"], ["NAC", "IMPORT", "Compra", "DUA"],
+  ["UE", "IVA21", "Venta", "R.UE"], ["UE", "S21", "Venta", "R.UE.S"], ["NAC", "EXENTO", "Compra", "S.NC.EX"], ["NAC", "NO SUJETO", "Compra", "S.NAC.NS"]];
+const EQ_BC_MAP = new Map(EQ_BC.map(([n, p, t, d]) => [[n, p, t].map((x) => x.toUpperCase().trim()).join('|'), d]));
+export function leerLibroBC(filas) {
+  const h = filas.findIndex((f) => { if (!f) return false; const H = Array.from(f, sinTildes); return H.includes('grupo contable iva negocio') && H.includes('tipo') && H.includes('base imponible'); });
+  if (h < 0) return null;
+  const H = Array.from(filas[h], (x) => sinTildes(x).replace(/[º°]/g, '').replace(/[^a-z0-9%]+/g, ' ').trim()), c = (n) => H.indexOf(n);
+  const I = { neg: c('grupo contable iva negocio'), prod: c('grupo contable iva prod'), fiva: c('fecha de iva'), freg: c('fecha registro'), doc: c('n documento'), tipo: c('tipo'), base: c('base imponible'),
+    piva: c('% iva'), cuota: c('cuota impuesto'), calc: c('tipo calculo iva'), nif: c('cif nif'), fac: c('factura'), nom: c('nombre'), conv: c('conversion d365'), fdoc: c('fecha documento'),
+    bs: c('base imponible signo'), cs: c('cuota impuesto signo'), auto: c('% autorepercutido') };
+  const vacio = (v) => v === null || v === undefined || v === '';
+  const out = [];
+  for (const r of filas.slice(h + 1)) {
+    if (!r) continue;
+    const tipo = String(r[I.tipo] ?? '').trim();
+    if (!tipo) continue;
+    const venta = /^venta/i.test(tipo), sg = venta ? -1 : 1;
+    const bRaw = numero(r[I.base]), qRaw = numero(r[I.cuota]);
+    let pAuto = I.auto >= 0 ? numero(r[I.auto]) : 0;
+    if (I.auto < 0 && /cargo revertido/i.test(String(r[I.calc] ?? '')) && venta && !qRaw) { const m = String(r[I.prod] ?? '').match(/(\d+)\s*$/); if (m) pAuto = +m[1] / 100; }
+    const base = I.bs >= 0 && !vacio(r[I.bs]) ? numero(r[I.bs]) : r2n(sg * bRaw);
+    const cuota = I.cs >= 0 && !vacio(r[I.cs]) ? numero(r[I.cs]) : r2n(sg * (pAuto > 0 ? bRaw * pAuto : qRaw));
+    let codigo = I.conv >= 0 ? String(r[I.conv] ?? '').trim() : (EQ_BC_MAP.get([r[I.neg], r[I.prod], tipo].map((x) => String(x ?? '').toUpperCase().trim()).join('|')) || '');
+    if (/^sin datos$/i.test(codigo) || !codigo) codigo = 'SIN.DATOS';
+    let pct = numero(r[I.piva]);
+    if (/^I\./i.test(codigo) && pct > 0) pct = -pct; // retenciones: en D365 el tipo va en negativo
+    const fecha = fechaIso(r[I.fiva]) || fechaIso(r[I.freg]);
+    const factura = String((I.fac >= 0 && r[I.fac]) || r[I.doc] || '').trim();
+    if (!factura) continue;
+    out.push({ asiento: '', factura, fecha, ff: fechaIso(r[I.fdoc]) || fecha, nif: String(r[I.nif] ?? '').trim().toUpperCase(), nombre: String(r[I.nom] ?? '').trim(),
+      base, pct, cuota, codigo, sentido: venta ? 'E' : 'R' });
+  }
+  return out.length ? out : null;
+}
+
 // Consulta de facturas del SII (Sede AEAT). Total base/cuota = suma de los desgloses, igual que las columnas «TOTAL … DECLARADA (SII)» del Excel
 export function leerSII(filas) {
   // la fila de cabecera tiene a la vez «Nº Serie + Nº Factura», «Ejercicio» y «Periodo» (el cuadro de filtros de arriba solo trae el primero)

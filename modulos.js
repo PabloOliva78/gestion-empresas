@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=33';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=34';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -416,14 +416,15 @@ export function crearModulos(c) {
       const n = await guardarGrande('sii-' + s, empresaId, sii, (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`);
       return `✔ ${f.name}: SII ${s === 'E' ? 'emitidas' : 'recibidas'} · ${sii.length} facturas leídas (${n} en total)`;
     }
-    const lib = leerLibroIVA(filas);
+    const bc = leerLibroBC(filas); // Business Central (Fertinova): un solo libro con ventas y compras
+    const lib = bc ?? leerLibroIVA(filas);
     if (lib) {
       const partes = [];
       for (const s of ['E', 'R']) {
         const x = lib.filter((l) => l.sentido === s);
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
       }
-      return `✔ ${f.name}: libro de IVA · ${partes.join(' y ')}`;
+      return `✔ ${f.name}: libro de IVA${bc ? ' (Business Central)' : ''} · ${partes.join(' y ')}`;
     }
     return `❔ ${f.name}: guardado, pero no reconozco el formato (libro de IVA del ERP o consulta del SII)`;
   }

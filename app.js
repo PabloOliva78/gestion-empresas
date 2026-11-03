@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=55';
+import { crearModulos } from './modulos.js?v=56';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -365,14 +365,32 @@ function vistaObligaciones({ area = '' } = {}) {
       : '<p class="vacio">No hay obligaciones que mostrar.</p>'}`;
 }
 
+// Programa contable de cada empresa: D365 salvo Fertinova (Business Central, un solo libro de IVA con ventas y compras)
+const PROGRAMAS = { D365: 'D365', BC: 'Business Central' };
+const programaDe = (e) => e?.datos?.programa || (/fertinova/i.test(e?.nombre ?? '') ? 'BC' : 'D365');
+async function guardarEmpCampo(clave, valor) {
+  const [id, campo] = clave.split('|');
+  const e = S.empresas.find((x) => x.id === id);
+  if (!e) return;
+  const cambio = campo === 'siglas' ? { siglas: nul(valor.trim().toUpperCase()) } : campo === 'tipo' ? { tipo: nul(valor) }
+    : { datos: { ...(e.datos ?? {}), [campo]: valor.trim() } };
+  const { error } = await db.from('empresas').update(cambio).eq('id', id);
+  if (error) return void alert(error.message);
+  await cargar(); render();
+}
 function vistaEmpresas() {
-  const filas = S.empresas.map((e) => `<tr><td><div class="emp">${logoHtml(e)}${esc(e.nombre)}</div></td><td>${esc(e.cif)}</td><td>${esc(e.siglas)}</td><td>${esc(e.tipo)}</td><td>${esc(e.notas)}</td>
-    <td class="acciones">${puedeEditar() ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}
-    ${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}">Borrar</button>` : ''}</td></tr>`).join('');
+  const ed = puedeEditar();
+  const cel = (e, campo, v, ph = '') => (ed ? `<input class="emp-in" data-empf="${e.id}|${campo}" value="${esc(v ?? '')}" placeholder="${ph}">` : esc(v ?? ''));
+  const sel = (e, campo, ops, v) => (ed ? `<select data-empf="${e.id}|${campo}">${Object.entries(ops).map(([k, t]) => `<option value="${k}"${k === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : esc(ops[v] ?? v ?? ''));
+  const TIPOS = { '': '—', GE: 'Gran empresa (mensual)', PYME: 'Pyme (trimestral)' };
+  const filas = [...S.empresas].sort((a, b) => (idxEmp(a) < 0 ? 99 : idxEmp(a)) - (idxEmp(b) < 0 ? 99 : idxEmp(b))).map((e) => `<tr><td><div class="emp">${logoHtml(e)}${esc(etiquetaEmp(e))}</div></td><td>${esc(e.cif)}</td>
+    <td>${cel(e, 'siglas', e.siglas, 'Sigla')}</td><td>${sel(e, 'tipo', TIPOS, e.tipo ?? '')}</td><td>${sel(e, 'programa', PROGRAMAS, programaDe(e))}</td><td>${cel(e, 'banco', e.datos?.banco, 'Banco')}</td>
+    <td class="acciones">${ed ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}" title="Borrar">✕</button>` : ''}</td></tr>`).join('');
   return `<div class="bar"><span class="space"></span>
-    ${puedeEditar() ? '<button class="primary" data-act="new-emp">Nueva empresa</button>' : ''}</div>
-    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>CIF</th><th>Siglas</th><th>Tipo</th><th>Notas</th><th></th></tr></thead>
-      <tbody>${filas}</tbody></table></div>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
+    ${ed ? '<button class="primary" data-act="new-emp">Nueva empresa</button>' : ''}</div>
+    ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>NIF</th><th>Sigla</th><th>Tipo</th><th>Programa</th><th>Banco</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>
+      <p class="hint">La sigla es la que usan los asientos de liquidación (HER, ESP…). Programa contable: D365, y Business Central en Fertinova (su libro de IVA trae ventas y compras en un solo archivo y se reparte solo al cargarlo en Facturas emitidas o recibidas).</p>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
 }
 
 function vistaUsuarios() {
@@ -699,6 +717,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
   if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
+  if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);
   if (t.dataset.retclave) return void M.guardarRetClave(t.dataset.retclave, t.value);
   if (t.dataset.prsver !== undefined) return void M.setPrsVer(t.value);
   if (t.dataset.man) return void M.guardarMan303(t.dataset.man, t.value);
