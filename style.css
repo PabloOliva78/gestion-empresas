@@ -621,3 +621,6 @@ td.amar { background: #fff3a8; }
 .siiwrap::-webkit-scrollbar { height: 14px; width: 14px; }
 .siiwrap::-webkit-scrollbar-thumb { background: #7f9bd8; border-radius: 8px; }
 .siiwrap::-webkit-scrollbar-track { background: #eef3ff; }
+
+.arch-det { margin: .3rem 0 .8rem; font-size: .85rem; }
+.arch-det summary { cursor: pointer; color: #1f3a7a; font-weight: 600; }

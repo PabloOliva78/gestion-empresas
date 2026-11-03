@@ -448,7 +448,7 @@ export function crearModulos(c) {
       sii.forEach((x) => { const p = `${x.ej}-${x.per}`; (porPer.get(p) ?? porPer.set(p, []).get(p)).push({ k: kf(x), raw: x.raw }); });
       for (const [p, rows] of porPer) await guardarGrande(`sii-raw-${s}-${p}`, empresaId, rows, (q) => q.k);
       await reemplazarGrande(`sii-cab-${s}`, empresaId, sii.cab);
-      const n = await guardarGrande('sii-' + s, empresaId, sii.map(({ raw, ...x }) => x), kf);
+      const n = await guardarGrande('sii-' + s, empresaId, sii.map(({ raw, ...x }) => ({ ...x, src: f.name })), kf);
       return `✔ ${f.name}: SII ${s === 'E' ? 'emitidas' : 'recibidas'} · ${sii.length} facturas leídas (${n} en total)`;
     }
     const bc = leerLibroBC(filas); // Business Central (Fertinova): un solo libro con ventas y compras
@@ -456,7 +456,7 @@ export function crearModulos(c) {
     if (lib) {
       const partes = [];
       for (const s of ['E', 'R']) {
-        const x = lib.filter((l) => l.sentido === s);
+        const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name }));
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
       }
       return `✔ ${f.name}: libro de IVA${bc ? ' (Business Central)' : ''} · ${partes.join(' y ')}`;
@@ -468,7 +468,46 @@ export function crearModulos(c) {
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   // Franja punteada para soltar un Excel (kind = botón del lateral al que equivale: sii, emitidas, recibidas)
   const dz = (kind, titulo, sub, acc = '.xlsx,.xls,.csv') => `<div class="dropzone" data-kind="${kind}" tabindex="0" role="button"><b>${titulo}</b> ${sub}
-    <input type="file" data-dzkind="${kind}" accept="${acc}" multiple hidden></div>`;
+    <input type="file" data-dzkind="${kind}" accept="${acc}" multiple hidden></div>${listaArch(kind)}`;
+  // archivos dejados en cada pestaña, con la opción de quitarlos (y los datos que aportaron)
+  function listaArch(kind) {
+    if (!S.sel || !ARCH[kind]) return '';
+    const l = S.registros.filter((r) => r.tipo === `arch-${kind}` && r.empresa_id === S.sel).sort((a, b) => String(b.datos.subido).localeCompare(String(a.datos.subido)));
+    if (!l.length) return '';
+    return `<details class="arch-det"><summary>Archivos dejados aquí (${l.length})</summary><table class="tprs tnom" style="width:auto"><tbody>${l.map((r) => `<tr><td>${esc(r.datos.nombre)}</td><td>${esc(r.datos.subido ?? '')}</td>
+      <td>${verArchivo(r.datos.archivo)}</td><td>${puede() ? `<button class="small danger" data-act="m-archdel" data-id="${r.id}" title="Quitar el archivo y los datos que aportó">✖ Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></details>`;
+  }
+  async function quitarDatosArchivo(tipo, nombre, empresaId) {
+    const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
+    const filas = data?.datos?.filas ?? [], quitadas = filas.filter((x) => x.src === nombre);
+    if (quitadas.length) await reemplazarGrande(tipo, empresaId, filas.filter((x) => x.src !== nombre), data);
+    return quitadas;
+  }
+  async function quitarArch(id) {
+    const r = S.registros.find((x) => x.id === id);
+    if (!r || !confirm(`¿Quitar «${r.datos.nombre}» y los datos que aportó a la empresa?`)) return;
+    const kind = r.tipo.slice(5), nombre = r.datos.nombre, emp = r.empresa_id;
+    try {
+      let n = 0;
+      if (kind === 'emitidas' || kind === 'recibidas') for (const t of ['fact-E', 'fact-R']) n += (await quitarDatosArchivo(t, nombre, emp)).length;
+      else if (kind === 'extractos') n += (await quitarDatosArchivo('may-mov', nombre, emp)).length;
+      else if (kind === 'sii') {
+        for (const s of ['E', 'R']) {
+          const q = await quitarDatosArchivo(`sii-${s}`, nombre, emp); n += q.length;
+          const porPer = new Map();
+          q.forEach((x) => { const p = `${x.ej}-${x.per}`; (porPer.get(p) ?? porPer.set(p, new Set()).get(p)).add(`${x.factura}|${x.nif}|${x.ej}|${x.per}`); });
+          for (const [p, ks] of porPer) {
+            const { data } = await db.from('registros').select('id,datos').eq('empresa_id', emp).eq('tipo', `sii-raw-${s}-${p}`).maybeSingle();
+            if (data) await reemplazarGrande(`sii-raw-${s}-${p}`, emp, (data.datos?.filas ?? []).filter((x) => !ks.has(x.k)), data);
+          }
+        }
+      }
+      const { error } = await db.from('registros').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      await cargar(); render();
+      if (!n && ['emitidas', 'recibidas', 'extractos', 'sii'].includes(kind)) alert('Archivo quitado. Los datos de este archivo se cargaron antes de que la app guardara su origen y no se pueden separar: si hay que borrarlos, quítalos a mano.');
+    } catch (err) { alert(`No se pudo quitar: ${err.message}`); }
+  }
   const suma = (a, k) => a.reduce((t, x) => t + x[k], 0);
   const TOPE = 1000;
   const tope = (n) => (n > TOPE ? `<p class="hint">Se muestran las ${TOPE} primeras de ${n}; el resto está cargado y cuenta en los totales.</p>` : '');
@@ -1978,7 +2017,7 @@ export function crearModulos(c) {
     const filas = await filasExcel(f);
     const mv = leerMayor(filas);
     if (!mv) return `❔ ${f.name}: guardado, pero no reconozco el extracto (hacen falta fecha, cuenta, debe y haber)`;
-    const n = await guardarGrande('may-mov', empresaId, mv, (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
+    const n = await guardarGrande('may-mov', empresaId, mv.map((l) => ({ ...l, src: f.name })), (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
     return `✔ ${f.name}: extracto contable · ${mv.length} movimientos leídos (${n} en total)`;
   }
 
@@ -2344,6 +2383,7 @@ export function crearModulos(c) {
       'm-siicod': () => { siiCod[d.t] = d.cod; render(); },
       'm-siitodo': () => { siiTodo = true; render(); },
       'm-siidel': () => quitarSii2(d.s, d.i),
+      'm-archdel': () => quitarArch(d.id),
       'm-siirec': () => recuperarSii(d.s, d.i),
       'm-siimas': () => { siiN[d.s] += 150; render(); },
       'm-ctamas': () => { ctaMas += 300; render(); },
