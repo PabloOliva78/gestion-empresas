@@ -1135,8 +1135,9 @@ export function crearModulos(c) {
     const ops = (e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((v) => [v, `${v} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), `${String(i + 1).padStart(2, '0')} ${m}`]))
       .map(([v, t]) => `<option value="${v}"${v === per ? ' selected' : ''}>${t}</option>`).join('');
     const barra = `<div class="fc-cab"><label>Empresa <select data-glob="sel">${S.empresas.map((x) => `<option value="${x.id}"${x.id === S.sel ? ' selected' : ''}>${esc(x.nombre)} (${x.tipo === 'PYME' ? 'trim.' : 'mens.'})</option>`).join('')}</select></label>
-      <label>Periodo <select data-glob="periodo">${ops}</select></label></div>
-      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS) y las nóminas, de la pestaña Nóminas.</p>`;
+      <label>Periodo <select data-glob="periodo">${ops}</select></label>
+      <button data-act="m-retprint" data-m="${mod}">Imprimir PDF Mod. ${mod} · todas las empresas</button><button data-act="m-retprint" data-m="todos">Imprimir PDF 111+115+123 · todas las empresas</button></div>
+      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas y las nóminas, de la pestaña Nóminas. En la impresión cada empresa va en un folio vertical (gran empresa por el mes, pyme por su trimestre).</p>`;
     return `<h4 class="cu-t gr">Listado justificativo Mod. ${mod}</h4>${barra}${listadoRetHtml(mod, e, R, 'pantalla')}`;
   }
 
