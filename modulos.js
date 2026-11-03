@@ -1035,7 +1035,7 @@ export function crearModulos(c) {
       : anios.map((y) => `${anios.length > 1 ? `<div class="prs-y">Ejercicio ${y}</div>` : ''}${fila(g, y)}`).join('')}</section>`).join('');
     return `${dz('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '(uno o varios) o haz clic para elegirlos', '.pdf')}<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
       <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
-      <p class="hint">Importes de las declaraciones presentadas, con las casillas de cada modelo. Se escriben a mano en cada celda (se guardan al salir). La lectura automática de las casillas de los PDF está pendiente.</p>${listaPrsPdf()}${grupos}`;
+      <p class="hint">Importes de las declaraciones presentadas, con las casillas de cada modelo. Se escriben a mano en cada celda (se guardan al salir). La lectura automática de las casillas de los PDF está pendiente.</p>${grupos}${listaPrsPdf()}`;
   }
 
   // ---- Bloque 1 · Retenciones Modelo 111 / 115 / 123: listado justificativo del periodo, desde el libro de recibidas ----
@@ -1330,9 +1330,9 @@ export function crearModulos(c) {
   }
   const listaPrsPdf = () => {
     const l = S.registros.filter((r) => r.tipo === 'prspdf' && r.empresa_id === S.sel).sort((a, b) => b.ejercicio - a.ejercicio || String(a.datos.modelo).localeCompare(b.datos.modelo));
-    return l.length ? `<section class="prs-card"><div class="prs-h">PDF incorporados (${l.length})</div><div class="wrap"><table class="tprs"><thead><tr><th class="pp">Modelo</th><th>Ejercicio</th><th>Periodo</th><th>Archivo</th><th></th></tr></thead><tbody>
+    return l.length ? `<details class="prs-card prs-pdf"><summary class="prs-h">PDF incorporados (${l.length}) · pulsa para ver la lista</summary><div class="wrap"><table class="tprs" style="width:100%"><thead><tr><th class="pp">Modelo</th><th>Ejercicio</th><th>Periodo</th><th>Archivo</th><th></th></tr></thead><tbody>
       ${l.map((r) => `<tr><td class="pp">${esc(r.datos.modelo || '?')}</td><td class="num">${r.ejercicio}</td><td class="num">${esc(r.datos.periodo || '—')}</td><td>${verArchivo(r.datos.archivo)}</td>
-        <td class="num">${puede() ? `<button class="small danger" data-act="m-del" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>` : '';
+        <td class="num">${puede() ? `<button class="small danger" data-act="m-del" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></div></details>` : '';
   };
 
   async function subirArchivos(files) {
