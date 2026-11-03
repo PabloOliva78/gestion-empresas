@@ -1084,7 +1084,8 @@ export function crearModulos(c) {
 
   // Listado justificativo de una empresa (la actual, S.sel). modo: 'pantalla' (una tabla con la clave editable) o 'imprimir' (111 por apartados)
   function listadoRetHtml(mod, e, R, modo) {
-    const ej = Number(S.ejercicio), per0 = S.periodo || '01', per = perEf(e, per0), ed = modo === 'pantalla' && puede();
+    const ej = Number(S.ejercicio), per0 = S.periodo || '01', per = perEf(e, per0), ed = false, pant = modo === 'pantalla';
+    const TB = (inner) => (pant ? `<div class="wrap"><table class="tabla-cu">${inner}</table></div>` : `<table>${inner}</table>`), H4 = (t) => `<h4${pant ? ' class="cu-t"' : ''}>${t}</h4>`;
     const todas = lineasListado(mod, R, ej, per), lis = todas.filter((x) => x.k[0] !== '-');
     const mn = mod === '111' ? nominasMan(per0, per) : {};
     const np = mod === '111' ? nomPer(ej, per) : null; // nóminas: cuadrante de la pestaña Nóminas (devengado + indemnizaciones, e IRPF)
@@ -1100,15 +1101,15 @@ export function crearModulos(c) {
     const th = (clave) => `<thead><tr><th>Fecha</th><th>Factura</th><th>NIF</th><th>Perceptor</th><th>Base</th><th>% ret.</th><th>Retención</th>${clave ? '<th>Clave</th>' : ''}</tr></thead>`;
     let tabla;
     if (!todas.length && !nom.length) tabla = '<p class="hint">Sin líneas de retención en el periodo.</p>';
-    else if (mod === '111' && modo === 'imprimir') {
+    else if (mod === '111') {
       const bN = rr(nS + sumaL(lT, 'b')), bP = sumaL(lP, 'b');
-      tabla = `<h4>1. Rendimientos del trabajo · Nóminas (casillas 02-03 / 05-06)</h4>${nom.length || lT.length ? `<table>${th(false)}<tbody>${nom.map((n) => nomFila(n, false)).join('')}${lT.map((x) => fl(x, false)).join('')}
-        <tr class="total tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num n">${fnum(bN)}</td><td></td><td class="num n">${fnum(tN)}</td></tr></tbody></table>` : '<p class="hint">Sin nóminas en el periodo.</p>'}
-        <h4>2. Actividades económicas · Profesionales (casillas 08-09)</h4>${lP.length ? `<table>${th(false)}<tbody>${lP.map((x) => fl(x, false)).join('')}
-        <tr class="total tot"><td colspan="4">Subtotal profesionales (${lP.length} líneas)</td><td class="num n">${fnum(bP)}</td><td></td><td class="num n">${fnum(tP)}</td></tr></tbody></table>` : '<p class="hint">Sin profesionales en el periodo.</p>'}
-        <h4>3. Resumen</h4><table><thead><tr><th>Concepto</th><th>Base</th><th>Retención</th></tr></thead><tbody>
+      tabla = `${H4('1. Rendimientos del trabajo · Nóminas (casillas 02-03 / 05-06)')}${nom.length || lT.length ? TB(`${th(false)}<tbody>${nom.map((n) => nomFila(n, false)).join('')}${lT.map((x) => fl(x, false)).join('')}
+        <tr class="total tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num n">${fnum(bN)}</td><td></td><td class="num n">${fnum(tN)}</td></tr></tbody>`) : '<p class="hint">Sin nóminas en el periodo: rellénalas en 9.- Nóminas.</p>'}
+        ${H4('2. Actividades económicas · Profesionales (casillas 08-09)')}${lP.length ? TB(`${th(false)}<tbody>${lP.map((x) => fl(x, false)).join('')}
+        <tr class="total tot"><td colspan="4">Subtotal profesionales (${lP.length} líneas)</td><td class="num n">${fnum(bP)}</td><td></td><td class="num n">${fnum(tP)}</td></tr></tbody>`) : '<p class="hint">Sin profesionales en el periodo.</p>'}
+        ${H4('3. Resumen')}${TB(`<thead><tr><th>Concepto</th><th>Base</th><th>Retención</th></tr></thead><tbody>
         <tr><td>Nóminas / trabajo</td><td class="num n">${fnum(bN)}</td><td class="num n">${fnum(tN)}</td></tr><tr><td>Profesionales</td><td class="num n">${fnum(bP)}</td><td class="num n">${fnum(tP)}</td></tr>
-        <tr class="total tot"><td>Total Modelo 111</td><td class="num n">${fnum(rr(bN + bP))}</td><td class="num n">${fnum(tR)}</td></tr></tbody></table>`;
+        <tr class="total tot"><td>Total Modelo 111</td><td class="num n">${fnum(rr(bN + bP))}</td><td class="num n">${fnum(tR)}</td></tr></tbody>`)}`;
     } else {
       tabla = `<table class="tabla-cu tret">${th(true)}<tbody>${nom.map((n) => nomFila(n, true)).join('')}${todas.map((x) => fl(x, true)).join('')}
         <tr class="total tot"><td colspan="4">Total listado (${lis.length + nom.length} líneas)</td><td class="num n">${fnum(tB)}</td><td></td><td class="num n">${fnum(tR)}</td><td></td></tr></tbody></table>`;
@@ -1119,9 +1120,9 @@ export function crearModulos(c) {
       return `<tr><td>${lbl}</td><td class="num n">${fnum(lisv)}</td><td class="num n">${pr === null ? '—' : fnum(pr)}</td><td class="num n"${d !== null && !ok ? ' style="color:#b00"' : ''}>${d === null ? '—' : fnum(d)}</td>
         <td class="c"><b style="color:${pr === null ? '#888' : ok ? '#070' : '#b00'}">${pr === null ? 'Sin presentar' : ok ? 'Cuadra' : 'Descuadre'}</b></td></tr>`; };
     const P = presentadoRet(mod, ej, per), pN = prsVal(ej, '111', per, 'retN'), pP = prsVal(ej, '111', per, 'retP');
-    const filas = mod === '111'
+    const filas = mod === '111' && !pant
       ? comp('Nóminas / trabajo (03+06)', tN, pN === undefined ? null : Number(pN)) + comp('Profesionales (09)', tP, pP === undefined ? null : Number(pP)) + comp('<b>Total 111</b>', tR, P)
-      : comp(`Retenciones (${mod === '115' ? '03' : '09'})`, tR, P);
+      : comp(mod === '111' ? '<b>Total 111</b>' : `Retenciones (${mod === '115' ? '03' : '09'})`, tR, P);
     const cab = `<div class="rl-cab"><b>${esc(e.nombre)}</b> · NIF ${esc(e.cif)} · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}<br>Modelo ${mod} · Periodo ${esc(per)}/${ej}${per !== per0 ? ' <small>(periodo de la empresa para el mes elegido)</small>' : ''}</div>`;
     return `${cab}${tabla}<h4 class="cu-t">Comprobación con lo presentado</h4><div class="wrap"><table class="tabla-cu tret"><thead><tr><th>Casilla</th><th>Listado</th><th>Presentado</th><th>Diferencia</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table></div>`;
   }
@@ -1134,9 +1135,8 @@ export function crearModulos(c) {
     const ops = (e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((v) => [v, `${v} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), `${String(i + 1).padStart(2, '0')} ${m}`]))
       .map(([v, t]) => `<option value="${v}"${v === per ? ' selected' : ''}>${t}</option>`).join('');
     const barra = `<div class="fc-cab"><label>Empresa <select data-glob="sel">${S.empresas.map((x) => `<option value="${x.id}"${x.id === S.sel ? ' selected' : ''}>${esc(x.nombre)} (${x.tipo === 'PYME' ? 'trim.' : 'mens.'})</option>`).join('')}</select></label>
-      <label>Periodo <select data-glob="periodo">${ops}</select></label>
-      <button data-act="m-retprint" data-m="${mod}">Imprimir PDF Mod. ${mod} · todas las empresas</button><button data-act="m-retprint" data-m="todos">Imprimir PDF 111+115+123 · todas las empresas</button></div>
-      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS). En la impresión cada empresa va en un folio vertical (gran empresa por el mes, pyme por su trimestre). Cambia la clave de una línea para pasarla a otro modelo o dejarla sin declarar.</p>`;
+      <label>Periodo <select data-glob="periodo">${ops}</select></label></div>
+      <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS) y las nóminas, de la pestaña Nóminas.</p>`;
     return `<h4 class="cu-t gr">Listado justificativo Mod. ${mod}</h4>${barra}${listadoRetHtml(mod, e, R, 'pantalla')}`;
   }
 
