@@ -905,7 +905,8 @@ export function crearModulos(c) {
     if (!R.length) return '<p class="vacio">Sin datos: carga el libro de IVA soportado con el botón RECIBIDAS.</p>';
     const c = calcularRet(modelo, R, Number(S.ejercicio), S.periodo);
     const m = manPer('m' + modelo);
-    const num = (k) => Number(m[k]) || 0;
+    const np = modelo === '111' ? nomPer(Number(S.ejercicio), perEf(empresa(), S.periodo)) : null; // percepciones y retenciones de nómina: del cuadrante de Nóminas
+    const num = (k) => (np && k === 't2' ? np.s : np && k === 't3' ? np.r : Number(m[k]) || 0);
     let tabla;
     if (modelo === '111') {
       const f = (ap, con, c1, n, c2, p, c3, r, cls = '') => `<tr class="${cls}"><td>${ap}</td><td>${con}</td><td class="cas">${c1}</td><td class="num">${n}</td><td class="cas">${c2}</td>
@@ -1073,8 +1074,10 @@ export function crearModulos(c) {
     if (!R) return cargandoTxt;
     const e = empresa(), ej = Number(S.ejercicio), per0 = S.periodo || '01', per = perEf(e, per0);
     const lis = lineasListado(mod, R, ej, per);
+    // nóminas del periodo: del cuadrante de la pestaña Nóminas (base = devengado + indemnizaciones, y retenciones); si no hay, lo escrito a mano en los ajustes del 111
     const mn = mod === '111' ? nominasMan(per0, per) : {};
-    const nom = (Number(mn.t2) || Number(mn.t3)) ? [{ s: Number(mn.t2) || 0, r: Number(mn.t3) || 0 }] : [];
+    const np = mod === '111' ? nomPer(ej, per) : null;
+    const nom = np ? [{ ...np, cuad: true }] : (Number(mn.t2) || Number(mn.t3)) ? [{ s: Number(mn.t2) || 0, r: Number(mn.t3) || 0 }] : [];
     const sumaL = (a, k) => Math.round(a.reduce((t, x) => t + x[k], 0) * 100) / 100;
     const lT = lis.filter((x) => x.k[0] === '111T'), lP = lis.filter((x) => x.k[0] === '111');
     const tN = Math.round((nom.reduce((a, n) => a + n.r, 0) + sumaL(lT, 're')) * 100) / 100, tP = sumaL(lP, 're');
@@ -1088,14 +1091,14 @@ export function crearModulos(c) {
       <p class="hint">Gran empresa: por meses. Pyme: por trimestres. Las líneas salen del libro de IVA recibidas (botón RECIBIDAS).</p>`;
     const fl = (x, clave) => `<tr><td class="c">${f(x.f)}</td><td>${esc(x.fa)}</td><td>${esc(x.ni)}</td><td>${esc(x.no)}</td><td class="num">${fnum(x.b)}</td><td class="num">${x.t ? fnum(x.t) : ''}</td><td class="num">${fnum(x.re)}</td>${clave ? `<td>${esc(x.k[1])}</td>` : ''}</tr>`;
     const th = (clave) => `<thead><tr><th>Fecha</th><th>Factura</th><th>NIF</th><th>Perceptor</th><th>Base</th><th>% ret.</th><th>Retención</th>${clave ? '<th>Clave</th>' : ''}</tr></thead>`;
-    const nomFila = (n) => `<tr><td class="c">${esc(per)}/${ej}</td><td colspan="3">Nóminas del periodo (devengado e IRPF)</td><td class="num">${fnum(n.s)}</td><td></td><td class="num">${fnum(n.r)}</td></tr>`;
+    const nomFila = (n) => `<tr><td class="c">${esc(per)}/${ej}</td><td colspan="3">${n.cuad ? 'Nóminas del periodo (pestaña Nóminas: devengado + indemnizaciones e IRPF)' : 'Nóminas del periodo (ajustes manuales: devengado e IRPF)'}</td><td class="num">${fnum(n.s)}</td><td></td><td class="num">${fnum(n.r)}</td></tr>`;
     let cuerpo;
     if (!lis.length && !nom.length) cuerpo = '<p class="hint">Sin líneas de retención en el periodo.</p>';
     else if (mod === '111') {
       const bN = Math.round((nom.reduce((a, n) => a + n.s, 0) + sumaL(lT, 'b')) * 100) / 100, bP = sumaL(lP, 'b');
       cuerpo = `<h4 class="cu-t">1. Rendimientos del trabajo · Nóminas (casillas 02-03 / 05-06)</h4>
         ${nom.length || lT.length ? `<div class="wrap"><table class="tabla-cu">${th(false)}<tbody>${nom.map(nomFila).join('')}${lT.map((x) => fl(x, false)).join('')}
-          <tr class="tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num">${fnum(bN)}</td><td></td><td class="num">${fnum(tN)}</td></tr></tbody></table></div>` : '<p class="hint">Sin nóminas en el periodo (se introducen a mano en la pestaña del modelo 111, «Ajustes manuales»).</p>'}
+          <tr class="tot"><td colspan="4">Subtotal nóminas (${nom.length + lT.length} líneas)</td><td class="num">${fnum(bN)}</td><td></td><td class="num">${fnum(tN)}</td></tr></tbody></table></div>` : '<p class="hint">Sin nóminas en el periodo: rellénalas en 9.- Nóminas (o a mano en los «Ajustes manuales» del modelo 111).</p>'}
         <h4 class="cu-t">2. Actividades económicas · Profesionales (casillas 08-09)</h4>
         ${lP.length ? `<div class="wrap"><table class="tabla-cu">${th(false)}<tbody>${lP.map((x) => fl(x, false)).join('')}
           <tr class="tot"><td colspan="4">Subtotal profesionales (${lP.length} líneas)</td><td class="num">${fnum(bP)}</td><td></td><td class="num">${fnum(tP)}</td></tr></tbody></table></div>` : '<p class="hint">Sin profesionales en el periodo.</p>'}
@@ -1322,6 +1325,12 @@ export function crearModulos(c) {
     return { ...x, ssTot: rr(ssTot), dif: rr(n('salarios') + n('km') + n('indem') + n('ssEmp') - ssTot - n('ret') - n('anticipos') - n('embargos') - n('seguro') - n('liquido')) };
   };
   const nomMes = (y, mm) => nomCalc(nomReg(y)?.datos?.[mm]);
+  // nóminas de un periodo (mes «01» o trimestre «1T»): base = devengado + indemnizaciones, y retenciones; null si no hay nóminas cargadas
+  const nomPer = (ej, per) => {
+    const meses = /^[1-4]T$/.test(per) ? [0, 1, 2].map((i) => String((+per[0] - 1) * 3 + i + 1).padStart(2, '0')) : /^\d\d$/.test(per ?? '') ? [per] : [];
+    const nm = meses.map((mm) => nomMes(ej, mm)).filter(Boolean);
+    return nm.length ? { s: rr(nm.reduce((a, x) => a + (Number(x.salarios) || 0) + (Number(x.indem) || 0), 0)), r: rr(nm.reduce((a, x) => a + (Number(x.ret) || 0), 0)) } : null;
+  };
   async function guardarNom(clave, valor) {
     const [mm, campo, y] = clave.split('|');
     const reg = nomReg(+y);
@@ -1738,7 +1747,7 @@ export function crearModulos(c) {
       if (!R) return { t: '…' };
       const per0 = S.periodo || '01', per = perEf(empresa(), per0);
       const lis = lineasListado(m, R, Number(S.ejercicio), per);
-      const tot = lis.reduce((a, x) => a + x.re, 0) + (m === '111' ? Number(nominasMan(per0, per).t3) || 0 : 0);
+      const tot = lis.reduce((a, x) => a + x.re, 0) + (m === '111' ? (nomPer(Number(S.ejercicio), per)?.r ?? (Number(nominasMan(per0, per).t3) || 0)) : 0);
       return lis.length || tot ? { t: fnum(tot), c: 'amar' } : { t: 'Sin líneas' };
     };
   });
