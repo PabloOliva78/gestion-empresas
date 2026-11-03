@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=35';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=36';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -1371,6 +1371,292 @@ export function crearModulos(c) {
       <p class="hint">«Saldo antes del cierre» = apertura + débito − crédito + ajustes. El saldo de cierre sale a cero porque el ejercicio ya está regularizado.</p>`;
   }
 
+  // ================= Bloque 5 · Cuentas contables: extracto de cada cuenta + resumen por periodo (como la otra aplicación) =================
+  // Columnas: ['c',código,etiqueta,desplazamiento] suma debe+haber del tipo · ['f',clave,etiqueta,fórmula,esDiferencia] · ['s',clave,etiqueta] saldo real al cierre
+  //           ['x',clave,etiqueta,fuente] dato externo (nóminas, presentados o a mano) · ['a',clave,etiqueta,de] acumulado.  {S} = sigla de la empresa en los asientos
+  const P2 = (a, n) => !!n && a.startsWith(n);
+  const CTAS_BASE = {
+    c4650: { cta: '4650.01', desc: 'Remuneraciones pendientes de pago', tit: 'RESUMEN MENSUAL REMUNERACIONES PENDIENTES DE PAGO - EXCEL NÓMINAS', per: 'mes',
+      tipo: (a, d) => (P2(a, 'PN') ? 'PN' : P2(a, 'N') ? 'N' : d ? 'OD' : 'OH'), codes: ['PN', 'OD', 'OH', 'N'],
+      cols: [['c', 'PN', 'PN - Pago Nóminas'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'N', 'N - Nóminas Devengadas'],
+        ['f', 'SP', 'Saldo del periodo (PN + OD − OH − N)', (v) => v.PN + v.OD - v.OH - v.N], ['a', 'SC', 'Saldo cuenta', 'SP'],
+        ['x', 'G', 'Nómina Gestoría (líquido de las nóminas)', 'nom:liquido'], ['f', 'D', 'Diferencia (PN − Nómina Gestoría)', (v) => (v.G === null ? null : v.PN - v.G), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c4700: { cta: '4700.01', desc: 'H.P. deudora por IVA - Modelo 303', tit: 'RESUMEN MENSUAL H.P. DEUDORA POR IVA - MODELO 303', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, S) ? 'S' : P2(a, 'DEV') ? 'DEV' : P2(a, 'RS') ? 'RS' : 'OD'), codes: ['S', 'OD', 'RS', 'DEV'],
+      cols: [['c', 'S', '{S} - Liquidaciones IVA'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'RS', 'RS - Reclasificaciones de Saldo'], ['c', 'DEV', 'DEV - Devoluciones de IVA', 'DY'],
+        ['f', 'T', 'Total movimientos ({S} + OD − RS − DEV)', (v) => v.S + v.OD - v.RS - v.DEV], ['a', 'SC', 'Saldo Cuenta', 'T'],
+        ['x', 'M', 'Modelo 303 Presentado', '303neg'], ['f', 'D', 'Diferencia ({S} − Modelo 303; en diciembre a devolver: DEV − Modelo 303)', (v) => (v.M === null ? null : v._devolver ? v.DEV - v.M : v.S - v.M), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c4709: { cta: '4709.01', desc: 'H.P. deudora por IS - Modelo 200', tit: 'RESUMEN MENSUAL H.P. DEUDORA POR IS - MODELO 200', per: 'ano',
+      tipo: (a, d) => (P2(a, 'DEV') ? 'DEV' : P2(a, 'I-') ? 'I' : d ? 'OD' : 'OH'), codes: ['I', 'OD', 'OH', 'DEV'],
+      cols: [['c', 'I', 'I - Impuesto Devengado'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'DEV', 'DEV - Devoluciones de IS (cobradas ejercicio siguiente)', 'Y'],
+        ['f', 'SE', 'Saldo del ejercicio (I + OD − OH − DEV)', (v) => v.I + v.OD - v.OH - v.DEV], ['a', 'SA', 'Saldo acumulado', 'SE'],
+        ['x', 'M', 'Impuesto Presentado Mod. 200', 'man'], ['f', 'D', 'Diferencia (I − Impuesto Presentado)', (v) => (v.M === null ? null : v.I - v.M), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c4730: { cta: '4730.05', desc: 'H.P. reten. y pagos a cta - Pagos fraccionados IS (Mod. 202)', tit: 'RESUMEN POR PERIODO DE PAGO FRACCIONADO (1P / 2P / 3P) - MOD 202', per: 'p202',
+      tipo: (a, d) => (P2(a, 'PM') ? 'PM' : P2(a, 'I') ? 'I' : d ? 'OD' : 'OH'), codes: ['PM', 'OD', 'OH', 'I'],
+      cols: [['c', 'PM', 'PM - Pago Mod. 202'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'I', 'I - Impto. Devengado'],
+        ['f', 'SP', 'Saldo del periodo (PM + OD − OH − I)', (v) => v.PM + v.OD - v.OH - v.I], ['a', 'SC', 'Saldo Cuenta', 'SP'],
+        ['x', 'M', 'Impuesto Presentado Mod. 202', 'man'], ['f', 'D', 'Diferencia (PM − Impuesto Presentado)', (v) => (v.M === null ? null : v.PM - v.M), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c4750: { cta: '4750.01', desc: 'H.P. acreedora por IVA - Modelo 303', tit: 'RESUMEN POR PERIODO Y TIPO DE ASIENTO', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, S) ? 'S' : P2(a, 'PM') ? 'PM' : P2(a, 'RS') ? 'RS' : 'OH'), codes: ['PM', 'RS', 'OH', 'S'],
+      cols: [['c', 'PM', 'PM - Pago Modelo 303', 1], ['c', 'RS', 'RS - Reclasificaciones de Saldo'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'S', '{S} - Liquidaciones IVA'],
+        ['f', 'T', 'Total movimientos (PM + RS − OH − {S})', (v) => v.PM + v.RS - v.OH - v.S], ['a', 'SC', 'Saldo Cuenta', 'T'],
+        ['x', 'M', 'Modelo 303 Presentado', '303pos'], ['f', 'D', 'Diferencia ({S} − Modelo 303)', (v) => (v.M === null ? null : v.S - v.M), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c47511: { cta: '4751.01', desc: 'H.P. acreedora por retenciones - modelo 111', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR RETENCIONES PROFESIONALES Y RDTOS. TRABAJO - MODELO 111', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, 'PN') ? 'PN' : P2(a, 'PP') ? 'PP' : P2(a, S) ? 'S' : P2(a, 'OD') ? 'OD' : P2(a, 'OH') ? 'OH' : P2(a, 'N') ? 'N' : 'OTROS'), codes: ['PN', 'N', 'PP', 'S', 'OD', 'OH', 'OTROS'],
+      cols: [['c', 'PN', 'PN - Pago nóminas retenciones', 1], ['c', 'N', 'N - Nóminas retenciones'], ['f', 'D1', 'Diferencia (PN − N)', (v) => v.PN - v.N, true],
+        ['c', 'PP', 'PP - Pago retenciones profesionales', 1], ['c', 'S', '{S} - Retenciones profesionales'], ['f', 'D2', 'Diferencia (PP − {S})', (v) => v.PP - v.S, true],
+        ['c', 'OD', 'Otros Mov. Debe (OD)'], ['c', 'OH', 'Otros Mov. Haber (OH)'], ['f', 'D3', 'Diferencia (OD − OH)', (v) => v.OD - v.OH],
+        ['a', 'TS', 'Total Saldo Cuenta', 'TD'], ['f', 'TD', 'Total diferencias (PN−N + PP−{S} + OD−OH)', (v) => v.D1 + v.D2 + v.D3, true], ['a', 'DA', 'Diferencias Acumuladas', 'TD']] },
+    c47512: { cta: '4751.02', desc: 'H.P. acreedora por retenciones - modelo 115', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR RETENCIONES CAPITAL INMOBILIARIO - MODELO 115', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, 'PA') ? 'PA' : P2(a, S) ? 'S' : d ? 'OD' : 'OH'), codes: ['PA', 'S', 'OD', 'OH'],
+      cols: [['c', 'PA', 'PA - Pagos Alquiler Retenciones', 1], ['c', 'S', '{S} - Retenciones Alquileres'], ['f', 'D1', 'Diferencia (PA − {S})', (v) => v.PA - v.S, true],
+        ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['f', 'D2', 'Diferencia (OD − OH)', (v) => v.OD - v.OH],
+        ['a', 'TS', 'Total Saldo Cuenta', 'TD'], ['f', 'TD', 'Total diferencias (PA−{S} + OD−OH)', (v) => v.D1 + v.D2, true], ['a', 'AC', 'Acumulado diferencias', 'TD']] },
+    c47514: { cta: '4751.04', desc: 'H.P. acreedora por retenciones - modelo 123', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR RETENCIONES CAPITAL MOBILIARIO - MODELO 123', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, 'PI') ? 'PI' : P2(a, S) ? 'S' : d ? 'OD' : 'OH'), codes: ['PI', 'S', 'OD', 'OH'],
+      cols: [['c', 'PI', 'PI - Pago Retenciones Intereses (pagado el mes siguiente)', 1], ['c', 'S', '{S} - Retenciones Intereses Div.'], ['f', 'D1', 'Diferencia (PI − {S})', (v) => v.PI - v.S, true],
+        ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['f', 'D2', 'Diferencia (OD − OH)', (v) => v.OD - v.OH],
+        ['a', 'TS', 'Total Saldo Cuenta', 'TD'], ['f', 'TD', 'Total diferencias (PI−{S} + OD−OH)', (v) => v.D1 + v.D2, true], ['a', 'AC', 'Acumulado diferencias', 'TD']] },
+    c4752: { cta: '4752.01', desc: 'H.P. acreedora por I.S. Mod. 200', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR IS - MODELO 200', per: 'ano',
+      tipo: (a, d) => (P2(a, 'PM') ? 'PM' : P2(a, 'I') ? 'I' : d ? 'OD' : 'OH'), codes: ['PM', 'OD', 'OH', 'I'],
+      cols: [['c', 'PM', 'PM - Pago I.S. (pagado en el ejercicio siguiente)', 'Y'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'I', 'I - Impuesto Devengado'],
+        ['f', 'SE', 'Saldo del ejercicio (PM + OD − OH − I)', (v) => v.PM + v.OD - v.OH - v.I], ['a', 'SA', 'Saldo acumulado', 'SE'],
+        ['x', 'M', 'Impuesto Presentado Mod. 200', 'man'], ['f', 'D', 'Diferencia (I − Impuesto Presentado)', (v) => (v.M === null ? null : v.I - v.M), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c4760: { cta: '4760.01', desc: 'Organismos de la Seguridad Social, acreedores', tit: 'RESUMEN MENSUAL ORG SEGURIDAD SOCIAL - TC2 GESTORIA', per: 'mes',
+      tipo: (a, d) => (P2(a, 'PS') ? 'PS' : P2(a, 'IT') ? 'IT' : P2(a, 'CB') ? 'CB' : P2(a, 'N') ? 'N' : d ? 'OD' : 'OH'), codes: ['PS', 'OD', 'OH', 'IT', 'CB', 'N'],
+      cols: [['c', 'PS', 'PS - Pago Seguridad Social', 1], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'IT', 'IT - Rectificaciones IT'], ['c', 'CB', 'CB - Rectificaciones cursos Bonif.'], ['c', 'N', 'N - Seguridad Social Devengada'],
+        ['f', 'SP', 'Saldo del periodo (PS + OD) − (OH + IT + CB + N)', (v) => (v.PS + v.OD) - (v.OH + v.IT + v.CB + v.N)], ['a', 'SC', 'Saldo acumulado', 'SP'],
+        ['x', 'G', 'Seguridad Social Gestoría', 'nom:ssTot'], ['f', 'D', 'Diferencia (PS − Seguridad Social Gestoría)', (v) => (v.G === null ? null : v.PS - v.G), true], ['a', 'AC', 'Acumulado diferencias', 'D']] },
+    c6400: { cta: '6400.01', desc: 'Sueldos y salarios', tit: 'RESUMEN SALARIOS - NÓMINAS', per: 'mes',
+      tipo: (a, d) => { const p = a.split('-')[0]; return p === 'N' || p === 'RTB' ? 'N' : p === 'IT' ? 'IT' : p === 'OD' ? 'OD' : p === 'OH' ? 'OH' : p === 'C' || p[0] === 'I' ? 'C' : d ? 'OD' : 'OH'; }, codes: ['N', 'IT', 'OD', 'OH', 'C'],
+      cols: [['c', 'N', 'N - Salarios Nóminas'], ['c', 'IT', 'IT - Bajas'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
+        ['f', 'SP', 'Saldo del mes (N + IT + OD − OH − C)', (v) => v.N + v.IT + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SP']] },
+    c6420: { cta: '6420.01', desc: 'Seguridad Social a cargo de la empresa', tit: 'RESUMEN SEGURIDAD SOCIAL EMPRESA - NÓMINAS', per: 'mes',
+      tipo: (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; }, codes: ['SS', 'R', 'OD', 'OH', 'C'],
+      cols: [['c', 'SS', 'SS - Seguridad Social Empresa Nóminas'], ['c', 'R', 'R - Regularizaciones'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
+        ['f', 'SP', 'Saldo del mes (SS + R + OD − OH − C)', (v) => v.SS + v.R + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SP']] },
+  };
+  // Fertinova: sus cuentas 4751 son propias
+  const CTAS_FERTINOVA = {
+    c47511: { cta: '4751.01', desc: 'H.P. Acreedora por Retenciones Rdtos. Trabajo Mod. 111', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR RETENCIONES RDTOS. TRABAJO - MODELO 111', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, 'PN') ? 'PN' : P2(a, 'N') ? 'N' : P2(a, S) ? 'N' : d ? 'OD' : 'OH'), codes: ['PN', 'N', 'OD', 'OH'],
+      cols: [['c', 'PN', 'PN - Pago nóminas retenciones', 1], ['c', 'N', 'N - Nóminas retenciones'], ['f', 'D1', 'Diferencia (PN − N)', (v) => v.PN - v.N, true],
+        ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['f', 'D2', 'Diferencia (OD − OH)', (v) => v.OD - v.OH],
+        ['a', 'TS', 'Total Saldo Cuenta', 'TD'], ['f', 'TD', 'Total diferencias (PN−N + OD−OH)', (v) => v.D1 + v.D2, true], ['a', 'DA', 'Diferencias Acumuladas', 'TD']] },
+    c47512: { cta: '4751.02', desc: 'H.P. Acreedora por Retenciones Profesionales Mod. 111', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR RETENCIONES PROFESIONALES - MODELO 111', per: 'mes',
+      tipo: (a, d, h, S) => (P2(a, 'PP') ? 'PP' : P2(a, S) ? 'S' : d ? 'OD' : 'OH'), codes: ['PP', 'S', 'OD', 'OH'],
+      cols: [['c', 'PP', 'PP - Pago retenciones profesionales', 1], ['c', 'S', '{S} - Retenciones profesionales'], ['f', 'D1', 'Diferencia (PP − {S})', (v) => v.PP - v.S, true],
+        ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['f', 'D2', 'Diferencia (OD − OH)', (v) => v.OD - v.OH],
+        ['a', 'TS', 'Total Saldo Cuenta', 'TD'], ['f', 'TD', 'Total diferencias (PP−{S} + OD−OH)', (v) => v.D1 + v.D2, true], ['a', 'AC', 'Acumulado diferencias', 'TD']] },
+  };
+  CTAS_FERTINOVA.c47513 = { ...CTAS_BASE.c47512, cta: '4751.03', desc: 'H.P. Acreedora por Retenciones Capital Mobiliario Mod. 115', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR RETENCIONES - MODELO 115' };
+  CTAS_FERTINOVA.c47514 = { ...CTAS_BASE.c47514, desc: 'H.P. Acreedora por Retenciones Capital Mobiliario Mod. 123' };
+  const retCta = (n, cod, desc, lbl) => ({ cta: `4730.0${n}`, desc, tit: `RESUMEN POR PERIODO DE ${lbl.toUpperCase()}`, per: 'mes',
+    tipo: (a, d) => (P2(a, cod) ? cod : P2(a, 'I') ? 'I' : d ? 'OD' : 'OH'), codes: [cod, 'OD', 'OH', 'I'],
+    cols: [['c', cod, `${cod} - ${lbl}`], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'I', 'I - Impto. Devengado'],
+      ['f', 'SP', `Saldo del periodo (${cod} + OD − OH − I)`, (v) => v[cod] + v.OD - v.OH - v.I], ['a', 'SC', 'Saldo Cuenta', 'SP']] });
+  const CTAS_HER_RET = { c473001: retCta(1, 'RTB', 'H.P. Retenciones Bancarias', 'Retenciones bancarias'), c473002: retCta(2, 'RTC', 'H.P. Retenciones Capital Mobiliario E.G.', 'Retenciones capital mobiliario'),
+    c473003: retCta(3, 'RTLM', 'H.P. Retenciones Capital Mobiliario Liquimed', 'Retenciones capital mobiliario Liquimed'), c473004: retCta(4, 'RTA', 'H.P. Retenciones Capital Inmobiliario E.G.', 'Retenciones capital inmobiliario') };
+  const CTAS_LYS = { c4745: { cta: '4745.0', desc: 'Créditos por impuestos diferidos - pérdidas', tit: 'RESUMEN ANUAL CRÉDITOS POR IMPUESTOS DIFERIDOS - PÉRDIDAS', per: 'ano',
+    tipo: (a, d) => { const p = String(a || '').toUpperCase(); return p.startsWith('CID') ? 'CID' : p.startsWith('RC') ? 'RC' : p.startsWith('OH') ? 'OH' : p.startsWith('OD') ? 'OD' : d ? 'OD' : 'OH'; }, codes: ['CID', 'OD', 'OH', 'RC'],
+    cols: [['c', 'CID', 'CID - Créditos Imp. Diferidos'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'RC', 'RC - Reducción Créditos'],
+      ['f', 'T', 'Total movimientos (CID + OD − OH − RC)', (v) => v.CID + v.OD - v.OH - v.RC], ['a', 'SC', 'Saldo Cuenta', 'T']] } };
+  const TODAS_CTAS = { ...CTAS_BASE, c47513: CTAS_FERTINOVA.c47513, ...CTAS_HER_RET, ...CTAS_LYS };
+  // cuentas que tiene cada empresa, en orden
+  function ctasEmpresa(e) {
+    const cif = e?.cif ?? '', fer = cif === 'B18546614';
+    const orden = Object.keys(CTAS_BASE);
+    if (fer) orden.splice(orden.indexOf('c47514'), 0, 'c47513');
+    if (cif === 'A18341404') orden.splice(orden.indexOf('c4730'), 0, ...Object.keys(CTAS_HER_RET));
+    if (cif === 'B18361329' || cif === 'B91428995') orden.splice(orden.indexOf('c4730'), 0, 'c473001', 'c473002');
+    if (cif === 'B18765289') orden.splice(orden.indexOf('c4730') + 1, 0, 'c4745');
+    return Object.fromEntries(orden.map((k) => [k, CTAS_LYS[k] || CTAS_HER_RET[k] || (fer && CTAS_FERTINOVA[k]) || CTAS_BASE[k]]));
+  }
+  const ctaDe = (k) => ctasEmpresa(empresa())[k] ?? TODAS_CTAS[k];
+  Object.keys(TODAS_CTAS).forEach((k) => { tabs[k] = [`Cuenta ${TODAS_CTAS[k].cta}`, TODAS_CTAS[k].desc, () => vistaCuenta(k), false, () => !!ctasEmpresa(empresa())[k]]; });
+
+  // configuración por empresa: cuenta elegida, tipo de cada asiento, comprobados, saldo del balance, importes a mano y ámbito
+  const ctaCfgReg = () => S.registros.find((r) => r.tipo === 'ctacfg' && r.empresa_id === S.sel);
+  const ctaCfg = () => ctaCfgReg()?.datos ?? {};
+  async function guardarCta(mut) {
+    const reg = ctaCfgReg(), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+    mut(datos);
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'ctacfg', ejercicio: null, datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  const setIn = (o, ...ruta) => { const v = ruta.pop(), k = ruta.pop(); let c = o; ruta.forEach((r) => { c = c[r] ??= {}; }); if (v === '' || v == null) delete c[k]; else c[k] = v; };
+  function accionCta(tipo, id, valor) {
+    const [a, b] = id.split('§');
+    if (tipo === 'pref') return guardarCta((d) => setIn(d, 'pref', a, valor.trim() === ctaDe(a)?.cta ? '' : valor.trim()));
+    if (tipo === 'ambito') return guardarCta((d) => setIn(d, 'ambito', a, valor === 'todo' ? '' : valor));
+    if (tipo === 'balance') return guardarCta((d) => setIn(d, 'balance', a, valor.trim() === '' ? '' : parseES(valor)));
+    if (tipo === 'manual') return guardarCta((d) => setIn(d, 'manual', a, b, valor.trim() === '' ? '' : parseES(valor)));
+    if (tipo === 'comp') return guardarCta((d) => setIn(d, 'comp', a, valor));
+    if (tipo === 'clase') return guardarCta((d) => setIn(d, 'clases', id, valor));
+    if (tipo === 'compvis') return guardarCta((d) => { (ctaVis ?? []).forEach((f) => setIn(d, 'comp', f, 'Sí')); });
+    if (tipo === 'filtro') { ctaFil.comp = valor; ctaMas = 300; return render(); }
+    if (tipo === 'buscar') { ctaFil.q = valor; ctaMas = 300; return render(); }
+    return undefined;
+  }
+  let ctaFil = { comp: 'todos', q: '' }, ctaMas = 300, ctaVis = [];
+  const ctaPref = (k) => ctaCfg().pref?.[k] || ctaDe(k).cta;
+
+  // periodos
+  const perDe = (T, d) => { const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+    return T === 'ano' ? String(y) : T === 'p202' ? `${y}-${m <= 4 ? '1P' : m <= 10 ? '2P' : '3P'}` : T === 'tri' ? `${y}-${Math.ceil(m / 3)}T` : `${y}-${String(m).padStart(2, '0')}`; };
+  const rangoDe = (T, key) => {
+    if (T === 'ano') { const y = +key; return [Date.UTC(y, 0, 1), Date.UTC(y + 1, 0, 1)]; }
+    const y = +key.slice(0, 4);
+    if (T === 'p202') { const p = key.slice(5); return p === '1P' ? [Date.UTC(y, 0, 1), Date.UTC(y, 4, 1)] : p === '2P' ? [Date.UTC(y, 4, 1), Date.UTC(y, 10, 1)] : [Date.UTC(y, 10, 1), Date.UTC(y + 1, 0, 1)]; }
+    if (T === 'tri') { const q = +key[5]; return [Date.UTC(y, (q - 1) * 3, 1), Date.UTC(y, q * 3, 1)]; }
+    const m = +key.slice(5); return [Date.UTC(y, m - 1, 1), Date.UTC(y, m, 1)];
+  };
+  const perAnterior = (T, key) => {
+    if (T === 'ano') return String(+key - 1);
+    const y = +key.slice(0, 4);
+    if (T === 'p202') { const p = key.slice(5); return p === '1P' ? `${y - 1}-3P` : p === '2P' ? `${y}-1P` : `${y}-2P`; }
+    if (T === 'tri') { const q = +key[5]; return q === 1 ? `${y - 1}-4T` : `${y}-${q - 1}T`; }
+    const m = +key.slice(5); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  };
+  const etiquetaPer = (T, key) => (T === 'ano' ? key : `${key.slice(5)}-${key.slice(0, 4)}`);
+  const fdate = (ms) => { const d = new Date(ms); return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`; };
+
+  function calcCuenta(k, M) {
+    const C = ctaDe(k), e = empresa(), cfg = ctaCfg(), ej = Number(S.ejercicio), pref = ctaPref(k), sigla = e?.siglas ?? '';
+    const firma = (l) => [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
+    const todos = M.filter((l) => casaCta(pref, l.digitos)).map((l) => ({ ...l, ms: Date.parse(l.fecha), firma: firma(l) }))
+      .sort((a, b) => a.ms - b.ms || String(a.asiento).localeCompare(String(b.asiento)));
+    todos.forEach((l) => { l._tipo = cfg.clases?.[`${k}§${l.firma}`] ?? C.tipo(String(l.asiento || '').trim().toUpperCase(), !!l.debe, !!l.haber, sigla); });
+    const ambito = cfg.ambito?.[k] || 'todo';
+    const ini = ambito === 'todo' ? -8.64e15 : Date.UTC(ej, 0, 1), fin = ambito === 'todo' ? 8.64e15 : Date.UTC(ej + 1, 0, 1);
+    const saldoIni = rr(todos.filter((l) => l.ms < ini).reduce((s, l) => s + l.debe - l.haber, 0));
+    let acc = saldoIni;
+    const movs = todos.filter((l) => l.ms >= ini && l.ms < fin).map((l) => { acc = rr(acc + l.debe - l.haber); return { l, saldo: acc, comp: cfg.comp?.[l.firma] || '', tipo: l._tipo }; });
+    const tD = rr(movs.reduce((s, x) => s + x.l.debe, 0)), tH = rr(movs.reduce((s, x) => s + x.l.haber, 0));
+    const si = movs.filter((x) => x.comp === 'Sí'), no = movs.filter((x) => x.comp === 'No');
+    const impComp = rr(si.reduce((s, x) => s + x.l.debe + x.l.haber, 0)), saldoFin = rr(saldoIni + tD - tH);
+    const bal = cfg.balance?.[`${k}-${ej}`];
+    const ctl = { n: movs.length, comp: si.length, exc: no.length, pend: movs.length - si.length - no.length, impComp, cobertura: tD + tH ? impComp / (tD + tH) : 0, saldoIni, tD, tH, neto: rr(tD - tH), saldoFin, balance: bal === undefined ? null : +bal };
+    ctl.dif = rr(saldoFin - (ctl.balance || 0)); ctl.estado = Math.abs(ctl.dif) < 0.005 ? 'CUADRA' : 'REVISAR DIFERENCIA';
+    // ---- resumen por periodo ----
+    const T = e?.tipo === 'PYME' && C.per === 'mes' && ['c4700', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514'].includes(k) ? 'tri' : C.per, keys = new Set();
+    const shiftCodes = new Set(C.cols.filter((c) => c[0] === 'c' && c[3]).map((c) => c[1]));
+    todos.forEach((l) => { const p = perDe(T, new Date(l.ms)); keys.add(p); if (shiftCodes.has(l._tipo)) keys.add(perAnterior(T, p)); });
+    const extNom = C.cols.find((c) => c[0] === 'x' && String(c[3]).startsWith('nom:'));
+    if (extNom && todos.length) {
+      const lo = perDe(T, new Date(todos[0].ms)), hi = perDe(T, new Date(todos[todos.length - 1].ms));
+      for (let y = +lo.slice(0, 4); y <= +hi.slice(0, 4); y++) MM12.forEach((mm) => { const ym = `${y}-${mm}`; if (ym >= lo && ym <= hi && nomMes(y, mm)) keys.add(ym); });
+    }
+    const suma = (code, t0, t1) => rr(todos.filter((l) => l._tipo === code && l.ms >= t0 && l.ms < t1).reduce((s, l) => s + l.debe + l.haber, 0));
+    const man = cfg.manual?.[k] ?? {}, acum = {}, filas = [], od = {};
+    [...keys].sort().forEach((key) => {
+      const [t0, t1] = rangoDe(T, key), v = {}, fuente = {};
+      C.cols.forEach(([t, c, lab, x]) => {
+        if (t === 'c') {
+          if (!x) v[c] = suma(c, t0, t1);
+          else if (x === 1) { const d = new Date(T === 'tri' ? t1 - 1 : t0); v[c] = suma(c, Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1), Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 2, 1)); }
+          else if (x === 'Y') { const y = new Date(t0).getUTCFullYear(); v[c] = suma(c, Date.UTC(y + 1, 0, 1), Date.UTC(y + 2, 0, 1)); }
+          else if (x === 'DY') { const d = new Date(t0); v[c] = d.getUTCMonth() === 11 ? suma(c, Date.UTC(d.getUTCFullYear() + 1, 0, 1), Date.UTC(d.getUTCFullYear() + 2, 0, 1)) : 0; }
+        } else if (t === 's') v[c] = rr(todos.filter((l) => l.ms < t1).reduce((s, l) => s + l.debe - l.haber, 0));
+        else if (t === 'x') {
+          let val = null, src = '';
+          if (String(x).startsWith('nom:')) { const n = nomMes(+key.slice(0, 4), key.slice(5)); if (n) { val = rr(Number(n[x.slice(4)]) || 0); src = 'nom'; } }
+          const y = +key.slice(0, 4), esT = T === 'tri';
+          const kPres = esT ? key.slice(5) : T === 'mes' && e?.tipo === 'PYME' ? (+key.slice(5) % 3 === 0 ? `${+key.slice(5) / 3}T` : null) : key.slice(5);
+          if (kPres === null && (x === '303neg' || x === '303pos')) { v[c] = null; fuente[c] = 'nodecl'; return; }
+          const pv = x === '303neg' || x === '303pos' ? prsVal(y, '303', kPres, 'liq')
+            : x === 'man' && (k === 'c4709' || k === 'c4752') ? prsVal(y + 1, '200', 'A', 'res') // el 200 del ejercicio y se presenta (y se guarda) en el año siguiente
+              : x === 'man' && k === 'c4730' ? prsVal(y, '202', key.slice(5), 'res') : undefined;
+          if (x === '303neg' && pv !== undefined && pv < 0) {
+            const ult = esT ? /-4T$/.test(key) : /-12$/.test(key), c87 = prsVal(y, '303', kPres, 'c87');
+            if (ult && ((v.DEV || 0) > 0.005 || !(c87 > 0.005))) v._devolver = true;
+          }
+          if (pv !== undefined) { val = x === '303neg' || k === 'c4709' ? rr(Math.max(0, -pv)) : x === '303pos' || k === 'c4752' ? rr(Math.max(0, pv)) : rr(pv); src = 'pres'; }
+          else if (!String(x).startsWith('nom:')) src = 'sinpres';
+          if (src !== 'nom' && src !== 'pres' && man[key] !== undefined && man[key] !== '') { val = +man[key]; src = 'man'; } // a mano solo si no hay dato de nóminas o presentados
+          v[c] = val; fuente[c] = src || 'vacio';
+        }
+      });
+      C.cols.forEach(([t, c, lab, f]) => { if (t === 'f') { const r = f(v); v[c] = r === null ? null : rr(r); } });
+      C.cols.forEach(([t, c, lab, de]) => { if (t === 'a') { if (v[de] !== null && v[de] !== undefined) acum[c] = rr((acum[c] || 0) + v[de]); v[c] = v[de] === null ? null : (acum[c] || 0); } });
+      filas.push({ key, lbl: etiquetaPer(T, key), v, fuente, y: key.slice(0, 4) });
+    });
+    const avisos = [];
+    if (!M.length) avisos.push('Falta el extracto contable: suéltalo en la franja de arriba.');
+    else if (!todos.length) avisos.push(`El extracto no tiene movimientos de la cuenta ${pref}. Cambia la cuenta en el recuadro «Cuenta contable».`);
+    if (!sigla) avisos.push('Falta la sigla de la empresa (pestaña Empresas): es la que usan los asientos de liquidación.');
+    if (extNom) avisos.push(`La columna «${C.cols.find((c) => c[0] === 'x' && String(c[3]).startsWith('nom:'))[2]}» trae el total del mes de la pestaña Nóminas.`);
+    if (C.cols.some((c) => c[0] === 'x' && !String(c[3]).startsWith('nom:'))) avisos.push('La columna del impuesto presentado se trae de «Impuestos Presentados», del mismo periodo. Donde pone «sin presentar» falta ese dato (o se puede escribir a mano).');
+    if (C.cols.some((c) => c[0] === 'c' && c[3])) avisos.push('Las columnas marcadas como pagadas el periodo siguiente suman los pagos del mes (o ejercicio) posterior.');
+    avisos.push('El tipo de cada movimiento se deduce del asiento; se puede cambiar en la tabla.');
+    return { k, C, T, ej, pref, ambito, movs, ctl, filas, avisos, subcuentas: [...new Set(todos.map((l) => l.cuenta))].sort(),
+      desde: ambito === 'todo' ? (movs.length ? fdate(movs[0].l.ms) : '-') : `01/01/${ej}`, hasta: ambito === 'todo' ? (movs.length ? fdate(movs[movs.length - 1].l.ms) : '-') : `31/12/${ej}` };
+  }
+
+  function vistaCuenta(k) {
+    if (!S.sel) return sinEmpresa;
+    const M = grande('may-mov');
+    if (!M) return cargandoTxt;
+    if (!ctaDe(k)) return '<p class="vacio">Esta cuenta no aplica a la empresa elegida.</p>';
+    const D = calcCuenta(k, M), C = D.C, c = D.ctl, e = empresa(), ed = puede(), sigla = e?.siglas ?? '';
+    const lblS = (t) => String(t).replace(/\{S\}/g, sigla);
+    const z = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '-' : fnum(v));
+    let movs = D.movs;
+    if (ctaFil.comp === 'pend') movs = movs.filter((x) => !x.comp); else if (ctaFil.comp === 'Sí' || ctaFil.comp === 'No') movs = movs.filter((x) => x.comp === ctaFil.comp);
+    if (ctaFil.q) { const q = sinAc(ctaFil.q); movs = movs.filter((x) => sinAc(`${fdate(x.l.ms)} ${x.l.asiento} ${x.l.desc} ${x.l.debe} ${x.l.haber} ${x.tipo}`).includes(q)); }
+    ctaVis = movs.map((x) => x.l.firma);
+    const opts = (t) => C.codes.map((cc) => `<option value="${cc}"${t === cc ? ' selected' : ''}>${esc(cc === 'S' ? sigla : cc)}</option>`).join('');
+    const vis = movs.slice(0, ctaMas);
+    const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}"><td class="c">${fdate(x.l.ms)}</td><td>${esc(x.l.asiento)}</td><td>${esc(x.l.desc)}</td>
+      <td class="num">${x.l.debe ? fnum(x.l.debe) : ''}</td><td class="num">${x.l.haber ? fnum(x.l.haber) : ''}</td><td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
+      <td class="c">${ed ? `<select data-cta="comp" data-id="${esc(x.l.firma)}"><option value=""></option><option${x.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${x.comp === 'No' ? ' selected' : ''}>No</option></select>` : esc(x.comp)}</td>
+      <td class="c">${ed ? `<select data-cta="clase" data-id="${esc(`${k}§${x.l.firma}`)}">${opts(x.tipo)}</select>` : esc(x.tipo)}</td><td class="c">${MESES[+x.l.fecha.slice(5, 7) - 1].slice(0, 3)}-${x.l.fecha.slice(0, 4)}</td></tr>`).join('');
+    const kv = (t, v) => `<tr><td>${t}</td><td class="num">${v}</td></tr>`;
+    const control = `<table class="tprs tnom"><tbody>${kv('<b>Nº de partidas del extracto</b>', c.n)}${kv('Partidas comprobadas', c.comp || '-')}${kv('Partidas pendientes', c.pend || '-')}${kv('Partidas con excepción (No)', c.exc || '-')}
+      ${kv('Importe comprobado', z(c.impComp))}${kv('Cobertura de la muestra', `${fnum(c.cobertura * 100)} %`)}</tbody></table>
+      <table class="tprs tnom"><tbody>${kv('<b>Saldo inicial del periodo</b>', z(c.saldoIni))}${kv('Total Debe', z(c.tD))}${kv('Total Haber', z(c.tH))}${kv('Movimiento neto del periodo', z(c.neto))}${kv('<b>Saldo final calculado</b>', `<b>${z(c.saldoFin)}</b>`)}
+      <tr><td>Saldo según balance de sumas y saldos</td><td class="num">${ed ? `<input class="emp-in" style="width:7.5rem;text-align:right" data-cta="balance" data-id="${k}-${D.ej}" value="${c.balance === null ? '' : fnum(c.balance)}" placeholder="-">` : (c.balance === null ? '-' : fnum(c.balance))}</td></tr>
+      ${kv('<b>DIFERENCIA (control de cuadre)</b>', `<b>${fnum(c.dif)}</b>`)}<tr class="${c.estado === 'CUADRA' ? 'cf-ok' : 'cf-ko'}"><td>Estado del cuadre</td><td class="num"><b>${c.estado}</b></td></tr></tbody></table>`;
+    const info = `<div class="css-4760-t">EXTRACTO DE CUENTA CONTABLE · ${esc(e.nombre)} · ${esc(e.cif)}</div>
+      <p class="hint" style="margin:.2rem 0"><b>Cuenta contable:</b> <input class="emp-in" style="width:6.5rem" data-cta="pref" data-id="${k}" value="${esc(D.pref)}"> ${esc(D.subcuentas.join(', ') || 'sin movimientos')} · <b>Descripción:</b> ${esc(C.desc)} · <b>Ejercicio:</b> ${D.ej}
+      · <b>Periodo:</b> <select data-cta="ambito" data-id="${k}"><option value="todo"${D.ambito === 'todo' ? ' selected' : ''}>Todo el extracto</option><option value="ej"${D.ambito !== 'todo' ? ' selected' : ''}>Año completo ${D.ej}</option></select> · <b>Desde ${D.desde} hasta ${D.hasta}</b></p>`;
+    // resumen por periodo
+    const cols = C.cols, xc = (cc) => (cc[0] === 'f' || cc[1] === 'DA' ? ' xdif' : '');
+    const celda = (cc, fila) => {
+      const [t, cn] = cc, v = fila.v[cn], f = fila.fuente[cn];
+      if (t === 'x' && f === 'nodecl') return '<td class="num vacio" title="Sin declaración en este mes (se presenta por trimestres)">-</td>';
+      if (t === 'x' && (f === 'sinpres' || f === 'vacio')) return ed ? `<td class="in"><input data-cta="manual" data-id="${k}§${fila.key}" value="" placeholder="sin presentar" title="No hay importe de este periodo en Impuestos Presentados: escríbelo a mano o rellénalo allí"></td>` : '<td class="num vacio">sin presentar</td>';
+      if (t === 'x' && f === 'nom') return `<td class="num pdfok" title="Total del mes en la pestaña Nóminas">${fnum(v)}</td>`;
+      if (t === 'x' && f === 'pres') return `<td class="num pdfok" title="De Impuestos Presentados">${fnum(v)}</td>`;
+      if (t === 'x' && f === 'man') return `<td class="in"><input data-cta="manual" data-id="${k}§${fila.key}" value="${fnum(v)}"></td>`;
+      const dif = t === 'f' && cc[4];
+      return `<td class="num${dif && v !== null && Math.abs(v) > 0.01 ? ' dif-ko' : ''}${xc(cc)}">${v === null || v === undefined ? '-' : (t === 'f' || t === 'a' ? fnum(v) : z(v))}</td>`;
+    };
+    const anos = [...new Set(D.filas.map((x) => x.y))];
+    const cuerpo = anos.map((y) => {
+      const rs = D.filas.filter((x) => x.y === y);
+      const tr = rs.map((x) => `<tr><td class="pp">${esc(x.lbl)}</td>${cols.map((cc) => celda(cc, x)).join('')}</tr>`).join('');
+      if (C.per === 'ano') return tr;
+      return `${tr}<tr class="ttot"><td class="pp">TOTAL ${y}</td>${cols.map(([tt, cn]) => `<td class="num">${tt === 'c' || tt === 'x' ? z(rr(rs.reduce((s, f) => s + (f.v[cn] || 0), 0))) : ''}</td>`).join('')}</tr>`;
+    }).join('');
+    const resumen = `<div class="css-4760-t">${esc(lblS(D.T === 'tri' ? C.tit.replace('MENSUAL', 'TRIMESTRAL') : C.tit))}</div>
+      <div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
+      <tbody>${cuerpo || `<tr><td colspan="${cols.length + 1}" class="vacio">Sin movimientos</td></tr>`}</tbody></table></div>`;
+    const av = D.avisos.map((a) => `<p>⚠ ${esc(a)}</p>`).join('');
+    return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel de la cuenta o de varias cuentas) o pulsa para elegirlo')}
+      <section class="prs-card"><div class="css-flex" style="padding-bottom:0">${control}</div><div style="padding:0 1rem">${info}</div></section>
+      <section class="prs-card"><div class="css-flex"><div>
+        <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
+        <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
+        ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button>` : ''}</div>
+        <div class="wrap" style="max-height:70vh;overflow:auto"><table class="tprs tnom"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th>Comprobado</th><th>Tipo</th><th>Periodo</th></tr></thead>
+        <tbody>${filas || '<tr><td colspan="9" class="vacio">Sin movimientos</td></tr>'}</tbody></table></div>
+        ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
+        <div>${resumen}</div></div></section>
+      ${av ? `<div class="aviso">${av}</div>` : ''}`;
+  }
+
   // ---- Bloque 9 · Nóminas (a mano), conciliación de la Seguridad Social y control de nóminas ----
   // Un registro «nominas» por empresa y ejercicio: datos[mes 01..12][campo]; los campos c_* son de la conciliación de la SS
   const NOM_CONC = [['salarios', 'Total devengado (T. devengado − kilometraje − dietas − indemnizaciones)'], ['km', 'Kilometraje exento'], ['dietas', 'Dietas y manutención'], ['indem', 'Indemnizaciones'],
@@ -1863,6 +2149,8 @@ export function crearModulos(c) {
       'm-manret': () => formManRet(d.m),
       'm-retprint': () => imprimirRet(d.m),
       'm-fundaedel': () => quitarFundae(d.y),
+      'm-ctavis': () => accionCta('compvis', '', ''),
+      'm-ctamas': () => { ctaMas += 300; render(); },
       'm-sube': () => {
         archKind = d.kind;
         const inp = document.getElementById('archIn');
@@ -1992,5 +2280,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }

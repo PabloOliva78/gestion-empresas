@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=60';
+import { crearModulos } from './modulos.js?v=61';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -150,7 +150,7 @@ const GRUPOS = [
   ['3.- INFORMACIÓN EMPRESA', ['ficha', 'empresas'], '', 'Ficha de la empresa y listado de empresas del grupo.'],
   ['4.- MODELOS TRIBUTARIOS', ['mod111', 'mod115', 'mod123', 'mod200', 'mod202', 'mod303', 'mod349', 'mod583', 'mod592', 'moda22', 'mod180', 'mod190', 'mod193', 'mod232', 'mod390', 'modintra'],
     'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
-  ['5.- CUENTAS CONTABLES', ['bss', 'c47', 'c465', 'c640', 'c642'], 'pgc', 'Saldos de las cuentas 47x, 465, 640 y 642.'],
+  ['5.- CUENTAS CONTABLES', ['bss', 'c4650', 'c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['8.- CONCILIACIONES FISCALES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
@@ -205,7 +205,7 @@ const ICONOS = { aeat: 'png', rm: 'png', pgc: 'jpg', sii: 'png', tgss: 'png' };
 const iconoGrupo = (k) => (k ? `<img class="gico" src="logos/grupo-${k}.${ICONOS[k]}?v=11" alt="" onerror="this.remove()">` : '');
 
 function tabsNav() {
-  const grupos = GRUPOS.map(([tit, ids, ico, sub], i) => ({ i, tit, ico, sub, ids: ids.filter((id) => !TABS[id][3] || esAdmin()) }))
+  const grupos = GRUPOS.map(([tit, ids, ico, sub], i) => ({ i, tit, ico, sub, ids: ids.filter((id) => (!TABS[id][3] || esAdmin()) && (!TABS[id][4] || TABS[id][4]())) }))
     .filter((g) => g.ids.length);
   const abierto = grupos.find((g) => g.i === S.grp);
   const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
@@ -717,6 +717,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
   if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
+  if (t.dataset.cta) return void M.cta(t.dataset.cta, t.dataset.id, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
   if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);
   if (t.dataset.retclave) return void M.guardarRetClave(t.dataset.retclave, t.value);

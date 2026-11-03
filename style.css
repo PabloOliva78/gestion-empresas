@@ -393,3 +393,7 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 
 .tnom tr.cf-ok td { background: #d6f2d6 !important; color: #14631f; }
 .tnom tr.cf-ko td { background: #fbdada !important; color: #a11212; }
+
+.tnom th.xdif, .tnom td.xdif { background: #f3f6fd; }
+.tnom td.pdfok { color: #14631f; }
+.tnom td.in input { text-align: right; }
