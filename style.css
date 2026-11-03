@@ -468,3 +468,20 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas table.res th.pp, .ctas table.res td.pp { width: 5.5rem; font-size: .9rem; }
 .ctas table.mov th:nth-child(1) { width: 6rem; } .ctas table.mov th:nth-child(2) { width: 7rem; }
 .ctas table.mov th:nth-child(4), .ctas table.mov th:nth-child(5) { width: 7rem; } .ctas table.mov th:nth-child(6) { width: 7.4rem; } .ctas table.mov th:nth-child(7) { width: 6rem; }
+
+/* cuentas: el tamaño sigue al ancho de la pantalla (todo en em sobre un tamaño base que escala con la ventana) */
+.ctas { font-size: clamp(11px, 0.82vw, 19px); }
+.ctas td, .ctas td.num, .ctas td.in input, .ctas td select { font-size: 1em; }
+.ctas th { font-size: .88em; }
+.ctas td { padding: .3em .5em; }
+.ctas table.res th:not(.pp) { width: 8.4em; font-size: .88em; }
+.ctas table.res { width: calc(var(--ncol, 12) * 8.4em + 5.8em); }
+.ctas table.res th.pp, .ctas table.res td.pp { width: 5.8em; font-size: .95em; }
+.ctas table.mov th:nth-child(1) { width: 6.4em; } .ctas table.mov th:nth-child(2) { width: 7.4em; }
+.ctas table.mov th:nth-child(4), .ctas table.mov th:nth-child(5) { width: 7.4em; } .ctas table.mov th:nth-child(6) { width: 7.8em; } .ctas table.mov th:nth-child(7) { width: 6.4em; }
+.ctas .css-4760-t { font-size: 1em; }
+.ctas .fc-cab, .ctas .fc-cab input, .ctas .fc-cab select, .ctas .fc-cab label { font-size: 1em; }
+.xc-cab { font-size: clamp(11px, 0.82vw, 19px); }
+.xc-ruta, .xc-p, .xc-sub, .xc-per, .xc-rt, .xc-desc, .xc-kt, .xc-balin, .xc-est, .xc-tog, .xc-p select { font-size: 1em; }
+.xc-tit { font-size: 2em; }
+.xc-kv { font-size: 2.3em; }
