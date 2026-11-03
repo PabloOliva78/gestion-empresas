@@ -428,8 +428,8 @@ export function crearModulos(c) {
   const SENT = { E: { lib: 'repercutido', cuota: 'Cuota repercutida', nif: 'NIF destinatario', boton: 'EMITIDAS' }, R: { lib: 'soportado', cuota: 'Cuota soportada', nif: 'NIF emisor', boton: 'RECIBIDAS' } };
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   // Franja punteada para soltar un Excel (kind = botón del lateral al que equivale: sii, emitidas, recibidas)
-  const dz = (kind, titulo, sub) => `<div class="dropzone" data-kind="${kind}" tabindex="0" role="button"><b>${titulo}</b> ${sub}
-    <input type="file" data-dzkind="${kind}" accept=".xlsx,.xls,.csv" multiple hidden></div>`;
+  const dz = (kind, titulo, sub, acc = '.xlsx,.xls,.csv') => `<div class="dropzone" data-kind="${kind}" tabindex="0" role="button"><b>${titulo}</b> ${sub}
+    <input type="file" data-dzkind="${kind}" accept="${acc}" multiple hidden></div>`;
   const suma = (a, k) => a.reduce((t, x) => t + x[k], 0);
   const TOPE = 1000;
   const tope = (n) => (n > TOPE ? `<p class="hint">Se muestran las ${TOPE} primeras de ${n}; el resto está cargado y cuenta en los totales.</p>` : '');
@@ -984,9 +984,9 @@ export function crearModulos(c) {
     };
     const grupos = PRS.map((g) => `<section class="prs-card"><div class="prs-h">${g.t}</div><div class="wrap">${g.tipo === 'ano' ? tabla(g, ej)
       : anios.map((y) => `${anios.length > 1 ? `<div class="prs-y">Ejercicio ${y}</div>` : ''}${tabla(g, y)}`).join('')}</div></section>`).join('');
-    return `<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
+    return `${dz('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '(uno o varios) o haz clic para elegirlos', '.pdf')}<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
       <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
-      <p class="hint">Importes de las declaraciones presentadas. Se escriben a mano en cada celda (se guardan al salir) y alimentan la comprobación de las pestañas de retenciones y el cuadro de mando. La lectura automática de los PDF presentados está pendiente.</p>${grupos}`;
+      <p class="hint">Importes de las declaraciones presentadas. Se escriben a mano en cada celda (se guardan al salir) y alimentan la comprobación de las pestañas de retenciones y el cuadro de mando. La lectura automática de las casillas de los PDF está pendiente.</p>${listaPrsPdf()}${grupos}`;
   }
 
   // ---- Bloque 1 · Retenciones Modelo 111 / 115 / 123: listado justificativo del periodo, desde el libro de recibidas ----
@@ -1253,7 +1253,41 @@ export function crearModulos(c) {
       <p class="hint">«Saldo antes del cierre» = apertura + débito − crédito + ajustes. El saldo de cierre sale a cero porque el ejercicio ya está regularizado.</p>`;
   }
 
+  // PDF de declaraciones presentadas: se guardan en la empresa (por el NIF del PDF, o la elegida) con modelo, ejercicio y periodo detectados
+  async function cargarPresentados(files) {
+    const informe = [];
+    for (const f of files) {
+      try {
+        if (!/\.pdf$/i.test(f.name)) { informe.push(`↷ ${f.name}: no es PDF`); continue; }
+        const t = await textoPdf(f);
+        const e = S.empresas.find((x) => x.cif === nifDe(t)) ?? empresa();
+        if (!e) { informe.push(`⚠ ${f.name}: elige la empresa`); continue; }
+        const s = `${f.name}\n${t}`;
+        const modelo = (/modelo\s*(?:n[ºo.]*\s*)?(A22|\d{3})/i.exec(s) || [])[1] ?? '';
+        const ej = Number((/(?:ejercicio|a[ñn]o)\D{0,12}(20\d\d)/i.exec(s) || /\b(20\d\d)\b/.exec(s) || [])[1]) || Number(S.ejercicio);
+        const per = (/per[ií]odo\D{0,12}(\d[TP]|\d{2}|0A)\b/i.exec(s) || [])[1] ?? '';
+        const ref = `${f.name}|${f.size}`;
+        if (S.registros.some((r) => r.tipo === 'prspdf' && r.empresa_id === e.id && r.datos.ref === ref)) { informe.push(`↩ ${f.name}: repetido`); continue; }
+        const id = crypto.randomUUID();
+        const sub = await subir(e.id, 'prspdf', id, 'archivo', f);
+        if (sub.error) throw new Error(sub.error);
+        const err = await guardarRegistro(null, { id, empresa_id: e.id, tipo: 'prspdf', ejercicio: ej, datos: { nombre: f.name, ref, modelo, periodo: per, archivo: sub.val } });
+        if (err) throw new Error(err);
+        informe.push(`✔ ${e.siglas || e.nombre}: ${f.name} → modelo ${modelo || '?'} · ${ej} · ${per || '—'}`);
+      } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
+    }
+    await cargar(); render();
+    alert(informe.join('\n'));
+  }
+  const listaPrsPdf = () => {
+    const l = S.registros.filter((r) => r.tipo === 'prspdf' && r.empresa_id === S.sel).sort((a, b) => b.ejercicio - a.ejercicio || String(a.datos.modelo).localeCompare(b.datos.modelo));
+    return l.length ? `<section class="prs-card"><div class="prs-h">PDF incorporados (${l.length})</div><div class="wrap"><table class="tprs"><thead><tr><th class="pp">Modelo</th><th>Ejercicio</th><th>Periodo</th><th>Archivo</th><th></th></tr></thead><tbody>
+      ${l.map((r) => `<tr><td class="pp">${esc(r.datos.modelo || '?')}</td><td class="num">${r.ejercicio}</td><td class="num">${esc(r.datos.periodo || '—')}</td><td>${verArchivo(r.datos.archivo)}</td>
+        <td class="num">${puede() ? `<button class="small danger" data-act="m-del" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>` : '';
+  };
+
   async function subirArchivos(files) {
+    if (archKind === 'prspdf') return cargarPresentados(files);
     if (archKind === 'sys') return cargarSYS(files);
     if (archKind === 'impuestos') return cargarPdfs(files);
     if (archKind === 'registro') return cargarRegistro(files);
