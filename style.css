@@ -608,3 +608,10 @@ td.est-ok { color: #14631f; }
 .sii-t td { white-space: nowrap; font-size: .82rem; }
 tr.sii-no td { opacity: .5; }
 td.amar { background: #fff3a8; }
+
+/* SII: todas las columnas, barra lateral y ancho de columna al texto */
+.siiwrap { max-height: 74vh; overflow: auto; }
+.sii-t { table-layout: auto !important; width: max-content !important; min-width: 100%; border-collapse: separate; border-spacing: 0; }
+.sii-t th { position: sticky; top: 0; z-index: 2; white-space: nowrap; min-width: 0; font-size: .8rem; padding: .35em .6em; background: #143a7b; color: #fff; text-align: center; }
+.sii-t td { white-space: nowrap; font-size: .82rem; padding: .25em .6em; }
+.sii-t td.in input { width: 100%; min-width: 6em; field-sizing: content; }

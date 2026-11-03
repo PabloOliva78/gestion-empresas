@@ -668,8 +668,8 @@ export function crearModulos(c) {
     const cumple = todos.filter(ok), lista = (siiTodos[s] ? todos : cumple).slice(0, siiN[s]);
     const sumB = rr(cumple.reduce((t, x) => t + x.base, 0)), sumC = rr(cumple.reduce((t, x) => t + x.cuota, 0));
     // solo las columnas de la descarga que tienen algún dato en lo que se ve
-    const cols = [...new Set(lista.flatMap((x) => Object.keys(raw.get(siiKey(x)) ?? {}).map(Number)))].sort((a, b) => a - b);
-    const nOcultas = cab.length - cols.length;
+    const cols = cab.map((_, i) => i); // todas las columnas de la descarga, con o sin datos
+    const nOcultas = 0;
     const celdaRaw = (v) => { const t = v === undefined ? '' : String(v); return `<td class="${/^-?[\d.]+,\d+$/.test(t) ? 'num' : ''}">${esc(t)}</td>`; };
     const fil = (k, lbl, ph = '') => `<label>${lbl}<input class="emp-in" style="width:7em" data-siifil="${s}|${k}" value="${esc(F[k] ?? '')}" placeholder="${esc(ph)}"></label>`;
     const ci = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-sie="${s}|${idx.get(x)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
@@ -680,7 +680,7 @@ export function crearModulos(c) {
       <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
     return `${dropz}
       <section class="prs-card"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
-      <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas con datos (${nOcultas} vacías ocultas)</p>
+      <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas de la descarga (barra de desplazamiento lateral)</p>
       <div class="css-flex" style="gap:2em;flex-wrap:wrap;padding-bottom:.2em"><table class="tprs tnom" style="width:auto"><tbody>
         <tr><td>NIF Titular</td><td class="amar"><b>${esc(e.cif)}</b></td></tr><tr><td>Nombre / Razón social</td><td class="amar"><b>${esc(e.nombre)}</b></td></tr>
         <tr><td>Libro registro</td><td class="amar"><b>Facturas ${emit ? 'Emitidas' : 'Recibidas'}</b></td></tr><tr><td>Ejercicio</td><td class="amar"><b>${ej}</b></td></tr>
