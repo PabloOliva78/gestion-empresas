@@ -521,7 +521,13 @@ export function valoresPresentado(modelo, cas, texto = '') {
     }
     if (hay) for (const c of 'EASI') pon(c, r2n(sum[c]));
   }
-  else if (modelo === '200') { pon('cuota', g(562)); pon('res', g(621)); }
+  else if (modelo === '232') {
+    // operaciones vinculadas: «… <tipo 2 dígitos> I|P <método> <importe>» (el nombre puede ocupar otra línea)
+    const re = /\s\d{2}\s+([IP])\s+\w{1,3}\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})$/;
+    let ing = 0, pag = 0, nr = 0;
+    for (const l of lineas) { const m = re.exec(l); if (m) { nr++; if (m[1] === 'I') ing += num(m[2]); else pag += num(m[2]); } }
+    if (nr) { pon('ing', r2n(ing)); pon('pag', r2n(pag)); pon('nreg', nr); }
+  } else if (modelo === '200') { pon('cuota', g(562)); pon('res', g(621)); }
   else if (modelo === '202') { pon('res', g(34) ?? g(3)); }
   else if (modelo === 'INT') {
     const fl = (/Flujo:\s*([EI])\s*-/.exec(texto) || [])[1];
@@ -560,7 +566,8 @@ export function cabeceraPresentado(texto) {
     return { modelo: 'INT', ej: +m[2] || null, per: m[1] ?? '' };
   }
   const modelo = (/Modelo\s+(A22|\d{3})\b/i.exec(texto) || [])[1] ?? '';
-  const ej = parseInt((/Ejercicio.{0,150}?\b(20\d\d)\b/i.exec(t) || [])[1] ?? '', 10) || null;
+  const ej = (modelo === '232' && parseInt((/comprendido desde\s+\d\d \d\d (20\d\d)/i.exec(t) || [])[1] ?? '', 10))
+    || parseInt((/Ejercicio.{0,150}?\b(20\d\d)\b/i.exec(t) || [])[1] ?? '', 10) || null;
   const per = (/Per[ií]odo[^\dA-Z]{0,80}?\b(0[1-9]|1[0-2]|[1-4]T|[1-3]P|0A)\b/i.exec(t) || /Per[ií]odo.{0,80}?\b(0[1-9]|1[0-2]|[1-4]T|[1-3]P|0A)\b/i.exec(t) || [])[1] ?? '';
   return { modelo, ej, per };
 }
