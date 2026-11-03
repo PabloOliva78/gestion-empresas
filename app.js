@@ -1,7 +1,18 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=48';
+import { crearModulos } from './modulos.js?v=49';
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
+// ...y se cierra tras 15 minutos sin tocar nada
+const INACTIVIDAD_MS = 15 * 60 * 1000;
+let ultimaActividad = Date.now();
+['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener?.(ev, () => { ultimaActividad = Date.now(); }, { passive: true }));
+setInterval?.(async () => {
+  if (Date.now() - ultimaActividad < INACTIVIDAD_MS) return;
+  ultimaActividad = Date.now();
+  const { data } = await db.auth.getSession();
+  if (data?.session) await db.auth.signOut();
+}, 30000)?.unref?.();
 const root = document.getElementById('app');
 
 const AREAS = { fiscal: 'Fiscal', contable: 'Contable', laboral: 'Laboral', mercantil: 'Registro Mercantil' };
