@@ -295,3 +295,19 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .badge.amar { background: #fff0a8; color: #6b4e00; align-self: flex-start; }
 .badge.rojo { background: #fde2e2; color: #b42318; }
 .badge.verde { background: #dcf3e4; color: #1b7f3b; }
+/* Impuestos presentados: tarjetas con cuadrícula editable */
+.prs-card { background: #fff; border: 1px solid #d6dbe8; border-radius: 12px; margin: 1.1rem 0; overflow: hidden; box-shadow: 0 1px 3px rgba(20, 40, 90, .06); }
+.prs-h { background: linear-gradient(90deg, #14286a, #1f3a7a); color: #fff; padding: .65rem 1.1rem; font-weight: 600; letter-spacing: .01em; }
+.prs-y { padding: .5rem 1.1rem; font-weight: 600; color: #1f3a7a; background: #f3f6fc; border-top: 1px solid #e3e8f2; }
+.tprs { border-collapse: collapse; width: 100%; font-size: .86rem; color: #1f3864; }
+.tprs th { background: #e8edf8; color: #1f3a7a; font-weight: 600; padding: .45rem .7rem; text-align: center; border-bottom: 1px solid #cfd6e6; }
+.tprs th.mh { border-left: 1px solid #cfd6e6; background: #dfe6f5; }
+.tprs th.ch { font-weight: 500; font-size: .78rem; border-left: 1px solid #e3e8f2; }
+.tprs td { padding: .2rem .5rem; border-bottom: 1px solid #edf0f7; }
+.tprs td.pp, .tprs th.pp { text-align: left; padding-left: 1.1rem; font-weight: 600; white-space: nowrap; position: sticky; left: 0; background: inherit; min-width: 130px; }
+.tprs tbody tr:nth-child(even) td { background: #fafbfe; }
+.tprs td.num { text-align: right; padding-right: .9rem; white-space: nowrap; }
+.tprs td.in input { width: 100%; min-width: 96px; text-align: right; border: 1px solid transparent; border-radius: 6px; padding: .28rem .5rem; background: transparent; font: inherit; color: #1f3864; }
+.tprs td.in input:hover { border-color: #cfd6e6; background: #fff; }
+.tprs td.in input:focus { outline: 0; border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 2px rgba(59, 130, 246, .2); }
+.tprs tr.ttot td { background: #eef2fb; font-weight: 700; border-top: 2px solid #cfd6e6; }

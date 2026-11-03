@@ -249,8 +249,7 @@ export function crearModulos(c) {
   // ---------- Cuadro de mando del grupo ----------
   function vistaCmg() {
     const cols = ['303', '111', '115', '123', '349', '390', '190', '200'];
-    const pres = S.registros.filter((r) => r.tipo === 'pres' && r.ejercicio === Number(S.ejercicio)
-      && (!S.periodo || r.datos.periodo === S.periodo));
+    const pres = prsComoLista();
     const liq = S.registros.filter((r) => r.tipo === 'liq' && r.ejercicio === Number(S.ejercicio) && r.datos.estado !== 'Presentado');
     const filas = S.empresas.map((e) => `<tr><td><div class="emp">${c.logoHtml(e)}<b>${esc(e.siglas || e.nombre)}</b></div></td>
       ${cols.map((m) => { const n = pres.filter((r) => r.empresa_id === e.id && r.datos.modelo === m).length;
@@ -270,7 +269,7 @@ export function crearModulos(c) {
     r111: ['Retenciones Modelo 111', 'Nóminas y profesionales', () => vistaListadoRet('111')],
     r115: ['Retenciones Modelo 115', 'Arrendamientos', () => vistaListadoRet('115')],
     r123: ['Retenciones Modelo 123', 'Capital mobiliario', () => vistaListadoRet('123')],
-    pres: ['Impuestos Presentados', 'Justificantes y PDF', L('pres')],
+    pres: ['Impuestos Presentados', 'Justificantes y PDF', () => vistaPrs()],
     liq: ['Liquidaciones Presentar', 'Todas las empresas', L('liq')],
     venc: ['Pagos Domiciliados Impuestos', 'Todas las empresas', L('venc')],
     notif: ['Notificaciones y requerimientos', 'Plazos de respuesta', L('notif')],
@@ -939,6 +938,57 @@ export function crearModulos(c) {
       <p class="hint">Borrador de trabajo. Las cuotas conservan el signo negativo del libro registro y en las casillas figuran en positivo. ${modelo === '111' ? 'La parte de nóminas (casillas 1 a 3) se introduce a mano hasta que se carguen las nóminas.' : ''}</p>`;
   }
 
+  // ---- Impuestos presentados: cuadrícula por modelo y periodo (importes presentados, editables; un registro «prs» por empresa y ejercicio) ----
+  let prsVer = 'ej';
+  const prsRegs = () => S.registros.filter((r) => r.tipo === 'prs' && r.empresa_id === S.sel);
+  const PRS = [
+    { t: 'Retenciones · 111, 115 y 123', tipo: 'per', ms: [['111', 'Modelo 111', [['retN', 'Nóminas (03+06)'], ['retP', 'Profesionales (09)']]], ['115', 'Modelo 115', [['ret', 'Retenciones (03)']]], ['123', 'Modelo 123', [['ret', 'Retenciones (09)']]]] },
+    { t: 'IVA · 303, 349 e Intrastat', tipo: 'per', ms: [['303', 'Modelo 303', [['res', 'Resultado (71)']]], ['349', 'Modelo 349', [['imp', 'Importe (€)']]], ['INT', 'Intrastat', [['imp', 'Importe (€)']]]] },
+    { t: 'Anuales · 180, 190, 193, 200 y 232', tipo: 'ano', ms: [['180', 'Modelo 180', [['perc', 'Percepciones (02)'], ['ret', 'Retenciones (03)']]], ['190', 'Modelo 190', [['perc', 'Percepciones (02)'], ['ret', 'Retenciones (03)']]],
+      ['193', 'Modelo 193', [['perc', 'Percepciones (02)'], ['ret', 'Retenciones (03)']]], ['200', 'Modelo 200', [['cuota', 'Cuota (00562)'], ['res', 'Resultado (00621)']]], ['232', 'Modelo 232', [['imp', 'Importe (€)']]]] },
+    { t: 'Pagos fraccionados · 202', tipo: 'p202', ms: [['202', 'Modelo 202', [['res', 'Pago fraccionado (34)']]]] },
+    { t: 'Impuestos especiales · 583, 592 y A22', tipo: 'per', ms: [['583', 'Modelo 583', [['res', 'Resultado']]], ['592', 'Modelo 592', [['res', 'Resultado']]], ['A22', 'Modelo A22', [['res', 'Resultado']]]] },
+  ];
+  const prsVal = (ej, m, per, col) => prsRegs().find((r) => r.ejercicio === ej)?.datos?.[`${m}|${per}`]?.[col];
+  const prsComoLista = () => S.registros.filter((r) => r.tipo === 'pres' && r.ejercicio === Number(S.ejercicio) && (!S.periodo || r.datos.periodo === S.periodo))
+    .concat(S.registros.filter((r) => r.tipo === 'prs' && r.ejercicio === Number(S.ejercicio)).flatMap((r) => Object.keys(r.datos)
+      .map((k) => ({ empresa_id: r.empresa_id, datos: { modelo: k.split('|')[0], periodo: k.split('|')[1] } })).filter((x) => !S.periodo || x.datos.periodo === S.periodo)));
+  async function guardarPrs(clave, valor) {
+    const [m, per, col, ej] = clave.split('|');
+    const reg = prsRegs().find((r) => r.ejercicio === +ej), k = `${m}|${per}`;
+    const datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+    datos[k] ??= {};
+    if (String(valor).trim() === '') delete datos[k][col]; else datos[k][col] = parseES(valor);
+    if (!Object.keys(datos[k]).length) delete datos[k];
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'prs', ejercicio: +ej, datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  const setPrsVer = (v) => { prsVer = v; render(); };
+
+  function vistaPrs() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), ej = Number(S.ejercicio), ed = puede();
+    const anios = prsVer === 'todo' ? [...new Set([...prsRegs().map((r) => r.ejercicio), ej])].sort((a, b) => b - a) : [ej];
+    const periodos = (tipo) => (tipo === 'p202' ? [['1P', 'Abril (1P)'], ['2P', 'Octubre (2P)'], ['3P', 'Diciembre (3P)']]
+      : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'].map((q) => [q, `${q} trimestre`]) : MESES.map((m, i) => [String(i + 1).padStart(2, '0'), m[0].toUpperCase() + m.slice(1)]));
+    const celda = (y, m, per, col) => { const v = prsVal(y, m, per, col); return ed ? `<td class="in"><input data-prs="${m}|${per}|${col}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`; };
+    const cab = (g) => `<thead><tr><th rowspan="2" class="pp">${g.tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${g.ms.map(([, n, cs]) => `<th colspan="${cs.length}" class="mh">${n}</th>`).join('')}</tr>
+      <tr>${g.ms.map(([, , cs]) => cs.map(([, l]) => `<th class="ch">${l}</th>`).join('')).join('')}</tr></thead>`;
+    const tabla = (g, y) => {
+      const filas = g.tipo === 'ano' ? anios.map((a) => [String(a), a, 'A']) : periodos(g.tipo).map(([p, l]) => [l, y, p]);
+      const cuerpo = filas.map(([l, yy, p]) => `<tr><td class="pp">${esc(l)}</td>${g.ms.map(([m, , cs]) => cs.map(([c]) => celda(yy, m, p, c)).join('')).join('')}</tr>`).join('');
+      const tot = g.tipo === 'per' || g.tipo === 'p202' ? `<tr class="ttot"><td class="pp">Total ${y}</td>${g.ms.map(([m, , cs]) => cs.map(([c]) =>
+        `<td class="num">${fnum(periodos(g.tipo).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')).join('')}</tr>` : '';
+      return `<table class="tprs">${cab(g)}<tbody>${cuerpo}${tot}</tbody></table>`;
+    };
+    const grupos = PRS.map((g) => `<section class="prs-card"><div class="prs-h">${g.t}</div><div class="wrap">${g.tipo === 'ano' ? tabla(g, ej)
+      : anios.map((y) => `${anios.length > 1 ? `<div class="prs-y">Ejercicio ${y}</div>` : ''}${tabla(g, y)}`).join('')}</div></section>`).join('');
+    return `<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
+      <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
+      <p class="hint">Importes de las declaraciones presentadas. Se escriben a mano en cada celda (se guardan al salir) y alimentan la comprobación de las pestañas de retenciones y el cuadro de mando. La lectura automática de los PDF presentados está pendiente.</p>${grupos}`;
+  }
+
   // ---- Bloque 1 · Retenciones Modelo 111 / 115 / 123: listado justificativo del periodo, desde el libro de recibidas ----
   const CLAVE_RET = (cod) => (/^I\.PR\./.test(cod) ? ['111', '111 · Actividades económicas'] : /^I\.NM/.test(cod) ? ['111T', '111 · Rendimientos del trabajo']
     : /^I\.ALQ/.test(cod) ? ['115', '115 · Arrendamientos'] : /^I\.(INT|DV)/.test(cod) ? ['123', '123 · Capital mobiliario'] : null);
@@ -956,7 +1006,9 @@ export function crearModulos(c) {
   }
   // lo presentado: importes de «Impuestos Presentados» para ese modelo y periodo (null = sin presentar)
   const presentadoRet = (mod, ej, per) => {
-    const fs = S.registros.filter((r) => r.tipo === 'pres' && r.empresa_id === S.sel && r.ejercicio === ej && r.datos.modelo === mod && r.datos.periodo === per);
+    const d = prsVal(ej, `${mod}|${per}`.split('|')[0], per, mod === '111' ? 'retN' : 'ret'), p = mod === '111' ? prsVal(ej, '111', per, 'retP') : undefined;
+    if (d !== undefined || p !== undefined) return Math.round(((Number(d) || 0) + (Number(p) || 0)) * 100) / 100;
+    const fs =S.registros.filter((r) => r.tipo === 'pres' && r.empresa_id === S.sel && r.ejercicio === ej && r.datos.modelo === mod && r.datos.periodo === per);
     return fs.length ? Math.round(fs.reduce((a, r) => a + (Number(r.datos.importe) || 0), 0) * 100) / 100 : null;
   };
   const nominasMan = (per0, per) => { const d = manDe('m111')?.datos ?? {}; return d[per] ?? d[per0] ?? {}; };
@@ -1461,6 +1513,11 @@ export function crearModulos(c) {
       return lis.length || tot ? { t: fnum(tot), c: 'amar' } : { t: 'Sin líneas' };
     };
   });
+  badges.pres = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const n = prsRegs().filter((r) => r.ejercicio === Number(S.ejercicio)).reduce((a, r) => a + Object.keys(r.datos).length, 0);
+    return n ? { t: `${n} declaraciones`, c: 'verde' } : { t: 'Sin datos' };
+  };
   badges.mod349 = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const l = libros();
@@ -1486,5 +1543,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => { archKind = kind; return subirArchivos(files); };
 
-  return { tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
+  return { guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif };
 }

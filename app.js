@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=30';
+import { crearModulos } from './modulos.js?v=31';
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const root = document.getElementById('app');
@@ -639,6 +639,8 @@ root.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
+  if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
+  if (t.dataset.prsver !== undefined) return void M.setPrsVer(t.value);
   if (t.dataset.man) return void M.guardarMan303(t.dataset.man, t.value);
   if (t.dataset.iban !== undefined) return void M.guardarIban(t.value);
   if (t.dataset.rectif !== undefined) return void M.setRectif(t.checked);
