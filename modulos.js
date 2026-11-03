@@ -4,6 +4,8 @@
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=39';
 
+import { CAB_SII } from './siicab.js?v=1';
+
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
 
@@ -639,8 +641,9 @@ export function crearModulos(c) {
   function siiFiltro(clave, valor) { const [s, c] = clave.split('|'); siiFil[s][c] = valor; siiN[s] = 150; render(); }
   function vistaSII(s) {
     if (!S.sel) return sinEmpresa;
-    const datos = grande('sii-' + s), cab = grande('sii-cab-' + s);
-    if (!datos || !cab) return cargandoTxt;
+    const datos = grande('sii-' + s), cab0 = grande('sii-cab-' + s);
+    if (!datos || !cab0) return cargandoTxt;
+    const cab = cab0.length ? cab0 : CAB_SII[s]; // todas las columnas de la descarga, vengan con datos o sin ellos
     const ej = Number(S.ejercicio), e = empresa(), ed = puede(), emit = s === 'E';
     const meses = siiMeses(), shards = meses.map((mm) => grande(`sii-raw-${s}-${ej}-${mm}`));
     if (shards.some((x) => x === null)) return cargandoTxt;
