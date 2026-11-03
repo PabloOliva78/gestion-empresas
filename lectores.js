@@ -491,9 +491,10 @@ export function valoresPresentado(modelo, cas, texto = '') {
   const lineas = String(texto).split('\n').map((l) => l.trim());
   const num = (s) => aNum(s);
   if (modelo === '111') { pon('base', g(2, 5)); pon('retN', g(3, 6)); pon('baseP', g(8)); pon('retP', g(9)); }
-  else if (modelo === '115' || modelo === '180') { pon('base', g(2)); pon('ret', g(3)); }
-  else if (modelo === '190') { pon('base', g(2)); pon('retN', g(3)); }
-  else if (modelo === '193') { pon('base', g(2)); pon('ret', g(3)); }
+  // sin importe impreso en la casilla = declaración a cero
+  else if (modelo === '115' || modelo === '180') { pon('base', g(2) ?? 0); pon('ret', g(3) ?? 0); }
+  else if (modelo === '190') { pon('base', g(2) ?? 0); pon('retN', g(3) ?? 0); }
+  else if (modelo === '193') { pon('base', g(2) ?? 0); pon('ret', g(3) ?? 0); }
   else if (modelo === '123') { pon('based', g(4)); pon('baser', g(5)); pon('base', g(6)); pon('retd', g(7)); pon('retr', g(8)); pon('ret', g(9)); }
   else if (modelo === '303') { pon('res', g(46)); pon('adu', g(77)); pon('comp', g(110)); pon('apl', g(78)); pon('c87', g(87) ?? (n[110] !== undefined ? r2n(n[110] - (n[78] ?? 0)) : undefined)); pon('liq', g(71)); }
   else if (modelo === '349') {
@@ -532,11 +533,19 @@ export function valoresPresentado(modelo, cas, texto = '') {
     for (const l of lineas) { const m = re.exec(l); if (m) { t ??= { base: 0, cuota: 0, pagos: 0, res: 0 }; t.base += num(m[2]); t.cuota += num(m[4]); t.pagos += num(m[5]); t.res += num(m[6]); } }
     if (t) Object.entries(t).forEach(([c, v]) => pon(c, r2n(v)));
   } else if (modelo === '592') {
-    const re = new RegExp(`^\\d+\\s+\\S+\\s+.*?${MON}\\s+${MON}\\s+(\\d+,\\d+)\\s+${MON}\\s+${MON}\\s+${MON}$`);
+    // fila «1 P0 Plásticos cantidad base tipo cuota deducción [compensación] [total]»: los importes en 0 pueden venir sin las últimas columnas
     let t = null;
-    for (const l of lineas) { const m = re.exec(l); if (m) { t ??= { kg: 0, base: 0, cuota: 0, ded: 0, res: 0 }; t.kg += num(m[1]); t.base += num(m[2]); t.cuota += num(m[4]); t.ded += num(m[5]); t.res += num(m[6]); } }
-    if (t) Object.entries(t).forEach(([c, v]) => pon(c, r2n(v)));
-    else { const i = lineas.findIndex((l) => /Total a ingresar/i.test(l)); const m = i >= 0 && new RegExp(`${MON}\\s*$`).exec(lineas[i]); if (m) pon('res', num(m[1])); }
+    for (const l of lineas) {
+      if (!/^\d+\s+\S+\s+\D+\s-?\d/.test(l)) continue;
+      const v = [...l.matchAll(/-?\d{1,3}(?:\.\d{3})*,\d{2,3}/g)].map((m) => num(m[0]));
+      if (v.length < 4) continue;
+      t ??= { kg: 0, base: 0, cuota: 0, ded: 0 };
+      t.kg += v[0]; t.base += v[1]; t.cuota += v[3]; t.ded += v[4] ?? 0;
+    }
+    if (t) Object.entries(t).forEach(([c, x]) => pon(c, r2n(x)));
+    const i = lineas.findIndex((l) => /Total a ingresar/i.test(l));
+    const m = i >= 0 && new RegExp(`${MON}\\s*$`).exec(lineas[i]);
+    if (m) pon('res', num(m[1]));
   }
   return out;
 }
