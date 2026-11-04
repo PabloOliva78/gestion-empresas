@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=94';
+import { crearModulos } from './modulos.js?v=95';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -247,7 +247,7 @@ function render() {
         <button id="out" class="small">Salir</button></div>
     </aside>
     <main class="princ">
-      <header class="doc"><div class="doc-l"><img class="logo-prog" src="logos/asesoria.svg?v=2" alt=""><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
+      <header class="doc"><div class="doc-l"><img class="logo-prog" src="logos/asesoria.svg?v=3" alt=""><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
         <div>
         <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
         <p class="doc-sub">Inicio · grupos de pestañas</p>

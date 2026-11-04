@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f6bff"/><stop offset="1" stop-color="#0b1f4d"/></linearGradient>
-    <linearGradient id="o" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffd978"/><stop offset="1" stop-color="#f0a92b"/></linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#101c3f"/><stop offset="1" stop-color="#050b1f"/></linearGradient>
+    <linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset=".55" stop-color="#4f7cff"/><stop offset="1" stop-color="#9b5cff"/></linearGradient>
   </defs>
-  <rect width="64" height="64" rx="15" fill="url(#g)"/>
-  <rect x="2" y="2" width="60" height="60" rx="13" fill="none" stroke="#fff" stroke-opacity=".25"/>
-  <text x="32" y="38" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="700" font-size="25" letter-spacing="1" fill="#fff">POT</text>
-  <rect x="11" y="43.5" width="42" height="2.4" rx="1.2" fill="url(#o)"/>
-  <text x="32" y="55" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="6.6" letter-spacing="1.6" fill="#ffd978">ASESORÍA</text>
-  <path d="M12 17h40" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>
+  <rect width="64" height="64" rx="18" fill="url(#g)"/>
+  <rect x="1" y="1" width="62" height="62" rx="17" fill="none" stroke="url(#a)" stroke-opacity=".55" stroke-width="1.2"/>
+  <path d="M10 22A24 24 0 0 1 54 22" fill="none" stroke="url(#a)" stroke-width="3.2" stroke-linecap="round"/>
+  <circle cx="54" cy="22" r="2.6" fill="#22d3ee"/>
+  <text x="32" y="43" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="23" letter-spacing="-.5" fill="#fff">POT</text>
+  <text x="32" y="55.5" text-anchor="middle" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-weight="600" font-size="5.8" letter-spacing="2.4" fill="url(#a)">ASESORÍA</text>
 </svg>

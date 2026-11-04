@@ -650,4 +650,4 @@ b.logo-txt { flex: none; font-size: .72rem; line-height: 1.15; letter-spacing: .
 /* Acceso: logo como marca de agua dentro del cuadro */
 form#f.card { position: relative; overflow: hidden; isolation: isolate; }
 form#f.card::before { content: ""; position: absolute; z-index: -1; width: 300px; height: 300px; right: -50px; bottom: -60px;
-  background: url("logos/asesoria.svg?v=2") center / contain no-repeat; opacity: .12; pointer-events: none; }
+  background: url("logos/asesoria.svg?v=3") center / contain no-repeat; opacity: .12; pointer-events: none; }
