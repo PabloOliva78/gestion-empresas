@@ -722,3 +722,6 @@ table.cmg-t td.cmg-e { white-space: normal; font-size: .64rem; }
 .inicio .dash-2 { gap: calc(var(--ini, 12px) * .8); }
 .inicio .dash-2 > .dsec { margin-bottom: calc(var(--ini, 12px) * .7); }
 .inicio p.hint { margin: 0; font-size: var(--ini, 11px); }
+
+.inicio table.cmg-t th, .inicio table.cmg-t td { padding: calc(var(--ini, 10px) * .2) calc(var(--ini, 10px) * .25); }
+.inicio .cmg-chip { margin: calc(var(--ini, 10px) * .1); }
