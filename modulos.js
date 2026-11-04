@@ -329,7 +329,7 @@ export function crearModulos(c) {
     if (uso('123')) pers.forEach((p) => add('123', p, ej, ej, '123'));
     if (uso('349')) pers.forEach((p) => add('349', p, ej, ej, '349'));
     if (obl592(e)) pers.forEach((p) => add('592', p, ej, ej, '592'));
-    if (uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
+    if (!trim || uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
     if (obl583(e)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
     if (uso('INT')) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
     if (uso('A22')) ['1T', '2T', '3T', '4T'].forEach((p) => add('A22', p, ej, ej, 'A22'));
@@ -368,7 +368,7 @@ export function crearModulos(c) {
     return `<div class="inicio"><section class="dsec"><h3>Cuadro de mando del grupo · ${ej} · <select data-cmgmod="1"><option value="">Todos los modelos</option>${[...mods].sort().map((m) => `<option${m === cmgMod ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></h3>
       <p class="dash-s" style="font-size:.7rem"><span style="color:#1a7f37">✓ ${tot.ok} presentados</span> · <span style="color:#b42318">✖ ${tot.venc} vencidos sin presentar</span> · <span style="color:#8a6d00">● ${tot.pron} vencen en 7 días</span> · <span style="color:#667085">○ ${tot.fut} en plazo</span></p>
       <div class="wrap"><table class="tabla cmg-t"><thead><tr><th>Empresa</th>${MS.map((m) => `<th>${m}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div></section>
-      <p class="hint">Estado fiscal de todas las empresas en ${ej}: cada modelo en el mes del periodo que liquida (en las pymes, trimestrales en el último mes del trimestre; el 202 en marzo, septiembre y noviembre; los anuales en la columna Anual). Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre; el 115 si está de alta en el censo; el 123, 202, 349, Intrastat, 232 y A22 si hay datos; el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. Presentado = está en «Impuestos Presentados» o marcado en «Liquidaciones Presentar». Los plazos son los de la regla general de la AEAT.</p></div>`;
+      <p class="hint">Estado fiscal de todas las empresas en ${ej}: cada modelo en el mes del periodo que liquida (en las pymes, trimestrales en el último mes del trimestre; el 202 en marzo, septiembre y noviembre; los anuales en la columna Anual). Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. Presentado = está en «Impuestos Presentados» o marcado en «Liquidaciones Presentar». Los plazos son los de la regla general de la AEAT.</p></div>`;
   }
 
   // Liquidaciones a presentar y pagos domiciliados: las mismas obligaciones, todas las empresas
@@ -395,7 +395,7 @@ export function crearModulos(c) {
         <label>Ver <select data-liqver="1"><option value="pend"${liqVer === 'pend' ? ' selected' : ''}>Pendientes</option><option value="todas"${liqVer === 'todas' ? ' selected' : ''}>Todas</option></select></label><span class="space"></span></div>
       ${L.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Modelo</th><th>Periodo</th><th>${pago ? 'Fecha de cargo' : 'Vencimiento'}</th>${pago ? '<th>Banco</th>' : ''}<th class="num">Importe</th><th>Estado</th><th></th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`
         : `<p class="vacio">${esc(titulo)}: nada pendiente en este periodo.</p>`}
-      <p class="hint">${pago ? 'Fecha de cargo: cinco días antes del fin de plazo (día hábil). ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre; el 115 si está de alta en el censo; el 123, 202, 349, Intrastat, 232 y A22 si hay datos; el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
+      <p class="hint">${pago ? 'Fecha de cargo: cinco días antes del fin de plazo (día hábil). ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
   }
   const vistaLiq = () => tablaOb('Liquidaciones a presentar', false);
   const vistaVenc = () => tablaOb('Pagos domiciliados', true);
