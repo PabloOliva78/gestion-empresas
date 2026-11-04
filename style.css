@@ -761,3 +761,10 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .dsec .dua-bar select { width: auto !important; min-width: 0; max-width: 16em; flex: 0 0 auto; }
 .dsec .dua-bar .dash-s { margin: 0; flex: 1 1 20em; }
 .dsec.dua-s .dropzone { margin-bottom: .5rem; }
+
+/* DUA-H1: separadores verticales entre bloques (datos del DUA, cada tributo) */
+.dsec table.dua-t th, .dsec table.dua-t td { border-left: 1px solid #8a9bb8; border-right: 1px solid #8a9bb8; }
+.dsec table.dua-t .g1 { border-right: none; }
+.dsec table.dua-t .g3 { border-left: none; }
+.dsec table.dua-t .mid { border-left: none; border-right: none; }
+.dsec table.dua-t th[colspan] { border-bottom: 1px solid #8a9bb8; }

@@ -2874,17 +2874,17 @@ export function crearModulos(c) {
     const mesSel = duaMes && (meses.includes(duaMes) || duaMes === 'todos') ? duaMes : (defM && meses.includes(defM) ? defM : 'todos');
     const nomM = (k) => { const m = /^(\d{4})-(\d\d)$/.exec(k); return m ? `${MESES[+m[2] - 1][0].toUpperCase()}${MESES[+m[2] - 1].slice(1)} ${m[1]}` : k; };
     const tr = (R, c) => (R.declarados || {})[c] || (R.calculados || {})[c] || null;
-    const celdas = (R, c) => { const t = tr(R, c); return t ? `<td class="num">${t.base === null ? '—' : t.ud === 'kg' ? `${t.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(t.base)}</td><td class="c">${esc(duaTipo(t.tipo))}</td><td class="num">${fnum(t.imp)}</td>` : '<td class="num">—</td><td class="c">—</td><td class="num">—</td>'; };
+    const celdas = (R, c) => { const t = tr(R, c); return t ? `<td class="num g1">${t.base === null ? '—' : t.ud === 'kg' ? `${t.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(t.base)}</td><td class="c mid">${esc(duaTipo(t.tipo))}</td><td class="num g3">${fnum(t.imp)}</td>` : '<td class="num g1">—</td><td class="c mid">—</td><td class="num g3">—</td>'; };
     const tabla = (lista, tit) => {
       const ORD = ['B00', 'A00', '1PL', 'A30'], cods = [...new Set(['B00', 'A00', '1PL'].concat(...lista.map((R) => Object.keys(R.declarados || {}).concat(Object.keys(R.calculados || {})))))].sort((a, b) => { const x = ORD.indexOf(a), y = ORD.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || a.localeCompare(b); });
       const tot = {}; cods.forEach((c) => { tot[c] = [0, 0, false]; });
       lista.forEach((R) => cods.forEach((c) => { const t = tr(R, c); if (t) { if (t.ud !== 'kg') tot[c][0] += t.base || 0; else tot[c][2] = true; tot[c][1] += t.imp || 0; } }));
       const neta = (R) => { const v = duaVal(R, 'neta'); return v && !Number.isNaN(duaNum(v)) ? duaNum(v).toLocaleString('es-ES', { maximumFractionDigits: 3 }) : esc(v); };
       return `<h4 class="it-sec">${esc(tit)} · ${lista.length} DUA</h4><div class="wrap"><table class="tprs tnom il-t dua-t"><thead><tr><th rowspan="2">Nº DUA</th><th rowspan="2">Importador</th><th rowspan="2">Exportador</th><th rowspan="2">País</th><th rowspan="2">TARIC</th><th rowspan="2">Masa neta (kg)</th><th rowspan="2">Lugar precisado</th><th rowspan="2">Medio transporte llegada</th>${cods.map((c) => `<th colspan="3">${esc(c)}${DUA_TRIB[c] ? ' · ' + DUA_TRIB[c] : ''}</th>`).join('')}</tr>
-        <tr>${'<th>Base imponible</th><th>Tipo</th><th>Importe</th>'.repeat(cods.length)}</tr></thead><tbody>
+        <tr>${'<th class="g1">Base imponible</th><th class="mid">Tipo</th><th class="g3">Importe</th>'.repeat(cods.length)}</tr></thead><tbody>
         ${lista.map((R) => `<tr data-duasel="${esc(R.num)}" style="cursor:pointer${R.num === duaSel ? ';background:#fff6d6' : ''}"><td>${esc(R.num)}</td><td>${esc(duaVal(R, 'importador').replace(/^ES[A-Z0-9]+\s*-\s*/, ''))}</td><td>${esc(duaVal(R, 'expedidor'))}</td><td>${esc(duaVal(R, 'paisExp'))}</td>
           <td>${esc((String(duaVal(R, 'taric')).replace(/\s/g, '').match(/\d{8,10}/g) || []).join(' · '))}</td><td class="num">${neta(R)}</td><td>${esc(duaVal(R, 'lugar'))}</td><td>${esc(duaVal(R, 'transporte'))}</td>${cods.map((c) => celdas(R, c)).join('')}</tr>`).join('')}
-        <tr class="ttot"><td colspan="8">Total ${esc(tit)}</td>${cods.map((c) => `<td class="num">${tot[c][2] && !tot[c][0] ? '' : fnum(rr(tot[c][0]))}</td><td></td><td class="num">${fnum(rr(tot[c][1]))}</td>`).join('')}</tr></tbody></table></div>`;
+        <tr class="ttot"><td colspan="8">Total ${esc(tit)}</td>${cods.map((c) => `<td class="num g1">${tot[c][2] && !tot[c][0] ? '' : fnum(rr(tot[c][0]))}</td><td class="mid"></td><td class="num g3">${fnum(rr(tot[c][1]))}</td>`).join('')}</tr></tbody></table></div>`;
     };
     const porMes = mesSel === 'todos' ? meses : [mesSel];
     const tablas = regs.length ? porMes.map((k) => tabla(regs.filter((R) => mesDe(R) === k).sort((a, b) => (a.levante || '').localeCompare(b.levante || '')), nomM(k))).join('') : '<p class="hint">Todavía no hay DUA cargados para esta empresa.</p>';
