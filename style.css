@@ -750,3 +750,9 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .dsec.dua-s .dropzone { font-size: calc(var(--tb) * 1.0); }
 .dua-bar { display: flex; align-items: center; gap: .8rem; margin: .5rem 0 .3rem; font-size: calc(var(--tb, 10px) * 1.1); }
 .dua-bar select { font: inherit; padding: .2em .6em; border: 1px solid #c9d3e6; border-radius: 6px; background: #fff; }
+
+/* Impuestos locales: letra pequeña, como DUA-H1 */
+.dsec.il-s { --tb: max(8.5px, 0.52vw); }
+.dsec.il-s table.il-t, .dsec.il-s table.il-t th, .dsec.il-s table.il-t td, .dsec.il-s table.il-t input, .dsec.il-s table.il-t select, .dsec.il-s table.il-t button, .dsec.il-s table.il-t span, .dsec.il-s table.il-t b { font-size: calc(var(--tb) * 1.0) !important; }
+.dsec.il-s .dash-s, .dsec.il-s .dropzone, .dsec.il-s button.small { font-size: calc(var(--tb) * 1.0); }
+.dsec.il-s > h3 { font-size: calc(var(--tb) * 1.3); }
