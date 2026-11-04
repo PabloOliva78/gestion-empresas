@@ -539,9 +539,42 @@ export function crearModulos(c) {
     let f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
     if (fcCod) f = f.filter((l) => l.codigo === fcCod);
     if (fcPais) f = f.filter((l) => paisDe(l.nif) === fcPais);
-    if (fcQ) { const q = sinAc(fcQ); f = f.filter((l) => sinAc(`${l.nif} ${l.nombre} ${l.factura}`).includes(q)); }
+    if (fcQ) { const q = sinAc(fcQ); f = f.filter((l) => sinAc(`${l.nif} ${l.nombre} ${l.factura}`).includes(q) || buscaImporte(l, fcQ)); }
     return f;
   }
+  // Si lo escrito es un importe, casa con la base o la cuota (exacto) o con parte del importe (3 cifras o más)
+  function buscaImporte(l, q) {
+    q = String(q ?? '').trim();
+    if (!/^[-+]?[\d.,\s€]+$/.test(q) || !/\d/.test(q)) return false;
+    const vs = [l.base, l.cuota].filter((v) => Number.isFinite(v)), n = parseES(q.replace(/[€\s]/g, ''));
+    if (n && vs.some((v) => Math.abs(Math.abs(v) - Math.abs(n)) < 0.006)) return true;
+    const t = q.replace(/[€\s]/g, '').replace(/^[-+]/, '');
+    return t.length >= 3 && vs.some((v) => fnum(Math.abs(v)).includes(t) || String(Math.abs(rr(v))).includes(t));
+  }
+
+  // Factura a mano: una línea más del libro (se guarda en el propio libro de la empresa, marcada «a mano»)
+  let fcNueva = null;
+  function fcNvAbrir(s) {
+    const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
+    fcNueva = { s, fecha: r.desde.split('-').reverse().join('/'), factura: '', nif: '', nombre: '', codigo: '', base: '', pct: '21', cuota: '' };
+    render();
+  }
+  async function fcNvOk() {
+    const N = fcNueva;
+    if (!N) return;
+    const f = fIsoCta(N.fecha), base = parseES(N.base), pct = parseES(N.pct);
+    if (!f) return void alert('Escribe una fecha válida (dd/mm/aaaa).');
+    if (!N.factura.trim()) return void alert('Falta el nº de factura.');
+    if (!N.codigo.trim()) return void alert('Falta el código de impuesto (el mismo que usa el libro, p. ej. el de otras líneas del libro).');
+    if (!base) return void alert('Falta la base.');
+    const cuota = N.cuota.trim() === '' ? rr((base * pct) / 100) : parseES(N.cuota);
+    const tipo = `fact-${N.s}`, arr = GR.get(`${tipo}|${S.sel}`) ?? [];
+    await reemplazarGrande(tipo, S.sel, [...arr, { asiento: '', factura: N.factura.trim(), fecha: f, ff: f, nif: N.nif.trim().toUpperCase(), nombre: N.nombre.trim(),
+      base, pct, cuota, codigo: N.codigo.trim(), sentido: N.s, src: 'a mano', manual: true }]);
+    fcNueva = null;
+    render();
+  }
+  function fcNvCampo(campo, valor) { if (fcNueva) fcNueva[campo] = valor; }
 
   function cuerpoFc(s, datos) {
     const f = lineasFc(s, datos);
@@ -560,19 +593,25 @@ export function crearModulos(c) {
       const p = paisDe(l.nif);
       return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
         <td>${p}</td>${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
-        <td class="num">${/^R\.RC\./.test(l.codigo) ? eur(l.cuota) : ''}</td><td>${esc(clasif(l.codigo))}</td><td class="acc">${acc(l)}</td></tr>`;
+        <td class="num">${/^R\.RC\./.test(l.codigo) ? eur(l.cuota) : ''}</td><td>${esc(clasif(l.codigo))}${l.manual ? ' <span class="hint">a mano</span>' : ''}</td><td class="acc">${acc(l)}</td></tr>`;
     }).join('');
+    const nv = fcNueva?.s === s && puede() ? (() => {
+      const ni = (c, ph, cls = '') => `<td class="in ${cls}"><input data-fcnv="${c}" value="${esc(fcNueva[c] ?? '')}" placeholder="${ph}"${c === 'codigo' ? ' list="fcCods"' : ''}></td>`;
+      return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}${ni('factura', 'nº factura', 'tl')}${ni('nif', 'NIF', 'tl')}${ni('nombre', 'nombre', 'tl')}<td></td>${ni('codigo', 'código')}${ni('base', 'base', 'num')}${ni('pct', '% IVA', 'num')}${ni('cuota', 'cuota (auto)', 'num')}<td></td><td></td>
+        <td class="acc"><button class="pill" data-act="m-fcnvok">✔ Añadir</button><button class="pill" data-act="m-fcnvx">✕</button></td></tr>`;
+    })() : '';
+    const codsDl = `<datalist id="fcCods">${[...new Set(datos.map((l) => l.codigo))].sort().map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`;
     const sinRet = f.filter((l) => !/^(R\.)?I\./.test(l.codigo)); // el total no incluye las retenciones (misma base que la factura)
     const tot = `<tr><td colspan="6"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="3"></td></tr>`;
     return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
-      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${filas}${f.length ? tot : ''}</tbody></table></div>` };
+      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
   }
 
   function vistaFacturas(s) {
     if (!S.sel) return sinEmpresa;
     const datos = grande('fact-' + s);
     if (!datos) return cargandoTxt;
-    if (!datos.length) return `<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>`;
+    if (!datos.length && fcNueva?.s !== s) return `<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura a mano</button>` : ''}`;
     const ej = Number(S.ejercicio);
     const per = [`<option value="">Todo el ejercicio ${ej}</option>`,
       ...MESES.map((m, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}"${S.periodo === v ? ' selected' : ''}>Periodo ${v} (${m}) ${ej}</option>`; }),
@@ -582,7 +621,8 @@ export function crearModulos(c) {
     return `<div class="fc-cab"><label>Ver <select data-glob="periodo">${per}</select></label>
       <label>Código ${sel('cod', fcCod, [...new Set(datos.map((l) => l.codigo))].sort())}</label>
       <label>País ${sel('pais', fcPais, [...new Set(datos.map((l) => paisDe(l.nif)))].sort())}</label>
-      <input data-fq type="search" placeholder="Buscar NIF, nombre, factura…" value="${esc(fcQ)}"><span id="fcCuenta" class="hint">${c.n} facturas</span></div>
+      <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}"><span id="fcCuenta" class="hint">${c.n} facturas</span>
+      ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
       <div id="fcTabla">${c.html}</div>`;
   }
 
@@ -687,6 +727,47 @@ export function crearModulos(c) {
   const siiKey = (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`;
   const siiMeses = () => (/^\d\d$/.test(S.periodo) ? [S.periodo] : /^[1-4]T$/.test(S.periodo) ? [0, 1, 2].map((i) => String((+S.periodo[0] - 1) * 3 + i + 1).padStart(2, '0')) : MM12);
   const quitReg = () => S.registros.find((r) => r.tipo === 'siiquit' && r.empresa_id === S.sel);
+  // Plazo de presentación al SII: 4 días hábiles desde la expedición (emitidas) o el registro contable (recibidas), con tope el día 15 del mes siguiente
+  const festivosNac = (y) => {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+      i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Set([[0, 1], [0, 6], [4, 1], [7, 15], [9, 12], [10, 1], [11, 6], [11, 8], [11, 25]].map(([mm, dd]) => Date.UTC(y, mm, dd)).concat([Date.UTC(y, mes - 1, dia) - 2 * 864e5]));
+  };
+  const esHabil = (t) => { const w = new Date(t).getUTCDay(); return w !== 0 && w !== 6 && !festivosNac(new Date(t).getUTCFullYear()).has(t); };
+  const masHabiles = (t, n) => { for (let k = 0; k < n;) { t += 864e5; if (esHabil(t)) k++; } return t; };
+  const fechaSii = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number') return v > 20000 ? Math.floor((Date.UTC(1899, 11, 30) + v * 864e5) / 864e5) * 864e5 : null;
+    const t = String(v).trim();
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+    return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : null;
+  };
+  const fechaTxt = (t) => new Date(t).toISOString().slice(0, 10).split('-').reverse().join('/');
+  function plazoSii(s, todos, raw, cab) {
+    const emit = s === 'E', iFp = cab.findIndex((c) => /presentaci/i.test(c) && /fecha|hora|timestamp/i.test(c)), iMod = cab.findIndex((c) => /timestamp|ltima modificaci/i.test(c)), iP = iFp >= 0 ? iFp : iMod;
+    if (iP < 0) return `<div class="aviso"><p>⚠ Plazo de 4 días hábiles: la descarga del SII no trae la fecha de presentación; descárgala con esa columna para comprobarlo.</p></div>`;
+    const iB = emit ? -1 : cab.findIndex((c) => /^Fecha (de )?Registro Contable/i.test(c));
+    const fuera = []; let n = 0, sinF = 0;
+    for (const x of todos) {
+      if (/anulad/i.test(x.estado)) continue;
+      const w = raw.get(siiKey(x)), fp = fechaSii(w?.[iP]), fb = (iB >= 0 ? fechaSii(w?.[iB]) : null) ?? fechaSii(x.fecha);
+      n++;
+      if (!fp || !fb) { sinF++; continue; }
+      const per = String(x.per ?? '').trim().toUpperCase(), trim = /^[1-4]T$/.test(per), mes = trim ? (+per[0]) * 3 : /^\d{1,2}$/.test(per) ? +per : new Date(fb).getUTCMonth() + 1;
+      const mFin = emit ? new Date(fb).getUTCMonth() + 1 : mes, yFin = emit ? new Date(fb).getUTCFullYear() : x.ej;
+      const tope = Date.UTC(mFin === 12 ? yFin + 1 : yFin, mFin === 12 ? 0 : mFin, 15), lim = Math.min(masHabiles(fb, 4), tope);
+      if (fp > lim) { let dd = 0; for (let t = lim; t < fp;) { t += 864e5; if (esHabil(t)) dd++; } fuera.push({ x, fb, fp, lim, dd }); }
+    }
+    fuera.sort((a, b) => b.dd - a.dd);
+    const base = emit ? 'expedición' : 'registro contable';
+    const tabla = fuera.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Factura</th><th>Nombre</th><th>${emit ? 'Expedición' : 'Registro'}</th><th>Límite</th><th>Presentada</th><th>Días hábiles tarde</th></tr></thead>
+      <tbody>${fuera.slice(0, 50).map((f) => `<tr><td>${esc(f.x.factura)}</td><td>${esc(f.x.nombre)}</td><td class="c">${fechaTxt(f.fb)}</td><td class="c">${fechaTxt(f.lim)}</td><td class="c">${fechaTxt(f.fp)}</td><td class="num">${f.dd}</td></tr>`).join('')}</tbody></table></div>
+      ${fuera.length > 50 ? `<p class="hint">y ${fuera.length - 50} más</p>` : ''}` : '';
+    return `<section class="prs-card"><div class="prs-h">Plazo de presentación al SII · ${n} facturas del periodo · ${fuera.length ? `${fuera.length} fuera de plazo` : 'todas en plazo'}</div>
+      <p class="hint" style="margin:.4em 1em">4 días hábiles desde la ${base} (tope: día 15 del mes siguiente${emit ? '' : ', al trimestre en las trimestrales'}). No cuentan sábados, domingos ni festivos nacionales.${sinF ? ` ${sinF} sin fecha para comprobar.` : ''}${iFp < 0 ? ' Fecha de presentación tomada de «última modificación»: una factura modificada después puede salir tarde sin estarlo.' : ''}</p>${tabla}</section>`;
+  }
   function siiFiltro(clave, valor) { const [s, c] = clave.split('|'); siiFil[s][c] = valor; siiN[s] = 150; render(); }
   function vistaSII(s) {
     if (!S.sel) return sinEmpresa;
@@ -747,7 +828,7 @@ export function crearModulos(c) {
       <div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th>${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
         <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(sumC)}</td><td></td><td></td></tr></tbody></table></div>
       ${quitados}
-      ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section>`;
+      ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section>${plazoSii(s, todos, raw, cab)}`;
   }
   async function quitarSii2(s, i) {
     const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
@@ -797,6 +878,7 @@ export function crearModulos(c) {
       <td class="num ${Math.abs(o.db) > 0.01 ? 'dif-ko' : ''}">${fnum(o.db)}</td><td class="num">${fnum(o.cc)}</td><td class="num">${fnum(o.cs)}</td><td class="num ${Math.abs(o.dc) > 0.01 ? 'dif-ko' : ''}">${fnum(o.dc)}</td></tr>`).join('');
     return `${cab}
       <section class="prs-card"><div class="prs-h">CONCILIACIÓN SII vs CONTABILIDAD - FACTURAS ${e ? 'EMITIDAS' : 'RECIBIDAS'} · ${D.desde.split('-').reverse().join('/')} – ${D.hasta.split('-').reverse().join('/')}</div>
+      <div class="no-print" style="margin:.4em 1em"><button class="small" data-act="m-siixl" data-s="${s}">⬇ Descargar Excel</button></div>
       <div class="wrap"><table class="tprs tnom conc-t" style="width:auto;min-width:40em"><thead><tr><th></th><th>${nomC}</th><th>${nomS}</th><th>Diferencia</th></tr></thead><tbody>
         <tr><td>Nº de facturas</td><td class="num">${x.n}</td><td class="num">${y.n}</td><td class="num ${x.n !== y.n ? 'dif-ko' : ''}">${x.n - y.n}</td></tr>
         <tr><td>Base imponible</td><td class="num">${fnum(x.base)}</td><td class="num">${fnum(y.base)}</td><td class="num ${ko(dif(x.base, y.base))}">${fnum(dif(x.base, y.base))}</td></tr>
@@ -821,6 +903,35 @@ export function crearModulos(c) {
         <div><div class="css-4760-t">B. Declaradas en el SII que no están contabilizadas · ${D.B.length}</div>${lst(D.B, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base SII', 'base', 'n'], ['Cuota SII', 'cuota', 'n']])}</div>
         <div><div class="css-4760-t">C. En ambos con importes distintos · ${D.C.length}</div>${lst(D.C.map((q) => ({ ...q, db: rr(q.bc - q.bs), dc: rr(q.cc - q.cs) })), [['Factura', 'fac'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}</div>
       </div></section>`;
+  }
+
+  // Excel de la conciliación SII vs contabilidad (lo mismo que se ve en pantalla), con SheetJS
+  function excelConcSii(s) {
+    const lib = GR.get(`fact-${s}|${S.sel}`), sii = GR.get(`sii-${s}|${S.sel}`);
+    if (!lib?.length || !sii?.length || !window.XLSX) return void alert('Faltan el libro de IVA o la descarga del SII (o no se ha cargado la librería de Excel).');
+    const X = window.XLSX, e = s === 'E', em = empresa(), ej = Number(S.ejercicio), D = conciliarSiiCompleta(s, lib, sii, ej, S.periodo), x = D.tc, y = D.ts;
+    const N = (v) => ({ t: 'n', v: Number(v) || 0, z: '#,##0.00;-#,##0.00;"-"' }), I = (v) => ({ t: 'n', v: Number(v) || 0, z: '0' });
+    const nif = e ? 'NIF' : 'NIF Emisor', rows = [];
+    const blk = (tit, cab, arr, f) => { rows.push([], [tit], cab); arr.forEach((q) => rows.push(f(q))); if (!arr.length) rows.push(['Ninguna']); };
+    rows.push([`CONCILIACIÓN SII vs CONTABILIDAD - FACTURAS ${e ? 'EMITIDAS' : 'RECIBIDAS'}`], [`${em?.nombre ?? ''} · ${em?.cif ?? ''}`],
+      [`Periodo: ${D.desde.split('-').reverse().join('/')} – ${D.hasta.split('-').reverse().join('/')}`], [],
+      ['', 'Contabilizado', 'Declarado SII', 'Diferencia'],
+      ['Nº de facturas', I(x.n), I(y.n), I(x.n - y.n)], ['Base imponible', N(x.base), N(y.base), N(rr(x.base - y.base))],
+      [`Cuota ${e ? 'repercutida' : 'soportada'}`, N(x.cuota), N(y.cuota), N(rr(x.cuota - y.cuota))],
+      ['Situación', D.cuadra ? `CUADRA${D.ceros ? ` (hay ${D.ceros} factura(s) a cero solo en un lado)` : ''}` : 'DESCUADRE - revisar el detalle']);
+    blk('DESCUADRE POR CÓDIGO DE IMPUESTO', ['Código', 'Nº facturas', 'Base contab.', 'Base SII', 'Dif. base', 'Cuota contab.', 'Cuota SII', 'Dif. cuota'], D.cods,
+      (o) => [o.cod, I(o.n), N(o.bc), N(o.bs), N(o.db), N(o.cc), N(o.cs), N(o.dc)]);
+    blk('FACTURAS QUE DESCUADRAN', ['Código', 'Factura', nif, 'Nombre', 'Base contab.', 'Base SII', 'Dif. base', 'Cuota contab.', 'Cuota SII', 'Dif. cuota', ''], D.facDesc,
+      (q) => [q.cod, q.fac || '', q.nif || '', q.nom || '', N(q.bc), N(q.bs), N(q.db), N(q.cc), N(q.cs), N(q.dc), q.anula ? 'se anula con otra (cuadra)' : '']);
+    blk('DECLARADAS EN EL SII DE FORMA DISTINTA A SU CÓDIGO', ['Código (contabilidad)', 'Factura', nif, 'Nombre', 'Debería estar como', 'Está declarada como'], D.malSii,
+      (q) => [q.cods, q.fac || '', q.nif || '', q.nom || '', q.esp, q.dec]);
+    blk('A. CONTABILIZADAS QUE NO ESTÁN EN EL SII', ['Factura', nif, 'Nombre', 'Base contab.', 'Cuota contab.'], D.A, (q) => [q.fac || '', q.nif || '', q.nom || '', N(q.base), N(q.cuota)]);
+    blk('B. DECLARADAS EN EL SII QUE NO ESTÁN CONTABILIZADAS', ['Factura', nif, 'Nombre', 'Base SII', 'Cuota SII'], D.B, (q) => [q.fac || '', q.nif || '', q.nom || '', N(q.base), N(q.cuota)]);
+    blk('C. EN AMBOS CON IMPORTES DISTINTOS', ['Factura', 'Nombre', 'Base contab.', 'Base SII', 'Cuota contab.', 'Cuota SII'], D.C, (q) => [q.fac || '', q.nom || '', N(q.bc), N(q.bs), N(q.cc), N(q.cs)]);
+    const ws = X.utils.aoa_to_sheet(rows), wb = X.utils.book_new();
+    ws['!cols'] = [34, 16, 16, 34, 16, 16, 16, 16, 16, 16, 28].map((wch) => ({ wch }));
+    X.utils.book_append_sheet(wb, ws, e ? 'ConcSII-E' : 'ConsSII-R');
+    X.writeFile(wb, `ConcSII-${e ? 'E' : 'R'}_${em?.cif ?? ''}_${ej}-${S.periodo || 'anual'}.xlsx`);
   }
 
   // ---------- Bloque 4: modelos tributarios ----------
@@ -2388,6 +2499,10 @@ export function crearModulos(c) {
       'm-man303': () => formMan303(),
       'm-fc': () => opFc(d.s, d.op, d.k),
       'm-esker': () => buscarEsker(d.n),
+      'm-siixl': () => excelConcSii(d.s),
+      'm-fcnv': () => fcNvAbrir(d.s),
+      'm-fcnvok': () => fcNvOk(),
+      'm-fcnvx': () => { fcNueva = null; render(); },
       'm-manret': () => formManRet(d.m),
       'm-retprint': () => imprimirRet(d.m),
       'm-fundaedel': () => quitarFundae(d.y),
@@ -3005,5 +3120,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => (kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
