@@ -2784,13 +2784,16 @@ export function crearModulos(c) {
   const duaNum = (s) => { const v = String(s || '').replace(/,/g, '.'), p = v.split('.'); return p.length > 2 ? +(`${p.slice(0, -1).join('')}.${p[p.length - 1]}`) : +v; };
   const duaEur = (s) => +String(s || '0').replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
   // códigos mal leídos por el OCR (APL, IPL, A0O, BOO…) → código correcto
-  const duaCod = (k) => { const c = String(k).toUpperCase().replace(/[OQ]/g, '0'); return /^[AIL1|]PL$/.test(c) ? '1PL' : /^B0+$/.test(c) ? 'B00' : /^A0+$/.test(c) ? 'A00' : c; };
+  const duaCod = (k) => { const c = String(k).toUpperCase().replace(/[OQ]/g, '0'); return /^[AÁIL1|]PL$/.test(c) ? '1PL' : /^B0+$/.test(c) ? 'B00' : /^A0+$/.test(c) ? 'A00' : c; };
   const duaTipo = (t) => String(t || '').replace(/,000(?=\s*(%|\/))/, '');
   const duaFecha = (s) => { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(String(s || '')); return m ? { d: +m[1], m: +m[2], y: +m[3] } : null; };
   function duaDeTexto(T) {
     const L = T.split('\n').map((x) => x.trim()), g = (re, i = 1) => { const m = T.match(re); return m ? m[i].replace(/\s+/g, ' ').trim() : ''; },
       all = (re) => [...T.matchAll(re)].map((m) => m[1].replace(/\s+/g, ' ').trim()).filter((x) => x && x !== '-');
-    const R = {}; R.num = g(/Importaci[oó]n\.\s*Detallada\s+([0-9A-Z ]+?)\s*$/m).replace(/\s/g, '');
+    const R = {}, limpia = (s) => String(s || '').replace(/\s/g, '').replace(/[|l]/g, 'I'), valido = (s) => /^\d\d[A-Z]{2}\d{6}[A-Z0-9]{8}$/.test(s);
+    // el número sale de «Importación. Detallada …» o de la línea MRN (en los escaneos el OCR separa las letras y cambia la I por «|» o «1»)
+    R.num = limpia(g(/Importaci[oó]n\.\s*Detallada\s+([0-9A-Z |]+?)\s*$/m));
+    if (!valido(R.num)) { const m = limpia(g(/^MRN:\s*([0-9A-Z |]+?)\s*$/m)); R.num = valido(m) ? m : ''; }
     R.grab = g(/Fecha de grabaci[oó]n:\s*(\d\d-\d\d-\d{4}(?:\s+\d\d:\d\d:\d\d)?)/); R.levante = g(/Fecha de levante:\s*(\d\d-\d\d-\d{4}(?:\s+\d\d:\d\d:\d\d)?)/);
     R.aduana = g(/Aduana de Presentaci[oó]n\s*:\s*(.+)/); R.importador = g(/1304\.\s*NIF:\s*(.+)/); R.declarante = g(/1305\.\s*NIF:\s*(.+)/);
     R.expedidor = [...new Set(all(/1301\.\s*Nombre:[ \t]*(.*)/g))].join(' · '); R.paisExp = [...new Set(all(/1606\.\s*Pa[ií]s de expedici[oó]n:\s*(.*)/g))].join(' · ');
@@ -2806,7 +2809,7 @@ export function crearModulos(c) {
       const a = L.findIndex((l) => l.startsWith(ini)); if (a < 0) return {};
       const o = {};
       for (let i = a + 1; i < L.length && !L[i].startsWith(fin) && !/^Calculado a Pagar|^1314\./.test(L[i]); i++) {
-        const m = L[i].match(/^([A-Za-z0-9]{3,4})\s+(.+)$/); if (!m || !/€|%|\/\s*KGM/.test(m[2])) continue;
+        const m = L[i].match(/^([A-Za-zÁÉÍÓÚ0-9]{3,4})\s+(.+)$/); if (!m || !/€|%|\/\s*KGM/.test(m[2])) continue;
         const s = (`${m[2]} ${L[i + 1] && !/^[A-Z0-9]{3,4}\s/.test(L[i + 1]) ? L[i + 1] : ''}`).replace(/(\d)\s+,(\d)/g, '$1,$2'), esp = s.match(/(\d[\d.]*,\d{4,6})\s*K/), adv = s.match(/([\d.]+,\d\d)\s*€\s+[\d.,]+\s*%/),
           tip = s.match(/([\d.,]+\s*%|[\d.,]+\s*\/\s*KGM)/), imps = [...s.matchAll(/([\d.]+,\d\d)\s*€/g)].map((x) => duaEur(x[1]));
         const base = adv ? duaEur(adv[1]) : esp ? duaNum(esp[1]) : null, bTxt = adv ? '' : esp ? 'kg' : '', impo = adv ? imps[1] : imps[0];
@@ -2852,7 +2855,9 @@ export function crearModulos(c) {
       try {
         duaMsg = `Leyendo ${f.name}…`; render();
         const R = duaDeTexto(await duaTexto(f));
-        if (!R.num) { const fm = /\d\dES\d{6}[A-Z0-9]{6,9}/i.exec(String(f.name).replace(/\s/g, '')); if (fm) R.num = fm[0].toUpperCase(); }
+        // el número del nombre del archivo manda si el PDF no lo trae o el OCR lo ha leído con un par de errores (5 por 6…)
+        const fm = /\d\dES\d{6}[A-Z0-9]{8}/i.exec(String(f.name).replace(/\s/g, '')), fn = fm ? fm[0].toUpperCase() : '';
+        if (fn && (!R.num || [...fn].filter((ch, i) => ch !== R.num[i]).length <= 2)) R.num = fn;
         if (!R.num) { mal.push(`${f.name} (no parece un DUA de importación: no encuentro «Importación. Detallada»)`); continue; }
         const prev = duaRegs().find((r) => r.datos.num === R.num), regId = prev?.id ?? crypto.randomUUID(), sub = await subir(S.sel, 'dua', regId, 'pdf', f);
         if (sub.error) mal.push(`${f.name} (PDF no guardado: ${sub.error})`);
@@ -3839,5 +3844,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => (kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
