@@ -1,4 +1,4 @@
-﻿// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
+// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
@@ -254,67 +254,148 @@ export function crearModulos(c) {
   const COLOR_EMP = { HER: '#1f3864', ESP: '#9b1c2c', HIS: '#0b7f8f', LYS: '#001433', GRU: '#bf4123', FER: '#1b4d2e', BSR: '#570000', FCH: '#17234e', FTC: '#432158', PDF: '#b5418e', TCP: '#5b2c83', PAS: '#911844', MOT: '#c0392b', MAX: '#008215' };
   const FONDO_EMP = ['#e8eef8', '#fbe7ea', '#e0f4f6', '#e3e8f2', '#fdece6', '#e6f2ea', '#f6e3e3', '#e6e9f5', '#efe7f5', '#fae8f3', '#efe9f8', '#f8e6ec', '#fcebe8', '#e3f5e6'];
   const CMG_ST = { ok: ['#1a7f37', '#e6f4ea', '✓', 'presentado'], venc: ['#b42318', '#fde8e8', '✖', 'vencido sin presentar'], pron: ['#8a6d00', '#fff8d6', '●', 'vence en 7 días o menos'], fut: ['#667085', '#f2f4f7', '○', 'en plazo'] };
+  // ---- Qué modelos le tocan a cada empresa y cómo van: lo usan el cuadro de mando, las liquidaciones a presentar, los pagos domiciliados e Inicio ----
+  // 111, 303, 200 y 390: obligatorios · 115: solo si está de ALTA en el censo · 123, 202, 349, Intrastat, 232 y A22: si tiene datos ·
+  // 592: HER, ESP y LYS · 583: HER, LYS, GRU (Gesufer) e HIS · 180, 190 y 193: con datos del ejercicio
+  const SIG_592 = ['HER', 'ESP', 'LYS'], SIG_583 = ['HER', 'LYS', 'GRU', 'HIS'];
+  const MODS_PAGO = ['303', '111', '115', '123', '202', '200', '592', '583'];
+  const hoyUtc = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
+  const habilF = (y, m, d) => { let t = Date.UTC(y, m - 1, d); while (!esHabil(t)) t += 864e5; return t; };
+  // fin de plazo de presentación según la regla general del calendario de la AEAT
+  const plazoMod = (mod, y, per) => {
+    if (['180', '190', '193'].includes(mod)) return habilF(y + 1, 1, 31);
+    if (mod === '390') return habilF(y + 1, 1, 30);
+    if (mod === '200') return habilF(y + 1, 7, 25);
+    if (mod === '202') return per === '1P' ? habilF(y, 4, 20) : per === '2P' ? habilF(y, 10, 20) : habilF(y, 12, 20);
+    if (mod === '232') return habilF(y + 1, 11, 30);
+    if (mod === '583') return per === '0A' ? habilF(y + 1, 11, 30) : habilF(y, 11, 20);
+    if (mod === 'Intrastat') { const m = +per; return m === 12 ? habilF(y + 1, 1, 12) : habilF(y, m + 1, 12); }
+    if (mod === '349') { const q = /^[1-4]T$/.test(per), m = q ? +per[0] * 3 : +per; if (m === 12) return habilF(y + 1, 1, 30); return !q && m === 7 ? habilF(y, 9, 20) : habilF(y, m + 1, 20); }
+    const iva = mod === '303';
+    if (/^[1-4]T$/.test(per)) { const q = +per[0]; return q === 4 ? habilF(y + 1, 1, iva ? 30 : 20) : habilF(y, q * 3 + 1, 20); }
+    const m = +per;
+    return m === 12 ? habilF(y + 1, 1, iva ? 30 : 20) : habilF(y, m + 1, iva ? Math.min(30, new Date(Date.UTC(y, m + 1, 0)).getUTCDate()) : 20);
+  };
+  const colMes = (per) => (per === '0A' || per === 'A' ? 12 : /^\d\d$/.test(per) ? +per - 1 : /^[1-4]T$/.test(per) ? +per[0] * 3 - 1 : ({ 1: 2, 2: 8, 3: 10 })[per[0]] ?? 12);
+  // ¿el periodo de la obligación (mes, trimestre, pago fraccionado) cae dentro del periodo p elegido?
+  const enPeriodo = (o, p) => {
+    if (!p) return true;
+    if (o.per === p) return true;
+    const mesesDe = (q) => (/^\d\d$/.test(q) ? [+q] : /^[1-4]T$/.test(q) ? [0, 1, 2].map((i) => (+q[0] - 1) * 3 + i + 1) : []);
+    const a = mesesDe(o.per), b = mesesDe(p);
+    return a.length && b.length ? a.some((m) => b.includes(m)) : false;
+  };
+  function presIndex() {
+    const hecho = new Set(), usado = new Set(), marcas = new Set();
+    const marca = (id, y, m, p) => { hecho.add(`${id}|${y}|${m}|${p}`); usado.add(`${id}|${y}|${m}`); };
+    S.registros.forEach((r) => {
+      if (r.tipo === 'prs') Object.entries(r.datos ?? {}).forEach(([k, v]) => { const [m, p] = k.split('|'); if (v && Object.keys(v).length) marca(r.empresa_id, r.ejercicio, m, p); });
+      else if (r.tipo === 'pres' || (r.tipo === 'liq' && r.datos?.estado === 'Presentado')) { const m = r.datos?.modelo; if (m) marca(r.empresa_id, r.ejercicio, m, r.datos.periodo); }
+      else if (r.tipo === 'liqpres') (r.datos?.marcas ?? []).forEach((k) => { hecho.add(`${r.empresa_id}|${k}`); marcas.add(`${r.empresa_id}|${k}`); });
+    });
+    return { hecho, usado, marcas };
+  }
+  const valPres = (id, y, m, p) => {
+    const d = S.registros.find((r) => r.tipo === 'prs' && r.empresa_id === id && r.ejercicio === y)?.datos?.[`${m}|${p}`];
+    if (!d) return null;
+    const n = (k) => (d[k] === undefined || d[k] === '' ? null : Number(d[k]));
+    if (m === '303') return n('liq') ?? n('res');
+    if (m === '111') return n('retN') === null && n('retP') === null ? null : (n('retN') || 0) + (n('retP') || 0);
+    if (m === '115' || m === '123') return n('ret');
+    if (m === '349') return n('imp');
+    return n('res') ?? n('imp');
+  };
+  // 115: solo si el censo lo tiene de ALTA en el periodo (si está de baja o no aparece, no se pone)
+  function alta115(e, ej, per) {
+    const os = (e?.datos?.aeat?.obligaciones ?? []).filter((o) => /ARREND/i.test(o.descripcion ?? ''));
+    if (!os.length || !per) return false;
+    const mm = /^\d\d$/.test(per) ? [per, per] : /^[1-4]T$/.test(per) ? [String((+per[0] - 1) * 3 + 1).padStart(2, '0'), String(+per[0] * 3).padStart(2, '0')] : ['01', '12'];
+    const ini = `${ej}-${mm[0]}-01`, fin = `${ej}-${mm[1]}-31`;
+    return os.some((o) => (o.alta || '0000-00-00') <= fin && (o.estado === 'ALTA' || (o.baja && o.baja >= ini)));
+  }
+  function obligaciones(e, ej, ix) {
+    const sig = String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, out = [];
+    const uso = (m) => [ej - 1, ej, ej + 1].some((y) => ix.usado.has(`${e.id}|${y}|${m}`));
+    const ANUAL = /^(200|232|180|190|193|390)$/;
+    const add = (mod, per, yP, yPres, clave) => {
+      const pk = ANUAL.test(mod) ? 'A' : per;
+      out.push({ e, mod, per, yP, yPres, clave, pk, fin: plazoMod(mod, yP, per), pres: ix.hecho.has(`${e.id}|${yPres}|${clave}|${pk}`), imp: valPres(e.id, yPres, clave, pk) });
+    };
+    pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (alta115(e, ej, p)) add('115', p, ej, ej, '115'); });
+    if (uso('123')) pers.forEach((p) => add('123', p, ej, ej, '123'));
+    if (uso('349')) pers.forEach((p) => add('349', p, ej, ej, '349'));
+    if (SIG_592.includes(sig)) pers.forEach((p) => add('592', p, ej, ej, '592'));
+    if (uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
+    if (SIG_583.includes(sig)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
+    if (uso('INT')) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
+    if (uso('A22')) ['1T', '2T', '3T', '4T'].forEach((p) => add('A22', p, ej, ej, 'A22'));
+    if (uso('232')) add('232', 'A', ej - 1, ej, '232');
+    add('390', 'A', ej, ej, '390'); add('200', 'A', ej, ej + 1, '200'); add('190', 'A', ej, ej, '190');
+    if (uso('180') || out.some((o) => o.mod === '115')) add('180', 'A', ej, ej, '180');
+    if (uso('193') || uso('123')) add('193', 'A', ej, ej, '193');
+    return out;
+  }
+  const estadoOb = (o, hoy) => { if (o.pres) return 'ok'; const d = Math.round((o.fin - hoy) / 864e5); return d < 0 ? 'venc' : d <= 7 ? 'pron' : 'fut'; };
+  const empOrden = () => [...S.empresas].sort((a, b) => (c.idxEmp(a) < 0 ? 99 : c.idxEmp(a)) - (c.idxEmp(b) < 0 ? 99 : c.idxEmp(b)));
+  const perTxt = (o) => (o.per === 'A' ? `Anual ${o.yP}` : o.per === '0A' ? `Anual ${o.yP}` : `${o.per}/${o.yP}`);
+  const chipEst = (st, fin) => { const [fg, bg, ic, tx] = CMG_ST[st]; return `<span class="cmg-chip" title="${esc(`${tx} · fin ${fechaTxt(fin)}`)}" style="color:${fg};background:${bg};border-color:${fg}55">${ic} ${esc(tx)}</span>`; };
+
   function vistaCmg() {
     if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
-    const ej = Number(S.ejercicio), hoyD = new Date(), hoy = Date.UTC(hoyD.getFullYear(), hoyD.getMonth(), hoyD.getDate());
-    const habilF = (y, m, d) => { let t = Date.UTC(y, m - 1, d); while (!esHabil(t)) t += 864e5; return t; };
-    // fin de plazo de presentación según la regla general del calendario de la AEAT
-    const plazo = (mod, y, per) => {
-      if (['180', '190', '193'].includes(mod)) return habilF(y + 1, 1, 31);
-      if (mod === '390') return habilF(y + 1, 1, 30);
-      if (mod === '200') return habilF(y + 1, 7, 25);
-      if (mod === '202') return per === '1P' ? habilF(y, 4, 20) : per === '2P' ? habilF(y, 10, 20) : habilF(y, 12, 20);
-      if (mod === '232') return habilF(y + 1, 11, 30);
-      if (mod === '583') return per === '0A' ? habilF(y + 1, 11, 30) : habilF(y, 11, 20);
-      if (mod === 'Intrastat') { const m = +per; return m === 12 ? habilF(y + 1, 1, 12) : habilF(y, m + 1, 12); }
-      if (mod === '349') { const q = /^[1-4]T$/.test(per), m = q ? +per[0] * 3 : +per; if (m === 12) return habilF(y + 1, 1, 30); return !q && m === 7 ? habilF(y, 9, 20) : habilF(y, m + 1, 20); }
-      const iva = mod === '303';
-      if (/^[1-4]T$/.test(per)) { const q = +per[0]; return q === 4 ? habilF(y + 1, 1, iva ? 30 : 20) : habilF(y, q * 3 + 1, 20); }
-      const m = +per;
-      return m === 12 ? habilF(y + 1, 1, iva ? 30 : 20) : habilF(y, m + 1, iva ? Math.min(30, new Date(Date.UTC(y, m + 1, 0)).getUTCDate()) : 20);
-    };
-    const col = (per) => (per === '0A' || per === 'A' ? 12 : /^\d\d$/.test(per) ? +per - 1 : /^[1-4]T$/.test(per) ? +per[0] * 3 - 1 : ({ 1: 2, 2: 8, 3: 10 })[per[0]] ?? 12);
-    const hecho = new Set(), usado = new Set();
-    S.registros.forEach((r) => {
-      if (r.tipo === 'prs') Object.keys(r.datos ?? {}).forEach((k) => { const [m, p] = k.split('|'); hecho.add(`${r.empresa_id}|${r.ejercicio}|${m}|${p}`); usado.add(`${r.empresa_id}|${m}`); });
-      else if (r.tipo === 'pres' || (r.tipo === 'liq' && r.datos?.estado === 'Presentado')) { const m = r.datos?.modelo; if (m) { hecho.add(`${r.empresa_id}|${r.ejercicio}|${m}|${r.datos.periodo}`); usado.add(`${r.empresa_id}|${m}`); } }
-    });
-    const orden = [...S.empresas].sort((a, b) => (c.idxEmp(a) < 0 ? 99 : c.idxEmp(a)) - (c.idxEmp(b) < 0 ? 99 : c.idxEmp(b)));
+    const ej = Number(S.ejercicio), hoy = hoyUtc(), ix = presIndex();
     const G = [], tot = { ok: 0, venc: 0, pron: 0, fut: 0 }, mods = new Set();
-    orden.forEach((e, i) => {
-      const sig = String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, uso = (m) => usado.has(`${e.id}|${m}`);
+    empOrden().forEach((e, i) => {
       const g = { e, i, cel: Array.from({ length: 13 }, () => []), n: { venc: 0, pron: 0 } };
-      const add = (mod, per, yP, yPres, clave) => {
-        const fin = plazo(mod, yP, per), pr = hecho.has(`${e.id}|${yPres}|${clave}|${mod === '200' || mod === '232' || /^(180|190|193|390)$/.test(mod) ? 'A' : per}`);
-        const d = Math.round((fin - hoy) / 864e5), st = pr ? 'ok' : d < 0 ? 'venc' : d <= 7 ? 'pron' : 'fut';
-        if (!mods.has(mod) && (!cmgMod || cmgMod === mod)) mods.add(mod);
-        if (cmgMod && cmgMod !== mod) return;
+      obligaciones(e, ej, ix).forEach((o) => {
+        mods.add(o.mod);
+        if (cmgMod && cmgMod !== o.mod) return;
+        const st = estadoOb(o, hoy);
         tot[st]++; if (g.n[st] !== undefined) g.n[st]++;
-        g.cel[col(per)].push({ mod, st, per, fin });
-      };
-      ['303', '111', '115', '123', '349'].forEach((m) => { if (m === '303' || m === '111' || uso(m)) pers.forEach((p) => add(m, p, ej, ej, m)); });
-      if (['HER', 'ESP', 'LYS'].includes(sig)) pers.forEach((p) => add('592', p, ej, ej, '592'));
-      if (!trim || uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
-      if (['A18341404', 'B18782730', 'B18765289', 'B91428995'].includes(e.cif)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
-      if (uso('232')) add('232', 'A', ej - 1, ej, '232');
-      if (['HER', 'ESP', 'HIS', 'FER'].includes(sig)) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
-      add('390', 'A', ej, ej, '390');
-      ['180', '190', '193'].forEach((m) => { if (uso(m)) add(m, 'A', ej, ej, m); });
-      add('200', 'A', ej, ej + 1, '200');
+        g.cel[colMes(o.per)].push({ mod: o.mod, st, per: o.per, fin: o.fin });
+      });
       G.push(g);
     });
-    ['303', '111', '115', '123', '349', '592', '202', '583', '232', 'Intrastat', '390', '180', '190', '193', '200'].forEach((m) => mods.add(m));
     const chip = (x) => { const [fg, bg, ic, tx] = CMG_ST[x.st];
       return `<span class="cmg-chip" title="${esc(`${x.mod === 'Intrastat' ? 'Intrastat' : 'Modelo ' + x.mod} · ${x.per} · ${tx} · fin ${fechaTxt(x.fin)}`)}" style="color:${fg};background:${bg};border-color:${fg}55">${ic} ${x.mod === 'Intrastat' ? 'INT' : esc(x.mod)}</span>`; };
     const MS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Anual'];
-    const filas = G.map((g) => { const k = g.e.siglas, bar = COLOR_EMP[String(k ?? '').toUpperCase()] ?? '#1f3864', fondo = FONDO_EMP[g.i % FONDO_EMP.length];
+    const filas = G.map((g) => { const bar = COLOR_EMP[String(g.e.siglas ?? '').toUpperCase()] ?? '#1f3864', fondo = FONDO_EMP[g.i % FONDO_EMP.length];
       return `<tr style="background:${fondo}"><td class="cmg-e" style="border-left:6px solid ${bar}"><b>${esc(g.e.nombre)}</b><div class="cmg-s">${g.n.venc ? `<b style="color:#b42318">${g.n.venc} vencido(s)</b> ` : ''}${g.n.pron ? `<b style="color:#8a6d00">${g.n.pron} próximos</b>` : ''}${!g.n.venc && !g.n.pron ? '✓ al día' : ''}</div></td>
         ${g.cel.map((cs) => `<td>${cs.map(chip).join('')}</td>`).join('')}</tr>`; }).join('');
-    return `<div class="inicio"><section class="dsec"><h3>Cuadro de mando del grupo ·${ej} · <select data-cmgmod="1"><option value="">Todos los modelos</option>${[...mods].sort().map((m) => `<option${m === cmgMod ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></h3>
+    return `<div class="inicio"><section class="dsec"><h3>Cuadro de mando del grupo · ${ej} · <select data-cmgmod="1"><option value="">Todos los modelos</option>${[...mods].sort().map((m) => `<option${m === cmgMod ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></h3>
       <p class="dash-s" style="font-size:.7rem"><span style="color:#1a7f37">✓ ${tot.ok} presentados</span> · <span style="color:#b42318">✖ ${tot.venc} vencidos sin presentar</span> · <span style="color:#8a6d00">● ${tot.pron} vencen en 7 días</span> · <span style="color:#667085">○ ${tot.fut} en plazo</span></p>
       <div class="wrap"><table class="tabla cmg-t"><thead><tr><th>Empresa</th>${MS.map((m) => `<th>${m}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div></section>
-      <p class="hint">Estado fiscal de todas las empresas en ${ej}: cada modelo en el mes del periodo que liquida (en las pymes, trimestrales en el último mes del trimestre; el 202 en marzo, septiembre y noviembre; los anuales en la columna Anual). Presentado = está en «Impuestos Presentados» o marcado en «Liquidaciones Presentar». Los plazos son los de la regla general de la AEAT. Pasa el ratón por cada modelo para ver el detalle.</p></div>`;
+      <p class="hint">Estado fiscal de todas las empresas en ${ej}: cada modelo en el mes del periodo que liquida (en las pymes, trimestrales en el último mes del trimestre; el 202 en marzo, septiembre y noviembre; los anuales en la columna Anual). Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre; el 115 si está de alta en el censo; el 123, 202, 349, Intrastat, 232 y A22 si hay datos; el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. Presentado = está en «Impuestos Presentados» o marcado en «Liquidaciones Presentar». Los plazos son los de la regla general de la AEAT.</p></div>`;
   }
+
+  // Liquidaciones a presentar y pagos domiciliados: las mismas obligaciones, todas las empresas
+  let liqVer = 'pend';
+  const filtroLista = (L, hoy) => L.filter((o) => (liqVer === 'todas' || !o.pres) && (S.periodo ? enPeriodo(o, S.periodo) : o.fin <= hoy + 45 * 864e5));
+  async function toggleMarca(eid, k) {
+    const reg = S.registros.find((r) => r.tipo === 'liqpres' && r.empresa_id === eid), set = new Set(reg?.datos?.marcas ?? []);
+    if (set.has(k)) set.delete(k); else set.add(k);
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: eid, tipo: 'liqpres', ejercicio: null, datos: { marcas: [...set] } });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  function tablaOb(titulo, pago) {
+    const ej = Number(S.ejercicio), hoy = hoyUtc(), ix = presIndex(), ed = puede();
+    let L = empOrden().flatMap((e) => obligaciones(e, ej, ix));
+    if (pago) L = L.filter((o) => MODS_PAGO.includes(o.mod));
+    L = filtroLista(L, hoy).sort((a, b) => a.fin - b.fin || String(a.e.nombre).localeCompare(String(b.e.nombre)) || a.mod.localeCompare(b.mod));
+    const dom = (o) => { let t = o.fin - 5 * 864e5; while (!esHabil(t)) t -= 864e5; return t; };
+    const fila = (o) => { const k = `${o.yPres}|${o.clave}|${o.pk}`, manual = ix.marcas.has(`${o.e.id}|${k}`);
+      return `<tr class="${o.pres ? 'fila-ok' : estadoOb(o, hoy) === 'venc' ? 'fila-pend' : ''}"><td>${esc(o.e.nombre)}</td><td class="c">${/^\d+$/.test(o.mod) ? 'Modelo ' + esc(o.mod) : esc(o.mod)}</td><td class="c">${esc(perTxt(o))}</td>
+        <td class="c">${fechaTxt(pago ? dom(o) : o.fin)}</td>${pago ? `<td>${esc(o.e.datos?.banco ?? '')}</td>` : ''}<td class="num">${o.imp === null ? '—' : fnum(o.imp)}</td><td class="c">${chipEst(estadoOb(o, hoy), o.fin)}</td>
+        <td class="c">${ed ? (o.pres && !manual ? '' : `<button class="small" data-act="m-liqmarca" data-e="${o.e.id}" data-k="${esc(k)}">${manual ? 'Quitar marca' : 'Marcar presentado'}</button>`) : ''}</td></tr>`; };
+    return `<div class="bar"><span class="chip">${S.periodo ? esc(PERIODOS[S.periodo] ?? S.periodo) : 'Vencidos y próximos 45 días'} · ${ej}</span>
+        <label>Ver <select data-liqver="1"><option value="pend"${liqVer === 'pend' ? ' selected' : ''}>Pendientes</option><option value="todas"${liqVer === 'todas' ? ' selected' : ''}>Todas</option></select></label><span class="space"></span></div>
+      ${L.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Modelo</th><th>Periodo</th><th>${pago ? 'Fecha de cargo' : 'Vencimiento'}</th>${pago ? '<th>Banco</th>' : ''}<th class="num">Importe</th><th>Estado</th><th></th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`
+        : `<p class="vacio">${esc(titulo)}: nada pendiente en este periodo.</p>`}
+      <p class="hint">${pago ? 'Fecha de cargo: cinco días antes del fin de plazo (día hábil). ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre; el 115 si está de alta en el censo; el 123, 202, 349, Intrastat, 232 y A22 si hay datos; el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
+  }
+  const vistaLiq = () => tablaOb('Liquidaciones a presentar', false);
+  const vistaVenc = () => tablaOb('Pagos domiciliados', true);
+  const setLiqVer = (v) => { liqVer = v; render(); };
   const setCmgMod = (v) => { cmgMod = v; render(); };
 
   // ---------- Pestañas ----------
@@ -2434,6 +2515,7 @@ export function crearModulos(c) {
     const imps = ['111', '115', '123', '303', '349'].map((m) => {
       const c = calc[m], pr = pres[m];
       if (c === undefined && pr === null) return '';
+      if (m === '115' && !alta115(e, ej, p)) return '';
       if (['115', '123', '349'].includes(m) && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005)) return '';
       const est = c === undefined ? '' : m === '349' ? 'Informativa' : c > 0.005 ? 'A ingresar' : c < -0.005 ? 'A compensar' : 'Cero';
       const cu = pr === null ? nd('Sin presentar') : Math.abs(pr - (c || 0)) <= 1 ? ok('Presentado') : ko(`Presentado ${g(pr)}`);
@@ -2528,9 +2610,7 @@ export function crearModulos(c) {
       } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
     }
     // 4) liquidaciones pendientes de presentar
-    const pend = S.registros.filter((r) => r.tipo === 'liq' && r.empresa_id === S.sel && r.ejercicio === ej && r.datos.estado !== 'Presentado')
-      .map((r) => ({ mod: r.datos.modelo, per: r.datos.periodo ? `${r.datos.periodo}/${ej}` : String(ej), imp: r.datos.importe }));
-    ['111', '115', '123', '303', '349'].forEach((m) => { if (calc[m] !== undefined && pres[m] === null && Math.abs(calc[m]) >= 0.005 && !pend.some((x) => x.mod === m && x.per.startsWith(p))) pend.push({ mod: m, per: `${p}/${ej}`, imp: calc[m] }); });
+    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.imp ?? calc[o.mod] ?? null })) : [];
     const siiTxt = [];
     [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
       const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
@@ -2554,6 +2634,8 @@ export function crearModulos(c) {
       <p class="hint">Pincha en cualquier recuadro o fila para ir a su pestaña.</p></div>`;
   }
   tabs.ini = ['Inicio', 'Resumen del periodo', vistaInicio];
+  tabs.liq = ['Liquidaciones Presentar', 'Todas las empresas', vistaLiq];
+  tabs.venc = ['Pagos Domiciliados Impuestos', 'Todas las empresas', vistaVenc];
 
   function vistaCnom() {
     if (!S.sel) return sinEmpresa;
@@ -2819,6 +2901,7 @@ export function crearModulos(c) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
       ...acc3,
+      'm-liqmarca': () => toggleMarca(d.e, d.k),
       'm-d365carpeta': () => d365Carpeta(d.c),
       'm-d365recoger': () => d365Recoger(true),
       'm-new': () => formReg(d.m),
@@ -3454,5 +3537,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => (kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
