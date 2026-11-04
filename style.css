@@ -691,3 +691,9 @@ table.cmg-t td.cmg-e { white-space: normal; font-size: .64rem; }
 .cmg-s { font-size: .58rem; font-weight: 400; color: #475467; }
 .cmg-chip { display: inline-block; margin: 1px; padding: 0 .28rem; border-radius: 4px; font-size: .58rem; border: 1px solid; white-space: nowrap; }
 .dsec h3 select { font-size: .72rem; margin-left: .4rem; }
+
+/* Libros de IVA: una sola fila, botones en píldora azul como la app antigua */
+.d-fila { gap: .4rem 1.6rem; }
+.d-fila .small { background: #3b5b9d; color: #fff; border: 0; border-radius: 14px; padding: .25rem .7rem; font-size: .66rem; font-weight: 600; }
+.d-fila .small:hover { background: #4a6cb3; }
+.d-fila label { display: inline-flex; align-items: center; gap: .3rem; }
