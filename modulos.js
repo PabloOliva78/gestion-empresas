@@ -2288,11 +2288,43 @@ export function crearModulos(c) {
     if (err) return void alert(err);
     await cargar(); render();
   }
+  // La tarea de los lunes lee config.json (en la carpeta de D365): por NIF, auto y meses liquidados. Cada cambio se escribe también ahí.
+  const d365Main = async () => (d365H ??= await idbD365('readonly', (s) => s.get('carpeta')).catch(() => null));
+  async function d365CfgLeer(h) { try { return JSON.parse(await (await (await h.getFileHandle('config.json')).getFile()).text()); } catch { return null; } }
+  async function d365CfgSembrar(h) { // lo que ya hay en config.json pasa a la base de datos si la empresa aún no tiene nada
+    const j = await d365CfgLeer(h); let nuevo = false;
+    for (const [nif, x] of Object.entries(j?.empresas ?? {})) {
+      const e = S.empresas.find((q) => q.cif === nif);
+      if (!e || liqReg(e.id)) continue;
+      const err = await guardarRegistro(null, { id: crypto.randomUUID(), empresa_id: e.id, tipo: 'liqiva', ejercicio: null, datos: { auto: !!x.auto, meses: x.liquidados ?? [] } });
+      if (!err) nuevo = true;
+    }
+    if (nuevo) await cargar();
+  }
+  async function d365Cambio(mut) {
+    const h = await d365Main(), e = empresa();
+    let permiso = false;
+    if (h) { try { permiso = (await h.queryPermission({ mode: 'readwrite' })) === 'granted' || (await h.requestPermission({ mode: 'readwrite' })) === 'granted'; } catch { /* sin permiso */ } }
+    if (h && permiso) await d365CfgSembrar(h); // antes de cambiar nada, trae lo que ya tenía el archivo
+    await liqGuardar(S.sel, mut);
+    if (!h) d365Msg = 'Elige la carpeta de D365 («Elegir carpeta…») para que la tarea de los lunes vea este cambio.';
+    else if (!permiso) d365Msg = 'Sin permiso de escritura en la carpeta de D365: la tarea de los lunes no verá este cambio.';
+    else {
+      try {
+        const j = (await d365CfgLeer(h)) ?? { empresas: {} }, d = liqReg(e.id)?.datos ?? {};
+        j.empresas ??= {}; j.empresas[e.cif] = { auto: !!d.auto, liquidados: d.meses ?? [] }; j.actualizado = new Date().toISOString();
+        const w = await (await h.getFileHandle('config.json', { create: true })).createWritable();
+        await w.write(JSON.stringify(j, null, 1)); await w.close();
+        d365Msg = 'Guardado también en config.json (lo lee la tarea de los lunes).';
+      } catch (err) { d365Msg = `No se pudo escribir config.json: ${err.message}`; }
+    }
+    render();
+  }
   function toggleLiqIva(txt) {
     const ms = txt.split(',');
-    return liqGuardar(S.sel, (d) => { const set = new Set(d.meses ?? []), todos = ms.every((m) => set.has(m)); ms.forEach((m) => (todos ? set.delete(m) : set.add(m))); d.meses = [...set].sort(); });
+    return d365Cambio((d) => { const set = new Set(d.meses ?? []), todos = ms.every((m) => set.has(m)); ms.forEach((m) => (todos ? set.delete(m) : set.add(m))); d.meses = [...set].sort(); });
   }
-  const d365Auto = (on) => liqGuardar(S.sel, (d) => { d.auto = !!on; });
+  const d365Auto = (on) => d365Cambio((d) => { d.auto = !!on; });
 
   // ---- Libros de IVA de D365: la tarea semanal deja D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx en la carpeta «Archivos Claude-D365»;
   // también se recogen los «Líneas de informes de IVA*.xlsx» exportados a mano (la empresa va por el prefijo del asiento). La carpeta se elige una vez y se recuerda en este navegador.
@@ -2324,7 +2356,7 @@ export function crearModulos(c) {
   async function d365Carpeta(cual) {
     if (!window.showDirectoryPicker) return void alert('Este navegador no deja elegir carpetas. Usa Chrome o Edge.');
     try {
-      const h = await window.showDirectoryPicker({ id: cual === 'otra' ? 'd365-otra' : 'd365-exportaciones', mode: 'read', ...(cual === 'otra' ? { startIn: 'downloads' } : {}) });
+      const h = await window.showDirectoryPicker({ id: cual === 'otra' ? 'd365-otra' : 'd365-exportaciones', mode: cual === 'otra' ? 'read' : 'readwrite', ...(cual === 'otra' ? { startIn: 'downloads' } : {}) });
       if (cual === 'otra') d365O = h; else d365H = h;
       await idbD365('readwrite', (s) => s.put(h, cual === 'otra' ? 'otra' : 'carpeta'));
       d365Msg = `Carpeta ${cual === 'otra' ? 'adicional' : 'de exportaciones'}: ${h.name}`; render();
@@ -2347,6 +2379,7 @@ export function crearModulos(c) {
       }
       if (!d365H && !d365O) { if (manual) { d365Msg = 'Elige primero la carpeta de exportaciones de D365.'; render(); } return; }
       if (!carpetas.length) return;
+      if (carpetas.includes(d365H)) await d365CfgSembrar(d365H);
       const hecho = d365Hecho(), omit = [], tocadas = new Set(); let cargados = 0;
       const entradas = [];
       for (const dir of carpetas) for await (const [n, h] of dir.entries()) entradas.push([n, h]);
