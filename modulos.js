@@ -2688,8 +2688,7 @@ export function crearModulos(c) {
     const fila = (r) => `<tr${ilArch(r)?.path ? ` data-ilpdf="${esc(ilArch(r).path)}" title="Doble clic: abrir ${esc(ilArch(r).nombre)}" style="cursor:pointer"` : ''}>${IL_CAMPOS.map(([k, , w]) => celda(r, k, w)).join('')}<td>${est(r)}</td>
       <td>${ilArch(r)?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(ilArch(r).path)}">📄 ${esc(ilDe(r, 'tipo'))} ${esc(ilDe(r, 'ej'))}</button>` : ''}</td>
       <td>${ed ? `<button class="small" data-act="m-ildel" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`;
-    return `<section class="dsec il-s"><h3>Impuestos locales · ${esc(e.nombre)} · <select data-ilver="1"><option value="todos">Todos los ejercicios</option>${anios.map((a) => `<option${a === ilVer ? ' selected' : ''}>${a}</option>`).join('')}</select> <span class="dash-s">(${L.length} recibo(s))</span></h3>
-      ${ed ? dz('iloc', 'Suelta aquí (o pulsa para elegir) todos los PDF que quieras, sin límite, de recibos o justificantes de pago', '(IBI, IAE, IVTM, vados… del Servicio Provincial Tributario u otros): se leen el impuesto, objeto, municipio, ejercicio, importe, último día de pago y si constan pagados. Doble clic en una fila con PDF para abrirlo.', '.pdf') : ''}
+    return `${ed ? dz('iloc', 'Suelta aquí (o pulsa para elegir) todos los PDF que quieras, sin límite, de recibos o justificantes de pago', '(IBI, IAE, IVTM, vados… del Servicio Provincial Tributario u otros): se leen el impuesto, objeto, municipio, ejercicio, importe, último día de pago y si constan pagados. Doble clic en una fila con PDF para abrirlo.', '.pdf') : ''}<section class="dsec il-s"><h3>Impuestos locales · ${esc(e.nombre)} · <select data-ilver="1"><option value="todos">Todos los ejercicios</option>${anios.map((a) => `<option${a === ilVer ? ' selected' : ''}>${a}</option>`).join('')}</select> <span class="dash-s">(${L.length} recibo(s))</span></h3>
       ${ilMsg ? `<p class="dash-s">${esc(ilMsg)}</p>` : ''}
       <div class="wrap"><table class="tprs tnom il-t"><thead><tr>${IL_CAMPOS.map((c) => `<th>${c[1]}</th>`).join('')}<th>Situación</th><th>PDF</th><th></th></tr></thead>
         <tbody>${L.map(fila).join('') || `<tr><td colspan="${IL_CAMPOS.length + 3}" class="c">Sin recibos${ilVer === 'todos' ? '' : ' en ' + ilVer}: suelta un PDF o añade una línea</td></tr>`}</tbody></table></div>
@@ -2862,8 +2861,22 @@ export function crearModulos(c) {
   }
   function duaSeleccionar(num, clics) {
     const reg = duaRegs().find((r) => r.datos.num === num);
-    if (clics >= 2) { if (reg?.datos?.arch?.path) abrir(reg.datos.arch.path); else duaMsg = 'Este DUA no tiene el PDF guardado: vuelve a soltarlo.'; render(); return; }
+    if (clics >= 2) return;
     if (duaSel !== num) { duaSel = num; render(); }
+  }
+  // doble clic en la fila: abre el PDF en otra pestaña (la ventana se abre ya, en el gesto del usuario, para que el navegador no la bloquee)
+  async function abrirNuevaPestana(path) {
+    const w = window.open('', '_blank');
+    const { data, error } = await db.storage.from('documentos').createSignedUrl(path, 300);
+    if (error || !data) { w?.close(); return void alert(error?.message ?? 'No se pudo abrir el PDF'); }
+    if (w) w.location.href = data.signedUrl; else window.open(data.signedUrl, '_blank');
+    return undefined;
+  }
+  function duaAbrir(num) {
+    const reg = duaRegs().find((r) => r.datos.num === num);
+    if (reg?.datos?.arch?.path) return abrirNuevaPestana(reg.datos.arch.path);
+    duaMsg = 'Este DUA no tiene el PDF guardado: vuelve a soltarlo.'; render();
+    return undefined;
   }
   const setDuaMes = (v) => { duaMes = v; render(); };
   function vistaDua() {
@@ -2882,7 +2895,7 @@ export function crearModulos(c) {
       const neta = (R) => { const v = duaVal(R, 'neta'); return v && !Number.isNaN(duaNum(v)) ? duaNum(v).toLocaleString('es-ES', { maximumFractionDigits: 3 }) : esc(v); };
       return `<h4 class="it-sec">${esc(tit)} · ${lista.length} DUA</h4><div class="wrap"><table class="tprs tnom il-t dua-t"><thead><tr><th rowspan="2">Nº DUA</th><th rowspan="2">Importador</th><th rowspan="2">Exportador</th><th rowspan="2">País</th><th rowspan="2">TARIC</th><th rowspan="2">Masa neta (kg)</th><th rowspan="2">Lugar precisado</th><th rowspan="2">Medio transporte llegada</th>${cods.map((c) => `<th colspan="3">${esc(c)}${DUA_TRIB[c] ? ' · ' + DUA_TRIB[c] : ''}</th>`).join('')}</tr>
         <tr>${'<th class="g1">Base imponible</th><th class="mid">Tipo</th><th class="g3">Importe</th>'.repeat(cods.length)}</tr></thead><tbody>
-        ${lista.map((R) => `<tr data-duasel="${esc(R.num)}" style="cursor:pointer${R.num === duaSel ? ';background:#fff6d6' : ''}"><td>${esc(R.num)} ${R.arch?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(R.arch.path)}" title="Abrir el PDF del DUA">📄 PDF</button>` : '<span title="Suelta de nuevo el PDF para guardarlo">sin PDF</span>'}</td><td>${esc(duaVal(R, 'importador').replace(/^ES[A-Z0-9]+\s*-\s*/, ''))}</td><td>${esc(duaVal(R, 'expedidor'))}</td><td>${esc(duaVal(R, 'paisExp'))}</td>
+        ${lista.map((R) => `<tr data-duasel="${esc(R.num)}" style="cursor:pointer${R.num === duaSel ? ';background:#fff6d6' : ''}"><td${R.arch?.path ? '' : ' title="Sin PDF guardado: suéltalo de nuevo"'}>${esc(R.num)}</td><td>${esc(duaVal(R, 'importador').replace(/^ES[A-Z0-9]+\s*-\s*/, ''))}</td><td>${esc(duaVal(R, 'expedidor'))}</td><td>${esc(duaVal(R, 'paisExp'))}</td>
           <td>${esc((String(duaVal(R, 'taric')).replace(/\s/g, '').match(/\d{8,10}/g) || []).join(' · '))}</td><td class="num">${neta(R)}</td><td>${esc(duaVal(R, 'lugar'))}</td><td>${esc(duaVal(R, 'transporte'))}</td>${cods.map((c) => celdas(R, c)).join('')}</tr>`).join('')}
         <tr class="ttot"><td colspan="8">Total ${esc(tit)}</td>${cods.map((c) => `<td class="num g1">${tot[c][2] && !tot[c][0] ? '' : fnum(rr(tot[c][0]))}</td><td class="mid"></td><td class="num g3">${fnum(rr(tot[c][1]))}</td>`).join('')}</tr></tbody></table></div>`;
     };
@@ -2890,11 +2903,10 @@ export function crearModulos(c) {
     const tablas = regs.length ? porMes.map((k) => tabla(regs.filter((R) => mesDe(R) === k).sort((a, b) => (a.levante || '').localeCompare(b.levante || '')), nomM(k))).join('') : '<p class="hint">Todavía no hay DUA cargados para esta empresa.</p>';
     const Sel = regs.find((R) => R.num === duaSel) ?? null;
     const tribT = (o, t) => { const xs = Object.values(o || {}); return xs.length ? `<h4 class="it-sec">${t}</h4><table class="tprs tnom il-t dua-t" style="width:auto"><thead><tr><th>Tributo</th><th>Base</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${xs.map((x) => `<tr><td><b>${esc(x.cod)}</b>${DUA_TRIB[x.cod] ? `<br><small>${DUA_TRIB[x.cod]}</small>` : ''}</td><td class="num">${x.base === null ? '—' : x.ud === 'kg' ? `${x.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(x.base)}</td><td class="c">${esc(duaTipo(x.tipo))}</td><td class="num">${fnum(x.imp)}</td></tr>`).join('')}</tbody></table>` : ''; };
-    const ficha = Sel ? `<section class="dsec dua-s"><h3>DUA ${esc(Sel.num)} ${Sel.arch?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(Sel.arch.path)}">📄 Abrir PDF</button>` : ''} ${ed ? `<button class="small" data-act="m-duadel" data-n="${esc(Sel.num)}">Eliminar</button>` : ''}</h3><p class="dash-s">Leído de ${esc(Sel.archivo || '')}. Los campos se pueden corregir.</p>
+    const ficha = Sel ? `<section class="dsec dua-s"><h3>DUA ${esc(Sel.num)} ${ed ? `<button class="small" data-act="m-duadel" data-n="${esc(Sel.num)}">Eliminar</button>` : ''}</h3><p class="dash-s">Leído de ${esc(Sel.archivo || '')}. Los campos se pueden corregir.</p>
       <div class="css-flex" style="align-items:flex-start;gap:1.5rem"><table class="tprs tnom il-t dua-t" style="width:auto"><tbody>${DUA_CAMPOS.map(([k, t]) => `<tr><td>${esc(t)}</td><td class="in"><input data-duacampo="${esc(Sel.num)}|${k}" value="${esc(duaVal(Sel, k))}" size="${Math.max(8, String(duaVal(Sel, k)).length + 1)}"${ed ? '' : ' readonly'}></td></tr>`).join('')}</tbody></table>
       <div>${tribT(Sel.calculados, 'Tributos calculados')}${tribT(Sel.declarados, 'Tributos declarados')}${Sel.ivaDif ? `<p><b>Importe IVA diferido: ${fnum(duaNum(Sel.ivaDif))}</b></p>` : ''}</div></div></section>` : '';
-    return `<section class="dsec dua-s"><h3>DUA-H1 · ${esc(e.nombre)}</h3>
-      ${ed ? dz('dua', 'Suelta aquí los PDF de los DUA (H1)', 'o pulsa para elegirlos. Puedes soltar varios a la vez; se ordenan por el mes de la fecha de levante.', '.pdf') : ''}
+    return `${ed ? dz('dua', 'Suelta aquí los PDF de los DUA (H1)', 'o pulsa para elegirlos. Puedes soltar varios a la vez; se ordenan por el mes de la fecha de levante.', '.pdf') : ''}<section class="dsec dua-s"><h3>DUA-H1 · ${esc(e.nombre)}</h3>
       ${duaMsg ? `<p class="dash-s">${esc(duaMsg)}</p>` : ''}
       <div class="dua-bar"><b>Mes</b> <select data-duames="1"><option value="todos">Todos</option>${meses.map((k) => `<option value="${k}"${k === mesSel ? ' selected' : ''}>${esc(nomM(k))}</option>`).join('')}</select>
         <span class="dash-s">Pulsa una fila para ver su detalle; doble clic para abrir el PDF en otra pestaña.</span></div>${tablas}</section>${ficha}`;
@@ -3803,5 +3815,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => (kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

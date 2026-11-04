@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=120';
+import { crearModulos } from './modulos.js?v=121';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -280,7 +280,8 @@ window.addEventListener('resize', () => ajustarInicio());
 let focoCelda = null;
 const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id', 'data-fce', 'data-sie', 'data-il'];
 // Impuestos locales: doble clic en una fila con PDF lo abre
-root.addEventListener('dblclick', (ev) => { const tr = ev.target.closest?.('[data-ilpdf]'); if (tr && !ev.target.closest('select,button')) { ev.preventDefault(); M.abrirArch(tr.dataset.ilpdf); } });
+root.addEventListener('dblclick', (ev) => { const du = ev.target.closest?.('[data-duasel]'); if (du && !ev.target.closest('button,select')) { ev.preventDefault(); M.duaAbrir(du.dataset.duasel); return; }
+  const tr = ev.target.closest?.('[data-ilpdf]'); if (tr && !ev.target.closest('select,button')) { ev.preventDefault(); M.abrirArch(tr.dataset.ilpdf); } });
 function restaurarFoco() {
   if (!focoCelda || (document.activeElement && document.activeElement !== document.body)) return;
   const i = [...root.querySelectorAll(`input[${focoCelda.a}]`)].find((x) => x.getAttribute(focoCelda.a) === focoCelda.v);
