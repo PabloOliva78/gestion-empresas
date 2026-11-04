@@ -247,10 +247,11 @@ function render() {
         <button id="out" class="small">Salir</button></div>
     </aside>
     <main class="princ">
-      <header class="doc"><div class="doc-l">
+      <header class="doc"><div class="doc-l"><img class="logo-prog" src="logos/asesoria.svg?v=1" alt="">
+        <div>
         <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
         <p class="doc-sub">Inicio · grupos de pestañas</p>
-        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>
+        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div></div>
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
         <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
