@@ -715,3 +715,10 @@ table.cmg-t td.cmg-e { white-space: normal; font-size: .64rem; }
 .dsec .cmg-s { font-size: calc(var(--tb) * .9); }
 .dsec .cmg-chip { font-size: calc(var(--tb) * .92); padding: 0 calc(var(--tb) * .4); }
 .dsec .dash-tab th { font-size: var(--tb); }
+
+/* Inicio: el tamaño lo fija app.js (ajustarInicio) según ancho y alto de la ventana, sin barra vertical */
+.inicio .dsec, .inicio .dash-2 { --tb: var(--ini, max(10px, 0.66vw)); }
+.inicio .dsec { margin-bottom: calc(var(--ini, 12px) * .7); padding: calc(var(--ini, 12px) * .6) calc(var(--ini, 12px) * .9); }
+.inicio .dash-2 { gap: calc(var(--ini, 12px) * .8); }
+.inicio .dash-2 > .dsec { margin-bottom: calc(var(--ini, 12px) * .7); }
+.inicio p.hint { margin: 0; font-size: var(--ini, 11px); }

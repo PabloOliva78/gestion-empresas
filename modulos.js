@@ -2542,7 +2542,7 @@ export function crearModulos(c) {
         : `<p>${ok('Todas las liquidaciones del periodo están presentadas')}</p>`);
     const lq = meses.map((mm) => `${ej}-${mm}`), setL = new Set(S.registros.find((r) => r.tipo === 'liqiva' && r.empresa_id === S.sel)?.datos?.meses ?? []), liqHecha = !!p && lq.every((m) => setL.has(m));
     const cfgD = liqReg(S.sel)?.datos ?? {}, ultimos = (cfgD.meses ?? []).slice(-6);
-    return `<section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila">
+    return `<div class="inicio"><section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila">
         <label title="Marcado: cada semana se cargan solos los libros que la tarea de D365 deja en la carpeta de exportaciones. Sin marcar: los subes tú como siempre."><input type="checkbox" data-d365auto="1"${cfgD.auto ? ' checked' : ''}${ed ? '' : ' disabled'}> <b>Descarga automática semanal desde D365</b></label>
         ${ed && p ? `<label title="Marcado: ese mes no se vuelve a cargar desde D365."><input type="checkbox" data-d365liq="${lq.join(',')}"${liqHecha ? ' checked' : ''}> <b>Liquidación de IVA hecha · ${esc(per)}</b></label>` : ''}
         <span class="dash-s">Exportaciones de D365: guárdalas en <b>${esc(d365H?.name ?? 'Archivos Claude-D365')}</b>${ed ? ` ${d365H ? '' : '<button class="small" data-act="m-d365carpeta" data-c="carpeta">Elegir carpeta…</button>'}${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
@@ -2551,7 +2551,7 @@ export function crearModulos(c) {
       <section class="dsec"><h3>Impuestos del periodo · ${esc(per)}</h3>${p ? `<div class="dash-g">${imps.join('') || '<p class="hint">Sin datos de impuestos en este periodo.</p>'}</div>` : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>'}</section>
       <section class="dsec"><h3>Conciliaciones</h3><div class="conc-resumen ${nMal ? 'd-ko' : 'd-ok'}">${nMal ? `✖ ${nMal} conciliación${nMal > 1 ? 'es' : ''} con descuadre` : '✓ Todas las conciliaciones cuadran'}</div><div class="dash-g">${conc.join('')}</div></section>
       <div class="dash-2"><section class="dsec"><h3>Saldos de las cuentas contables</h3>${ctas}</section><section class="dsec"><h3>Liquidaciones a presentar pendientes</h3>${liq}</section></div>
-      <p class="hint">Pincha en cualquier recuadro o fila para ir a su pestaña.</p>`;
+      <p class="hint">Pincha en cualquier recuadro o fila para ir a su pestaña.</p></div>`;
   }
   tabs.ini = ['Inicio', 'Resumen del periodo', vistaInicio];
 

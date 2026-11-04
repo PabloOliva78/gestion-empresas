@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=104';
+import { crearModulos } from './modulos.js?v=105';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -259,8 +259,22 @@ function render() {
       <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   alinearPanel();
+  ajustarInicio();
   restaurarFoco();
 }
+
+// Pantalla de inicio: la letra se ajusta al ancho y al alto de la ventana para que quepa sin barra de desplazamiento vertical
+function ajustarInicio() {
+  const el = root.querySelector('.inicio');
+  if (!el) return;
+  let tb = Math.min(innerWidth * 0.0085, 20);
+  for (let i = 0; i < 30; i++) {
+    el.style.setProperty('--ini', `${tb}px`);
+    if (document.documentElement.scrollHeight <= innerHeight + 1 || tb <= 6.5) break;
+    tb *= 0.95;
+  }
+}
+window.addEventListener('resize', () => ajustarInicio());
 
 // Celdas de importes editables: el foco sobrevive a los redibujados y se navega con flechas, Intro y tabulador
 let focoCelda = null;
