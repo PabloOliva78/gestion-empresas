@@ -2224,13 +2224,87 @@ export function crearModulos(c) {
   }
 
   // ---------- Inicio: resumen al arrancar (impuestos del periodo, conciliaciones, saldos de cuentas y liquidaciones pendientes) ----------
-  async function toggleLiqIva(txt) {
-    const ms = txt.split(','), reg = S.registros.find((r) => r.tipo === 'liqiva' && r.empresa_id === S.sel), set = new Set(reg?.datos?.meses ?? []);
-    const todos = ms.every((m) => set.has(m));
-    ms.forEach((m) => (todos ? set.delete(m) : set.add(m)));
-    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'liqiva', ejercicio: null, datos: { meses: [...set].sort() } });
+  // Configuración de libros D365 por empresa (registro «liqiva»): auto = descarga semanal activada; meses = liquidaciones de IVA hechas (no se vuelven a cargar)
+  const liqReg = (id) => S.registros.find((r) => r.tipo === 'liqiva' && r.empresa_id === id);
+  async function liqGuardar(id, mut) {
+    const reg = liqReg(id), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+    mut(datos);
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: id, tipo: 'liqiva', ejercicio: null, datos });
     if (err) return void alert(err);
     await cargar(); render();
+  }
+  function toggleLiqIva(txt) {
+    const ms = txt.split(',');
+    return liqGuardar(S.sel, (d) => { const set = new Set(d.meses ?? []), todos = ms.every((m) => set.has(m)); ms.forEach((m) => (todos ? set.delete(m) : set.add(m))); d.meses = [...set].sort(); });
+  }
+  const d365Auto = (on) => liqGuardar(S.sel, (d) => { d.auto = !!on; });
+
+  // ---- Libros de IVA de D365: la tarea semanal deja D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx en la carpeta «Archivos Claude-D365»;
+  // también se recogen los «Líneas de informes de IVA*.xlsx» exportados a mano (la empresa va por el prefijo del asiento). La carpeta se elige una vez y se recuerda en este navegador.
+  const idbD365 = (modo, fn) => new Promise((ok, no) => {
+    const r = indexedDB.open('gestion-d365', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('h');
+    r.onsuccess = () => { const t = r.result.transaction('h', modo), q = fn(t.objectStore('h')); t.oncomplete = () => ok(q.result); t.onerror = () => no(t.error); };
+    r.onerror = () => no(r.error);
+  });
+  let d365H = null, d365Msg = '', d365Ocupado = false;
+  const d365Hecho = () => { try { return new Set(JSON.parse(localStorage.getItem('d365hecho') || '[]')); } catch { return new Set(); } };
+  const d365Marca = (set) => { try { localStorage.setItem('d365hecho', JSON.stringify([...set].slice(-3000))); } catch { /* sin almacenamiento */ } };
+  const ymVal = (v) => {
+    const d = v instanceof Date ? v : typeof v === 'number' ? new Date(Math.round((v - 25569) * 864e5)) : null;
+    if (d && !Number.isNaN(d.getTime())) return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(String(v ?? '')) ?? null, i = /^(\d{4})-(\d{2})/.exec(String(v ?? ''));
+    return m ? `${m[3]}-${m[2].padStart(2, '0')}` : i ? `${i[1]}-${i[2]}` : null;
+  };
+  async function reconocerD365(file) {
+    const filas = await filasExcel(file), hd = (filas[0] ?? []).map((x) => sinAc(String(x ?? ''))), j = (t) => hd.indexOf(t);
+    const jA = j('asiento'), jF = j('fecha');
+    if (jA < 0 || jF < 0) return null;
+    const cnt = (m, k) => { if (k) m.set(k, (m.get(k) || 0) + 1); }, pre = new Map(), mes = new Map(), top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    filas.slice(1).forEach((r) => { if (!r) return; cnt(pre, (String(r[jA] ?? '').match(/^([A-Z]{2,4})-/) || [])[1]); cnt(mes, ymVal(r[jF])); });
+    const sig = top(pre), ym = top(mes);
+    return sig && ym ? { sig, ym } : null;
+  }
+  async function d365Carpeta() {
+    if (!window.showDirectoryPicker) return void alert('Este navegador no deja elegir carpetas. Usa Chrome o Edge.');
+    try {
+      d365H = await window.showDirectoryPicker({ id: 'd365-exportaciones', mode: 'read' });
+      await idbD365('readwrite', (s) => s.put(d365H, 'carpeta'));
+      d365Msg = `Carpeta de exportaciones: ${d365H.name}`; render();
+      return d365Recoger(true);
+    } catch (err) { if (err?.name !== 'AbortError') alert(err.message); }
+    return undefined;
+  }
+  // manual = con un clic del usuario (puede pedir permiso); sin manual solo se lee si el navegador ya lo permite
+  async function d365Recoger(manual) {
+    if (d365Ocupado) return;
+    d365Ocupado = true;
+    try {
+      d365H ??= await idbD365('readonly', (s) => s.get('carpeta')).catch(() => null);
+      if (!d365H) { if (manual) { d365Msg = 'Elige primero la carpeta de exportaciones de D365.'; render(); } return; }
+      let perm = 'prompt';
+      try { perm = await d365H.queryPermission({ mode: 'read' }); if (perm !== 'granted' && manual) perm = await d365H.requestPermission({ mode: 'read' }); } catch { /* sin permiso */ }
+      if (perm !== 'granted') { if (manual) { d365Msg = `Sin permiso para leer ${d365H.name}: pulsa «Recoger ahora» y acepta.`; render(); } return; }
+      const hecho = d365Hecho(), omit = [], tocadas = new Set(); let cargados = 0;
+      for await (const [n, h] of d365H.entries()) {
+        if (h.kind !== 'file') continue;
+        const mN = /^D365_([^_]+)_(Repercutido|Soportado)_(\d{4})-(\d{2})(?:_.*)?\.xlsx$/i.exec(n), esL = /^L[ií]neas de informes de IVA.*\.xlsx$/i.test(n);
+        if (!mN && !esL) continue;
+        const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
+        if (hecho.has(clave)) continue;
+        let sig, ym;
+        if (mN) { sig = mN[1].toUpperCase(); ym = `${mN[3]}-${mN[4]}`; } else { const R = await reconocerD365(f).catch(() => null); if (!R) { omit.push(`${n} (no reconocido)`); continue; } ({ sig, ym } = R); }
+        const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === sig);
+        if (!e) { omit.push(`${n} (empresa ${sig})`); continue; }
+        const cfg = liqReg(e.id)?.datos ?? {};
+        if (mN && !cfg.auto) { omit.push(`${n} (automático desactivado)`); continue; }
+        if ((cfg.meses ?? []).includes(ym)) { omit.push(`${n} (IVA liquidado)`); continue; }
+        try { await ingestaIVA(f, e.id); hecho.add(clave); cargados++; tocadas.add(e.id); } catch (err) { omit.push(`${n} (${err.message})`); }
+      }
+      d365Marca(hecho);
+      d365Msg = `${cargados ? `${cargados} libro(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}`;
+      if (cargados || manual) { await cargar(); render(); }
+    } finally { d365Ocupado = false; }
   }
   function vistaInicio() {
     if (!S.sel) return sinEmpresa;
@@ -2370,8 +2444,13 @@ export function crearModulos(c) {
         <td class="c">${/^\d+$/.test(f.mod) ? 'Modelo ' + esc(f.mod) : esc(f.mod)}</td><td class="c">${esc(f.per)}</td><td class="n">${g(f.imp)}</td></tr>`).join('')}</tbody></table><p class="hint">${pend.length} liquidación(es) sin marcar como presentadas.</p>`
         : `<p>${ok('Todas las liquidaciones del periodo están presentadas')}</p>`);
     const lq = meses.map((mm) => `${ej}-${mm}`), setL = new Set(S.registros.find((r) => r.tipo === 'liqiva' && r.empresa_id === S.sel)?.datos?.meses ?? []), liqHecha = !!p && lq.every((m) => setL.has(m));
-    return `<section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila"><span>Facturas emitidas cargadas: <b>${E.length}</b></span><span>Facturas recibidas cargadas: <b>${R.length}</b></span>
-        ${ed && p ? `<button class="small" data-act="m-liqiva" data-m="${lq.join(',')}">${liqHecha ? '☑' : '☐'} <b>Liquidación de IVA hecha · ${esc(per)}</b></button>` : ''}</div></section>
+    const cfgD = liqReg(S.sel)?.datos ?? {}, ultimos = (cfgD.meses ?? []).slice(-6);
+    return `<section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila">
+        <label title="Marcado: cada semana se cargan solos los libros que la tarea de D365 deja en la carpeta de exportaciones. Sin marcar: los subes tú como siempre."><input type="checkbox" data-d365auto="1"${cfgD.auto ? ' checked' : ''}${ed ? '' : ' disabled'}> <b>Descarga automática semanal desde D365</b></label>
+        ${ed && p ? `<label title="Marcado: ese mes no se vuelve a cargar desde D365."><input type="checkbox" data-d365liq="${lq.join(',')}"${liqHecha ? ' checked' : ''}> <b>Liquidación de IVA hecha · ${esc(per)}</b></label>` : ''}
+        <span class="dash-s">Exportaciones de D365: carpeta <b>${esc(d365H?.name ?? 'Archivos Claude-D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
+        <span class="dash-s">${cfgD.auto ? 'Automático' : 'Manual'}${ultimos.length ? ` · liquidados: ${esc(ultimos.join(', '))}` : ''}</span></div>
+        <div class="d-fila"><span class="dash-s">Facturas emitidas cargadas: <b>${E.length}</b> · recibidas: <b>${R.length}</b></span>${d365Msg ? `<span class="dash-s">${esc(d365Msg)}</span>` : ''}</div></section>
       <section class="dsec"><h3>Impuestos del periodo · ${esc(per)}</h3>${p ? `<div class="dash-g">${imps.join('') || '<p class="hint">Sin datos de impuestos en este periodo.</p>'}</div>` : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>'}</section>
       <section class="dsec"><h3>Conciliaciones</h3><div class="conc-resumen ${nMal ? 'd-ko' : 'd-ok'}">${nMal ? `✖ ${nMal} conciliación${nMal > 1 ? 'es' : ''} con descuadre` : '✓ Todas las conciliaciones cuadran'}</div><div class="dash-g">${conc.join('')}</div></section>
       <div class="dash-2"><section class="dsec"><h3>Saldos de las cuentas contables</h3>${ctas}</section><section class="dsec"><h3>Liquidaciones a presentar pendientes</h3>${liq}</section></div>
@@ -2643,7 +2722,8 @@ export function crearModulos(c) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
       ...acc3,
-      'm-liqiva': () => toggleLiqIva(d.m),
+      'm-d365carpeta': () => d365Carpeta(),
+      'm-d365recoger': () => d365Recoger(true),
       'm-new': () => formReg(d.m),
       'm-edit': () => formReg(d.m, reg()),
       'm-del': () => borrarReg(reg()),
@@ -3277,5 +3357,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => (kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

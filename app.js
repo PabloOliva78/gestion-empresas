@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=98';
+import { crearModulos } from './modulos.js?v=99';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -103,6 +103,7 @@ async function boot() {
   S.cargando = true; render(); // se enseña ya la pantalla y los datos llegan después
   await cargar();
   S.cargando = false; render();
+  M.d365Recoger(false); // si la carpeta de D365 ya tiene permiso, se cargan los libros nuevos solos
 }
 
 db.auth.onAuthStateChange((ev, session) => {
@@ -749,6 +750,8 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fcnv) return void M.fcNvCampo(t.dataset.fcnv, t.value);
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
+  if (t.dataset.d365auto !== undefined) return void M.d365Auto(t.checked);
+  if (t.dataset.d365liq !== undefined) return void M.toggleLiqIva(t.dataset.d365liq);
   if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);
   if (t.dataset.emplogo) { const f = t.files[0]; t.value = ''; return void subirLogo(t.dataset.emplogo, f); }
   if (t.dataset.asib) return void M.asiCampo(t.dataset.asib, t.value);
