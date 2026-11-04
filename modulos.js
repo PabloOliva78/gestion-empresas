@@ -2320,14 +2320,16 @@ export function crearModulos(c) {
     const sig = top(pre), ym = top(mes);
     return sig && ym ? { sig, ym } : null;
   }
-  async function d365Carpeta() {
+  let d365O = null; // segunda carpeta (por ejemplo una subcarpeta de Descargas: Chrome no deja elegir Descargas entera)
+  async function d365Carpeta(cual) {
     if (!window.showDirectoryPicker) return void alert('Este navegador no deja elegir carpetas. Usa Chrome o Edge.');
     try {
-      d365H = await window.showDirectoryPicker({ id: 'd365-exportaciones', mode: 'read' });
-      await idbD365('readwrite', (s) => s.put(d365H, 'carpeta'));
-      d365Msg = `Carpeta de exportaciones: ${d365H.name}`; render();
+      const h = await window.showDirectoryPicker({ id: cual === 'otra' ? 'd365-otra' : 'd365-exportaciones', mode: 'read', ...(cual === 'otra' ? { startIn: 'downloads' } : {}) });
+      if (cual === 'otra') d365O = h; else d365H = h;
+      await idbD365('readwrite', (s) => s.put(h, cual === 'otra' ? 'otra' : 'carpeta'));
+      d365Msg = `Carpeta ${cual === 'otra' ? 'adicional' : 'de exportaciones'}: ${h.name}`; render();
       return d365Recoger(true);
-    } catch (err) { if (err?.name !== 'AbortError') alert(err.message); }
+    } catch (err) { if (err?.name !== 'AbortError') alert(err.name === 'SecurityError' || /system|sistema/i.test(err.message) ? 'Chrome no deja elegir la carpeta Descargas entera: crea una subcarpeta dentro (por ejemplo «D365») y elige esa.' : err.message); }
     return undefined;
   }
   // manual = con un clic del usuario (puede pedir permiso); sin manual solo se lee si el navegador ya lo permite
@@ -2336,12 +2338,19 @@ export function crearModulos(c) {
     d365Ocupado = true;
     try {
       d365H ??= await idbD365('readonly', (s) => s.get('carpeta')).catch(() => null);
-      if (!d365H) { if (manual) { d365Msg = 'Elige primero la carpeta de exportaciones de D365.'; render(); } return; }
-      let perm = 'prompt';
-      try { perm = await d365H.queryPermission({ mode: 'read' }); if (perm !== 'granted' && manual) perm = await d365H.requestPermission({ mode: 'read' }); } catch { /* sin permiso */ }
-      if (perm !== 'granted') { if (manual) { d365Msg = `Sin permiso para leer ${d365H.name}: pulsa «Recoger ahora» y acepta.`; render(); } return; }
+      d365O ??= await idbD365('readonly', (s) => s.get('otra')).catch(() => null);
+      const carpetas = [];
+      for (const h of [d365H, d365O].filter(Boolean)) {
+        let perm = 'prompt';
+        try { perm = await h.queryPermission({ mode: 'read' }); if (perm !== 'granted' && manual) perm = await h.requestPermission({ mode: 'read' }); } catch { /* sin permiso */ }
+        if (perm === 'granted') carpetas.push(h); else if (manual) { d365Msg = `Sin permiso para leer ${h.name}: pulsa «Recoger ahora» y acepta.`; render(); }
+      }
+      if (!d365H && !d365O) { if (manual) { d365Msg = 'Elige primero la carpeta de exportaciones de D365.'; render(); } return; }
+      if (!carpetas.length) return;
       const hecho = d365Hecho(), omit = [], tocadas = new Set(); let cargados = 0;
-      for await (const [n, h] of d365H.entries()) {
+      const entradas = [];
+      for (const dir of carpetas) for await (const [n, h] of dir.entries()) entradas.push([n, h]);
+      for (const [n, h] of entradas) {
         if (h.kind !== 'file') continue;
         const mN = /^D365_([^_]+)_(Repercutido|Soportado)_(\d{4})-(\d{2})(?:_.*)?\.xlsx$/i.exec(n), esL = /^L[ií]neas de informes de IVA.*\.xlsx$/i.test(n);
         if (!mN && !esL) continue;
@@ -2503,7 +2512,7 @@ export function crearModulos(c) {
     return `<section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila">
         <label title="Marcado: cada semana se cargan solos los libros que la tarea de D365 deja en la carpeta de exportaciones. Sin marcar: los subes tú como siempre."><input type="checkbox" data-d365auto="1"${cfgD.auto ? ' checked' : ''}${ed ? '' : ' disabled'}> <b>Descarga automática semanal desde D365</b></label>
         ${ed && p ? `<label title="Marcado: ese mes no se vuelve a cargar desde D365."><input type="checkbox" data-d365liq="${lq.join(',')}"${liqHecha ? ' checked' : ''}> <b>Liquidación de IVA hecha · ${esc(per)}</b></label>` : ''}
-        <span class="dash-s">Exportaciones de D365: carpeta <b>${esc(d365H?.name ?? 'Archivos Claude-D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
+        <span class="dash-s">Exportaciones de D365: carpeta <b>${esc(d365H?.name ?? 'Archivos Claude-D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta" data-c="carpeta">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button>${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
         <span class="dash-s">${cfgD.auto ? 'Automático' : 'Manual'}${ultimos.length ? ` · liquidados: ${esc(ultimos.join(', '))}` : ''}</span></div>
         <div class="d-fila"><span class="dash-s">Facturas emitidas cargadas: <b>${E.length}</b> · recibidas: <b>${R.length}</b></span>${d365Msg ? `<span class="dash-s">${esc(d365Msg)}</span>` : ''}</div></section>
       <section class="dsec"><h3>Impuestos del periodo · ${esc(per)}</h3>${p ? `<div class="dash-g">${imps.join('') || '<p class="hint">Sin datos de impuestos en este periodo.</p>'}</div>` : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>'}</section>
@@ -2777,7 +2786,7 @@ export function crearModulos(c) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
       ...acc3,
-      'm-d365carpeta': () => d365Carpeta(),
+      'm-d365carpeta': () => d365Carpeta(d.c),
       'm-d365recoger': () => d365Recoger(true),
       'm-new': () => formReg(d.m),
       'm-edit': () => formReg(d.m, reg()),
