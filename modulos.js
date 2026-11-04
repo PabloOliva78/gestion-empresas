@@ -2739,7 +2739,7 @@ export function crearModulos(c) {
         if (E && E.id !== S.sel) otras.add(E.nombre);
         const prev = S.registros.find((q) => q.tipo === 'iloc' && q.empresa_id === id && (r.id ? q.datos?.id === r.id : (ilDe(q, 'tipo') === r.tipo && q.datos?.objeto === r.objeto && ilDe(q, 'ej') === String(r.ej) && Number(ilDe(q, 'imp')) === r.imp)));
         const regId = prev?.id ?? crypto.randomUUID(), sub = await subir(id, 'iloc', regId, 'pdf', f);
-        if (sub.error) mal.push(${f.name} (PDF no guardado: ));
+        if (sub.error) mal.push(`${f.name} (PDF no guardado: ${sub.error})`);
         const datos = { ...(prev?.datos ?? {}), ...r, arch: sub.val ?? (prev ? ilArch(prev) : undefined) };
         if (prev) { datos.dom = prev.datos?.dom === 'Sí' ? 'Sí' : datos.dom; if (prev.datos?.cta) datos.cta = prev.datos.cta; }
         const err = await guardarRegistro(prev, prev ? { datos, ejercicio: +r.ej } : { id: regId, empresa_id: id, tipo: 'iloc', ejercicio: +r.ej, datos });
