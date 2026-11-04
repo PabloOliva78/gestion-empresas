@@ -727,3 +727,10 @@ table.cmg-t td.cmg-e { white-space: normal; font-size: .64rem; }
 .inicio .cmg-chip { margin: calc(var(--ini, 10px) * .1); }
 
 img.logo-aside, span.logo-aside { cursor: pointer; }
+
+/* Impuestos locales */
+.il-t { font-size: var(--tb, 12px); }
+.il-t input, .il-t select { font: inherit; padding: .12em .3em; }
+.il-t td.in input.num { text-align: right; }
+.il-t input[type=date] { width: 9.6em; }
+.il-t td { white-space: nowrap; }

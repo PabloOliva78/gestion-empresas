@@ -2640,6 +2640,138 @@ export function crearModulos(c) {
   tabs.ini = ['Inicio', 'Resumen del periodo', vistaInicio];
   tabs.liq = ['Liquidaciones Presentar', 'Todas las empresas', vistaLiq];
   tabs.venc = ['Pagos Domiciliados Impuestos', 'Todas las empresas', vistaVenc];
+  tabs.iloc = ['Impuestos Locales', 'IBI · IAE · IVTM', vistaIloc];
+
+  // ---------- Impuestos locales: IBI, IAE, IVTM, vados · periodo voluntario y domiciliación (un registro «iloc» por recibo, con su PDF en Storage) ----------
+  const IL_CAMPOS = [['tipo', 'Impuesto', 0], ['objeto', 'Objeto (ref. catastral / epígrafe / matrícula)', 26], ['muni', 'Municipio / organismo', 16], ['ej', 'Ejercicio', 6], ['imp', 'Importe (€)', 10],
+    ['ini', 'Inicio voluntario', 0], ['fin', 'Fin voluntario', 0], ['dom', 'Domiciliado', 0], ['cargo', 'Fecha de cargo', 0], ['cta', 'Cuenta de cargo', 18], ['pag', 'Pagado', 0], ['obs', 'Observaciones', 20]];
+  let ilVer = 'todos', ilMsg = '';
+  const ilDe = (r, k) => {
+    const d = r.datos ?? {};
+    if (k === 'tipo') return d.tipo ?? d.impuesto ?? 'IBI';
+    if (k === 'muni') return d.muni ?? d.municipio ?? '';
+    if (k === 'ej') return String(d.ej ?? r.ejercicio ?? '');
+    if (k === 'imp') return d.imp ?? d.importe ?? '';
+    if (k === 'fin') return d.fin ?? d.vencimiento ?? '';
+    if (k === 'cargo') return d.cargo ?? d.fecha_pago ?? '';
+    if (k === 'pag') return d.pag ?? (d.estado === 'Pagado' ? 'Sí' : 'No');
+    return d[k] ?? '';
+  };
+  const ilFecha = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; };
+  const ilRegs = () => S.registros.filter((r) => r.tipo === 'iloc' && r.empresa_id === S.sel);
+  function vistaIloc() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), ed = puede(), hoy = Date.now(), D = ilRegs();
+    const anios = [...new Set(D.map((r) => ilDe(r, 'ej')).filter(Boolean))].sort().reverse();
+    const L = D.filter((r) => ilVer === 'todos' || !ilDe(r, 'ej') || ilDe(r, 'ej') === ilVer)
+      .sort((a, b) => ilDe(b, 'ej').localeCompare(ilDe(a, 'ej')) || String(ilDe(a, 'tipo')).localeCompare(String(ilDe(b, 'tipo'))) || String(ilDe(a, 'fin') || ilDe(a, 'cargo')).localeCompare(String(ilDe(b, 'fin') || ilDe(b, 'cargo'))));
+    const sel = (id, k, v, ops) => (ed ? `<select data-il="${id}|${k}">${ops.map((o) => `<option${o === v ? ' selected' : ''}>${o}</option>`).join('')}</select>` : esc(v));
+    const celda = (r, k, w) => {
+      const v = ilDe(r, k);
+      if (k === 'tipo') return `<td class="in">${sel(r.id, k, v, IL_TIPOS_IL)}</td>`;
+      if (k === 'dom' || k === 'pag') return `<td class="in">${sel(r.id, k, v || 'No', ['No', 'Sí'])}</td>`;
+      if (k === 'ini' || k === 'fin' || k === 'cargo') return `<td class="in"><input type="date" data-il="${r.id}|${k}" value="${esc(v)}"${ed ? '' : ' disabled'}></td>`;
+      if (k === 'imp') return `<td class="in"><input class="num" data-il="${r.id}|${k}" value="${v === '' ? '' : fnum(v)}" size="${w}"${ed ? '' : ' readonly'}></td>`;
+      return `<td class="in"><input data-il="${r.id}|${k}" value="${esc(v)}" size="${w}"${ed ? '' : ' readonly'}></td>`;
+    };
+    const est = (r) => {
+      if (ilDe(r, 'pag') === 'Sí') return `<span class="d-ok">✓ pagado${ilFecha(ilDe(r, 'cargo')) ? ' el ' + fechaTxt(ilFecha(ilDe(r, 'cargo'))) : ''}</span>`;
+      const f = ilFecha(ilDe(r, 'fin'));
+      if (f === null) return '';
+      const d = Math.round((f - hoy) / 864e5);
+      return d < 0 ? '<b style="color:#a50e0e">vencido</b>' : d <= 15 ? `<b style="color:#b06000">vence en ${d} día(s)</b>` : 'en plazo';
+    };
+    const imp = (r) => Number(ilDe(r, 'imp')) || 0;
+    const tot = (t) => rr(L.filter((r) => ilDe(r, 'tipo') === t).reduce((a, r) => a + imp(r), 0));
+    const fila = (r) => `<tr${r.datos?.arch?.path ? ` data-ilpdf="${esc(r.datos.arch.path)}" title="Doble clic: abrir ${esc(r.datos.arch.nombre)}" style="cursor:pointer"` : ''}>${IL_CAMPOS.map(([k, , w]) => celda(r, k, w)).join('')}<td>${est(r)}</td>
+      <td>${r.datos?.arch?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(r.datos.arch.path)}">📄 ${esc(ilDe(r, 'tipo'))} ${esc(ilDe(r, 'ej'))}</button>` : ''}</td>
+      <td>${ed ? `<button class="small" data-act="m-ildel" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`;
+    return `<section class="dsec"><h3>Impuestos locales · ${esc(e.nombre)} · <select data-ilver="1"><option value="todos">Todos los ejercicios</option>${anios.map((a) => `<option${a === ilVer ? ' selected' : ''}>${a}</option>`).join('')}</select> <span class="dash-s">(${L.length} recibo(s))</span></h3>
+      ${ed ? dz('iloc', 'Suelta aquí (o pulsa para elegir) todos los PDF que quieras, sin límite, de recibos o justificantes de pago', '(IBI, IAE, IVTM, vados… del Servicio Provincial Tributario u otros): se leen el impuesto, objeto, municipio, ejercicio, importe, último día de pago y si constan pagados. Doble clic en una fila con PDF para abrirlo.', '.pdf') : ''}
+      ${ilMsg ? `<p class="dash-s">${esc(ilMsg)}</p>` : ''}
+      <div class="wrap"><table class="tprs tnom il-t"><thead><tr>${IL_CAMPOS.map((c) => `<th>${c[1]}</th>`).join('')}<th>Situación</th><th>PDF</th><th></th></tr></thead>
+        <tbody>${L.map(fila).join('') || `<tr><td colspan="${IL_CAMPOS.length + 3}" class="c">Sin recibos${ilVer === 'todos' ? '' : ' en ' + ilVer}: suelta un PDF o añade una línea</td></tr>`}</tbody></table></div>
+      ${ed ? '<button class="small" data-act="m-iladd" style="margin-top:.5rem">+ Añadir recibo</button>' : ''}
+      ${L.length ? `<p class="dash-s">Total ${ilVer === 'todos' ? 'todos los ejercicios' : ilVer}: IBI ${fnum(tot('IBI'))} · IAE ${fnum(tot('IAE'))} · IVTM ${fnum(tot('IVTM'))}${tot('Vado') ? ' · Vados ' + fnum(tot('Vado')) : ''}${tot('Otro') ? ' · Otros ' + fnum(tot('Otro')) : ''} · pendiente de pago ${fnum(rr(L.filter((r) => ilDe(r, 'pag') !== 'Sí').reduce((a, r) => a + imp(r), 0)))}</p>` : ''}</section>`;
+  }
+  const IL_TIPOS_IL = ['IBI', 'IAE', 'IVTM', 'Vado', 'Otro'];
+  const ilTipo = (t) => { const u = sinAc(t).toUpperCase(); return /\bIBI\b|BIENES INMUEBLES/.test(u) ? 'IBI' : /ACTIVIDADES ECONOM|\bIAE\b/.test(u) ? 'IAE' : /\bIVTM\b|VEHICULOS DE TRACCION/.test(u) ? 'IVTM' : /VADO/.test(u) ? 'Vado' : 'Otro'; };
+  // PDF de recibos (pendientes) y justificantes de pago (pagados) de impuestos locales
+  async function ilPdf(file) {
+    const texto = await textoPdf(file);
+    const ls = texto.split('\n').filter((l) => l && !l.startsWith('--- página')), t = ls.join('\n'), iso = (d) => { const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(d ?? '')); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+    const sig = (re) => { const i = ls.findIndex((l) => re.test(l)); return i >= 0 ? ls[i + 1] || '' : ''; }, nums = (l) => (l.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g) || []);
+    const nif = (/Identificador Fiscal:?\s*([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])/.exec(t) || /\b([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])\b/.exec(sig(/Identificador Fiscal/)) || [])[1] ?? '';
+    const r = { dom: 'No' };
+    const pag = /consta como PAGADA la siguiente deuda relativa a\s*(.+)/i.exec(t);
+    if (pag) {
+      r.tipo = ilTipo(pag[1]); r.pag = 'Sí';
+      const v = /\n\s*(.+?)\s+-\s+((?:19|20)\d{2})-[A-Z]*\s*-?\s*ID:\s*(\S+)/.exec(t);
+      if (v) { r.muni = v[1].trim(); r.ej = v[2]; r.id = v[3]; }
+      const o = sig(/^Objeto Tributario/), fc = /(\d{2}\/\d{2}\/\d{4})\s*$/.exec(o);
+      r.objeto = o.replace(/\s*\d{2}\/\d{2}\/\d{4}\s*$/, '').replace(/\s+/g, ' ').trim(); if (fc) r.cargo = iso(fc[1]);
+      const n = nums(sig(/^Principal\s+Recargo/)); if (n.length) r.imp = parseES(n[n.length - 1]);
+      r.obs = `Justificante de pago${r.id ? ' · ' + r.id : ''}`;
+    } else if (/RECIBO DE\s/i.test(t)) {
+      r.tipo = ilTipo((/RECIBO DE\s+(.+)/i.exec(t) || [])[1] || ''); r.pag = 'No';
+      r.muni = ((/\bAYTO\.? DE\s+([^\n]+)/i.exec(t) || [])[1] || '').trim(); r.ej = (/PERIODO:\s*((?:19|20)\d{2})/.exec(t) || [])[1] || '';
+      r.objeto = sig(/^Objeto Tributario$/).trim();
+      const rc = /Catast\D{0,6}?(\d{7}[A-Z]{2}\d{4}[A-Z]\d{4}[A-Z]{2}|\d{7}[A-Z]{2}\d{4}[A-Z])/.exec(t); if (rc) r.objeto = `${rc[1]} · ${r.objeto}`;
+      r.id = (/\b(\d{8,}[A-Z0-9]+)\b/.exec(sig(/Identificaci[oó]n del Recibo/)) || [])[1] || '';
+      const u = sig(/[UÚ]ltimo d[ií]a de pago/), f = /\d{2}\/\d{2}\/\d{4}/.exec(u); if (f) r.fin = iso(f[0]);
+      const n = nums(u); if (n.length) r.imp = parseES(n[n.length - 1]);
+      if (r.imp === undefined) { const n2 = nums(sig(/Importe a Ingresar$/)); if (n2.length) r.imp = parseES(n2[n2.length - 1]); }
+      const ref = (/Referencia de Pago\s*:?\s*(\d+)/.exec(t) || [])[1], rec = /Recargo pendiente[\s\S]{0,80}?\b(\d+)%\s+([\d.,]+)/.exec(t) || [];
+      r.obs = `Recibo pendiente${r.id ? ' · ' + r.id : ''}${ref ? ' · ref. pago ' + ref : ''}${rec[1] ? ` · recargo ${rec[1]}% ${rec[2]} fuera de plazo` : ''}`;
+    } else return { error: 'no reconozco el recibo ni el justificante de pago' };
+    if (!r.ej) return { error: 'no encuentro el ejercicio' };
+    return { r, nif };
+  }
+  async function ilCargar(files) {
+    let n = 0, act = 0; const otras = new Set(), mal = [];
+    for (const f of files.filter((x) => /\.pdf$/i.test(x.name))) {
+      try {
+        ilMsg = `Leyendo ${f.name}…`; render();
+        const x = await ilPdf(f);
+        if (x.error) { mal.push(`${f.name} (${x.error})`); continue; }
+        const { r, nif } = x, E = S.empresas.find((q) => q.cif === nif), id = E ? E.id : S.sel;
+        if (E && E.id !== S.sel) otras.add(E.nombre);
+        const prev = S.registros.find((q) => q.tipo === 'iloc' && q.empresa_id === id && (r.id ? q.datos?.id === r.id : (ilDe(q, 'tipo') === r.tipo && q.datos?.objeto === r.objeto && ilDe(q, 'ej') === String(r.ej) && Number(ilDe(q, 'imp')) === r.imp)));
+        const regId = prev?.id ?? crypto.randomUUID(), sub = await subir(id, 'iloc', regId, 'pdf', f);
+        const datos = { ...(prev?.datos ?? {}), ...r, arch: sub.val ?? prev?.datos?.arch };
+        if (prev) { datos.dom = prev.datos?.dom === 'Sí' ? 'Sí' : datos.dom; if (prev.datos?.cta) datos.cta = prev.datos.cta; }
+        const err = await guardarRegistro(prev, prev ? { datos, ejercicio: +r.ej } : { id: regId, empresa_id: id, tipo: 'iloc', ejercicio: +r.ej, datos });
+        if (err) { mal.push(`${f.name} (${err})`); continue; }
+        if (prev) act++; else n++;
+      } catch (err) { mal.push(`${f.name} (${err.message})`); }
+    }
+    ilMsg = `${n} recibo(s) nuevo(s)${act ? ` · ${act} actualizado(s)` : ''}${otras.size ? ` · guardados en ${[...otras].join(', ')}` : ''}${mal.length ? ` · sin leer: ${mal.join(', ')}` : ''}`;
+    await cargar(); render();
+  }
+  async function guardarIl(clave, valor) {
+    const [id, k] = clave.split('|'), reg = S.registros.find((r) => r.id === id);
+    if (!reg) return;
+    const datos = { ...reg.datos }, v = String(valor).trim();
+    if (k === 'imp') datos.imp = v === '' ? '' : parseES(v); else datos[k] = v;
+    const err = await guardarRegistro(reg, k === 'ej' && /^\d{4}$/.test(v) ? { datos, ejercicio: +v } : { datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  async function ilAnadir() {
+    const ej = ilVer !== 'todos' ? +ilVer : Number(S.ejercicio);
+    const err = await guardarRegistro(null, { id: crypto.randomUUID(), empresa_id: S.sel, tipo: 'iloc', ejercicio: ej, datos: { tipo: 'IBI', ej: String(ej), dom: 'No', pag: 'No' } });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  async function ilQuitar(id) {
+    const reg = S.registros.find((r) => r.id === id);
+    if (!reg || !confirm('¿Quitar este recibo?')) return;
+    await quitarArchivos(rutas({ a: reg.datos?.arch }));
+    const { error } = await db.from('registros').delete().eq('id', id);
+    if (error) return void alert(error.message);
+    await cargar(); render();
+  }
+  const setIlVer = (v) => { ilVer = v; render(); };
 
   function vistaCnom() {
     if (!S.sel) return sinEmpresa;
@@ -2906,6 +3038,8 @@ export function crearModulos(c) {
     ({
       ...acc3,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
+      'm-iladd': () => ilAnadir(),
+      'm-ildel': () => ilQuitar(d.id),
       'm-d365carpeta': () => d365Carpeta(d.c),
       'm-d365recoger': () => d365Recoger(true),
       'm-new': () => formReg(d.m),
@@ -3539,7 +3673,7 @@ export function crearModulos(c) {
     return chkR?.key === chkClave() ? (chkR.nKo ? { t: `${chkR.nKo} a revisar`, c: 'rojo' } : { t: 'OK', c: 'verde' }) : { t: 'Sin hacer' };
   };
 
-  const subirComo = (kind, files) => (kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (kind === 'iloc' ? ilCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setIlVer, guardarIl, abrirArch: abrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=111';
+import { crearModulos } from './modulos.js?v=112';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -278,7 +278,9 @@ window.addEventListener('resize', () => ajustarInicio());
 
 // Celdas de importes editables: el foco sobrevive a los redibujados y se navega con flechas, Intro y tabulador
 let focoCelda = null;
-const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id', 'data-fce', 'data-sie'];
+const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id', 'data-fce', 'data-sie', 'data-il'];
+// Impuestos locales: doble clic en una fila con PDF lo abre
+root.addEventListener('dblclick', (ev) => { const tr = ev.target.closest?.('[data-ilpdf]'); if (tr && !ev.target.closest('select,button')) { ev.preventDefault(); M.abrirArch(tr.dataset.ilpdf); } });
 function restaurarFoco() {
   if (!focoCelda || (document.activeElement && document.activeElement !== document.body)) return;
   const i = [...root.querySelectorAll(`input[${focoCelda.a}]`)].find((x) => x.getAttribute(focoCelda.a) === focoCelda.v);
@@ -765,6 +767,8 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fcnv) return void M.fcNvCampo(t.dataset.fcnv, t.value);
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
+  if (t.dataset.ilver !== undefined) return void M.setIlVer(t.value);
+  if (t.dataset.il) return void M.guardarIl(t.dataset.il, t.value);
   if (t.dataset.cmgmod !== undefined) return void M.setCmgMod(t.value);
   if (t.dataset.liqver !== undefined) return void M.setLiqVer(t.value);
   if (t.dataset.d365auto !== undefined) return void M.d365Auto(t.checked);
