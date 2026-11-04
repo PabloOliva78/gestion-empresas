@@ -650,3 +650,12 @@ b.logo-txt { flex: none; font-size: .72rem; line-height: 1.15; letter-spacing: .
 /* Acceso: logo como marca de agua dentro del cuadro */
 form#f.card { position: relative; overflow: hidden; isolation: isolate; }
 form#f.card::before { content: ""; position: absolute; z-index: -1; inset: 0; background: url("logos/asesoria.svg?v=3") center / cover no-repeat; opacity: .13; pointer-events: none; }
+
+/* Botonera izquierda: mismo degradado azul que la cabecera y píldora de empresa con el nombre completo */
+.layout { grid-template-columns: 300px 1fr; }
+.lat { background: linear-gradient(180deg, #0b1f4d 0%, #1a3a8a 55%, #1f4fb8 100%); }
+.lat .sel-btn { min-width: 0; border-radius: 22px; padding: .5rem .8rem; }
+.lat .sel-btn span { font-size: .72rem; line-height: 1.15; white-space: normal; overflow-wrap: anywhere; letter-spacing: 0; }
+.lat .sel-menu { min-width: 100%; }
+.lat .sel-op, .lat .sel-op span { font-size: .72rem; white-space: normal; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
