@@ -734,3 +734,10 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .il-t td.in input.num { text-align: right; }
 .il-t input[type=date] { width: 9.6em; }
 .il-t td { white-space: nowrap; }
+
+/* Impuestos locales: un solo tamaño de letra en toda la tabla */
+.dsec table.il-t, .dsec table.il-t th, .dsec table.il-t td, .dsec table.il-t input, .dsec table.il-t select, .dsec table.il-t button, .dsec table.il-t span, .dsec table.il-t b { font-size: calc(var(--tb) * 1.08) !important; }
+.dsec table.il-t td.in input:not(.num) { text-align: left; }
+.dsec table.il-t td.in select { padding: .1em .2em; }
+.dsec .dropzone { font-size: calc(var(--tb) * 1.05); }
+.dsec .il-t ~ button.small, .dsec .dash-s { font-size: calc(var(--tb) * 1.05); }

@@ -2658,6 +2658,7 @@ export function crearModulos(c) {
     return d[k] ?? '';
   };
   const ilFecha = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; };
+  const ilArch = (r) => r.datos?.arch ?? r.datos?.archivo; // rchivo es como lo guardaba la carga antigua
   const ilRegs = () => S.registros.filter((r) => r.tipo === 'iloc' && r.empresa_id === S.sel);
   function vistaIloc() {
     if (!S.sel) return sinEmpresa;
@@ -2683,8 +2684,8 @@ export function crearModulos(c) {
     };
     const imp = (r) => Number(ilDe(r, 'imp')) || 0;
     const tot = (t) => rr(L.filter((r) => ilDe(r, 'tipo') === t).reduce((a, r) => a + imp(r), 0));
-    const fila = (r) => `<tr${r.datos?.arch?.path ? ` data-ilpdf="${esc(r.datos.arch.path)}" title="Doble clic: abrir ${esc(r.datos.arch.nombre)}" style="cursor:pointer"` : ''}>${IL_CAMPOS.map(([k, , w]) => celda(r, k, w)).join('')}<td>${est(r)}</td>
-      <td>${r.datos?.arch?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(r.datos.arch.path)}">📄 ${esc(ilDe(r, 'tipo'))} ${esc(ilDe(r, 'ej'))}</button>` : ''}</td>
+    const fila = (r) => `<tr${ilArch(r)?.path ? ` data-ilpdf="${esc(ilArch(r).path)}" title="Doble clic: abrir ${esc(ilArch(r).nombre)}" style="cursor:pointer"` : ''}>${IL_CAMPOS.map(([k, , w]) => celda(r, k, w)).join('')}<td>${est(r)}</td>
+      <td>${ilArch(r)?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(ilArch(r).path)}">📄 ${esc(ilDe(r, 'tipo'))} ${esc(ilDe(r, 'ej'))}</button>` : ''}</td>
       <td>${ed ? `<button class="small" data-act="m-ildel" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`;
     return `<section class="dsec"><h3>Impuestos locales · ${esc(e.nombre)} · <select data-ilver="1"><option value="todos">Todos los ejercicios</option>${anios.map((a) => `<option${a === ilVer ? ' selected' : ''}>${a}</option>`).join('')}</select> <span class="dash-s">(${L.length} recibo(s))</span></h3>
       ${ed ? dz('iloc', 'Suelta aquí (o pulsa para elegir) todos los PDF que quieras, sin límite, de recibos o justificantes de pago', '(IBI, IAE, IVTM, vados… del Servicio Provincial Tributario u otros): se leen el impuesto, objeto, municipio, ejercicio, importe, último día de pago y si constan pagados. Doble clic en una fila con PDF para abrirlo.', '.pdf') : ''}
@@ -2738,7 +2739,8 @@ export function crearModulos(c) {
         if (E && E.id !== S.sel) otras.add(E.nombre);
         const prev = S.registros.find((q) => q.tipo === 'iloc' && q.empresa_id === id && (r.id ? q.datos?.id === r.id : (ilDe(q, 'tipo') === r.tipo && q.datos?.objeto === r.objeto && ilDe(q, 'ej') === String(r.ej) && Number(ilDe(q, 'imp')) === r.imp)));
         const regId = prev?.id ?? crypto.randomUUID(), sub = await subir(id, 'iloc', regId, 'pdf', f);
-        const datos = { ...(prev?.datos ?? {}), ...r, arch: sub.val ?? prev?.datos?.arch };
+        if (sub.error) mal.push(${f.name} (PDF no guardado: ));
+        const datos = { ...(prev?.datos ?? {}), ...r, arch: sub.val ?? (prev ? ilArch(prev) : undefined) };
         if (prev) { datos.dom = prev.datos?.dom === 'Sí' ? 'Sí' : datos.dom; if (prev.datos?.cta) datos.cta = prev.datos.cta; }
         const err = await guardarRegistro(prev, prev ? { datos, ejercicio: +r.ej } : { id: regId, empresa_id: id, tipo: 'iloc', ejercicio: +r.ej, datos });
         if (err) { mal.push(`${f.name} (${err})`); continue; }
@@ -2766,7 +2768,7 @@ export function crearModulos(c) {
   async function ilQuitar(id) {
     const reg = S.registros.find((r) => r.id === id);
     if (!reg || !confirm('¿Quitar este recibo?')) return;
-    await quitarArchivos(rutas({ a: reg.datos?.arch }));
+    await quitarArchivos(rutas({ a: ilArch(reg) }));
     const { error } = await db.from('registros').delete().eq('id', id);
     if (error) return void alert(error.message);
     await cargar(); render();
