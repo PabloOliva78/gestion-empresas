@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=106';
+import { crearModulos } from './modulos.js?v=107';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -720,6 +720,7 @@ root.addEventListener('click', (ev) => {
   if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap')) S.grp = -1; render(); }
   const dz = ev.target.closest('.dropzone');
   if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
+  if (ev.target.closest('.logo-aside')) { S.tab = 'ini'; S.grp = -1; return render(); }
   const ir = ev.target.closest('[data-ir]');
   if (ir && !ev.target.closest('button')) { S.tab = ir.dataset.ir; S.grp = -1; return render(); }
   const t = ev.target.closest('button');
