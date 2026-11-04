@@ -258,6 +258,10 @@ export function crearModulos(c) {
   // 111, 303, 200 y 390: obligatorios · 115: solo si está de ALTA en el censo · 123, 202, 349, Intrastat, 232 y A22: si tiene datos ·
   // 592: HER, ESP y LYS · 583: HER, LYS, GRU (Gesufer) e HIS · 180, 190 y 193: con datos del ejercicio
   const SIG_592 = ['HER', 'ESP', 'LYS'], SIG_583 = ['HER', 'LYS', 'GRU', 'HIS'];
+  // por sigla o, si no coincide, por el nombre de la empresa
+  const RX_592 = /herogra\s+fertiliz|herogra\s+especiales|lys\s+del\s+sur|lysur/i, RX_583 = /herogra\s+fertiliz|lys\s+del\s+sur|lysur|gesti[oó]n\s+unificada|gesufer|hispalense/i;
+  const obl592 = (e) => SIG_592.includes(String(e.siglas ?? '').toUpperCase()) || RX_592.test(e.nombre ?? '');
+  const obl583 = (e) => SIG_583.includes(String(e.siglas ?? '').toUpperCase()) || RX_583.test(e.nombre ?? '');
   const MODS_PAGO = ['303', '111', '115', '123', '202', '200', '592', '583'];
   const hoyUtc = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
   const habilF = (y, m, d) => { let t = Date.UTC(y, m - 1, d); while (!esHabil(t)) t += 864e5; return t; };
@@ -324,9 +328,9 @@ export function crearModulos(c) {
     pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (alta115(e, ej, p)) add('115', p, ej, ej, '115'); });
     if (uso('123')) pers.forEach((p) => add('123', p, ej, ej, '123'));
     if (uso('349')) pers.forEach((p) => add('349', p, ej, ej, '349'));
-    if (SIG_592.includes(sig)) pers.forEach((p) => add('592', p, ej, ej, '592'));
+    if (obl592(e)) pers.forEach((p) => add('592', p, ej, ej, '592'));
     if (uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
-    if (SIG_583.includes(sig)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
+    if (obl583(e)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
     if (uso('INT')) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
     if (uso('A22')) ['1T', '2T', '3T', '4T'].forEach((p) => add('A22', p, ej, ej, 'A22'));
     if (uso('232')) add('232', 'A', ej - 1, ej, '232');
