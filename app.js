@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=99';
+import { crearModulos } from './modulos.js?v=100';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -672,7 +672,7 @@ function formCalendario() {
 }
 
 // Bloques 1 y 2 (ver modulos.js): se añaden a las pestañas ya definidas.
-const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml });
+const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml, idxEmp });
 Object.assign(TABS, M.tabs);
 
 // Buscador de pestañas (Ctrl+K)
@@ -750,6 +750,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fcnv) return void M.fcNvCampo(t.dataset.fcnv, t.value);
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
+  if (t.dataset.cmgmod !== undefined) return void M.setCmgMod(t.value);
   if (t.dataset.d365auto !== undefined) return void M.d365Auto(t.checked);
   if (t.dataset.d365liq !== undefined) return void M.toggleLiqIva(t.dataset.d365liq);
   if (t.dataset.empf) return void guardarEmpCampo(t.dataset.empf, t.value);

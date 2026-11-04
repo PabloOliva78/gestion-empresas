@@ -249,18 +249,73 @@ export function crearModulos(c) {
   }
 
   // ---------- Cuadro de mando del grupo ----------
+  // Estado fiscal de todas las empresas: cada modelo en el mes del periodo que liquida (grandes: mensual; pymes: trimestral, en el último mes del trimestre)
+  let cmgMod = '';
+  const COLOR_EMP = { HER: '#1f3864', ESP: '#9b1c2c', HIS: '#0b7f8f', LYS: '#001433', GRU: '#bf4123', FER: '#1b4d2e', BSR: '#570000', FCH: '#17234e', FTC: '#432158', PDF: '#b5418e', TCP: '#5b2c83', PAS: '#911844', MOT: '#c0392b', MAX: '#008215' };
+  const FONDO_EMP = ['#e8eef8', '#fbe7ea', '#e0f4f6', '#e3e8f2', '#fdece6', '#e6f2ea', '#f6e3e3', '#e6e9f5', '#efe7f5', '#fae8f3', '#efe9f8', '#f8e6ec', '#fcebe8', '#e3f5e6'];
+  const CMG_ST = { ok: ['#1a7f37', '#e6f4ea', '✓', 'presentado'], venc: ['#b42318', '#fde8e8', '✖', 'vencido sin presentar'], pron: ['#8a6d00', '#fff8d6', '●', 'vence en 7 días o menos'], fut: ['#667085', '#f2f4f7', '○', 'en plazo'] };
   function vistaCmg() {
-    const cols = ['303', '111', '115', '123', '349', '390', '190', '200'];
-    const pres = prsComoLista();
-    const liq = S.registros.filter((r) => r.tipo === 'liq' && r.ejercicio === Number(S.ejercicio) && r.datos.estado !== 'Presentado');
-    const filas = S.empresas.map((e) => `<tr><td><div class="emp">${c.logoHtml(e)}<b>${esc(e.siglas || e.nombre)}</b></div></td>
-      ${cols.map((m) => { const n = pres.filter((r) => r.empresa_id === e.id && r.datos.modelo === m).length;
-        return `<td class="c">${n ? `<span class="ok">✔ ${n}</span>` : '<span class="muted">—</span>'}</td>`; }).join('')}
-      <td class="c">${liq.filter((r) => r.empresa_id === e.id).length || '<span class="muted">—</span>'}</td></tr>`).join('');
-    return `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th>${cols.map((m) => `<th class="c">${m}</th>`).join('')}
-      <th class="c">Por presentar</th></tr></thead><tbody>${filas}</tbody></table></div>
-      <p class="hint">✔ n = declaraciones presentadas del modelo en el ejercicio y periodo elegidos (se alimenta de «Impuestos Presentados»).</p>`;
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const ej = Number(S.ejercicio), hoyD = new Date(), hoy = Date.UTC(hoyD.getFullYear(), hoyD.getMonth(), hoyD.getDate());
+    const habilF = (y, m, d) => { let t = Date.UTC(y, m - 1, d); while (!esHabil(t)) t += 864e5; return t; };
+    // fin de plazo de presentación según la regla general del calendario de la AEAT
+    const plazo = (mod, y, per) => {
+      if (['180', '190', '193'].includes(mod)) return habilF(y + 1, 1, 31);
+      if (mod === '390') return habilF(y + 1, 1, 30);
+      if (mod === '200') return habilF(y + 1, 7, 25);
+      if (mod === '202') return per === '1P' ? habilF(y, 4, 20) : per === '2P' ? habilF(y, 10, 20) : habilF(y, 12, 20);
+      if (mod === '232') return habilF(y + 1, 11, 30);
+      if (mod === '583') return per === '0A' ? habilF(y + 1, 11, 30) : habilF(y, 11, 20);
+      if (mod === 'Intrastat') { const m = +per; return m === 12 ? habilF(y + 1, 1, 12) : habilF(y, m + 1, 12); }
+      if (mod === '349') { const q = /^[1-4]T$/.test(per), m = q ? +per[0] * 3 : +per; if (m === 12) return habilF(y + 1, 1, 30); return !q && m === 7 ? habilF(y, 9, 20) : habilF(y, m + 1, 20); }
+      const iva = mod === '303';
+      if (/^[1-4]T$/.test(per)) { const q = +per[0]; return q === 4 ? habilF(y + 1, 1, iva ? 30 : 20) : habilF(y, q * 3 + 1, 20); }
+      const m = +per;
+      return m === 12 ? habilF(y + 1, 1, iva ? 30 : 20) : habilF(y, m + 1, iva ? Math.min(30, new Date(Date.UTC(y, m + 1, 0)).getUTCDate()) : 20);
+    };
+    const col = (per) => (per === '0A' || per === 'A' ? 12 : /^\d\d$/.test(per) ? +per - 1 : /^[1-4]T$/.test(per) ? +per[0] * 3 - 1 : ({ 1: 2, 2: 8, 3: 10 })[per[0]] ?? 12);
+    const hecho = new Set(), usado = new Set();
+    S.registros.forEach((r) => {
+      if (r.tipo === 'prs') Object.keys(r.datos ?? {}).forEach((k) => { const [m, p] = k.split('|'); hecho.add(`${r.empresa_id}|${r.ejercicio}|${m}|${p}`); usado.add(`${r.empresa_id}|${m}`); });
+      else if (r.tipo === 'pres' || (r.tipo === 'liq' && r.datos?.estado === 'Presentado')) { const m = r.datos?.modelo; if (m) { hecho.add(`${r.empresa_id}|${r.ejercicio}|${m}|${r.datos.periodo}`); usado.add(`${r.empresa_id}|${m}`); } }
+    });
+    const orden = [...S.empresas].sort((a, b) => (c.idxEmp(a) < 0 ? 99 : c.idxEmp(a)) - (c.idxEmp(b) < 0 ? 99 : c.idxEmp(b)));
+    const G = [], tot = { ok: 0, venc: 0, pron: 0, fut: 0 }, mods = new Set();
+    orden.forEach((e, i) => {
+      const sig = String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, uso = (m) => usado.has(`${e.id}|${m}`);
+      const g = { e, i, cel: Array.from({ length: 13 }, () => []), n: { venc: 0, pron: 0 } };
+      const add = (mod, per, yP, yPres, clave) => {
+        const fin = plazo(mod, yP, per), pr = hecho.has(`${e.id}|${yPres}|${clave}|${mod === '200' || mod === '232' || /^(180|190|193|390)$/.test(mod) ? 'A' : per}`);
+        const d = Math.round((fin - hoy) / 864e5), st = pr ? 'ok' : d < 0 ? 'venc' : d <= 7 ? 'pron' : 'fut';
+        if (!mods.has(mod) && (!cmgMod || cmgMod === mod)) mods.add(mod);
+        if (cmgMod && cmgMod !== mod) return;
+        tot[st]++; if (g.n[st] !== undefined) g.n[st]++;
+        g.cel[col(per)].push({ mod, st, per, fin });
+      };
+      ['303', '111', '115', '123', '349'].forEach((m) => { if (m === '303' || m === '111' || uso(m)) pers.forEach((p) => add(m, p, ej, ej, m)); });
+      if (['HER', 'ESP', 'LYS'].includes(sig)) pers.forEach((p) => add('592', p, ej, ej, '592'));
+      if (!trim || uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
+      if (['A18341404', 'B18782730', 'B18765289', 'B91428995'].includes(e.cif)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
+      if (uso('232')) add('232', 'A', ej - 1, ej, '232');
+      if (['HER', 'ESP', 'HIS', 'FER'].includes(sig)) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
+      add('390', 'A', ej, ej, '390');
+      ['180', '190', '193'].forEach((m) => { if (uso(m)) add(m, 'A', ej, ej, m); });
+      add('200', 'A', ej, ej + 1, '200');
+      G.push(g);
+    });
+    ['303', '111', '115', '123', '349', '592', '202', '583', '232', 'Intrastat', '390', '180', '190', '193', '200'].forEach((m) => mods.add(m));
+    const chip = (x) => { const [fg, bg, ic, tx] = CMG_ST[x.st];
+      return `<span class="cmg-chip" title="${esc(`${x.mod === 'Intrastat' ? 'Intrastat' : 'Modelo ' + x.mod} · ${x.per} · ${tx} · fin ${fechaTxt(x.fin)}`)}" style="color:${fg};background:${bg};border-color:${fg}55">${ic} ${x.mod === 'Intrastat' ? 'INT' : esc(x.mod)}</span>`; };
+    const MS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Anual'];
+    const filas = G.map((g) => { const k = g.e.siglas, bar = COLOR_EMP[String(k ?? '').toUpperCase()] ?? '#1f3864', fondo = FONDO_EMP[g.i % FONDO_EMP.length];
+      return `<tr style="background:${fondo}"><td class="cmg-e" style="border-left:6px solid ${bar}"><b>${esc(g.e.nombre)}</b><div class="cmg-s">${g.n.venc ? `<b style="color:#b42318">${g.n.venc} vencido(s)</b> ` : ''}${g.n.pron ? `<b style="color:#8a6d00">${g.n.pron} próximos</b>` : ''}${!g.n.venc && !g.n.pron ? '✓ al día' : ''}</div></td>
+        ${g.cel.map((cs) => `<td>${cs.map(chip).join('')}</td>`).join('')}</tr>`; }).join('');
+    return `<section class="dsec"><h3>Cuadro de mando del grupo · ${ej} · <select data-cmgmod="1"><option value="">Todos los modelos</option>${[...mods].sort().map((m) => `<option${m === cmgMod ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></h3>
+      <p class="dash-s" style="font-size:.7rem"><span style="color:#1a7f37">✓ ${tot.ok} presentados</span> · <span style="color:#b42318">✖ ${tot.venc} vencidos sin presentar</span> · <span style="color:#8a6d00">● ${tot.pron} vencen en 7 días</span> · <span style="color:#667085">○ ${tot.fut} en plazo</span></p>
+      <div class="wrap"><table class="tabla cmg-t"><thead><tr><th>Empresa</th>${MS.map((m) => `<th>${m}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div></section>
+      <p class="hint">Estado fiscal de todas las empresas en ${ej}: cada modelo en el mes del periodo que liquida (en las pymes, trimestrales en el último mes del trimestre; el 202 en marzo, septiembre y noviembre; los anuales en la columna Anual). Presentado = está en «Impuestos Presentados» o marcado en «Liquidaciones Presentar». Los plazos son los de la regla general de la AEAT. Pasa el ratón por cada modelo para ver el detalle.</p>`;
   }
+  const setCmgMod = (v) => { cmgMod = v; render(); };
 
   // ---------- Pestañas ----------
   const L = (id) => () => vistaLista(id);
@@ -3357,5 +3412,5 @@ export function crearModulos(c) {
 
   const subirComo = (kind, files) => (kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

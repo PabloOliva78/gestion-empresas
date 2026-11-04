@@ -681,3 +681,13 @@ table.dash-tab td.n { text-align: right; white-space: nowrap; font-variant-numer
 table.dash-tab td.nw { white-space: nowrap; } table.dash-sal { width: auto; } table.dash-sal td, table.dash-sal th { white-space: nowrap; }
 td.gris { color: #4b5563; }
 @media (prefers-color-scheme: dark) { .dsec > h3, .dash-c { color: #0b1736; } }
+
+/* Cuadro de mando del grupo: semáforo por empresa, modelo y periodo */
+table.cmg-t { width: 100%; table-layout: fixed; font-size: .62rem; border-collapse: collapse; }
+table.cmg-t th { background: #e6ecf7; color: #1d2a4d; border: 1px solid #c9d3e6; padding: .3rem .2rem; font-weight: 600; text-align: center; }
+table.cmg-t th:first-child { width: 14%; }
+table.cmg-t td { border: 1px solid #d3dbea; padding: .2rem .25rem; vertical-align: top; }
+table.cmg-t td.cmg-e { white-space: normal; font-size: .64rem; }
+.cmg-s { font-size: .58rem; font-weight: 400; color: #475467; }
+.cmg-chip { display: inline-block; margin: 1px; padding: 0 .28rem; border-radius: 4px; font-size: .58rem; border: 1px solid; white-space: nowrap; }
+.dsec h3 select { font-size: .72rem; margin-left: .4rem; }
