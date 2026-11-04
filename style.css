@@ -756,3 +756,8 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .dsec.il-s table.il-t, .dsec.il-s table.il-t th, .dsec.il-s table.il-t td, .dsec.il-s table.il-t input, .dsec.il-s table.il-t select, .dsec.il-s table.il-t button, .dsec.il-s table.il-t span, .dsec.il-s table.il-t b { font-size: calc(var(--tb) * 1.0) !important; }
 .dsec.il-s .dash-s, .dsec.il-s .dropzone, .dsec.il-s button.small { font-size: calc(var(--tb) * 1.0); }
 .dsec.il-s > h3 { font-size: calc(var(--tb) * 1.3); }
+
+.dsec .dua-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .9rem; margin: .7rem 0 .5rem; clear: both; position: relative; }
+.dsec .dua-bar select { width: auto !important; min-width: 0; max-width: 16em; flex: 0 0 auto; }
+.dsec .dua-bar .dash-s { margin: 0; flex: 1 1 20em; }
+.dsec.dua-s .dropzone { margin-bottom: .5rem; }
