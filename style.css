@@ -741,3 +741,12 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .dsec table.il-t td.in select { padding: .1em .2em; }
 .dsec .dropzone { font-size: calc(var(--tb) * 1.05); }
 .dsec .il-t ~ button.small, .dsec .dash-s { font-size: calc(var(--tb) * 1.05); }
+
+/* DUA-H1: letra más pequeña y barra de mes como la app antigua */
+.dsec.dua-s { --tb: max(8.5px, 0.52vw); }
+.dsec.dua-s table.dua-t, .dsec.dua-s table.dua-t th, .dsec.dua-s table.dua-t td, .dsec.dua-s table.dua-t input, .dsec.dua-s table.dua-t b, .dsec.dua-s table.dua-t small, .dsec.dua-s table.dua-t span { font-size: calc(var(--tb) * 1.0) !important; }
+.dsec.dua-s table.dua-t td.in input { border: 0; background: #eef3fc; padding: .05em .3em; }
+.dsec.dua-s .dash-s { font-size: calc(var(--tb) * 1.0); }
+.dsec.dua-s .dropzone { font-size: calc(var(--tb) * 1.0); }
+.dua-bar { display: flex; align-items: center; gap: .8rem; margin: .5rem 0 .3rem; font-size: calc(var(--tb, 10px) * 1.1); }
+.dua-bar select { font: inherit; padding: .2em .6em; border: 1px solid #c9d3e6; border-radius: 6px; background: #fff; }
