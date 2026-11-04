@@ -2819,6 +2819,30 @@ export function crearModulos(c) {
     R.ivaDif = g(/Importe IVA Diferido:\s*([\d.,]+)/);
     return R;
   }
+  // Texto del PDF del DUA; si es un escaneo (sin capa de texto), se lee con OCR (Tesseract, se descarga la primera vez)
+  async function duaTexto(file) {
+    const lib = window.pdfjsLib;
+    if (!lib) throw new Error('No se cargó el lector de PDF (pdf.js).');
+    lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise, pags = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const tc = await (await doc.getPage(p)).getTextContent();
+      pags.push(lineasPagina(tc.items.filter((i) => i.str && i.str.trim()).map((i) => ({ x: i.transform[4], y: i.transform[5], str: i.str }))).join('\n'));
+    }
+    if (pags.join('').replace(/\s/g, '').length >= 60 * doc.numPages) return pags.join('\n');
+    await cargarTesseract();
+    const w = await window.Tesseract.createWorker('spa'), out = [];
+    try {
+      for (let p = 1; p <= doc.numPages; p++) {
+        duaMsg = `${file.name}: leyendo el escaneo (OCR) página ${p} de ${doc.numPages}…`; render();
+        const pg = await doc.getPage(p), vp = pg.getViewport({ scale: 2 }), cv = document.createElement('canvas');
+        cv.width = vp.width; cv.height = vp.height;
+        await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+        out.push((await w.recognize(cv)).data.text);
+      }
+    } finally { await w.terminate(); }
+    return out.join('\n');
+  }
   const duaRegs = () => S.registros.filter((r) => r.tipo === 'dua' && r.empresa_id === S.sel && r.datos?.num);
   const duaVal = (R, k) => (R.man && R.man[k] !== undefined ? R.man[k] : R[k] || '');
   const duaFixTrib = (R) => { ['declarados', 'calculados'].forEach((t) => { const o = R[t] || {}, n = {}; Object.keys(o).forEach((k) => { const c = duaCod(k), x = { ...o[k], cod: c }; n[c] = n[c] ? { ...x, imp: rr((n[c].imp || 0) + (x.imp || 0)) } : x; }); R[t] = n; }); return R; };
@@ -2827,7 +2851,7 @@ export function crearModulos(c) {
     for (const f of files.filter((x) => /\.pdf$/i.test(x.name))) {
       try {
         duaMsg = `Leyendo ${f.name}…`; render();
-        const T = (await textoPdf(f)).split('\n').filter((l) => !l.startsWith('--- página')).join('\n'), R = duaDeTexto(T);
+        const R = duaDeTexto(await duaTexto(f));
         if (!R.num) { const fm = /\d\dES\d{6}[A-Z0-9]{6,9}/i.exec(String(f.name).replace(/\s/g, '')); if (fm) R.num = fm[0].toUpperCase(); }
         if (!R.num) { mal.push(`${f.name} (no parece un DUA de importación: no encuentro «Importación. Detallada»)`); continue; }
         const prev = duaRegs().find((r) => r.datos.num === R.num), regId = prev?.id ?? crypto.randomUUID(), sub = await subir(S.sel, 'dua', regId, 'pdf', f);
