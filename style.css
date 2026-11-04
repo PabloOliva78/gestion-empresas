@@ -697,3 +697,21 @@ table.cmg-t td.cmg-e { white-space: normal; font-size: .64rem; }
 .d-fila .small { background: #3b5b9d; color: #fff; border: 0; border-radius: 14px; padding: .25rem .7rem; font-size: .66rem; font-weight: 600; }
 .d-fila .small:hover { background: #4a6cb3; }
 .d-fila label { display: inline-flex; align-items: center; gap: .3rem; }
+
+/* Inicio y cuadro de mando: la letra escala con el ancho de pantalla */
+.dsec, .dash-2 { --tb: max(10px, 0.66vw); }
+.dsec > h3 { font-size: calc(var(--tb) * 1.25); }
+.dsec .d-fila, .dsec .dash-s { font-size: var(--tb); }
+.dsec .d-fila .small { font-size: calc(var(--tb) * .95); padding: calc(var(--tb) * .3) calc(var(--tb) * .9); }
+.dsec .dash-g { grid-template-columns: repeat(auto-fill, minmax(calc(var(--tb) * 17), 1fr)); gap: calc(var(--tb) * 1.1); }
+.dsec .dash-c { padding: calc(var(--tb) * .7) calc(var(--tb) * 1); border-radius: calc(var(--tb) * 1.1); }
+.dsec .dash-t { font-size: var(--tb); }
+.dsec .dash-v { font-size: calc(var(--tb) * 1.9); }
+.dsec .dash-c .dash-s { font-size: calc(var(--tb) * .92); }
+.dsec .conc-resumen { font-size: var(--tb); }
+.dsec table.dash-tab { font-size: var(--tb); }
+.dsec table.cmg-t { font-size: calc(var(--tb) * .95); }
+.dsec table.cmg-t td.cmg-e { font-size: var(--tb); }
+.dsec .cmg-s { font-size: calc(var(--tb) * .9); }
+.dsec .cmg-chip { font-size: calc(var(--tb) * .92); padding: 0 calc(var(--tb) * .4); }
+.dsec .dash-tab th { font-size: var(--tb); }
