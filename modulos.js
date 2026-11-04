@@ -2641,6 +2641,7 @@ export function crearModulos(c) {
   tabs.liq = ['Liquidaciones Presentar', 'Todas las empresas', vistaLiq];
   tabs.venc = ['Pagos Domiciliados Impuestos', 'Todas las empresas', vistaVenc];
   tabs.iloc = ['Impuestos Locales', 'IBI · IAE · IVTM', vistaIloc];
+  tabs.dua = ['DUA-H1', 'Importaciones · IVA diferido', vistaDua];
 
   // ---------- Impuestos locales: IBI, IAE, IVTM, vados · periodo voluntario y domiciliación (un registro «iloc» por recibo, con su PDF en Storage) ----------
   const IL_CAMPOS = [['tipo', 'Impuesto', 0], ['objeto', 'Objeto (ref. catastral / epígrafe / matrícula)', 26], ['muni', 'Municipio / organismo', 16], ['ej', 'Ejercicio', 6], ['imp', 'Importe (€)', 10],
@@ -2774,6 +2775,128 @@ export function crearModulos(c) {
     await cargar(); render();
   }
   const setIlVer = (v) => { ilVer = v; render(); };
+
+  // ---------- DUA-H1 (importación, IVA diferido): un registro «dua» por declaración, con su PDF en Storage ----------
+  const DUA_CAMPOS = [['num', 'Número del DUA'], ['grab', 'Fecha de grabación'], ['levante', 'Fecha de levante'], ['aduana', 'Aduana de presentación'], ['importador', 'Importador'], ['declarante', 'Declarante'], ['expedidor', 'Expedidor / exportador'],
+    ['paisExp', 'País de expedición'], ['paisDest', 'País de destino'], ['transporte', 'Medio de transporte de llegada'], ['contenedores', 'Contenedores'], ['codEntrega', 'Código de entrega'], ['lugar', 'Lugar precisado'], ['divisa', 'Divisa'],
+    ['totalFac', 'Total factura'], ['modoTr', 'Modo de transporte en frontera'], ['desc', 'Descripción de las mercancías'], ['taric', 'Código TARIC'], ['bruta', 'Masa bruta (kg)'], ['neta', 'Masa neta (kg)']];
+  const DUA_TRIB = { A00: 'Derechos Aduana', A30: 'Derechos Antidumping', '1PL': 'Impuesto Plástico', B00: 'IVA Importación' };
+  let duaSel = null, duaMes = 'todos', duaMsg = '';
+  const duaNum = (s) => { const v = String(s || '').replace(/,/g, '.'), p = v.split('.'); return p.length > 2 ? +(`${p.slice(0, -1).join('')}.${p[p.length - 1]}`) : +v; };
+  const duaEur = (s) => +String(s || '0').replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
+  // códigos mal leídos por el OCR (APL, IPL, A0O, BOO…) → código correcto
+  const duaCod = (k) => { const c = String(k).toUpperCase().replace(/[OQ]/g, '0'); return /^[AIL1|]PL$/.test(c) ? '1PL' : /^B0+$/.test(c) ? 'B00' : /^A0+$/.test(c) ? 'A00' : c; };
+  const duaTipo = (t) => String(t || '').replace(/,000(?=\s*(%|\/))/, '');
+  const duaFecha = (s) => { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(String(s || '')); return m ? { d: +m[1], m: +m[2], y: +m[3] } : null; };
+  function duaDeTexto(T) {
+    const L = T.split('\n').map((x) => x.trim()), g = (re, i = 1) => { const m = T.match(re); return m ? m[i].replace(/\s+/g, ' ').trim() : ''; },
+      all = (re) => [...T.matchAll(re)].map((m) => m[1].replace(/\s+/g, ' ').trim()).filter((x) => x && x !== '-');
+    const R = {}; R.num = g(/Importaci[oó]n\.\s*Detallada\s+([0-9A-Z ]+?)\s*$/m).replace(/\s/g, '');
+    R.grab = g(/Fecha de grabaci[oó]n:\s*(\d\d-\d\d-\d{4}(?:\s+\d\d:\d\d:\d\d)?)/); R.levante = g(/Fecha de levante:\s*(\d\d-\d\d-\d{4}(?:\s+\d\d:\d\d:\d\d)?)/);
+    R.aduana = g(/Aduana de Presentaci[oó]n\s*:\s*(.+)/); R.importador = g(/1304\.\s*NIF:\s*(.+)/); R.declarante = g(/1305\.\s*NIF:\s*(.+)/);
+    R.expedidor = [...new Set(all(/1301\.\s*Nombre:[ \t]*(.*)/g))].join(' · '); R.paisExp = [...new Set(all(/1606\.\s*Pa[ií]s de expedici[oó]n:\s*(.*)/g))].join(' · ');
+    R.paisDest = g(/1603\.a\.\s*Pa[ií]s:\s*(.+)/); const prov = g(/1603\.b\.\s*Provincia:\s*(.+)/); if (prov && prov !== '-') R.paisDest += ` (${prov})`;
+    R.transporte = g(/1906\.\s*N[uú]mero de Identificaci[oó]n medio transporte llegada\s*:\s*(.+)/);
+    const cont = []; [...T.matchAll(/1907\.\s*Contenedores([\s\S]{0,400})/g)].forEach((m) => { (m[1].match(/\b[A-Z]{4}\d{7}\b/g) || []).forEach((c) => cont.push(c)); });
+    R.contenedores = cont.length ? [...new Set(cont)].join(', ') : g(/1901\.\s*Contenedores\s*:\s*(.+)/);
+    R.codEntrega = g(/C[oó]digo de entrega:\s*(.+)/); R.lugar = g(/Lugar precisado:\s*(.+)/); R.divisa = g(/1405\.\s*Divisa\s*:\s*(.+)/); R.totalFac = g(/1406\.\s*Total Factura\s*:\s*([\d.,]+)/);
+    R.modoTr = g(/1903\.\s*Modo de Transporte en Frontera:[ \t]*(\S[^\n]*)/); R.desc = all(/1805\.\s*Descripci[oó]n de las mercanc[ií]as:\s*(.*)/g).join(' · '); R.taric = all(/1809\.\s*C[oó]digo TARIC:\s*(.*)/g).join(' · ');
+    const sum = (re) => { const v = all(re).map(duaNum).filter((x) => !Number.isNaN(x)); return v.length ? String(rr(v.reduce((a, b) => a + b, 0))) : ''; };
+    R.bruta = sum(/1804\.\s*Masa Bruta \(Kg\):\s*([\d.,]+)/g); R.neta = sum(/1801\.\s*Masa Neta\s*\(kg\):\s*([\d.,]+)/g);
+    const trib = (ini, fin) => {
+      const a = L.findIndex((l) => l.startsWith(ini)); if (a < 0) return {};
+      const o = {};
+      for (let i = a + 1; i < L.length && !L[i].startsWith(fin) && !/^Calculado a Pagar|^1314\./.test(L[i]); i++) {
+        const m = L[i].match(/^([A-Za-z0-9]{3,4})\s+(.+)$/); if (!m || !/€|%|\/\s*KGM/.test(m[2])) continue;
+        const s = (`${m[2]} ${L[i + 1] && !/^[A-Z0-9]{3,4}\s/.test(L[i + 1]) ? L[i + 1] : ''}`).replace(/(\d)\s+,(\d)/g, '$1,$2'), esp = s.match(/(\d[\d.]*,\d{4,6})\s*K/), adv = s.match(/([\d.]+,\d\d)\s*€\s+[\d.,]+\s*%/),
+          tip = s.match(/([\d.,]+\s*%|[\d.,]+\s*\/\s*KGM)/), imps = [...s.matchAll(/([\d.]+,\d\d)\s*€/g)].map((x) => duaEur(x[1]));
+        const base = adv ? duaEur(adv[1]) : esp ? duaNum(esp[1]) : null, bTxt = adv ? '' : esp ? 'kg' : '', impo = adv ? imps[1] : imps[0];
+        const k = /envases de pl/i.test(s) ? '1PL' : /antidumping/i.test(s) ? 'A30' : /Derechos\s+(de\s+)?Aduana/i.test(s) ? 'A00' : /I\.?\s*V\.?\s*A\.?/.test(s) ? 'B00' : duaCod(m[1]), prev = o[k];
+        o[k] = { cod: k, base: prev && base !== null ? rr((prev.base || 0) + base) : base, ud: bTxt, tipo: tip ? tip[1].replace(/\s+/g, ' ') : '', imp: rr((prev ? prev.imp : 0) + (impo || 0)) };
+      }
+      return o;
+    };
+    R.declarados = trib('Tributos Declarados', 'Tributos Calculados'); R.calculados = trib('Tributos Calculados', 'Importe IVA Diferido');
+    R.ivaDif = g(/Importe IVA Diferido:\s*([\d.,]+)/);
+    return R;
+  }
+  const duaRegs = () => S.registros.filter((r) => r.tipo === 'dua' && r.empresa_id === S.sel && r.datos?.num);
+  const duaVal = (R, k) => (R.man && R.man[k] !== undefined ? R.man[k] : R[k] || '');
+  const duaFixTrib = (R) => { ['declarados', 'calculados'].forEach((t) => { const o = R[t] || {}, n = {}; Object.keys(o).forEach((k) => { const c = duaCod(k), x = { ...o[k], cod: c }; n[c] = n[c] ? { ...x, imp: rr((n[c].imp || 0) + (x.imp || 0)) } : x; }); R[t] = n; }); return R; };
+  async function duaCargar(files) {
+    let n = 0; const mal = [], otras = [];
+    for (const f of files.filter((x) => /\.pdf$/i.test(x.name))) {
+      try {
+        duaMsg = `Leyendo ${f.name}…`; render();
+        const T = (await textoPdf(f)).split('\n').filter((l) => !l.startsWith('--- página')).join('\n'), R = duaDeTexto(T);
+        if (!R.num) { const fm = /\d\dES\d{6}[A-Z0-9]{6,9}/i.exec(String(f.name).replace(/\s/g, '')); if (fm) R.num = fm[0].toUpperCase(); }
+        if (!R.num) { mal.push(`${f.name} (no parece un DUA de importación: no encuentro «Importación. Detallada»)`); continue; }
+        const prev = duaRegs().find((r) => r.datos.num === R.num), regId = prev?.id ?? crypto.randomUUID(), sub = await subir(S.sel, 'dua', regId, 'pdf', f);
+        if (sub.error) mal.push(`${f.name} (PDF no guardado: ${sub.error})`);
+        const fe = duaFecha(R.levante || R.grab), datos = { ...R, archivo: f.name, man: prev?.datos?.man ?? {}, arch: sub.val ?? prev?.datos?.arch }, ej = fe ? fe.y : Number(S.ejercicio);
+        const err = await guardarRegistro(prev, prev ? { datos, ejercicio: ej } : { id: regId, empresa_id: S.sel, tipo: 'dua', ejercicio: ej, datos });
+        if (err) { mal.push(`${f.name} (${err})`); continue; }
+        n++; duaSel = R.num; if (fe) duaMes = `${fe.y}-${String(fe.m).padStart(2, '0')}`;
+        const nifImp = (/^ES([A-Z0-9]+)/.exec(R.importador) || [])[1];
+        if (nifImp && nifImp !== empresa()?.cif) otras.push(`${R.num}: el importador (${nifImp}) no es la empresa seleccionada`);
+      } catch (err) { mal.push(`${f.name} (${err.message})`); }
+    }
+    duaMsg = `${n} DUA leído(s)${otras.length ? ` · ojo: ${otras.join('; ')}` : ''}${mal.length ? ` · sin leer: ${mal.join(', ')}` : ''}`;
+    await cargar(); render();
+  }
+  async function duaCampo(clave, valor) {
+    const [num, k] = clave.split('|'), reg = duaRegs().find((r) => r.datos.num === num);
+    if (!reg) return;
+    const datos = { ...reg.datos, man: { ...(reg.datos.man ?? {}), [k]: String(valor).trim() } };
+    const err = await guardarRegistro(reg, { datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  async function duaQuitar(num) {
+    const reg = duaRegs().find((r) => r.datos.num === num);
+    if (!reg || !confirm(`¿Eliminar el DUA ${num}?`)) return;
+    await quitarArchivos(rutas({ a: reg.datos.arch }));
+    const { error } = await db.from('registros').delete().eq('id', reg.id);
+    if (error) return void alert(error.message);
+    duaSel = null; await cargar(); render();
+  }
+  function duaSeleccionar(num, clics) {
+    const reg = duaRegs().find((r) => r.datos.num === num);
+    if (clics >= 2) { if (reg?.datos?.arch?.path) abrir(reg.datos.arch.path); else duaMsg = 'Este DUA no tiene el PDF guardado: vuelve a soltarlo.'; render(); return; }
+    if (duaSel !== num) { duaSel = num; render(); }
+  }
+  const setDuaMes = (v) => { duaMes = v; render(); };
+  function vistaDua() {
+    if (!S.sel) return sinEmpresa;
+    const regs = duaRegs().map((r) => duaFixTrib({ ...r.datos })), ed = puede(), e = empresa();
+    const mesDe = (R) => { const f = duaFecha(R.levante || R.grab); return f ? `${f.y}-${String(f.m).padStart(2, '0')}` : 'sin fecha'; };
+    const meses = [...new Set(regs.map(mesDe))].sort(), defM = /^\d\d$/.test(S.periodo ?? '') ? `${S.ejercicio}-${S.periodo}` : null;
+    const mesSel = duaMes && (meses.includes(duaMes) || duaMes === 'todos') ? duaMes : (defM && meses.includes(defM) ? defM : 'todos');
+    const nomM = (k) => { const m = /^(\d{4})-(\d\d)$/.exec(k); return m ? `${MESES[+m[2] - 1][0].toUpperCase()}${MESES[+m[2] - 1].slice(1)} ${m[1]}` : k; };
+    const tr = (R, c) => (R.declarados || {})[c] || (R.calculados || {})[c] || null;
+    const celdas = (R, c) => { const t = tr(R, c); return t ? `<td class="num">${t.base === null ? '—' : t.ud === 'kg' ? `${t.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(t.base)}</td><td class="c">${esc(duaTipo(t.tipo))}</td><td class="num">${fnum(t.imp)}</td>` : '<td class="num">—</td><td class="c">—</td><td class="num">—</td>'; };
+    const tabla = (lista, tit) => {
+      const ORD = ['B00', 'A00', '1PL', 'A30'], cods = [...new Set(['B00', 'A00', '1PL'].concat(...lista.map((R) => Object.keys(R.declarados || {}).concat(Object.keys(R.calculados || {})))))].sort((a, b) => { const x = ORD.indexOf(a), y = ORD.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || a.localeCompare(b); });
+      const tot = {}; cods.forEach((c) => { tot[c] = [0, 0, false]; });
+      lista.forEach((R) => cods.forEach((c) => { const t = tr(R, c); if (t) { if (t.ud !== 'kg') tot[c][0] += t.base || 0; else tot[c][2] = true; tot[c][1] += t.imp || 0; } }));
+      const neta = (R) => { const v = duaVal(R, 'neta'); return v && !Number.isNaN(duaNum(v)) ? duaNum(v).toLocaleString('es-ES', { maximumFractionDigits: 3 }) : esc(v); };
+      return `<h4 class="it-sec">${esc(tit)} · ${lista.length} DUA</h4><div class="wrap"><table class="tprs tnom il-t"><thead><tr><th rowspan="2">Nº DUA</th><th rowspan="2">Importador</th><th rowspan="2">Exportador</th><th rowspan="2">País</th><th rowspan="2">TARIC</th><th rowspan="2">Masa neta (kg)</th><th rowspan="2">Lugar precisado</th><th rowspan="2">Medio transporte llegada</th>${cods.map((c) => `<th colspan="3">${esc(c)}${DUA_TRIB[c] ? ' · ' + DUA_TRIB[c] : ''}</th>`).join('')}</tr>
+        <tr>${'<th>Base imponible</th><th>Tipo</th><th>Importe</th>'.repeat(cods.length)}</tr></thead><tbody>
+        ${lista.map((R) => `<tr data-duasel="${esc(R.num)}" style="cursor:pointer${R.num === duaSel ? ';background:#fff6d6' : ''}"><td>${esc(R.num)}</td><td>${esc(duaVal(R, 'importador').replace(/^ES[A-Z0-9]+\s*-\s*/, ''))}</td><td>${esc(duaVal(R, 'expedidor'))}</td><td>${esc(duaVal(R, 'paisExp'))}</td>
+          <td>${esc((String(duaVal(R, 'taric')).replace(/\s/g, '').match(/\d{8,10}/g) || []).join(' · '))}</td><td class="num">${neta(R)}</td><td>${esc(duaVal(R, 'lugar'))}</td><td>${esc(duaVal(R, 'transporte'))}</td>${cods.map((c) => celdas(R, c)).join('')}</tr>`).join('')}
+        <tr class="ttot"><td colspan="8">Total ${esc(tit)}</td>${cods.map((c) => `<td class="num">${tot[c][2] && !tot[c][0] ? '' : fnum(rr(tot[c][0]))}</td><td></td><td class="num">${fnum(rr(tot[c][1]))}</td>`).join('')}</tr></tbody></table></div>`;
+    };
+    const porMes = mesSel === 'todos' ? meses : [mesSel];
+    const tablas = regs.length ? porMes.map((k) => tabla(regs.filter((R) => mesDe(R) === k).sort((a, b) => (a.levante || '').localeCompare(b.levante || '')), nomM(k))).join('') : '<p class="hint">Todavía no hay DUA cargados para esta empresa.</p>';
+    const Sel = regs.find((R) => R.num === duaSel) ?? null;
+    const tribT = (o, t) => { const xs = Object.values(o || {}); return xs.length ? `<h4 class="it-sec">${t}</h4><table class="tprs tnom il-t" style="width:auto"><thead><tr><th>Tributo</th><th>Base</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${xs.map((x) => `<tr><td><b>${esc(x.cod)}</b>${DUA_TRIB[x.cod] ? `<br><small>${DUA_TRIB[x.cod]}</small>` : ''}</td><td class="num">${x.base === null ? '—' : x.ud === 'kg' ? `${x.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(x.base)}</td><td class="c">${esc(duaTipo(x.tipo))}</td><td class="num">${fnum(x.imp)}</td></tr>`).join('')}</tbody></table>` : ''; };
+    const ficha = Sel ? `<section class="dsec"><h3>DUA ${esc(Sel.num)} ${ed ? `<button class="small" data-act="m-duadel" data-n="${esc(Sel.num)}">Eliminar</button>` : ''}</h3><p class="dash-s">Leído de ${esc(Sel.archivo || '')}. Los campos se pueden corregir.</p>
+      <div class="css-flex" style="align-items:flex-start;gap:1.5rem"><table class="tprs tnom il-t" style="width:auto"><tbody>${DUA_CAMPOS.map(([k, t]) => `<tr><td>${esc(t)}</td><td class="in"><input data-duacampo="${esc(Sel.num)}|${k}" value="${esc(duaVal(Sel, k))}" size="${Math.max(8, String(duaVal(Sel, k)).length + 1)}"${ed ? '' : ' readonly'}></td></tr>`).join('')}</tbody></table>
+      <div>${tribT(Sel.calculados, 'Tributos calculados')}${tribT(Sel.declarados, 'Tributos declarados')}${Sel.ivaDif ? `<p><b>Importe IVA diferido: ${fnum(duaNum(Sel.ivaDif))}</b></p>` : ''}</div></div></section>` : '';
+    return `<section class="dsec"><h3>DUA-H1 · ${esc(e.nombre)} · <select data-duames="1"><option value="todos">Todos los meses</option>${meses.map((k) => `<option value="${k}"${k === mesSel ? ' selected' : ''}>${esc(nomM(k))}</option>`).join('')}</select></h3>
+      ${ed ? dz('dua', 'Suelta aquí los PDF de los DUA (H1)', 'o pulsa para elegirlos. Puedes soltar varios a la vez; se ordenan por el mes de la fecha de levante.', '.pdf') : ''}
+      ${duaMsg ? `<p class="dash-s">${esc(duaMsg)}</p>` : ''}<p class="dash-s">Pulsa una fila para ver su detalle; doble clic para abrir el PDF.</p>${tablas}</section>${ficha}`;
+  }
 
   function vistaCnom() {
     if (!S.sel) return sinEmpresa;
@@ -3041,6 +3164,7 @@ export function crearModulos(c) {
       ...acc3,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
       'm-iladd': () => ilAnadir(),
+      'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
       'm-d365carpeta': () => d365Carpeta(d.c),
       'm-d365recoger': () => d365Recoger(true),
@@ -3675,7 +3799,7 @@ export function crearModulos(c) {
     return chkR?.key === chkClave() ? (chkR.nKo ? { t: `${chkR.nKo} a revisar`, c: 'rojo' } : { t: 'OK', c: 'verde' }) : { t: 'Sin hacer' };
   };
 
-  const subirComo = (kind, files) => (kind === 'iloc' ? ilCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setIlVer, guardarIl, abrirArch: abrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

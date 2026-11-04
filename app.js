@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=114';
+import { crearModulos } from './modulos.js?v=115';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -723,6 +723,8 @@ root.addEventListener('click', (ev) => {
   const dz = ev.target.closest('.dropzone');
   if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
   if (ev.target.closest('.logo-aside')) { S.tab = 'ini'; S.grp = -1; return render(); }
+  const ds = ev.target.closest('[data-duasel]');
+  if (ds && !ev.target.closest('button,input,select')) return void M.duaSeleccionar(ds.dataset.duasel, ev.detail);
   const ir = ev.target.closest('[data-ir]');
   if (ir && !ev.target.closest('button')) { S.tab = ir.dataset.ir; S.grp = -1; return render(); }
   const t = ev.target.closest('button');
@@ -767,6 +769,8 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fcnv) return void M.fcNvCampo(t.dataset.fcnv, t.value);
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
+  if (t.dataset.duames !== undefined) return void M.setDuaMes(t.value);
+  if (t.dataset.duacampo) return void M.duaCampo(t.dataset.duacampo, t.value);
   if (t.dataset.ilver !== undefined) return void M.setIlVer(t.value);
   if (t.dataset.il) return void M.guardarIl(t.dataset.il, t.value);
   if (t.dataset.cmgmod !== undefined) return void M.setCmgMod(t.value);
