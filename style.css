@@ -659,3 +659,25 @@ form#f.card::before { content: ""; position: absolute; z-index: -1; inset: 0; ba
 .lat .sel-menu { min-width: 100%; }
 .lat .sel-op, .lat .sel-op span { font-size: .72rem; white-space: normal; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+/* Inicio: resumen al arrancar (mismo diseño que la app antigua) */
+.dsec { background: var(--card); border-radius: 14px; box-shadow: 0 2px 14px rgba(11,23,54,.08); padding: .9rem 1.1rem 1rem; margin: 0 0 14px; min-width: 0; overflow-x: auto; }
+.dsec > h3 { margin: 0 0 .7rem; font-size: .8rem; color: #0b1736; border-left: 4px solid #2563eb; padding-left: .6rem; font-weight: 600; }
+.d-fila { display: flex; flex-wrap: wrap; gap: .6rem 1.8rem; align-items: center; font-size: .72rem; }
+.d-ok { color: #1a7f37; font-weight: 600; } .d-ko { color: #b42318; font-weight: 600; } .d-nd { color: #6b7280; }
+.dash-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; align-items: start; }
+.dash-c { border-radius: 12px; padding: .6rem .8rem; background: #fff; cursor: pointer; box-shadow: 0 2px 12px rgba(11,23,54,.09); transition: box-shadow .15s, transform .15s; }
+.dash-c:hover { box-shadow: 0 4px 16px rgba(11,23,54,.2); transform: translateY(-1px); }
+.dash-t { font-weight: 700; font-size: .72rem; margin-bottom: .25rem; } .dash-v { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash-s { font-size: .66rem; color: #444; margin-top: 2px; }
+.conc-resumen { margin: 0 0 .6rem; font-weight: 600; font-size: .72rem; }
+.dash-2 { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; align-items: start; }
+@media (max-width: 1200px) { .dash-2 { grid-template-columns: 1fr; } }
+table.dash-tab { width: 100%; border-collapse: collapse; font-size: .7rem; }
+table.dash-tab th { background: #e6ecf7; color: #1d2a4d; border: 1px solid #c9d3e6; padding: .3rem .5rem; font-weight: 600; text-align: center; }
+table.dash-tab td { border: 1px solid #dde3ee; padding: .22rem .5rem; }
+table.dash-tab tbody tr { cursor: pointer; } table.dash-tab tbody tr:hover td { background: #f1f5fd; }
+table.dash-tab td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; } table.dash-tab td.c { text-align: center; }
+table.dash-tab td.nw { white-space: nowrap; } table.dash-sal { width: auto; } table.dash-sal td, table.dash-sal th { white-space: nowrap; }
+td.gris { color: #4b5563; }
+@media (prefers-color-scheme: dark) { .dsec > h3, .dash-c { color: #0b1736; } }

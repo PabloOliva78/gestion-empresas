@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=97';
+import { crearModulos } from './modulos.js?v=98';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -21,7 +21,7 @@ const ROLES = { admin: 'Administrador', gestor: 'Gestor', consulta: 'Consulta' }
 
 const S = {
   perfil: null, empresas: [], obligaciones: [], conciliaciones: [], registros: [], usuarios: [], asign: [],
-  tab: 'cmg', filtro: { area: '', estado: '' },
+  tab: 'ini', filtro: { area: '', estado: '' },
   ejercicio: new Date().getFullYear(), periodo: '', // periodo '' = todo el ejercicio
   sel: '', menu: false, grp: -1, cargando: false, // empresa elegida ('' = todas) y grupo de pestañas abierto
 };
@@ -228,7 +228,7 @@ function ejercicios() {
 }
 
 function render() {
-  if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'cmg';
+  if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'ini';
   const e = S.empresas.find((x) => x.id === S.sel);
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   root.innerHTML = `<div class="layout">
@@ -705,6 +705,8 @@ root.addEventListener('click', (ev) => {
   if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap')) S.grp = -1; render(); }
   const dz = ev.target.closest('.dropzone');
   if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
+  const ir = ev.target.closest('[data-ir]');
+  if (ir && !ev.target.closest('button')) { S.tab = ir.dataset.ir; S.grp = -1; return render(); }
   const t = ev.target.closest('button');
   if (!t) return;
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
@@ -723,7 +725,7 @@ root.addEventListener('click', (ev) => {
     'edit-obl': () => formObligacion(S.obligaciones.find((o) => o.id === id)),
     'del-obl': () => confirm('¿Borrar la obligación?') && run(db.from('obligaciones').delete().eq('id', id)),
     calendario: () => formCalendario(),
-    inicio: () => { S.tab = 'cmg'; S.grp = -1; render(); },
+    inicio: () => { S.tab = 'ini'; S.grp = -1; render(); },
     buscar: () => paleta(),
     'new-conc': () => formConciliacion({ periodo: S.periodo || '1T' }),
     'edit-conc': () => formConciliacion(S.conciliaciones.find((c) => c.id === id)),

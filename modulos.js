@@ -2223,6 +2223,162 @@ export function crearModulos(c) {
       ${ed ? `<button class="small" data-act="m-fundaedel" data-y="${y}" style="margin:.6rem 1rem">Quitar los datos de FUNDAE de ${y}</button>` : ''}</section>` : ''}`;
   }
 
+  // ---------- Inicio: resumen al arrancar (impuestos del periodo, conciliaciones, saldos de cuentas y liquidaciones pendientes) ----------
+  async function toggleLiqIva(txt) {
+    const ms = txt.split(','), reg = S.registros.find((r) => r.tipo === 'liqiva' && r.empresa_id === S.sel), set = new Set(reg?.datos?.meses ?? []);
+    const todos = ms.every((m) => set.has(m));
+    ms.forEach((m) => (todos ? set.delete(m) : set.add(m)));
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'liqiva', ejercicio: null, datos: { meses: [...set].sort() } });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  function vistaInicio() {
+    if (!S.sel) return sinEmpresa;
+    const E = grande('fact-E'), R = grande('fact-R'), M = grande('may-mov'), sE = grande('sii-E'), sR = grande('sii-R');
+    if (!E || !R || !M || !sE || !sR) return cargandoTxt;
+    const e = empresa(), ej = Number(S.ejercicio), p = S.periodo, ed = puede(), meses = siiMeses();
+    const per = p ? (PERIODOS[p] ?? p) : 'Todo el ejercicio';
+    const hay = (v) => v !== undefined && v !== null, g = (v) => (hay(v) && !Number.isNaN(v) ? fnum(v) : '—');
+    const ok = (t = 'Cuadra') => `<span class="d-ok">✓ ${esc(t)}</span>`, ko = (t = 'Descuadre') => `<span class="d-ko">✖ ${esc(t)}</span>`, nd = (t = 'Sin datos') => `<span class="d-nd">• ${esc(t)}</span>`;
+    const tarjeta = (tab, tit, cuerpo) => `<div class="dash-c" data-ir="${tab}" title="Abrir ${esc(tit)}"><div class="dash-t">${esc(tit)}</div>${cuerpo}</div>`;
+    const pv = (m, col) => (p ? prsVal(ej, m, p, col) : undefined);
+    // 1) impuestos del periodo: calculado desde los libros y lo presentado
+    const calc = {};
+    let r111 = { ret: 0 }, nomR = 0;
+    if (p) {
+      try {
+        r111 = calcularRet('111', R, ej, p);
+        const np = nomPer(ej, perEf(e, p)), m111 = manPer('m111');
+        nomR = np ? np.r : Number(m111.t3) || 0;
+        calc['111'] = rr(nomR + r111.ret - (Number(m111.c29) || 0));
+        ['115', '123'].forEach((m) => { calc[m] = rr(calcularRet(m, R, ej, p).ret - (Number(manPer('m' + m).c4) || 0)); });
+        if (E.length || R.length) {
+          calc['303'] = calcular303(E, R, ej, p, manuales(), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
+          calc['349'] = calcular349(E, R, ej, p).total;
+        }
+      } catch (err) { /* sin libros: solo se muestra lo presentado */ }
+    }
+    const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
+      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? pv('303', 'res') ?? null, 349: pv('349', 'imp') ?? null };
+    const imps = ['111', '115', '123', '303', '349'].map((m) => {
+      const c = calc[m], pr = pres[m];
+      if (c === undefined && pr === null) return '';
+      if (['115', '123', '349'].includes(m) && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005)) return '';
+      const est = c === undefined ? '' : m === '349' ? 'Informativa' : c > 0.005 ? 'A ingresar' : c < -0.005 ? 'A compensar' : 'Cero';
+      const cu = pr === null ? nd('Sin presentar') : Math.abs(pr - (c || 0)) <= 1 ? ok('Presentado') : ko(`Presentado ${g(pr)}`);
+      return tarjeta('mod' + m, 'Modelo ' + m, `<div class="dash-v">${g(c)}</div><div class="dash-s">${est}</div><div class="dash-s">${cu}</div>`);
+    }).filter(Boolean);
+    const tiene = (m) => imps.some((h) => h.includes(`data-ir="mod${m}"`));
+    // 2) conciliaciones
+    const conc = [];
+    ['111', '115', '123'].forEach((m) => {
+      if (m !== '111' && !tiene(m)) return;
+      let st = nd(), dif = '';
+      const pr = m === '111' ? [pv('111', 'retN'), pv('111', 'retP')] : [pv(m, 'ret')];
+      if (p && pr.some(hay)) {
+        try {
+          const ds = m === '111' ? [(pr[0] || 0) - nomR, (pr[1] || 0) - r111.ret] : [(pr[0] || 0) - calcularRet(m, R, ej, p).ret];
+          const mal = ds.some((d) => Math.abs(d) > 1);
+          st = mal ? ko() : ok();
+          if (mal) dif = `<div class="dash-s">Diferencia mayor: ${g(ds.reduce((a, d) => (Math.abs(d) > Math.abs(a) ? d : a), 0))} €</div>`;
+        } catch (err) { /* sin libros */ }
+      }
+      conc.push(tarjeta('r' + m, 'Conciliación ' + m, `<div class="dash-s">${st}</div>${dif}`));
+    });
+    { let st = nd(), det = '';
+      try {
+        const mal = []; let hayD = false;
+        meses.forEach((mm) => {
+          const d = {};
+          [['E', E, sE], ['R', R, sR]].forEach(([s, lib, sii]) => { if (lib.length && sii.length) d[s] = conciliarSiiCompleta(s, lib, sii, ej, mm); });
+          if (!Object.keys(d).length) return;
+          const lado = (s, n) => (d[s] && !d[s].cuadra ? `${n} SII−libro ${fnum(rr(d[s].ts.cuota - d[s].tc.cuota))} ` : '');
+          if (['E', 'R'].some((s) => d[s] && (d[s].tc.n || d[s].ts.n))) hayD = true;
+          if (!d.E?.cuadra && d.E || !d.R?.cuadra && d.R) mal.push(`<div class="dash-s">${esc(MESES[+mm - 1].toUpperCase())}: ${lado('E', 'emitidas')}${lado('R', 'recibidas')}</div>`);
+        });
+        if (hayD) { st = mal.length ? ko() : ok(); det = mal.slice(0, 6).join('') + (mal.length > 6 ? '<div class="dash-s">…</div>' : ''); }
+      } catch (err) { /* sin datos */ }
+      conc.push(tarjeta('concsiie', 'Conciliación 303 · SII', `<div class="dash-s">${st}</div>${det}`)); }
+    { let st = nd(), det = '';
+      try {
+        const nm = meses.filter((mm) => nomMes(ej, mm));
+        if (M.length && nm.length) {
+          const cta = cssCta(), pag = {}, rit = {};
+          M.forEach((l) => {
+            const a = String(l.asiento || '').trim().toUpperCase();
+            if (/^PS/.test(a) && casaCta(cta, l.digitos)) pag[ymDe(l.fecha)] = rr((pag[ymDe(l.fecha)] || 0) + (+l.debe || 0) - (+l.haber || 0));
+            if (/^IT/.test(a) && casaCta(cta, l.digitos)) rit[ymDe(l.fecha)] = rr((rit[ymDe(l.fecha)] || 0) + (+l.debe || 0) + (+l.haber || 0));
+          });
+          const F = fundaeMes(ej), mal = [];
+          nm.forEach((mm) => {
+            const ymN = `${ej}-${mm}`, ymP = sumMes(`${ymN}-01`, 1), N = nomMes(ej, mm), x = nomReg(ej)?.datos?.[mm] ?? {};
+            const ss = N.ssTot, pg = pag[ymP] !== undefined ? pag[ymP] : null, it = -(rit[ymN] || 0);
+            const cur = F.M[ymN] ? -rr(F.M[ymN].reduce((a, c) => a + (c.coste || 0), 0)) : (Object.keys(F.M).length ? 0 : -Math.abs(Number(x.c_bonif) || 0));
+            const dif = rr(rr((pg || 0) - ss) - it - cur);
+            if (Math.abs(dif) > 0.9) mal.push(`<div class="dash-s">${esc(MESES[+mm - 1])}: ${pg === null ? 'sin pago' : 'descuadra'} ${fnum(dif)}</div>`);
+          });
+          st = mal.length ? ko() : ok(); det = mal.join('');
+        }
+      } catch (err) { /* sin datos */ }
+      conc.push(tarjeta('cssoc', 'Conciliación Seguridad Social', `<div class="dash-s">${st}</div>${det}`)); }
+    const nMal = conc.filter((c) => c.includes('d-ko')).length;
+    // 3) saldos de las cuentas que concilian impuestos, a fin del periodo
+    const rg = rangoPeriodo(ej, p), corte = Date.parse(rg.hasta) + 864e5, m1 = +rg.hasta.slice(5, 7), fer = e?.cif === 'B18546614';
+    const MOD = { c4700: 'MODELO 303 IVA A COMPENSAR', c4709: 'MODELO 200 IMPUESTO SOBRE SOCIEDADES A DEVOLVER', c4730: 'MODELO 202 PAGO A CUENTA IMPUESTO SOBRE SOCIEDADES',
+      c4750: 'MODELO 303 IVA A INGRESAR', c47511: fer ? 'MODELO 111 RETENCIONES RDTOS DEL TRABAJO' : 'MODELO 111 RETENCIONES RDTOS DEL TRABAJO Y ACTIV. ECONOMICAS',
+      c47512: fer ? 'MODELO 111 RETENCIONES PROFESIONALES' : 'MODELO 115 RETENCIONES DEL CAPITAL INMOBILIARIO', c47513: 'MODELO 115 RETENCIONES DEL CAPITAL MOBILIARIO',
+      c47514: 'MODELO 123 RETENCIONES DEL CAPITAL MOBILIARIO', c4752: 'MODELO 200 IMPUESTO SOBRE SOCIEDADES A INGRESAR', c4760: 'SEGURIDAD SOCIAL MES EN CURSO' };
+    const neg = (v) => (v === null ? null : rr(-v));
+    const impK = (k) => {
+      const liq = pv('303', 'liq'), c87 = pv('303', 'c87'), v200 = prsVal(ej, '200', 'A', 'res');
+      if (k === 'c4700') return !hay(liq) && !hay(c87) ? null : rr((c87 || 0) + (liq < 0 ? -liq : 0));
+      if (k === 'c4750') return pres[303] === null ? null : rr(-Math.max(0, pres[303]));
+      if (k === 'c47511') return fer ? (hay(pv('111', 'retN')) ? neg(pv('111', 'retN')) : null) : neg(pres[111]);
+      if (k === 'c47512') return fer ? (hay(pv('111', 'retP')) ? neg(pv('111', 'retP')) : null) : neg(pres[115]);
+      if (k === 'c47513') return neg(pres[115]);
+      if (k === 'c47514') return neg(pres[123]);
+      if (k === 'c4709') return hay(v200) ? rr(v200 < 0 ? -v200 : 0) : null;
+      if (k === 'c4752') return hay(v200) ? rr(v200 > 0 ? -v200 : 0) : null;
+      if (k === 'c4730') { const ps = [['1P', 4], ['2P', 10], ['3P', 12]].filter(([, m]) => m1 >= m).map(([q]) => prsVal(ej, '202', q, 'res')); return !ps.length ? 0 : ps.some(hay) ? rr(ps.reduce((s, v) => s + (v || 0), 0)) : null; }
+      if (k === 'c4760') { const n = nomMes(ej, String(m1).padStart(2, '0')); return n ? rr(-n.ssTot) : null; }
+      return null;
+    };
+    let ctas = '<p class="hint">Carga el extracto contable para ver los saldos.</p>';
+    if (M.length) {
+      try {
+        const F = Object.entries(ctasEmpresa(e)).filter(([k]) => MOD[k]).map(([k, C]) => {
+          const D = calcCuenta(k, M), mv = D.movs.filter((x) => x.l.ms < corte), saldo = mv.length ? mv[mv.length - 1].saldo : D.ctl.saldoIni, imp = p ? impK(k) : null;
+          const std = C.cta.split('.')[0] + String(C.cta.split('.')[1] || '').padStart(5, '0');
+          return { k, cuenta: D.subcuentas[0] || std, nombre: C.desc, modelo: MOD[k], saldo, imp, dif: rr(saldo - (imp || 0)) };
+        }).sort((a, b) => String(a.cuenta).replace(/\D/g, '').localeCompare(String(b.cuenta).replace(/\D/g, '')));
+        ctas = `<table class="dash-tab dash-sal"><thead><tr><th>Cuenta</th><th>Modelo</th><th>Saldo</th><th>Impuesto</th><th>Diferencia</th><th>Estado</th></tr></thead><tbody>${F.map((f) => `<tr data-ir="${f.k}">
+          <td>${esc(f.cuenta)} · ${esc(f.nombre)}</td><td class="gris">${esc(f.modelo)}</td><td class="n">${g(f.saldo)}</td><td class="n">${g(f.imp)}</td><td class="n"><b>${g(f.imp === null ? null : f.dif)}</b></td>
+          <td>${f.imp === null ? nd('Sin declaración') : Math.abs(f.dif) <= 1 ? ok() : ko()}</td></tr>`).join('')}</tbody></table>`;
+      } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
+    }
+    // 4) liquidaciones pendientes de presentar
+    const pend = S.registros.filter((r) => r.tipo === 'liq' && r.empresa_id === S.sel && r.ejercicio === ej && r.datos.estado !== 'Presentado')
+      .map((r) => ({ mod: r.datos.modelo, per: r.datos.periodo ? `${r.datos.periodo}/${ej}` : String(ej), imp: r.datos.importe }));
+    ['111', '115', '123', '303', '349'].forEach((m) => { if (calc[m] !== undefined && pres[m] === null && Math.abs(calc[m]) >= 0.005 && !pend.some((x) => x.mod === m && x.per.startsWith(p))) pend.push({ mod: m, per: `${p}/${ej}`, imp: calc[m] }); });
+    const siiTxt = [];
+    [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
+      const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
+      if (c) siiTxt.push(ok(`${n}: presentado (${c} registros)`)); else if (p) pend.push({ mod: n, per: `${p}/${ej}`, imp: null });
+    });
+    const liq = (p ? '' : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>') + (siiTxt.length ? `<p class="dash-s">${siiTxt.join(' &nbsp; ')}</p>` : '')
+      + (pend.length ? `<table class="dash-tab"><thead><tr><th>Empresa</th><th>Modelo</th><th>Periodo</th><th>Importe</th></tr></thead><tbody>${pend.map((f) => `<tr data-ir="liq"><td class="nw">${esc(e.nombre)}</td>
+        <td class="c">${/^\d+$/.test(f.mod) ? 'Modelo ' + esc(f.mod) : esc(f.mod)}</td><td class="c">${esc(f.per)}</td><td class="n">${g(f.imp)}</td></tr>`).join('')}</tbody></table><p class="hint">${pend.length} liquidación(es) sin marcar como presentadas.</p>`
+        : `<p>${ok('Todas las liquidaciones del periodo están presentadas')}</p>`);
+    const lq = meses.map((mm) => `${ej}-${mm}`), setL = new Set(S.registros.find((r) => r.tipo === 'liqiva' && r.empresa_id === S.sel)?.datos?.meses ?? []), liqHecha = !!p && lq.every((m) => setL.has(m));
+    return `<section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila"><span>Facturas emitidas cargadas: <b>${E.length}</b></span><span>Facturas recibidas cargadas: <b>${R.length}</b></span>
+        ${ed && p ? `<button class="small" data-act="m-liqiva" data-m="${lq.join(',')}">${liqHecha ? '☑' : '☐'} <b>Liquidación de IVA hecha · ${esc(per)}</b></button>` : ''}</div></section>
+      <section class="dsec"><h3>Impuestos del periodo · ${esc(per)}</h3>${p ? `<div class="dash-g">${imps.join('') || '<p class="hint">Sin datos de impuestos en este periodo.</p>'}</div>` : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>'}</section>
+      <section class="dsec"><h3>Conciliaciones</h3><div class="conc-resumen ${nMal ? 'd-ko' : 'd-ok'}">${nMal ? `✖ ${nMal} conciliación${nMal > 1 ? 'es' : ''} con descuadre` : '✓ Todas las conciliaciones cuadran'}</div><div class="dash-g">${conc.join('')}</div></section>
+      <div class="dash-2"><section class="dsec"><h3>Saldos de las cuentas contables</h3>${ctas}</section><section class="dsec"><h3>Liquidaciones a presentar pendientes</h3>${liq}</section></div>
+      <p class="hint">Pincha en cualquier recuadro o fila para ir a su pestaña.</p>`;
+  }
+  tabs.ini = ['Inicio', 'Resumen del periodo', vistaInicio];
+
   function vistaCnom() {
     if (!S.sel) return sinEmpresa;
     const e = empresa(), y = Number(S.ejercicio), trim = e.tipo === 'PYME';
@@ -2487,6 +2643,7 @@ export function crearModulos(c) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
       ...acc3,
+      'm-liqiva': () => toggleLiqIva(d.m),
       'm-new': () => formReg(d.m),
       'm-edit': () => formReg(d.m, reg()),
       'm-del': () => borrarReg(reg()),
