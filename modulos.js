@@ -355,7 +355,7 @@ export function crearModulos(c) {
         if (cmgMod && cmgMod !== o.mod) return;
         const st = estadoOb(o, hoy);
         tot[st]++; if (g.n[st] !== undefined) g.n[st]++;
-        g.cel[colMes(o.per)].push({ mod: o.mod, st, per: o.per, fin: o.fin });
+        g.cel[o.mod === '583' ? 9 : o.mod === '200' ? 5 : colMes(o.per)].push({ mod: o.mod, st, per: o.per, fin: o.fin });
       });
       G.push(g);
     });
