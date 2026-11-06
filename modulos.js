@@ -426,6 +426,93 @@ export function crearModulos(c) {
   const setLiqVer = (v) => { liqVer = v; render(); };
   const setCmgMod = (v) => { cmgMod = v; render(); };
 
+  // ---------- Calendario Fiscal: mes tipo agenda con plazos de presentación y domiciliaciones ----------
+  let calMes = null, calEmp = false;
+  const domDe = (o) => { let t = o.fin - 5 * 864e5; while (!esHabil(t)) t -= 864e5; return t; };
+  const setCalMes = (m) => { calMes = m; render(); };
+  const setCalEmp = (v) => { calEmp = !!v; render(); };
+  const sigDe = (id) => S.empresas.find((q) => q.id === id)?.siglas ?? '';
+  const colorDe = (id) => COLOR_EMP[String(sigDe(id)).toUpperCase()] ?? '#1f3864';
+  // recibos de impuestos locales (fin del periodo voluntario y fecha de cargo si están domiciliados) y plazos de las notificaciones
+  function ilEventos() {
+    const out = [];
+    S.registros.filter((r) => r.tipo === 'iloc').forEach((r) => {
+      const E = S.empresas.find((q) => q.id === r.empresa_id); if (!E) return;
+      const nom = (ilDe(r, 'tipo') || 'IBI') + (ilDe(r, 'objeto') ? ' · ' + ilDe(r, 'objeto') : '') + (ilDe(r, 'muni') ? ' (' + ilDe(r, 'muni') + ')' : ''), imp = Number(ilDe(r, 'imp')) || null, pres = ilDe(r, 'pag') === 'Sí';
+      const f = ilFecha(ilDe(r, 'fin')); if (f !== null) out.push({ t: 'plazo', fecha: f, txt: nom, id: E.id, emp: E.nombre, imp, pres, loc: true });
+      const cg = ilFecha(ilDe(r, 'cargo')); if (cg !== null && ilDe(r, 'dom') === 'Sí') out.push({ t: 'dom', fecha: cg, txt: nom + ' · cargo', id: E.id, emp: E.nombre, imp, pres, loc: true });
+    });
+    return out.concat(ntEventos());
+  }
+  // todos los vencimientos (plazo y domiciliación) de los ejercicios dados, sin repetir
+  function eventosCal(ejs, soloEmp) {
+    const ix = presIndex(), vistos = new Set(), ev = [];
+    ejs.forEach((y) => empOrden().forEach((e) => {
+      if (soloEmp && e.id !== S.sel) return;
+      obligaciones(e, y, ix).forEach((o) => {
+        const k = `${e.id}|${o.mod}|${o.per}|${o.yP}`; if (vistos.has(k)) return; vistos.add(k);
+        const nom = (/^\d+$/.test(o.mod) ? 'Mod. ' + o.mod : o.mod) + ' · ' + (o.per === 'A' || o.per === '0A' ? 'anual ' + o.yP : o.per + '/' + o.yP);
+        const base = { txt: nom, id: e.id, emp: e.nombre, sig: e.siglas ?? '', pres: o.pres, imp: o.imp };
+        ev.push({ ...base, t: 'plazo', fecha: o.fin });
+        if (MODS_PAGO.includes(o.mod) && !(o.pres && o.imp !== null && o.imp <= 0.005)) ev.push({ ...base, t: 'dom', fecha: domDe(o) });
+      });
+    }));
+    ilEventos().filter((o) => !soloEmp || o.id === S.sel).forEach((o) => ev.push({ ...o, sig: sigDe(o.id) }));
+    return ev;
+  }
+  function vistaCalFiscal() {
+    const h = new Date(), def = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0'), ym = calMes || def, y = +ym.slice(0, 4), mo = +ym.slice(5, 7), soloEmp = !!calEmp && !!S.sel;
+    const NOMM = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const ev = {};
+    eventosCal(mo <= 2 ? [y, y - 1] : [y], soloEmp).forEach((o) => { const d = new Date(o.fecha); if (d.getUTCFullYear() !== y || d.getUTCMonth() + 1 !== mo) return; (ev[d.getUTCDate()] = ev[d.getUTCDate()] || []).push(o); });
+    const nd = new Date(Date.UTC(y, mo, 0)).getUTCDate(), off = (new Date(Date.UTC(y, mo - 1, 1)).getUTCDay() + 6) % 7, hoyD = h.getFullYear() === y && h.getMonth() + 1 === mo ? h.getDate() : 0;
+    const ico = (t) => (t === 'plazo' ? '📄' : '🏦'), tipoTxt = (t) => (t === 'plazo' ? 'Fin de plazo de presentación' : 'Último día para domiciliar');
+    const chip = (o) => `<div class="calf-ev ${o.t}${o.pres ? ' pres' : ''}" style="border-left-color:${colorDe(o.id)}" title="${esc(`${tipoTxt(o.t)} · ${o.txt} · ${o.emp}${o.imp != null ? ' · ' + fnum(o.imp) : ''}${o.pres ? ' · presentado' : ''}`)}"><b>${ico(o.t)} ${esc(o.sig)}</b> ${esc(o.txt)}${o.pres ? ' ✓' : ''}</div>`;
+    const ord = (a, b) => (a.t === b.t ? 0 : a.t === 'dom' ? -1 : 1);
+    const agrupa = (es) => { // un renglón por impuesto y periodo, con las empresas
+      const G = new Map(); es.forEach((o) => { const k = o.t + '|' + o.txt; if (!G.has(k)) G.set(k, { t: o.t, txt: o.txt, its: [] }); G.get(k).its.push(o); });
+      return [...G.values()].sort((a, b) => ord(a, b) || a.txt.localeCompare(b.txt)).map((g) => {
+        const allP = g.its.every((o) => o.pres), sigs = g.its.map((o) => o.sig + (o.pres ? '✓' : '')).join(', ');
+        return `<div class="calf-ev ${g.t}${allP ? ' pres' : ''}" title="${esc(tipoTxt(g.t) + ' · ' + g.txt + '\n' + g.its.map((o) => o.emp + (o.imp != null ? ' · ' + fnum(o.imp) : '') + (o.pres ? ' · presentado' : '')).join('\n'))}"><b>${ico(g.t)} ${esc(g.txt)}</b> <span class="calf-s">${esc(sigs)}</span></div>`;
+      }).join('');
+    };
+    let celdas = '<div class="calf-d vacio"></div>'.repeat(off);
+    for (let d = 1; d <= nd; d++) {
+      const es = (ev[d] || []).sort((a, b) => ord(a, b) || String(a.sig).localeCompare(String(b.sig)));
+      celdas += `<div class="calf-d${d === hoyD ? ' hoy' : ''}${((off + d - 1) % 7) >= 5 ? ' fds' : ''}"><div class="calf-n">${d}</div>${soloEmp ? es.map(chip).join('') : agrupa(es)}</div>`;
+    }
+    const tot = Object.values(ev).flat(), nP = tot.filter((o) => o.t === 'plazo').length, nD = tot.filter((o) => o.t === 'dom').length, nPend = tot.filter((o) => o.t === 'plazo' && !o.pres).length;
+    const mesAnt = mo === 1 ? (y - 1) + '-12' : y + '-' + String(mo - 1).padStart(2, '0'), mesSig = mo === 12 ? (y + 1) + '-01' : y + '-' + String(mo + 1).padStart(2, '0');
+    return `<div class="inicio"><section class="dsec"><div class="calf-cab"><button class="small" data-act="m-calmes" data-m="${mesAnt}">‹</button><button class="small" data-act="m-calmes" data-m="${def}">Hoy</button><button class="small" data-act="m-calmes" data-m="${mesSig}">›</button>
+      <h3 style="margin:0 12px">${NOMM[mo - 1]} ${y}</h3><button class="small no-print" data-act="m-calav">⚠ Avisos de hoy</button> <label class="no-print"><input type="checkbox" data-calfemp="1"${soloEmp ? ' checked' : ''}> Solo ${esc(empresa()?.nombre ?? 'la empresa elegida')}</label>
+      <span class="dash-s" style="margin-left:auto">📄 fin de plazo de presentación (${nP}, ${nPend} sin presentar) · 🏦 último día para domiciliar (${nD}) · ✓ presentado</span></div>
+      <div class="calf-g">${['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((t) => `<div class="calf-h">${t}</div>`).join('')}${celdas}</div>
+      <p class="hint">Fin de plazo por la regla general de la AEAT de cada modelo (303, 111, 115, 123, 592, 202, 200, 349, Intrastat, 583, resúmenes anuales…). Domiciliación: último día para domiciliar el pago de los impuestos a ingresar (cinco días hábiles antes del fin de plazo). También salen los recibos de Impuestos Locales y los plazos de las Notificaciones y requerimientos pendientes.</p></section></div>`;
+  }
+  // aviso emergente: lo que vence hoy (plazo de presentación o último día de domiciliación) y no está presentado
+  function calfHoy() {
+    const h = new Date(), hoy = Date.UTC(h.getFullYear(), h.getMonth(), h.getDate());
+    return eventosCal([h.getFullYear(), h.getFullYear() - 1], false).filter((o) => !o.pres && o.fecha === hoy);
+  }
+  function calfAvisoHoy(forzar) {
+    const hoy = new Date().toISOString().slice(0, 10); let visto = '';
+    try { visto = localStorage.getItem('calfAviso') || ''; } catch { /* sin almacenamiento */ }
+    if (!forzar && visto === hoy) return;
+    const L = calfHoy();
+    if (!L.length) { if (forzar) alert('Hoy no vence nada pendiente'); return; }
+    try { localStorage.setItem('calfAviso', hoy); } catch { /* sin almacenamiento */ }
+    const fila = (o) => `<tr><td>${o.t === 'plazo' ? '📄 Fin de plazo de presentación' : '🏦 Último día para domiciliar'}</td><td><b>${esc(o.txt)}</b></td><td>${esc(o.emp)}</td><td class="num">${o.imp != null ? fnum(o.imp) : ''}</td></tr>`;
+    document.getElementById('calfAvisoOv')?.remove();
+    const ov = document.createElement('div'); ov.id = 'calfAvisoOv'; ov.className = 'no-print';
+    ov.innerHTML = `<div class="calf-av"><h3>⚠ Hoy, ${new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}, vence:</h3>
+      <table class="tabla" style="width:auto"><thead><tr><th>Qué</th><th>Impuesto</th><th>Empresa</th><th>Importe</th></tr></thead><tbody>${L.filter((o) => o.t === 'dom').map(fila).join('')}${L.filter((o) => o.t === 'plazo').map(fila).join('')}</tbody></table>
+      <p class="hint">Solo lo que no está marcado como presentado. Sale una vez al día al abrir la aplicación.</p>
+      <div style="text-align:right;margin-top:10px"><button class="small" data-v="ver">Ver Calendario Fiscal</button> <button class="small primary" data-v="ok">Entendido</button></div></div>`;
+    ov.addEventListener('click', (ev) => { const b = ev.target.closest('[data-v]'); if (!b) return; ov.remove(); if (b.dataset.v === 'ver') { S.tab = 'calf'; calMes = null; S.grp = -1; render(); } });
+    document.body.appendChild(ov);
+  }
+  [3000, 8000, 15000].forEach((t) => setTimeout(() => { try { if (S.empresas.length && !document.getElementById('calfAvisoOv')) calfAvisoHoy(false); } catch { /* aún sin datos */ } }, t));
+
   // ---------- Pestañas ----------
   const L = (id) => () => vistaLista(id);
   const D = (id) => () => vistaDocs(id);
@@ -2759,6 +2846,8 @@ export function crearModulos(c) {
   tabs.venc = ['Pagos Domiciliados Impuestos', 'Todas las empresas', vistaVenc];
   tabs.iloc = ['Impuestos Locales', 'IBI · IAE · IVTM', vistaIloc];
   tabs.dua = ['DUA-H1', 'Importaciones · IVA diferido', vistaDua];
+  tabs.calf = ['Calendario Fiscal', 'Plazos y domiciliaciones', vistaCalFiscal];
+  tabs.notif = ['Notificaciones y requerimientos', 'Plazos de respuesta', vistaNotif];
 
   // ---------- Impuestos locales: IBI, IAE, IVTM, vados · periodo voluntario y domiciliación (un registro «iloc» por recibo, con su PDF en Storage) ----------
   const IL_CAMPOS = [['tipo', 'Impuesto', 0], ['objeto', 'Objeto (ref. catastral / epígrafe / matrícula)', 26], ['muni', 'Municipio / organismo', 16], ['ej', 'Ejercicio', 6], ['imp', 'Importe (€)', 10],
@@ -2891,6 +2980,225 @@ export function crearModulos(c) {
     await cargar(); render();
   }
   const setIlVer = (v) => { ilVer = v; render(); };
+
+  // ---------- Notificaciones y requerimientos (AEAT, TGSS, Junta, ayuntamientos…): PDF → organismo, tipo, plazo, lo que reclaman y lo que hay que aportar (un registro «notif» por notificación, con su PDF en Storage) ----------
+  const NT_NUM = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, quince: 15, veinte: 20, treinta: 30 };
+  const NT_ESTADOS = ['Pendiente', 'Contestado', 'Pagado', 'Recurrido', 'Sin acción', 'Archivado'];
+  let ntVer = 'pend', ntMsg = '';
+  const ntIso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+  const ntHoyIso = () => { const n = new Date(); return ntIso(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())); };
+  const ntFecha = (s) => { const t = ilFecha(s); return t === null ? null : new Date(t); };
+  const ntHabil = (t) => { while (!esHabil(t)) t += 864e5; return new Date(t); }; // si cae en inhábil, pasa al siguiente día hábil
+  // Los registros anteriores (lista genérica) guardaban fecha / organismo / plazo (fecha) / archivo
+  const ntDe = (r, k) => {
+    const d = r.datos ?? {}, esF = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''));
+    if (k === 'org') return d.org ?? d.organismo ?? '';
+    if (k === 'fnot') return d.fnot ?? d.fecha ?? '';
+    if (k === 'fin') return d.fin ?? (esF(d.plazo) ? d.plazo : '');
+    if (k === 'plazo') return d.fin === undefined && esF(d.plazo) ? '' : d.plazo ?? '';
+    if (k === 'arch') return d.arch ?? d.archivo;
+    if (k === 'estado') return ['Respondida', 'Cerrada'].includes(d.estado) ? d.estado : d.estado || 'Pendiente';
+    return d[k] ?? '';
+  };
+  const ntRegs = (id) => S.registros.filter((r) => r.tipo === 'notif' && r.empresa_id === (id ?? S.sel));
+  function ntVence(fnot, plazo) {
+    const f = ntFecha(fnot), m = String(plazo ?? '').match(/(\d+)\s*(d[ií]as?\s*h[aá]biles|d[ií]as?\s*naturales|d[ií]as?|mes(?:es)?)/i);
+    if (!f || !m) return '';
+    const n = +m[1], u = sinAc(m[2]);
+    if (/habil/.test(u)) { let d = f.getTime(), k = 0; while (k < n) { d += 864e5; if (esHabil(d)) k++; } return ntIso(d); } // hábiles: sin sábados, domingos ni festivos nacionales, desde el día siguiente
+    if (/mes/.test(u)) return ntIso(ntHabil(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + n, f.getUTCDate())));
+    return ntIso(ntHabil(f.getTime() + n * 864e5));
+  }
+  function ntLeer(t, nombre) {
+    const U = sinAc(t).toUpperCase(), ls = t.split('\n').map((x) => x.trim()).filter(Boolean), T1 = t.replace(/\s+/g, ' ');
+    const iso = (s) => { const m = String(s || '').match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : ''; }, D8 = '(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{4})';
+    const MES = { ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6, JULIO: 7, AGOSTO: 8, SEPTIEMBRE: 9, OCTUBRE: 10, NOVIEMBRE: 11, DICIEMBRE: 12 };
+    const campo = (re) => { const m = t.match(new RegExp('(?:^|\\n)\\s*' + re + '[\\s.…·]*:[\\s.…·:]*([^\\n]+)', 'i')); return m ? m[1].trim() : ''; };
+    const eur = (v) => { v = String(v || '').trim(); if (/^\d+\.\d{1,2}$/.test(v)) v = v.replace('.', ','); return v; };
+    const r = { pdf: nombre, estado: 'Pendiente' };
+    /* organismo y dependencia */
+    const dep = (ls.find((x) => /^(DEPENDENCIA (REGIONAL )?DE |DEP\. REG\. |DEPARTAMENTO DE |ADMINISTRACI[OÓ]N DE |UNIDAD DE )/i.test(x)) || '').replace(/\s+/g, ' ');
+    const aeat = /AGENCIA ?TRIBUTARIA|AGENCIATRIBUTARIA|\bAEAT\b|DELEGACION (ESPECIAL )?DE /.test(U) && !/AGENCIA TRIBUTARIA DE ANDALUCIA/.test(U);
+    r.org = aeat ? 'AEAT' + (dep ? ' · ' + dep.replace(/^DEP\. REG\./i, 'Dep. Regional').toLowerCase().replace(/(^|\s)([a-záéíóú])/g, (a, b, c) => b + c.toUpperCase()).replace(/\bE\b/g, 'e').replace(/\bDe\b/g, 'de').replace(/\bIi\.ee\./i, 'II.EE.') : '') : /AGENCIA TRIBUTARIA DE ANDALUCIA/.test(U) ? 'Agencia Tributaria de Andalucía' : /TESORERIA GENERAL DE LA SEGURIDAD SOCIAL|\bTGSS\b/.test(U) ? 'TGSS' : /INSPECCION DE TRABAJO/.test(U) ? 'Inspección de Trabajo' : /CATASTRO/.test(U) ? 'Catastro' : /SERVICIO PROVINCIAL TRIBUTARIO|DIPUTACION/.test(U) ? 'Diputación (Servicio Provincial Tributario)' : (U.match(/AYUNTAMIENTO DE ([A-Z ]{3,30})/) || [])[1] ? 'Ayto. ' + U.match(/AYUNTAMIENTO DE ([A-Z ]{3,30})/)[1].trim() : /REGISTRO MERCANTIL/.test(U) ? 'Registro Mercantil' : '';
+    /* título del documento: primera línea en mayúsculas tras «Documento:» */
+    const iDoc = ls.findIndex((x) => /^Documento\s*:/i.test(x)); let tit = '';
+    for (let k = Math.max(0, iDoc + 1); k < Math.min(ls.length, iDoc + 8); k++) { const x = ls[k]; if (x.length > 8 && x === x.toUpperCase() && /[A-ZÁÉÍÓÚ]{4}/.test(x) && !/^(N\.I\.F|NIF|IDENTIFICACI)/.test(x)) { tit = x; if (ls[k + 1] && ls[k + 1] === ls[k + 1].toUpperCase() && ls[k + 1].length < 60 && !/^(IDENTIFICACI|N\.I\.F)/.test(ls[k + 1]) && /[A-Z]{4}/.test(ls[k + 1])) tit += ' ' + ls[k + 1]; break; } }
+    { const k = ls.findIndex((x) => /RESUMEN INFORMATIVO/i.test(x)); if (k >= 0 && ls[k + 1]) tit = ls[k + 1]; }
+    r.asunto = tit.replace(/\s+/g, ' ');
+    const UT = sinAc(r.asunto).toUpperCase() + ' ' + U.slice(0, 3000);
+    const TIP = [[/NOTA INFORMATIVA|COMUNICACION INFORMATIVA|NO CONSTITUYE UN REQUERIMIENTO/, 'Informativa'], [/PROVIDENCIA DE APREMIO/, 'Providencia de apremio'], [/DILIGENCIA DE EMBARGO DE CREDITOS/, 'Diligencia de embargo de créditos (a terceros)'], [/DILIGENCIA DE EMBARGO/, 'Diligencia de embargo'], [/ACUERDO DE IMPOSICION DE SANCION|RESOLUCION SANCIONADORA|ACUERDO SANCIONADOR/, 'Sanción'], [/INICIO (DE(L)? )?(UN |DEL )?(EXPEDIENTE|PROCEDIMIENTO) SANCIONADOR|PROPUESTA DE (IMPOSICION DE )?SANCION/, 'Expediente sancionador'], [/PROPUESTA DE LIQUIDACION/, 'Propuesta de liquidación'], [/RESOLUCION EXPRESA|RESOLUCION DEL PROCEDIMIENTO|NO PROCEDE PRACTICAR LIQUIDACION/, 'Resolución'], [/LIQUIDACION/, 'Liquidación'], [/COMPROBACION LIMITADA/, 'Comprobación limitada'], [/VERIFICACION DE DATOS/, 'Verificación de datos'], [/ACTUACIONES INSPECTORAS|PROCEDIMIENTO INSPECTOR/, 'Inspección'], [/REQUERIMIENTO/, 'Requerimiento'], [/DEVOLUCION/, 'Devolución'], [/RECURSO|RECLAMACION/, 'Recurso / reclamación'], [/COMUNICACION/, 'Comunicación']];
+    r.tipo = (TIP.find(([re]) => re.test(sinAc(r.asunto).toUpperCase())) || TIP.find(([re]) => re.test(UT)) || [, 'Notificación'])[1];
+    /* referencia y concepto */
+    r.ref = campo('Documento') || campo('N[º°]\\s*de la diligencia') || campo('Referencia') || campo('N[º°o]?\\.?\\s*(?:de\\s*)?Expediente') || campo('Expediente') || ((T1.match(/C[oó]digo Seguro (?:de )?Verificaci[oó]n\s*(?:\(CSV\))?\s*[:.]?\s*([A-Z0-9]{12,})/i) || [])[1] || '');
+    r.ref = r.ref.split(/\s{2,}|\s+N[º°]/)[0].trim();
+    const conc = campo('Concepto(?: tributario)?') || campo('Impuesto') || campo('Tributo'), mot = campo('Motivo'), dua = campo('DUA') || ((campo('Referencia').match(/\b\d{2}ES[0-9A-Z]{14}\b/) || [])[0] || ''), refx = campo('Referencia');
+    const mod = (t.match(/Modelo\s*[:.]?\s*(\d{3})\b/i) || [])[1], ej = (t.match(/Ejercicio\s*[.…:]*\s*((?:19|20)\d{2})/i) || [])[1], per = (t.match(/Per[ií]odo\s*[.…:]*\s*(0[1-9]|1[0-2]|[1-4]T|0A)\b/i) || [])[1];
+    r.concepto = [conc, mot, dua ? 'DUA ' + dua : (refx && !r.ref.includes(refx) ? 'Ref. ' + refx : ''), mod && !conc.includes(mod) ? 'Modelo ' + mod : '', ej ? 'Ejercicio ' + ej : '', per ? 'Periodo ' + per.toUpperCase() : ''].filter(Boolean).join(' · ').slice(0, 160);
+    /* fechas */
+    const fd = [...t.matchAll(/,?\s*a\s+(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+((?:19|20)\d{2})/gi)].map((m) => (MES[sinAc(m[2]).toUpperCase()] ? m[3] + '-' + String(MES[sinAc(m[2]).toUpperCase()]).padStart(2, '0') + '-' + m[1].padStart(2, '0') : '')).filter(Boolean);
+    const fe = T1.match(/Fecha de emisi[oó]n[\s\S]{0,90}?(\d{2}[/\-.]\d{2}[/\-.]\d{4})/i), ff = T1.match(/firmado electr[oó]nicamente[\s\S]{0,220}?(\d{1,2}) de ([a-záéíóú]+) de ((?:19|20)\d{2})/i);
+    if (ff && MES[sinAc(ff[2]).toUpperCase()]) fd.unshift(ff[3] + '-' + String(MES[sinAc(ff[2]).toUpperCase()]).padStart(2, '0') + '-' + ff[1].padStart(2, '0'));
+    if (fe) fd.unshift(iso(fe[1]));
+    r.fdoc = iso((T1.match(new RegExp('Fecha de (?:la diligencia|la resoluci[oó]n|la propuesta|emisi[oó]n|del acuerdo|del documento|la liquidaci[oó]n)\\s*[:.]?\\s*' + D8, 'i')) || [])[1]) || iso((T1.match(new RegExp('firmado electr[oó]nicamente[\\s\\S]{0,160}?con fecha\\s*' + D8, 'i')) || [])[1]) || fd[0] || '';
+    r.fnot = iso((T1.match(new RegExp('fecha (?:de )?(?:notificaci[oó]n|aceptaci[oó]n|comparecencia|acceso al contenido|recepci[oó]n)\\D{0,25}' + D8, 'i')) || [])[1]) || r.fdoc || ntHoyIso();
+    /* importe */
+    const im = T1.match(/(?:importe (?:a ingresar|total)(?: de(?: la deuda)?)?|total a ingresar|deuda tributaria|importe de la deuda|importe de la sanci[oó]n|deuda pendiente)\s*(?:\(euros\)|\(€\))?\s*[:.]?\s*(-?\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2})\s*(?:euros|€)?/i); if (im) r.imp = eur(im[1]);
+    /* plazo según el acto */
+    const NUMS = '(\\d+|un|uno|dos|tres|cinco|diez|quince|veinte|treinta)', pm = T1.match(new RegExp('plazo\\s+(?:improrrogable\\s+)?(?:m[aá]ximo\\s+)?(?:de\\s+)?' + NUMS + '\\s+(?:\\(\\d+\\)\\s+)?(d[ií]as?\\s+h[aá]biles|d[ií]as?\\s+naturales|mes(?:es)?)', 'i')) || T1.match(new RegExp('durante\\s+' + NUMS + '\\s+(d[ií]as?\\s+h[aá]biles)', 'i'));
+    const plz = pm ? ((/^\d+$/.test(pm[1]) ? +pm[1] : NT_NUM[sinAc(pm[1])]) + ' ' + pm[2].toLowerCase()) : '';
+    const pago62 = () => { const f = ntFecha(r.fnot); if (!f) return ''; const d = f.getUTCDate(), y = f.getUTCFullYear(), m = f.getUTCMonth(); return ntIso(ntHabil(d <= 15 ? Date.UTC(y, m + 1, 20) : Date.UTC(y, m + 2, 5))); };
+    if (r.tipo === 'Informativa') { r.estado = 'Sin acción'; r.plazo = ''; r.fin = ''; }
+    else if (r.tipo === 'Resolución' && /NO PROCEDE PRACTICAR LIQUIDACION|SE ESTIMA|ANULANDO/.test(U)) { r.estado = 'Sin acción'; r.plazo = 'recurso: 1 mes'; r.fin = ntVence(r.fnot, '1 mes'); }
+    else if (r.tipo === 'Providencia de apremio') { r.plazo = 'apremio (art. 62.5 LGT)'; const f = ntFecha(r.fnot); if (f) { const d = f.getUTCDate(), y = f.getUTCFullYear(), m = f.getUTCMonth(); r.fin = ntIso(ntHabil(d <= 15 ? Date.UTC(y, m, 20) : Date.UTC(y, m + 1, 5))); } }
+    else if (/^(Liquidación|Sanción)$/.test(r.tipo)) { r.plazo = 'pago voluntario (art. 62.2 LGT)'; r.fin = pago62(); }
+    else { r.plazo = plz || (/Requerimiento|Propuesta|Expediente sancionador|Diligencia de embargo de créditos|Comprobación|Verificación/.test(r.tipo) ? '10 días hábiles' : ''); r.fin = ntVence(r.fnot, r.plazo); }
+    /* resumen de lo que reclaman y lo que hay que aportar */
+    const sec = (ini, fin) => { const a = ls.findIndex((x) => ini.test(x)); if (a < 0) return []; const o = []; for (let k = a + 1; k < ls.length && o.length < 25; k++) { if (fin.test(ls[k])) break; o.push(ls[k]); } return o; };
+    const deu = T1.match(/derechos de cobro de\s+(.+?),\s*con NIF:?\s*([A-Z0-9]{9})/i);
+    const res = [];
+    if (r.tipo === 'Informativa') res.push('Comunicación informativa: no constituye requerimiento, no hay que contestar.');
+    if (r.tipo === 'Resolución' && /NO PROCEDE PRACTICAR LIQUIDACION/.test(U)) res.push('Resolución favorable: no procede practicar liquidación provisional.');
+    if (/ANULANDO|SE ESTIMA/.test(U) && r.tipo === 'Resolución') res.push('Se estima el recurso/alegación y se anula la propuesta de liquidación.');
+    if (r.tipo === 'Liquidación' || r.tipo === 'Sanción') res.push(r.tipo + (mot ? ' · ' + mot : '') + (r.imp ? ': importe a ingresar ' + r.imp + ' €' : '') + '. Pagar en periodo voluntario (art. 62.2 LGT) o recurrir (reposición o TEAR en 1 mes).');
+    if (r.tipo === 'Propuesta de liquidación') res.push('Propuesta de liquidación' + (mot ? ' · ' + mot : '') + (r.imp ? ': ' + r.imp + ' €' : '') + '. Trámite de alegaciones: ' + (r.plazo || '10 días hábiles') + '.');
+    if (deu) res.push('Embargo de los créditos de ' + deu[1] + ' (NIF ' + deu[2] + ')' + (r.imp ? ' por ' + r.imp + ' €' : '') + '. La empresa no es deudora: contestar el anexo indicando si hay cantidades pendientes de pago y relación comercial, e ingresar lo que se le deba.');
+    const KW = /requier|solicit|se le comunica|se ha detectado|se han detectado|discrepanc|no consta|no ha presentado|omisi|incumpl|alegaciones|subsan|regulariz|se propone|se acuerda|procede|fuera del plazo|importe a ingresar/i, RUIDO = /art[ií]culo|\bLey\b|Reglamento|recurso de reposici|reclamaci[oó]n econ[oó]mico|podr[aá]n ser presentad|protecci[oó]n de datos|c[oó]digo seguro|sede electr[oó]nica|puede consultar|ADI|tel[eé]fono|cita/i;
+    const frases = T1.split(/(?<=\.)\s+(?=[A-ZÁÉÍÓÚ¿])/).map((x) => x.trim()).filter((x) => x.length > 30 && x.length < 400 && KW.test(x) && !RUIDO.test(x));
+    r.reclaman = [...new Set(res.concat(frases.slice(0, res.length ? 2 : 5)))].join('\n').slice(0, 1500);
+    let ap = sec(/^¿Qu[eé] tiene que hacer\?/i, /^¿Tiene dudas|^¿|^App AEAT|C[oó]digo Seguro/i);
+    if (!ap.length) {
+      const ini = ls.findIndex((x) => /documentaci[oó]n (?:a aportar|requerida|que (?:debe|deber[aá]) aportar|solicitada)|deber[aá] aportar|aporte la siguiente|aportar la siguiente|la siguiente documentaci[oó]n|se le requiere para que aporte/i.test(x));
+      if (ini >= 0) { const tope = /^(PLAZO|LUGAR|FORMA|ADVERTENCIA|RECURSOS|INFORMACI[OÓ]N|CONSECUENCIAS|EFECTOS|El plazo|En caso de no|Si no atiende|Firmado|Puede presentar|App AEAT)/i; for (let k = ini; k < ls.length && ap.length < 25; k++) { if (k > ini && tope.test(ls[k])) break; ap.push(ls[k]); } }
+    }
+    if (!ap.length) { if (r.tipo === 'Propuesta de liquidación') ap = ['Alegaciones y documentos o justificantes (opcional), por registro electrónico de la Sede, en ' + (r.plazo || '10 días hábiles') + '. Si no se alega, se dicta la liquidación.']; else if (/^(Liquidación|Sanción|Providencia de apremio)$/.test(r.tipo)) ap = ['Ingreso con la carta de pago antes del ' + (r.fin ? r.fin.split('-').reverse().join('/') : 'fin de plazo') + ' (o aplazamiento / recurso).']; else if (r.estado === 'Sin acción') ap = ['Nada.']; }
+    if (!ap.length) ap = ls.filter((x) => /^([-•·▪]|\d{1,2}[.)º]\s|[a-z]\)\s)/.test(x)).slice(0, 15);
+    r.aportar = ap.join('\n').slice(0, 2000);
+    return r;
+  }
+  // propuesta de actuación conforme a la normativa (orientativa: revisar con el expediente)
+  function ntSolucion(r) {
+    const U = sinAc((r.asunto || '') + ' ' + (r.concepto || '') + ' ' + (r.reclaman || '')).toUpperCase(), imp = parseES(String(r.imp || '')) || 0, fin = r.fin ? r.fin.split('-').reverse().join('/') : '', o = [];
+    const rec = 'Si no se está de acuerdo: recurso de reposición (art. 223 LGT) o reclamación económico-administrativa ante el TEAR (art. 235 LGT), en el plazo de 1 mes desde el día siguiente a la notificación; para no pagar mientras se recurre, solicitar la suspensión con garantía (art. 224 y 233 LGT).';
+    const apl = 'Si no hay liquidez: solicitar aplazamiento o fraccionamiento dentro del periodo voluntario (art. 65 LGT y 44 RGR; sin garantía hasta 50.000 €), lo que evita el periodo ejecutivo.';
+    switch (r.tipo) {
+      case 'Requerimiento': o.push('Atender el requerimiento en plazo' + (fin ? ' (hasta el ' + fin + ')' : '') + ' por el registro electrónico de la Sede, aportando solo lo pedido y dentro del alcance indicado (art. 29.2.f y 93 LGT; art. 87 RGAT).', 'Si no da tiempo, pedir ampliación de plazo antes de que venza: hasta la mitad del plazo inicial (art. 91 RGAT).', 'No atenderlo puede ser infracción por resistencia u obstrucción (art. 203 LGT), con multa de 150 € en adelante y, si se reitera, mayor.', 'Revisar antes si el ejercicio está prescrito (4 años, art. 66 LGT) o si la información ya obra en poder de la Administración (art. 34.1.h LGT): en ese caso, indicarlo en la contestación.'); break;
+      case 'Propuesta de liquidación': o.push('Revisar el cálculo de la propuesta' + (imp ? ' (' + r.imp + ' €)' : '') + ' frente a la declaración y la documentación.', 'Si no es correcta: presentar alegaciones y pruebas en el trámite de audiencia' + (fin ? ' hasta el ' + fin : '') + ' (art. 99.8 y 34.1.l LGT; en comprobación limitada, art. 138-140 LGT).', 'Si es correcta: no alegar (o renunciar al trámite por escrito) y pagar cuando llegue la liquidación en el plazo del art. 62.2 LGT.');
+        if (/RECARGO/.test(U)) o.push('Recargo por presentación extemporánea sin requerimiento (art. 27 LGT): 1 % + 1 % por mes completo de retraso (15 % pasados 12 meses), sin sanción. Comprobar los meses de retraso computados; si se paga en plazo y sin recurrir, procede la reducción del 25 % del art. 27.5 LGT (si no está ya aplicada).'); break;
+      case 'Liquidación': o.push('Pagar' + (imp ? ' ' + r.imp + ' €' : '') + ' en periodo voluntario' + (fin ? ' hasta el ' + fin : '') + ' (art. 62.2 LGT: notificada del 1 al 15, hasta el 20 del mes siguiente; del 16 al último, hasta el 5 del segundo mes) con la carta de pago, para evitar el recargo de apremio (art. 28 LGT).');
+        if (/RECARGO/.test(U)) o.push('Es un recargo del art. 27 LGT: si se paga en plazo y no se recurre, reducción del 25 % (art. 27.5 LGT) si no estaba aplicada.'); o.push(apl, rec); if (imp && imp < 300) o.push('Por la cuantía, lo eficiente es pagar salvo error claro.'); break;
+      case 'Sanción': o.push('Revisar la motivación de la culpabilidad (art. 179 y 183 LGT): sin ella, la sanción es recurrible con buenas posibilidades.', 'Si se acepta: reducción del 30 % por conformidad (si procede) y del 40 % adicional por pronto pago, pagando en el plazo del art. 62.2 LGT y sin recurrir (art. 188 LGT).', 'La sanción recurrida queda suspendida automáticamente sin garantía en vía administrativa (art. 212.3 LGT).', rec); break;
+      case 'Expediente sancionador': o.push('Alegaciones en 15 días hábiles (art. 23 RGRST) aportando las pruebas; valorar la falta de culpabilidad, interpretación razonable de la norma o error (art. 179.2.d LGT).', 'Valorar la conformidad: reducción del 30 % (art. 188.1 LGT) más el 40 % por pronto pago sin recurrir (art. 188.3 LGT).'); break;
+      case 'Providencia de apremio': o.push('Pagar' + (imp ? ' la deuda' : '') + (fin ? ' hasta el ' + fin : '') + ' (art. 62.5 LGT) para quedarse en el recargo de apremio reducido del 10 % y evitar el 20 % más intereses y el embargo (art. 28 LGT).', 'Solo cabe oponerse por los motivos tasados del art. 167.3 LGT: extinción o prescripción de la deuda, solicitud de aplazamiento, compensación o suspensión en periodo voluntario, falta de notificación de la liquidación, anulación de la liquidación o error en la identificación.', apl); break;
+      case 'Diligencia de embargo de créditos (a terceros)': o.push('Contestar el anexo' + (fin ? ' hasta el ' + fin : '') + ' (único medio: electrónico) indicando si a la fecha de recepción hay facturas o importes pendientes de pago al deudor y si hay relación comercial continuada (art. 162 LGT y 79-81 RGR).', 'Comprobar en cuentas a pagar (proveedores 400/410) los saldos con el deudor y bloquear sus pagos: lo que se le deba se ingresa en el Tesoro hasta cubrir el importe embargado, no al proveedor.', 'Pagar al deudor tras la diligencia o no contestar puede hacer a la empresa responsable solidaria hasta el importe embargado (art. 42.2.b LGT).'); break;
+      case 'Diligencia de embargo': o.push('Comprobar la deuda de origen y su notificación; para levantar el embargo, pagar o solicitar aplazamiento (art. 65 LGT).', 'Oposición solo por los motivos del art. 170.3 LGT (extinción, prescripción, falta de notificación de la providencia de apremio, incumplimiento de normas de embargo o suspensión).'); break;
+      case 'Comprobación limitada': case 'Verificación de datos': o.push('Preparar la documentación del alcance indicado y aportarla en plazo (art. 136-140 o 131-133 LGT). Revisar que la Administración no se salga del alcance comunicado.', 'Antes de la liquidación habrá propuesta y trámite de alegaciones: es el momento de aportar pruebas.'); break;
+      case 'Inspección': o.push('Designar representante con poder (art. 46 LGT), preparar la documentación pedida y controlar el plazo del procedimiento (18 o 27 meses, art. 150 LGT).', 'Valorar la firma en conformidad (reducción del 30 % de la sanción) o en disconformidad con alegaciones, y el acta con acuerdo (reducción del 65 %, art. 155 y 188.1 LGT).'); break;
+      case 'Resolución': o.push(/NO PROCEDE PRACTICAR LIQUIDACION|ANULANDO|SE ESTIMA/.test(U) ? 'Resolución favorable: archivar el expediente y, si se pagó algo, comprobar la devolución de ingresos indebidos con intereses (art. 32 y 221 LGT).' : 'Revisar el contenido; si es desfavorable, ' + rec); break;
+      case 'Devolución': o.push('Comprobar importe, intereses de demora a favor (art. 31 LGT si pasan 6 meses) y la cuenta de abono; contabilizar el cobro.'); break;
+      case 'Informativa': o.push('No requiere respuesta. Comprobar si afecta a la empresa' + (/INTRASTAT/.test(U) ? ' (Intrastat: la empresa ya lo presenta mensualmente; vigilar el umbral de 400.000 € por flujo)' : /GASES FLUORADOS/.test(U) ? ' (impuesto sobre gases fluorados: solo si se importan o adquieren en la UE HFC, PFC o SF6, incluidos en equipos)' : '') + ' y archivar.'); break;
+      default: o.push('Leer el acto, identificar plazo y pretensión de la Administración y, si exige respuesta, contestar en plazo por la Sede. ' + rec);
+    }
+    return o.map((x) => '• ' + x).join('\n');
+  }
+  async function ntCargar(files) {
+    let n = 0, act = 0; const mal = [], otras = new Set();
+    for (const f of files.filter((x) => /\.pdf$/i.test(x.name))) {
+      try {
+        ntMsg = `Leyendo ${f.name}…`; render();
+        const t = (await textoPdf(f)).split('\n').filter((l) => l.trim() && !l.startsWith('--- página')).map((l) => l.replace(/\s+/g, ' ').trim()).join('\n');
+        if (!t.trim()) { mal.push(`${f.name} (sin texto)`); continue; }
+        const r = ntLeer(t, f.name), nifs = [...new Set([...t.matchAll(/\b([ABCDEFGHJNPQRSUVW]\d{7}[0-9A-J])\b/g)].map((m) => m[1]))], E = S.empresas.find((q) => nifs.includes(q.cif)), id = E ? E.id : S.sel;
+        if (E && E.id !== S.sel) otras.add(E.nombre);
+        r.key = (r.ref || f.name) + '|' + (r.asunto || r.tipo);
+        r.solucion = ntSolucion({ ...r, reclaman: (r.reclaman || '') + ' ' + t.slice(0, 4000) });
+        const prev = ntRegs(id).find((q) => q.datos?.key === r.key), regId = prev?.id ?? crypto.randomUUID(), sub = await subir(id, 'notif', regId, 'pdf', f);
+        if (sub.error) mal.push(`${f.name} (PDF no guardado: ${sub.error})`);
+        let datos = { ...r, arch: sub.val ?? (prev ? ntDe(prev, 'arch') : undefined) };
+        if (prev) {
+          const v = prev.datos ?? {};
+          datos = { ...datos, estado: v.estado || r.estado, fresp: v.fresp, obs: v.obs, solucion: v.solMan ? v.solucion : r.solucion, solMan: v.solMan, fnot: v.fnotMan ? v.fnot : r.fnot, fnotMan: v.fnotMan };
+          if (v.fnotMan) datos.fin = ntVence(v.fnot, datos.plazo) || datos.fin;
+        }
+        const err = await guardarRegistro(prev, prev ? { datos } : { id: regId, empresa_id: id, tipo: 'notif', ejercicio: null, datos });
+        if (err) { mal.push(`${f.name} (${err})`); continue; }
+        if (prev) act++; else n++;
+      } catch (err) { mal.push(`${f.name} (${err.message})`); }
+    }
+    ntMsg = `${n} notificación(es) nueva(s)${act ? ` · ${act} actualizada(s)` : ''}${otras.size ? ` · guardadas en ${[...otras].join(', ')}` : ''}${mal.length ? ` · sin leer: ${mal.join(', ')}` : ''}`;
+    await cargar(); render();
+  }
+  function vistaNotif() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), ed = puede(), D = ntRegs(), hoy = ilFecha(ntHoyIso());
+    const L = D.filter((r) => ntVer === 'todas' || ntDe(r, 'estado') === 'Pendiente').sort((a, b) => String(ntDe(a, 'fin') || '9').localeCompare(String(ntDe(b, 'fin') || '9')));
+    const sit = (r) => {
+      const est = ntDe(r, 'estado'); if (est !== 'Pendiente') return `<span class="d-ok">✓ ${esc(est)}${ntDe(r, 'fresp') ? ' el ' + esc(String(ntDe(r, 'fresp')).split('-').reverse().join('/')) : ''}</span>`;
+      const f = ilFecha(ntDe(r, 'fin')); if (f === null) return '<span style="color:#777">sin plazo</span>';
+      const d = Math.round((f - hoy) / 864e5);
+      return d < 0 ? `<b style="color:#a50e0e">VENCIDO hace ${-d} día(s)</b>` : d === 0 ? '<b style="color:#a50e0e">vence HOY</b>' : d <= 5 ? `<b style="color:#b06000">vence en ${d} día(s)</b>` : `en plazo · ${d} días`;
+    };
+    const inp = (r, k, w, tp) => `<input${tp ? ` type="${tp}"` : ''} class="facin" data-nt="${r.id}|${k}" value="${esc(ntDe(r, k))}"${w ? ` size="${w}"` : ''}${ed ? '' : ' readonly'}>`;
+    const sel = (r, k, ops) => (ed ? `<select data-nt="${r.id}|${k}">${ops.map((o) => `<option${o === ntDe(r, k) ? ' selected' : ''}>${o}</option>`).join('')}</select>` : esc(ntDe(r, k)));
+    const ta = (r, k, filas, extra = '') => `<textarea data-nt="${r.id}|${k}" rows="${filas}" style="width:100%${extra}"${ed ? '' : ' readonly'}>${esc(k === 'solucion' ? ntDe(r, k) || ntSolucion({ ...(r.datos ?? {}), tipo: ntDe(r, 'tipo'), fin: ntDe(r, 'fin') }) : ntDe(r, k))}</textarea>`;
+    const pend = D.filter((r) => ntDe(r, 'estado') === 'Pendiente');
+    const tarjeta = (r) => {
+      const a = ntDe(r, 'arch'), est = ntDe(r, 'estado'), f = ilFecha(ntDe(r, 'fin'));
+      return `<div class="nt-card" ${a?.path ? `data-ntpdf="${esc(a.path)}" title="Doble clic: abrir ${esc(a.nombre || '')}"` : ''} style="border:1px solid #d0d7e2;border-left:6px solid ${est !== 'Pendiente' ? '#1a7f37' : (f !== null && f - hoy <= 5 * 864e5 ? '#b42318' : '#1f3864')};border-radius:6px;padding:8px 10px;margin:10px 0;${a?.path ? 'cursor:pointer' : ''}">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center"><b>${esc(ntDe(r, 'tipo') || 'Notificación')}</b>${ntDe(r, 'asunto') ? ` <span class="leyenda">(${esc(ntDe(r, 'asunto'))})</span>` : ''} · ${inp(r, 'org', 22)} · Ref. ${inp(r, 'ref', 22)} · ${inp(r, 'concepto', 34)} <span style="margin-left:auto">${sit(r)}</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:6px">Documento ${inp(r, 'fdoc', 0, 'date')} Notificado ${inp(r, 'fnot', 0, 'date')} Plazo ${inp(r, 'plazo', 16)} Vence ${inp(r, 'fin', 0, 'date')} Importe ${inp(r, 'imp', 11)} Estado ${sel(r, 'estado', NT_ESTADOS.includes(est) ? NT_ESTADOS : [...NT_ESTADOS, est])} Fecha ${inp(r, 'fresp', 0, 'date')} <span class="leyenda">📄 ${esc(ntDe(r, 'pdf') || a?.nombre || '')}</span> ${ed ? `<button class="small no-print" data-act="m-ntdel" data-id="${r.id}">Quitar</button>` : ''}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"><label><b>Lo que reclaman / motivo</b>${ta(r, 'reclaman', 6)}</label><label><b>Documentación a aportar</b>${ta(r, 'aportar', 6)}</label></div>
+        <label style="display:block;margin-top:6px"><b>Propuesta de actuación conforme a la normativa</b> <span class="leyenda">(orientativa: contrastar con el expediente)</span> ${ed ? `<button class="small no-print" data-act="m-ntsol" data-id="${r.id}">Rehacer</button>` : ''}${ta(r, 'solucion', 5, ';background:#f4f8ff')}</label>
+        <div style="margin-top:4px">Observaciones ${inp(r, 'obs', 90)}</div></div>`;
+    };
+    return `${bloqueAvisosNt(['Suelta los PDF de notificaciones (AEAT, TGSS, Agencia Tributaria de Andalucía, Diputación, ayuntamientos, Catastro…): se leen organismo, tipo de acto, referencia, concepto, fecha, plazo e importe, lo que reclaman y la documentación a aportar. El vencimiento se calcula desde la fecha de notificación (cámbiala si la aceptaste otro día): días hábiles sin sábados, domingos ni festivos nacionales; apremio, hasta el 20 o el 5 según el art. 62.5 LGT. Revisa siempre el plazo en el propio documento. Los pendientes salen en el Calendario Fiscal y en el aviso del día.'])}
+      ${ed ? dz('notif', 'Suelta aquí los PDF de notificaciones y requerimientos', 'sin límite, o pulsa para elegirlos. Doble clic en una notificación para abrir su PDF.', '.pdf') : ''}
+      <section class="dsec"><h3>Notificaciones y requerimientos · ${esc(e.nombre)} · <select data-ntver="1"><option value="pend"${ntVer === 'pend' ? ' selected' : ''}>Pendientes (${pend.length})</option><option value="todas"${ntVer === 'todas' ? ' selected' : ''}>Todas (${D.length})</option></select></h3>
+      ${ntMsg ? `<p class="dash-s">${esc(ntMsg)}</p>` : ''}
+      ${L.map(tarjeta).join('') || `<p class="leyenda">${ntVer === 'pend' ? 'Sin notificaciones pendientes de contestar.' : 'Sin notificaciones.'}</p>`}
+      ${ed ? '<button class="small no-print" data-act="m-ntadd">+ Añadir a mano</button>' : ''}</section>`;
+  }
+  const bloqueAvisosNt = (l) => `<div class="aviso">${l.map((t) => `<div>${esc(t)}</div>`).join('')}</div>`;
+  async function guardarNt(clave, valor) {
+    const [id, k] = clave.split('|'), reg = S.registros.find((r) => r.id === id);
+    if (!reg) return;
+    const datos = { ...(reg.datos ?? {}) }, v = String(valor).trim();
+    if (k === 'fin' && datos.fin === undefined && datos.plazo && /^\d{4}-\d{2}-\d{2}$/.test(datos.plazo)) datos.plazo = '';
+    datos[k] = v; if (k === 'solucion') datos.solMan = 1;
+    if (k === 'fnot' || k === 'plazo') { if (k === 'fnot') datos.fnotMan = 1; const nv = ntVence(datos.fnot ?? ntDe(reg, 'fnot'), datos.plazo); if (nv) datos.fin = nv; }
+    if (k === 'estado' && v !== 'Pendiente' && !datos.fresp) datos.fresp = ntHoyIso();
+    const err = await guardarRegistro(reg, { datos });
+    if (err) return void alert(err);
+    await cargar();
+    if (/^(fnot|plazo|fin|estado|fresp)$/.test(k)) render();
+  }
+  async function ntAnadir() {
+    const fnot = ntHoyIso(), err = await guardarRegistro(null, { id: crypto.randomUUID(), empresa_id: S.sel, tipo: 'notif', ejercicio: null, datos: { tipo: 'Requerimiento', estado: 'Pendiente', fnot, plazo: '10 días hábiles', fin: ntVence(fnot, '10 días hábiles'), key: 'man-' + Date.now() } });
+    if (err) return void alert(err);
+    ntVer = 'todas'; await cargar(); render();
+  }
+  async function ntRehacer(id) {
+    const reg = S.registros.find((r) => r.id === id);
+    if (!reg) return;
+    const d = { ...(reg.datos ?? {}) }; d.solucion = ntSolucion({ ...d, fin: ntDe(reg, 'fin') }); delete d.solMan;
+    const err = await guardarRegistro(reg, { datos: d });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  async function ntQuitar(id) {
+    const reg = S.registros.find((r) => r.id === id);
+    if (!reg || !confirm('¿Quitar esta notificación?')) return;
+    await quitarArchivos(rutas({ a: ntDe(reg, 'arch') }));
+    const { error } = await db.from('registros').delete().eq('id', id);
+    if (error) return void alert(error.message);
+    await cargar(); render();
+  }
+  const setNtVer = (v) => { ntVer = v; render(); };
+  // plazos de las notificaciones pendientes de todas las empresas, para el Calendario Fiscal y el aviso del día
+  const ntEventos = () => S.registros.filter((r) => r.tipo === 'notif').flatMap((r) => {
+    const f = ilFecha(ntDe(r, 'fin')); if (f === null) return [];
+    const E = S.empresas.find((q) => q.id === r.empresa_id);
+    return [{ t: 'plazo', fecha: f, txt: `Notificación · ${ntDe(r, 'tipo')}${ntDe(r, 'org') ? ' ' + ntDe(r, 'org') : ''}${ntDe(r, 'concepto') ? ' · ' + ntDe(r, 'concepto') : ''}`, id: r.empresa_id, emp: E?.nombre ?? '', imp: parseES(String(ntDe(r, 'imp'))) || null, pres: ntDe(r, 'estado') !== 'Pendiente', loc: true }];
+  });
 
   // ---------- DUA-H1 (importación, IVA diferido): un registro «dua» por declaración, con su PDF en Storage ----------
   const DUA_CAMPOS = [['num', 'Número del DUA'], ['grab', 'Fecha de grabación'], ['levante', 'Fecha de levante'], ['aduana', 'Aduana de presentación'], ['importador', 'Importador'], ['declarante', 'Declarante'], ['expedidor', 'Expedidor / exportador'],
@@ -3332,6 +3640,11 @@ export function crearModulos(c) {
       'm-iladd': () => ilAnadir(),
       'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
+      'm-calmes': () => setCalMes(d.m),
+      'm-calav': () => calfAvisoHoy(true),
+      'm-ntadd': () => ntAnadir(),
+      'm-ntdel': () => ntQuitar(d.id),
+      'm-ntsol': () => ntRehacer(d.id),
       'm-d365carpeta': () => d365Carpeta(d.c),
       'm-d365recoger': () => d365Recoger(true),
       'm-new': () => formReg(d.m),
@@ -4007,7 +4320,7 @@ export function crearModulos(c) {
   const M7 = crearEstados({ S, esc, render, empresa, dz, db, cargar, puede, filasExcel: (f) => filasExcel(f) });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
-  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
