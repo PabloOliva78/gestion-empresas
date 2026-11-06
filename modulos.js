@@ -1090,12 +1090,13 @@ export function crearModulos(c) {
   const claveL = (l) => [l.asiento, l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo].join('|');
   const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const sentidoTab = () => (S.tab === 'fr' ? 'R' : 'E');
+  const paisL = (l) => l.pais || paisDe(l.nif); // el país escrito a mano en la línea manda sobre el del NIF
 
   function lineasFc(s, datos) {
     const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
     let f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
     if (fcCod) f = f.filter((l) => l.codigo === fcCod);
-    if (fcPais) f = f.filter((l) => paisDe(l.nif) === fcPais);
+    if (fcPais) f = f.filter((l) => paisL(l) === fcPais);
     if (fcQ) { const q = sinAc(fcQ); f = f.filter((l) => sinAc(`${l.nif} ${l.nombre} ${l.factura}`).includes(q) || buscaImporte(l, fcQ)); }
     return f;
   }
@@ -1147,20 +1148,20 @@ export function crearModulos(c) {
     const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
     const ci = (l, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-fce="${s}|${idx.get(l)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
     const filas = f.map((l) => { // todas las líneas del periodo, sin límite
-      const p = paisDe(l.nif);
-      return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
-        <td>${p}</td>${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
-        <td class="num">${/^R\.RC\./.test(l.codigo) ? eur(l.cuota) : ''}</td><td>${esc(clasif(l.codigo))}${l.manual ? ' <span class="hint">a mano</span>' : ''}</td><td class="acc">${acc(l)}</td></tr>`;
+      const p = paisL(l);
+      return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(s === 'E' ? l.fecha : l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
+        ${ci(l, 'pais', p)}${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
+        ${ci(l, 'rec', l.rec !== undefined ? fnum(l.rec) : (/^R\.RC\./.test(l.codigo) ? fnum(l.cuota) : ''), 'num')}${ci(l, 'clasif', l.clasif ?? clasif(l.codigo))}<td class="acc">${l.manual ? '<span class="hint">a mano</span> ' : ''}${acc(l)}</td></tr>`;
     }).join('');
     const nv = fcNueva?.s === s && puede() ? (() => {
       const ni = (c, ph, cls = '') => `<td class="in ${cls}"><input data-fcnv="${c}" value="${esc(fcNueva[c] ?? '')}" placeholder="${ph}"${c === 'codigo' ? ' list="fcCods"' : ''}></td>`;
-      return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}${ni('factura', 'nº factura', 'tl')}${ni('nif', 'NIF', 'tl')}${ni('nombre', 'nombre', 'tl')}<td></td>${ni('codigo', 'código')}${ni('base', 'base', 'num')}${ni('pct', '% IVA', 'num')}${ni('cuota', 'cuota (auto)', 'num')}<td></td><td></td>
+      return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}<td></td><td></td>${ni('factura', 'nº factura', 'tl')}${ni('nif', 'NIF', 'tl')}${ni('nombre', 'nombre', 'tl')}<td></td>${ni('codigo', 'código')}${ni('base', 'base', 'num')}${ni('pct', '% IVA', 'num')}${ni('cuota', 'cuota (auto)', 'num')}<td></td><td></td>
         <td class="acc"><button class="pill" data-act="m-fcnvok">✔ Añadir</button><button class="pill" data-act="m-fcnvx">✕</button></td></tr>`;
     })() : '';
     const codsDl = `<datalist id="fcCods">${[...new Set(datos.map((l) => l.codigo))].sort().map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`;
     const sinRet = f.filter((l) => !/^(R\.)?I\./.test(l.codigo)); // el total no incluye las retenciones (misma base que la factura)
-    const tot = `<tr><td colspan="6"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="3"></td></tr>`;
-    return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
+    const tot = `<tr><td colspan="8"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="3"></td></tr>`;
+    return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Asiento</th><th>${s === 'R' ? 'Fecha factura' : 'Fecha contable'}</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
       <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
   }
 
@@ -1177,7 +1178,7 @@ export function crearModulos(c) {
     const c = cuerpoFc(s, datos);
     return `<div class="fc-cab"><label>Ver <select data-glob="periodo">${per}</select></label>
       <label>Código ${sel('cod', fcCod, [...new Set(datos.map((l) => l.codigo))].sort())}</label>
-      <label>País ${sel('pais', fcPais, [...new Set(datos.map((l) => paisDe(l.nif)))].sort())}</label>
+      <label>País ${sel('pais', fcPais, [...new Set(datos.map((l) => paisL(l)))].sort())}</label>
       <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}"><span id="fcCuenta" class="hint">${c.n} facturas</span>
       ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
       <div id="fcTabla">${c.html}</div>`;
@@ -1197,7 +1198,8 @@ export function crearModulos(c) {
     const [s, i, campo] = clave.split('|'), tipo = `fact-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
     if (!l) return;
     const nl = { ...l };
-    if (campo === 'fecha') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); if (s === 'E') nl.ff = f; else nl.fecha = f; }
+    if (campo === 'fecha' || campo === 'fecha2') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); if ((s === 'E') === (campo === 'fecha')) nl.ff = f; else nl.fecha = f; }
+    else if (['pais', 'clasif', 'rec'].includes(campo)) { const v = valor.trim(); if (v === '') delete nl[campo]; else nl[campo] = campo === 'rec' ? parseES(v) : campo === 'pais' ? v.toUpperCase() : v; }
     else if (['base', 'cuota', 'pct'].includes(campo)) nl[campo] = parseES(valor);
     else if (campo === 'nif' || campo === 'codigo') nl[campo] = valor.trim().toUpperCase();
     else nl[campo] = valor.trim();
@@ -1236,8 +1238,9 @@ export function crearModulos(c) {
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
     const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
     const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
-    if (err) return void alert(err);
+    if (err) { alert(/statement timeout/i.test(err) ? 'La base de datos ha tardado demasiado en guardar el libro (es muy grande). Amplía el tiempo máximo de las consultas: ejecuta supabase/05_timeout.sql en el editor SQL de Supabase.' : err); return false; }
     GR.set(`${tipo}|${empresaId}`, filas);
+    return true;
   }
 
   // ± signo · → pasar al otro libro · ✕ línea · ✕ factura
@@ -1256,9 +1259,13 @@ export function crearModulos(c) {
     } else if (op === 'mover') {
       const otro = s === 'E' ? 'R' : 'E';
       if (!confirm(`¿Pasar esta línea al libro de ${otro === 'R' ? 'recibidas' : 'emitidas'}?`)) return;
-      const { data } = await db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', 'fact-' + otro).maybeSingle();
-      await reemplazarGrande('fact-' + otro, S.sel, [...(data?.datos?.filas ?? []), { ...l, sentido: otro }], data);
+      const cuenta = document.getElementById('fcCuenta'); if (cuenta) cuenta.textContent = 'Moviendo la línea… los libros grandes tardan unos segundos';
+      const { data, error } = await db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', 'fact-' + otro).maybeSingle();
+      if (error) return void alert(/statement timeout/i.test(error.message) ? 'La base de datos ha tardado demasiado: ejecuta supabase/05_timeout.sql en el editor SQL de Supabase.' : error.message);
+      if (!(await reemplazarGrande('fact-' + otro, S.sel, [...(data?.datos?.filas ?? []), { ...l, sentido: otro }], data))) return render();
       nuevo = arr.filter((_, j) => j !== i);
+      if (!(await reemplazarGrande(tipo, S.sel, nuevo))) { alert('La línea ya está en el otro libro, pero no se ha podido quitar de este: quítala a mano para que no quede repetida.'); GR.delete(`fact-${otro}|${S.sel}`); }
+      return render();
     }
     await reemplazarGrande(tipo, S.sel, nuevo);
     render();
