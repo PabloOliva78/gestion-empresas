@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=156';
+import { crearModulos } from './modulos.js?v=157';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -778,6 +778,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.ilver !== undefined) return void M.setIlVer(t.value);
   if (t.dataset.il) return void M.guardarIl(t.dataset.il, t.value);
   if (t.dataset.lt) return void M.setLt(t.dataset.lt, t.checked);
+  if (t.dataset.ltmodo) return void M.setLtModo(t.dataset.ltmodo, t.value);
   if (t.dataset.ltfreq) return void M.setLtFreq(t.dataset.ltfreq, t.value);
   if (t.dataset.pgmes !== undefined) return void M.setPgMes(t.value);
   if (t.dataset.pgman) return void M.setPgMan(t.dataset.pgman, t.value);
