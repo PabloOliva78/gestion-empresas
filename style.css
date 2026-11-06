@@ -967,3 +967,19 @@ table.ca-t th:nth-child(3),table.ca-t th:nth-child(4){width:150px}
 #calfAvisoOv{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:3000;display:flex;align-items:center;justify-content:center}
 #calfAvisoOv .calf-av{background:#fff;border-top:6px solid #d93025;border-radius:8px;padding:18px 22px;max-width:900px;max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35)}
 #calfAvisoOv h3{margin:0 0 10px;color:#a50e0e;font-size:1rem}
+
+/* La tarjeta con las pestañas de cada bloque toma el color de la empresa elegida */
+.gpanel { background: var(--emp, #14286a); }
+.gpanel-h { background: linear-gradient(90deg, color-mix(in srgb, var(--emp, #1b2a78) 55%, #fff), var(--emp, #1b2a78)); }
+.gpanel .tile:hover, .gpanel .tile.on { border-color: color-mix(in srgb, var(--emp, #3b82f6) 60%, #fff); }
+
+/* Pagos domiciliados: empresas × banco × fecha de cargo */
+table.pagos-t { width: auto; min-width: 60%; border-collapse: collapse; font-size: .78rem; }
+table.pagos-t th { background: #e6ecf7; color: #1d2a4d; border: 1px solid #8a9bb8; padding: .35rem .5rem; text-align: center; font-weight: 600; }
+table.pagos-t td { border-left: 1px dotted #8a9bb8; border-right: 1px dotted #8a9bb8; padding: .3rem .5rem; white-space: nowrap; }
+table.pagos-t td.pg-e { white-space: nowrap; font-weight: 600; color: #1d2a4d; }
+table.pagos-t td.pg-tot { background: #d9d9d9; font-weight: 700; }
+table.pagos-t td.pend { color: #b00; }
+table.pagos-t tr.pg-sum td { background: #d9d9d9; font-weight: 700; border-top: 1px solid #8a9bb8; }
+.pg-in { text-align: right; border: 0; background: transparent; width: 7em; }
+.pg-auto { color: #667085; }

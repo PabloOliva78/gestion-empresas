@@ -420,19 +420,68 @@ export function crearModulos(c) {
     let L = empOrden().filter((e) => pago || !S.sel || e.id === S.sel).flatMap((e) => obligaciones(e, ej, ix)); // liquidaciones: solo la empresa elegida
     if (pago) L = L.filter((o) => MODS_PAGO.includes(o.mod));
     L = filtroLista(L, hoy).sort((a, b) => a.fin - b.fin || String(a.e.nombre).localeCompare(String(b.e.nombre)) || a.mod.localeCompare(b.mod));
-    const dom = (o) => { let t = o.fin - 5 * 864e5; while (!esHabil(t)) t -= 864e5; return t; };
     const fila = (o) => { const k = `${o.yPres}|${o.clave}|${o.pk}`, manual = ix.marcas.has(`${o.e.id}|${k}`);
       return `<tr class="${o.pres ? 'fila-ok' : estadoOb(o, hoy) === 'venc' ? 'fila-pend' : ''}"><td>${esc(o.e.nombre)}</td><td class="c">${/^\d+$/.test(o.mod) ? 'Modelo ' + esc(o.mod) : esc(o.mod)}</td><td class="c">${esc(perTxt(o))}</td>
-        <td class="c">${fechaTxt(pago ? dom(o) : o.fin)}</td>${pago ? `<td>${esc(o.e.datos?.banco ?? '')}</td>` : ''}<td class="num">${o.imp === null ? '—' : fnum(o.imp)}</td><td class="c">${chipEst(estadoOb(o, hoy), o.fin)}</td>
+        <td class="c">${fechaTxt(o.fin)}</td>${pago ? `<td>${esc(bancoEmp(o.e, o.mod))}</td>` : ''}<td class="num">${o.imp === null ? '—' : fnum(o.imp)}</td>${pago ? `<td class="c">${o.imp > 0 ? (() => { const s = estPago(o.e.id, o), col = { dom: '#1f3864', pag: '#0a6', pend: '#b00' }[s]; return ed ? `<select data-pgest="${o.e.id}|${esc(claveEst(o))}" style="color:${col};font-weight:600">${[['dom', 'Domiciliado'], ['pag', 'Pagado'], ['pend', 'Pendiente de pago']].map(([v, t]) => `<option value="${v}"${v === s ? ' selected' : ''}>${t}</option>`).join('')}</select>` : { dom: 'Domiciliado', pag: 'Pagado', pend: 'Pendiente de pago' }[s]; })() : ''}</td>` : ''}<td class="c">${chipEst(estadoOb(o, hoy), o.fin)}</td>
         <td class="c">${ed ? (o.pres && !manual ? '' : `<button class="small" data-act="m-liqmarca" data-e="${o.e.id}" data-k="${esc(k)}">${manual ? 'Quitar marca' : 'Marcar presentado'}</button>`) : ''}</td></tr>`; };
     return `<div class="bar"><span class="chip">${S.periodo ? esc(PERIODOS[S.periodo] ?? S.periodo) : 'Vencidos y próximos 45 días'} · ${ej}</span>
         <label>Ver <select data-liqver="1"><option value="pend"${liqVer === 'pend' ? ' selected' : ''}>Pendientes</option><option value="todas"${liqVer === 'todas' ? ' selected' : ''}>Todas</option></select></label><span class="space"></span></div>
-      ${L.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Modelo</th><th>Periodo</th><th>${pago ? 'Fecha de cargo' : 'Vencimiento'}</th>${pago ? '<th>Banco</th>' : ''}<th class="num">Importe</th><th>Estado</th><th></th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`
+      ${L.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Modelo</th><th>Periodo</th><th>${pago ? 'Fecha de cargo' : 'Vencimiento'}</th>${pago ? '<th>Banco</th>' : ''}<th class="num">Importe</th>${pago ? '<th>Estado de pago</th>' : ''}<th>Estado</th><th></th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`
         : `<p class="vacio">${esc(titulo)}: nada pendiente en este periodo.</p>`}
-      <p class="hint">${pago ? 'Fecha de cargo: cinco días antes del fin de plazo (día hábil). ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
+      <p class="hint">${pago ? 'Fecha de cargo: el último día del plazo de presentación. ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
   }
   const vistaLiq = () => tablaOb('Liquidaciones a presentar', false);
-  const vistaVenc = () => tablaOb('Pagos domiciliados', true);
+  // ---------- Pagos domiciliados: empresas × banco × fecha de cargo (como el cuadro de la antigua) ----------
+  // Un registro «estpago» por empresa: est = {clave de la liquidación: 'pag' | 'pend'} (sin clave = domiciliado) y man = {AAAA-MM: {pagado, pend}} a mano
+  const MES_L = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  let pgMes = null;
+  const pgReg = (id) => S.registros.find((r) => r.tipo === 'estpago' && r.empresa_id === id);
+  const claveEst = (o) => `${o.mod}|${o.yP}|${o.per}`;
+  const estPago = (id, o) => pgReg(id)?.datos?.est?.[claveEst(o)] ?? 'dom';
+  const bancoEmp = (e, mod) => { const ib = String(e.datos?.[`cuenta${mod}`] ?? '').trim(); return bancoDe(ib) || ib || String(e.datos?.banco ?? '').trim() || 'Sin banco'; };
+  const mesPagos = () => pgMes ?? (/^\d\d$/.test(S.periodo) ? +S.periodo : /^[1-4]T$/.test(S.periodo) ? +S.periodo[0] * 3 : Math.max(1, new Date().getMonth()));
+  async function guardarPg(id, cambia) {
+    const reg = pgReg(id), datos = { est: { ...(reg?.datos?.est ?? {}) }, man: { ...(reg?.datos?.man ?? {}) } };
+    cambia(datos);
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: id, tipo: 'estpago', ejercicio: null, datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  const setPgEst = (clave, v) => { const [id, k] = [clave.slice(0, clave.indexOf('|')), clave.slice(clave.indexOf('|') + 1)]; return guardarPg(id, (d) => { if (v === 'dom') delete d.est[k]; else d.est[k] = v; }); };
+  const setPgMan = (clave, v) => { const [per, id, campo] = clave.split('|'); return guardarPg(id, (d) => { d.man[per] = { ...(d.man[per] ?? {}), [campo]: parseES(v) || 0 }; }); };
+  const setPgMes = (v) => { pgMes = +v; render(); };
+  function calcPagos() {
+    const ej = Number(S.ejercicio), m = mesPagos(), y2 = m === 12 ? ej + 1 : ej, m2 = m === 12 ? 1 : m + 1, ix = presIndex(), clavePer = `${ej}-${String(m).padStart(2, '0')}`;
+    const cargo = (o) => o.fin; // fecha de cargo = último día de presentación
+    const delMes = (o) => { const d = new Date(cargo(o)); return d.getUTCFullYear() === y2 && d.getUTCMonth() + 1 === m2; };
+    const todas = empOrden().map((e) => ({ e, os: obligaciones(e, ej, ix).filter((o) => MODS_PAGO.includes(o.mod) && delMes(o)) }));
+    const items = todas.flatMap((x) => x.os.filter((o) => o.imp > 0).map((o) => ({ ...o, banco: bancoEmp(o.e, o.mod), fc: cargo(o) })));
+    const bancos = [...new Set(items.map((f) => f.banco))].sort((a, b) => (a === 'Sin banco') - (b === 'Sin banco') || a.localeCompare(b));
+    const fechas = [...new Set(items.map((f) => f.fc))].sort((a, b) => a - b);
+    const filas = todas.map(({ e, os }) => {
+      const c = {}; let pagAuto = 0, pendAuto = 0;
+      items.filter((f) => f.e.id === e.id).forEach((f) => { const s = estPago(e.id, f); if (s === 'pag') pagAuto = rr(pagAuto + f.imp); else if (s === 'pend') pendAuto = rr(pendAuto + f.imp); else { const k = `${f.banco}|${f.fc}`; c[k] = rr((c[k] || 0) + f.imp); } });
+      const mm = pgReg(e.id)?.datos?.man?.[clavePer] ?? {}, pagadoMan = Number(mm.pagado) || 0, pendMan = Number(mm.pend) || 0, pagado = rr(pagadoMan + pagAuto), pend = rr(pendMan + pendAuto);
+      return { e, c, pagado, pagadoMan, pagAuto, pend, pendMan, pendAuto, tot: rr(Object.values(c).reduce((s, v) => s + v, 0) + pagado + pend), sinImp: os.filter((o) => !o.pres).length };
+    });
+    return { ej, m, clavePer, bancos, fechas, filas, titulo: `${MES_L[m - 1].toUpperCase()} ${ej} - ${Math.ceil(m / 3)}º TRIMESTRE ${String(ej).slice(2)}` };
+  }
+  function tablaPagos() {
+    const P = calcPagos(), ed = puede(), nF = Math.max(1, P.fechas.length), fd = (t) => fechaTxt(t);
+    const cab1 = P.bancos.map((b) => `<th colspan="${nF}" class="mes">${esc(b.toUpperCase())}</th>`).join('');
+    const cab2 = P.bancos.map(() => P.fechas.map((t) => `<th>${fd(t)}</th>`).join('') || '<th>-</th>').join('');
+    const celdas = (fr) => P.bancos.map((b) => P.fechas.map((t) => { const v = fr.c[`${b}|${t}`]; return `<td class="num">${v ? fnum(v) : '-'}</td>`; }).join('') || '<td class="num">-</td>').join('');
+    const inp = (fr, k, v) => (ed ? `<input class="num pg-in" data-pgman="${P.clavePer}|${fr.e.id}|${k}" value="${v ? fnum(v) : ''}" placeholder="-" size="9">` : v ? fnum(v) : '-');
+    const celdaMan = (fr, k, auto, man) => `<td class="num${k === 'pend' ? ' pend' : ''}">${auto && !man ? fnum(auto) : (auto ? `<span class="pg-auto">${fnum(auto)} + </span>` : '') + inp(fr, k, man)}</td>`;
+    const totCol = (b, t) => rr(P.filas.reduce((s, fr) => s + (fr.c[`${b}|${t}`] || 0), 0));
+    const filas = P.filas.map((fr, i) => `<tr style="background:${FONDO_EMP[i % FONDO_EMP.length]}"><td class="pg-e" style="border-left:6px solid ${colorDe(fr.e.id)}"><b>${esc(fr.e.nombre)}</b>${fr.sinImp ? ` <span class="dash-s" title="${fr.sinImp} liquidación(es) de este mes sin presentar">(${fr.sinImp} sin presentar)</span>` : ''}</td>${celdas(fr)}
+      ${celdaMan(fr, 'pagado', fr.pagAuto, fr.pagadoMan)}${celdaMan(fr, 'pend', fr.pendAuto, fr.pendMan)}<td class="num pg-tot">${fnum(fr.tot)}</td></tr>`).join('');
+    return `<section class="dsec sec-pagos"><h3>PAGOS DOMICILIADOS <span class="dash-s">· ${esc(P.titulo)}</span> <label class="no-print" style="font-weight:400">Periodo <select data-pgmes="1">${MES_L.map((n, i) => `<option value="${i + 1}"${P.m === i + 1 ? ' selected' : ''}>${n} ${P.ej}</option>`).join('')}</select></label></h3>
+      <p class="hint">Importes de los impuestos que se cargan el mes siguiente, de la pestaña Presentados de cada empresa. Fecha: último día de presentación de cada impuesto. Cada impuesto va a una sola columna según su estado (Domiciliado → su banco y fecha · Pagado · Pendiente de pago), que se elige en el calendario de abajo; en Pagado y Pendiente también se puede añadir importe a mano.</p>
+      <div class="wrap"><table class="tabla pagos-t"><thead><tr><th rowspan="2">Empresa</th>${cab1}<th rowspan="2">PAGADO</th><th rowspan="2">PENDIENTE DE PAGO</th><th rowspan="2">TOTALES</th></tr><tr>${cab2}</tr></thead><tbody>${filas}
+      <tr class="pg-sum"><td>TOTALES</td>${P.bancos.map((b) => P.fechas.map((t) => `<td class="num">${fnum(totCol(b, t))}</td>`).join('') || '<td></td>').join('')}<td class="num">${fnum(rr(P.filas.reduce((s, f) => s + f.pagado, 0)))}</td><td class="num">${fnum(rr(P.filas.reduce((s, f) => s + f.pend, 0)))}</td><td class="num">${fnum(rr(P.filas.reduce((s, f) => s + f.tot, 0)))}</td></tr></tbody></table></div></section>`;
+  }
+  const vistaVenc = () => `<div class="inicio">${S.empresas.length ? tablaPagos() : ''}</div>${tablaOb('Calendario de vencimientos', true)}`;
   const setLiqVer = (v) => { liqVer = v; render(); };
   const setCmgMod = (v) => { cmgMod = v; render(); };
 
@@ -4332,5 +4381,5 @@ export function crearModulos(c) {
   Object.assign(badges, M7.badges);
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
