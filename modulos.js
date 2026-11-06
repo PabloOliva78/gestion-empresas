@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=41';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=42';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=10';
@@ -1223,7 +1223,8 @@ export function crearModulos(c) {
     if (!E || !R) return cargandoTxt;
     if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
     const e = empresa(), ej = Number(S.ejercicio), p = S.periodo;
-    const c = calcular303(E, R, ej, p, manuales(), { rectif: rectif303, c110: p ? disponible303(E, R, ej, p) : 0 });
+    const d110 = p ? disponible303(E, R, ej, p) : 0; // cuotas a compensar de periodos previos que salen de Presentados
+    const c = calcular303(E, R, ej, p, manuales(), { rectif: rectif303, c110: d110 });
     const g = c.G, mm = c.man, ro = puede() ? '' : ' readonly';
     const bx = (n, v, cls = '') => `<span class="bx ${cls}"><b>${n}</b><span class="v">${fnum(v)}</span></span>`;
     const inp = (n, k, v) => `<span class="bx man"><b>${n}</b><input data-man="${k}" value="${fnum(v)}"${ro}></span>`;
@@ -1257,6 +1258,7 @@ export function crearModulos(c) {
         ${fila('', bx('01', g.rg4.base), bx('02', 4, 't'), bx('03', g.rg4.cuota))}
         ${fila('', bx('04', g.rg10.base), bx('05', 10, 't'), bx('06', g.rg10.cuota))}
         ${fila('', bx('07', g.rg21.base), bx('08', 21, 't'), bx('09', g.rg21.cuota))}
+        ${c.otros.map((o) => fila(`Otro tipo${nota('casilla por verificar')}`, bx('¿?', o.base, 'warn'), bx('¿?', o.tipo, 'warn t'), bx('¿?', o.cuota, 'warn'))).join('')}
         ${fila('Adquisiciones intracomunitarias de bienes y servicios', bx('10', g.intra.base), '', bx('11', g.intra.cuota))}
         ${fila('Otras operaciones con inversión del sujeto pasivo (excepto adq. intracom.)', bx('12', g.isp.base), '', bx('13', g.isp.cuota))}
         ${fila('Modificación bases y cuotas', bx('14', c.b14), '', bx('15', c.c14))}
@@ -1289,8 +1291,10 @@ export function crearModulos(c) {
         ${fila('Suma de resultados ( [46] )', '', '', bx('64', c.c46))}
         ${fila('% Atribuible a la Administración del Estado', '', '', inp('65', 'pct65', c.pct))}
         ${fila('Atribuible a la Administración del Estado', '', '', bx('66', c.c66))}
-        ${fila(`IVA a la importación liquidado por la Aduana pendiente de ingreso${nota('suma de DUA, DUARED, DUALCNR y DUALCRED')}`, '', '', bx('77', c.c77))}
-        ${fila(`Cuotas a compensar pendientes de periodos previos${nota(`303 de ${prevTxt}: 87 + resultado a compensar (71), pestaña Presentados`)}`, '', '', bx('110', c.c110))}
+        ${c.hayDua ? fila(`IVA a la importación liquidado por la Aduana pendiente de ingreso${nota('suma de DUA, DUARED, DUALCNR y DUALCRED')}`, '', '', bx('77', c.c77))
+          : fila('IVA a la importación liquidado por la Aduana pendiente de ingreso', '', '', inp('77', 'c77', c.c77))}
+        ${d110 > 0 && !mm.c110 ? fila(`Cuotas a compensar pendientes de periodos previos${nota(`303 de ${prevTxt}: 87 + resultado a compensar (71), pestaña Presentados`)}`, '', '', bx('110', c.c110))
+          : fila('Cuotas a compensar pendientes de periodos previos', '', '', inp('110', 'c110', c.c110))}
         ${hay(P3.apl) ? fila(`Cuotas a compensar de periodos previos aplicadas en este periodo${etP}`, '', '', bx('78', c78v)) : fila('Cuotas a compensar de periodos previos aplicadas en este periodo', '', '', inp('78', 'c78', c.c78))}
         ${fila(`Cuotas a compensar de periodos previos pendientes para periodos posteriores${hay(P3.c87) ? etP : ' ( [110] − [78] )'}`, '', '', bx('87', c87v))}
         ${fila('Exclusivamente para sujetos pasivos que tributan conjuntamente a la Administración del Estado y a las Haciendas Forales. Resultado de la regularización anual', '', '', inp('68', 'c68', c.c68))}
@@ -1440,7 +1444,9 @@ export function crearModulos(c) {
     let tabla, importe = 0;
     if (modelo === '111') {
       const z = (a, b, c_) => fila('', man(a, `k${a}`, true), man(b, `k${b}`), man(c_, `k${c_}`));
-      const aut = { n: mv('t1'), s: (np ? np.s : 0) + mv('t2'), r: (np ? np.r : 0) + mv('t3') }; // nÃ³minas + ajuste a mano, como en la antigua
+      // rendimientos del trabajo: pestaña Nóminas o, si no hay nóminas del mes, las líneas I.NM del libro de soportado; + ajuste a mano (como en la antigua)
+      const lT = !np && S.periodo ? lineasListado('111', R, Number(S.ejercicio), perEf(e, S.periodo)).filter((x) => x.k[0] === '111T') : [];
+      const aut = { n: new Set(lT.map((x) => x.ni || x.no)).size + mv('t1'), s: (np ? np.s : rr(lT.reduce((a, x) => a + x.b, 0))) + mv('t2'), r: (np ? np.r : rr(lT.reduce((a, x) => a + x.re, 0))) + mv('t3') };
       const ret = aut.r + mv('k06') + c.ret + mv('k12') + mv('k15') + mv('k18') + mv('k21') + mv('k24') + mv('k27');
       importe = ret - mv('c29');
       tabla = `${aeat('Retenciones e ingresos a cuenta. Rendimientos del trabajo y de actividades económicas, premios y determinadas ganancias patrimoniales e imputaciones de rentas. Autoliquidación')}

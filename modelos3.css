@@ -57,3 +57,4 @@ table.t200c.solo tbody tr:not(.conimp) { display: none; }
 .cas200-grid > div { display: flex; gap: 6px; align-items: center; border-bottom: 1px dotted #d6dbe6; padding: 2px 0; }
 .cas200-grid > div b { margin-left: auto; } .cas200-grid > div.usada { background: #fffbdd; }
 table.m200t td.pdfok { background: #e3f4e3; }
+.f202 .chk202 input { width: auto; display: inline-block; margin: 0 6px 0 0; vertical-align: middle; padding: 0; }
