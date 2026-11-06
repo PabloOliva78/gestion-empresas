@@ -1,7 +1,7 @@
 // Bloque 2 · Información Registro Mercantil (portado de la aplicación antigua).
 // Datos Registrales y Titularidad Real: se suelta el PDF o Excel y se leen los datos, con el archivo de origen.
 export function crearRegistral(c) {
-  const { db, S, esc, render, cargar, empresa, puede, leerPdf, filasExcel, ocrPdf } = c;
+  const { db, S, esc, render, cargar, empresa, puede, leerPdf, filasExcel, ocrPdf, eur } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   let msg = '', msgMal = false;
   const aviso = (m, mal = false) => { msg = m; msgMal = mal; render(); };
@@ -26,7 +26,7 @@ export function crearRegistral(c) {
       [...porY.entries()].sort((a, b) => b[0] - a[0]).forEach(([, l]) => { l.sort((a, b) => a.x - b.x); l.pag = p + 1; lineas.push(l); });
       todo += `${items.map((i) => i.s).join(' ')}\n`;
     });
-    return { lineas, todo };
+    return { lineas, todo, n: pags.length };
   }
   const textoLineas = (lineas) => lineas.map((l) => l.map((i) => i.s).join('  ')).join('\n');
 
@@ -88,7 +88,7 @@ export function crearRegistral(c) {
     if (/\.pdf$/i.test(f.name)) {
       const { lineas } = await lineasDe(f);
       const t = textoLineas(lineas);
-      return t.trim() ? t : (ocrPdf ? ocrPdf(f, (m) => aviso(`${f.name}: ${m}`)) : '');
+      return t.trim() ? t : (await ocrPdf(f, (m) => aviso(`${f.name}: ${m}`))).join('\n');
     }
     const filas = await filasExcel(f);
     return (filas ?? []).map((r) => (r ?? []).map((v) => celdaTxt(v).trim()).filter(Boolean).join('  ')).join('\n');
@@ -119,7 +119,7 @@ export function crearRegistral(c) {
   function vistaDreg() {
     const e = empresa();
     if (!e) return sinEmpresa;
-    const d = dregDe(e); dregDesdeCenso(e, d);
+    const d = dregDe(e); dregDesdeCenso(e, d); dregDesdeCA(e, d); dregDesdeEsc(e, d);
     const ed = puede();
     const av = d.nif && nifEmp() && d.nif !== nifEmp() ? `<p class="aviso">El NIF leído (${esc(d.nif)}) no coincide con el de la empresa seleccionada (${esc(nifEmp())})</p>` : '';
     const arch = d._arch;
@@ -350,7 +350,7 @@ export function crearRegistral(c) {
         if (/\.pdf$/i.test(file.name)) {
           const { lineas, todo } = await lineasDe(file);
           texto = textoLineas(lineas);
-          if (!texto.trim() && ocrPdf) { texto = await ocrPdf(file, (m) => aviso(`${file.name}: ${m}`)); R = trlDeTexto(texto.split('\n')); }
+          if (!texto.trim()) { texto = (await ocrPdf(file, (m) => aviso(`${file.name}: ${m}`))).join('\n'); R = trlDeTexto(texto.split('\n')); }
           else R = /DECLARACI[OÓ]N DE IDENTIFICACI[OÓ]N DEL TITULAR REAL/i.test(todo) && /I\.a/.test(todo) ? trlDeFormTR(lineas) : trlDeTexto(lineas);
         } else {
           const filas = await filasExcel(file), sh = [{ rows: filas ?? [] }];
@@ -413,8 +413,789 @@ export function crearRegistral(c) {
   }
   async function trlCab(k, v) { const D = trlDe(); D.cab[k] = v; await trlGuardar(D, false); }
 
+  // ================= Organigrama / Accionariado (común a todo el grupo) =================
+  // Excel con casillas (socios y sociedades) unidas con flechas y el % de cada participación → participaciones
+  async function accLeerOrganigrama(buf) {
+    if (!window.JSZip) throw new Error('No se ha podido cargar el lector de Excel (JSZip). Revisa la conexión a internet.');
+    const zip = await window.JSZip.loadAsync(buf), dp = new DOMParser();
+    const leer = async (p) => { const f = zip.file(p); return f ? dp.parseFromString(await f.async('string'), 'application/xml') : null; };
+    const all = (d, t) => (d ? Array.from(d.getElementsByTagNameNS('*', t)) : []);
+    const ss = all(await leer('xl/sharedStrings.xml'), 'si').map((si) => all(si, 't').map((t) => t.textContent).join(''));
+    const wbRels = all(await leer('xl/_rels/workbook.xml.rels'), 'Relationship'), wb = await leer('xl/workbook.xml');
+    const res = [];
+    for (const sh of all(wb, 'sheet')) {
+      const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+      const rel = wbRels.find((r) => r.getAttribute('Id') === rid);
+      if (!rel) continue;
+      const path = `xl/${rel.getAttribute('Target').replace(/^\/?xl\//, '').replace(/^\.\//, '')}`;
+      const doc = await leer(path);
+      if (!doc) continue;
+      const col2n = (s) => s.split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+      const ref = (r) => { const m = r.match(/^([A-Z]+)(\d+)$/); return { c: col2n(m[1]), r: +m[2] - 1 }; };
+      const fm = all(doc, 'sheetFormatPr')[0];
+      const defW = fm && fm.getAttribute('defaultColWidth') ? +fm.getAttribute('defaultColWidth') : (fm && fm.getAttribute('baseColWidth') ? +fm.getAttribute('baseColWidth') + 0.71 : 8.43);
+      const defH = fm && fm.getAttribute('defaultRowHeight') ? +fm.getAttribute('defaultRowHeight') : 15;
+      const cw = {}; all(doc, 'col').forEach((q) => { for (let i = +q.getAttribute('min'); i <= +q.getAttribute('max'); i++) cw[i - 1] = +q.getAttribute('width'); });
+      const rh = {}; all(doc, 'row').forEach((q) => { if (q.getAttribute('ht')) rh[+q.getAttribute('r') - 1] = +q.getAttribute('ht'); });
+      const wpx = (q) => Math.round((cw[q] !== undefined ? cw[q] : defW) * 7 + 5), hpx = (q) => ((rh[q] !== undefined ? rh[q] : defH) * 96) / 72;
+      const X = (q) => { let s = 0; for (let i = 0; i < q; i++) s += wpx(i); return s; }, Y = (q) => { let s = 0; for (let i = 0; i < q; i++) s += hpx(i); return s; };
+      const merges = all(doc, 'mergeCell').map((m) => { const [a, b] = m.getAttribute('ref').split(':').map(ref); return { c1: a.c, r1: a.r, c2: b.c, r2: b.r }; });
+      const celdas = [];
+      all(doc, 'c').forEach((q) => {
+        const v = all(q, 'v')[0], t = q.getAttribute('t'); let val = null;
+        if (t === 's' && v) val = ss[+v.textContent]; else if (t === 'inlineStr') val = all(q, 't').map((x) => x.textContent).join(''); else if (v) val = t === 'str' ? v.textContent : +v.textContent;
+        if (val === null || val === '' || (typeof val === 'string' && !val.trim())) return;
+        const p = ref(q.getAttribute('r')); const m = merges.find((mm) => mm.c1 === p.c && mm.r1 === p.r) || { c1: p.c, r1: p.r, c2: p.c, r2: p.r };
+        celdas.push({ val, x1: X(m.c1), x2: X(m.c2 + 1), y1: Y(m.r1), y2: Y(m.r2 + 1), ref: q.getAttribute('r') });
+      });
+      const segs = [];
+      const shRels = await leer(path.replace(/worksheets\/(sheet\d+\.xml)$/, 'worksheets/_rels/$1.rels'));
+      const dRel = all(shRels, 'Relationship').find((r) => /drawing$/.test(r.getAttribute('Type') || ''));
+      if (dRel) {
+        const dd = await leer(`xl/${dRel.getAttribute('Target').replace(/^\.\.\//, '')}`);
+        all(dd, 'twoCellAnchor').forEach((a) => {
+          const sp = all(a, 'cxnSp')[0] || all(a, 'sp')[0];
+          if (!sp) return;
+          const prst = (all(sp, 'prstGeom')[0] || { getAttribute: () => '' }).getAttribute('prst') || '';
+          if (!/connector|line|arrow/i.test(prst)) return;
+          const pt = (tag) => { const el = all(a, tag)[0]; const g = (n) => +(all(el, n)[0] || { textContent: 0 }).textContent; return { x: X(g('col')) + g('colOff') / 9525, y: Y(g('row')) + g('rowOff') / 9525 }; };
+          const f = pt('from'), t = pt('to'), xf = all(sp, 'xfrm')[0], fh = xf && xf.getAttribute('flipH') === '1', fv = xf && xf.getAttribute('flipV') === '1';
+          const p1 = { x: fh ? t.x : f.x, y: fv ? t.y : f.y }, p2 = { x: fh ? f.x : t.x, y: fv ? f.y : t.y };
+          const tail = !!all(sp, 'tailEnd').find((q) => q.getAttribute('type') && q.getAttribute('type') !== 'none'), head = !!all(sp, 'headEnd').find((q) => q.getAttribute('type') && q.getAttribute('type') !== 'none');
+          segs.push({ p1, p2, tail, head, elbow: /bent/i.test(prst) });
+        });
+      }
+      res.push({ hoja: sh.getAttribute('name'), celdas, segs });
+    }
+    return res;
+  }
+  const accNorm = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?\s?L\.?U?|S\.?\s?A\.?U?|SL|SA|SLU)\b\.?/g, '').replace(/[^A-Z0-9Ñ ]/g, ' ').replace(/\s+/g, ' ').trim();
+  function accRelaciones(H) {
+    const out = [], avisos = [];
+    H.forEach(({ celdas, segs }) => {
+      const ents = celdas.filter((q) => typeof q.val === 'string' && !/^\s*[\d.,]+\s*%?\s*$/.test(q.val));
+      const pcs = celdas.filter((q) => (typeof q.val === 'number' && q.val > 0 && q.val <= 1.0000001) || (typeof q.val === 'string' && /^\s*[\d.,]+\s*%\s*$/.test(q.val)));
+      const pv = (q) => (typeof q.val === 'number' ? q.val * 100 : parseFloat(q.val.replace(',', '.')));
+      const cerca = (a, b, t = 10) => Math.abs(a.x - b.x) <= t && Math.abs(a.y - b.y) <= t;
+      const enCaja = (p, q, t = 8) => p.x >= q.x1 - t && p.x <= q.x2 + t && p.y >= q.y1 - t && p.y <= q.y2 + t;
+      const junto = (e, P) => e.x >= P.x1 - 4 && e.x <= P.x2 + 4 && ((e.y >= P.y2 - 6 && e.y <= P.y2 + 30) || (e.y <= P.y1 + 6 && e.y >= P.y1 - 30));
+      // sigue una línea desde el %: devuelve la casilla a la que llega y si termina en flecha (apunta a esa casilla)
+      const seguir = (seg, desdeP1) => {
+        let cur = desdeP1 ? seg : { p1: seg.p2, p2: seg.p1, tail: seg.head, head: seg.tail }; const usados = new Set([seg]); let haciaP = cur.head;
+        for (let k = 0; k < 12; k++) {
+          if (cur.tail) break;
+          const pt = cur.p2; const nx = segs.find((s) => !usados.has(s) && (cerca(s.p1, pt, 12) || cerca(s.p2, pt, 12)));
+          if (!nx) break;
+          usados.add(nx);
+          cur = cerca(nx.p1, pt, 12) ? nx : { p1: nx.p2, p2: nx.p1, tail: nx.head, head: nx.tail };
+          haciaP = haciaP || cur.head;
+        }
+        const pt = cur.p2, baja = pt.y >= cur.p1.y;
+        const e = ents.filter((q) => enCaja(pt, q, 10)).sort((a, b) => Math.min(Math.abs(a.y1 - pt.y), Math.abs(a.y2 - pt.y)) - Math.min(Math.abs(b.y1 - pt.y), Math.abs(b.y2 - pt.y)))[0]
+          || ents.filter((q) => q.x1 - 12 <= pt.x && q.x2 + 12 >= pt.x && (baja ? q.y1 >= pt.y - 12 : q.y2 <= pt.y + 12)).sort((a, b) => (baja ? a.y1 - b.y1 : b.y2 - a.y2))[0];
+        return { e, flecha: !!cur.tail, haciaP };
+      };
+      pcs.forEach((P) => {
+        const cx = (P.x1 + P.x2) / 2, lados = [];
+        segs.forEach((s) => { if (junto(s.p1, P)) lados.push(seguir(s, true)); else if (junto(s.p2, P)) lados.push(seguir(s, false)); });
+        const vale = lados.filter((l) => l.e && !(l.e.y1 >= P.y1 - 1 && l.e.y2 <= P.y2 + 1));
+        let socio = null, dest = null;
+        const conFlecha = vale.filter((l) => l.flecha), sinFlecha = vale.filter((l) => !l.flecha);
+        if (conFlecha.length === 1) { dest = conFlecha[0].e; socio = (sinFlecha.find((l) => l.e !== dest) || vale.find((l) => l.e !== dest && l.haciaP) || {}).e || null; }
+        if (!socio) socio = ents.filter((q) => q.y2 <= P.y1 + 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => b.y2 - a.y2)[0];
+        if (!dest) dest = ents.filter((q) => q.y1 >= P.y2 - 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => a.y1 - b.y1)[0];
+        if (socio && dest && socio !== dest) out.push({ socio: String(socio.val).trim(), participada: String(dest.val).trim(), pct: Math.round(pv(P) * 1e6) / 1e6, celda: P.ref });
+        else avisos.push(`Porcentaje ${P.ref} (${pv(P).toFixed(4)} %): no se encuentra ${socio ? 'la sociedad participada' : 'el socio'}`);
+      });
+    });
+    return { rel: out, avisos };
+  }
+
+  // las participaciones son del grupo: se guardan una sola vez, colgando de la primera empresa
+  const accReg = () => S.registros.find((r) => r.tipo === 'accionariado');
+  const accDatos = () => { const D = JSON.parse(JSON.stringify(accReg()?.datos ?? {})); D.rel ??= []; D.archivos ??= []; D.tipos ??= {}; return D; };
+  async function accGuardar(D) {
+    const r = accReg();
+    if (r) {
+      const { error } = await db.from('registros').update({ datos: D }).eq('id', r.id);
+      if (error) return aviso(error.message, true);
+      r.datos = D;
+    } else {
+      const fila = { id: crypto.randomUUID(), empresa_id: S.empresas[0]?.id ?? S.sel, tipo: 'accionariado', ejercicio: null, datos: D };
+      const { error } = await db.from('registros').insert(fila);
+      if (error) return aviso(error.message, true);
+      S.registros.push(fila);
+    }
+  }
+  async function cargarAccionariado(files) {
+    for (const file of files) {
+      let R;
+      try { R = accRelaciones(await accLeerOrganigrama(await file.arrayBuffer())); } catch (err) { R = { rel: [], avisos: [], err }; }
+      // si no es un organigrama (sin flechas), tabla con columnas socio / sociedad / %
+      if (!R.rel.length) {
+        try {
+          const rows = (await filasExcel(file)) ?? []; let hr = -1, M = null;
+          for (let i = 0; i < Math.min(20, rows.length); i++) {
+            const m = {};
+            (rows[i] ?? []).forEach((h, j) => {
+              const t = String(h ?? '').toLowerCase();
+              if (m.s === undefined && /socio|accionista|titular|partícipe|participe/.test(t)) m.s = j;
+              else if (m.p === undefined && /participada|sociedad|empresa|entidad/.test(t)) m.p = j;
+              else if (m.pct === undefined && /%|porcentaje|particip/.test(t)) m.pct = j;
+            });
+            if (m.s !== undefined && m.p !== undefined && m.pct !== undefined) { hr = i; M = m; break; }
+          }
+          if (hr >= 0) {
+            for (let i = hr + 1; i < rows.length; i++) {
+              const r = rows[i] ?? [], so = String(r[M.s] ?? '').trim(), pa = String(r[M.p] ?? '').trim();
+              let pc = typeof r[M.pct] === 'number' ? r[M.pct] : parseFloat(String(r[M.pct] ?? '').replace('%', '').replace(',', '.'));
+              if (!so || !pa || Number.isNaN(pc)) continue;
+              if (pc <= 1 && typeof r[M.pct] === 'number') pc *= 100;
+              R.rel.push({ socio: so, participada: pa, pct: Math.round(pc * 1e6) / 1e6, celda: `fila ${i + 1}` });
+            }
+          }
+        } catch (err) { R.err ??= err; }
+      }
+      if (!R.rel.length && R.err) { aviso(`${file.name}: no se ha podido leer (${R.err.message})`, true); continue; }
+      const D = accDatos(), vistos = new Set();
+      D.rel = D.rel.filter((r) => r.origen !== file.name);
+      R.rel.forEach((r) => {
+        const k = `${accNorm(r.socio)}|${accNorm(r.participada)}`;
+        if (vistos.has(k)) return;
+        vistos.add(k); r.origen = file.name;
+        D.rel = D.rel.filter((x) => `${accNorm(x.socio)}|${accNorm(x.participada)}` !== k); D.rel.push(r);
+      });
+      D.archivos = D.archivos.filter((a) => a.name !== file.name).concat([{ name: file.name, fecha: hoy(), n: vistos.size, avisos: R.avisos }]);
+      await accGuardar(D);
+      msg = `${file.name}: ${vistos.size} participaciones leídas${R.avisos.length ? ` · ${R.avisos.length} porcentaje(s) sin enlazar` : ''}`; msgMal = !vistos.size || R.avisos.length > 0;
+    }
+    render();
+  }
+
+  // participación efectiva (directa + indirecta por todas las cadenas)
+  function accGrafo(rel) {
+    const N = {}, nom = {};
+    rel.forEach((r) => { const a = accNorm(r.socio), b = accNorm(r.participada); if (!a || !b) return; nom[a] ||= r.socio; nom[b] ||= r.participada; (N[a] ||= []).push({ b, p: (+r.pct || 0) / 100 }); });
+    return { N, nom };
+  }
+  function accEfectiva(G, a, b) {
+    let tot = 0;
+    const dfs = (x, acc, vis) => { (G.N[x] || []).forEach(({ b: y, p }) => { if (vis.has(y)) return; const v = acc * p; if (y === b) tot += v; else { vis.add(y); dfs(y, v, vis); vis.delete(y); } }); };
+    dfs(a, 1, new Set([a]));
+    return tot * 100;
+  }
+  function accCaminos(G, a, b) {
+    const out = [];
+    const dfs = (x, path, ps, acc, vis) => {
+      (G.N[x] || []).forEach(({ b: y, p }) => {
+        if (vis.has(y)) return;
+        const v = acc * p;
+        if (y === b) out.push({ nodos: path.concat([y]), pcts: ps.concat([p * 100]), v: v * 100 });
+        else { vis.add(y); dfs(y, path.concat([y]), ps.concat([p * 100]), v, vis); vis.delete(y); }
+      });
+    };
+    dfs(a, [a], [], 1, new Set([a]));
+    return out.filter((q) => q.v > 1e-9).sort((p, q) => q.v - p.v);
+  }
+  const n2 = (v) => (+v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+
+  // esquema del accionariado: cajas (personas en verde, sociedades en amarillo) y flechas con el %
+  function accEsquema(D, G, sel, todo) {
+    const A = {}, P = {};
+    D.rel.forEach((r) => { const a = accNorm(r.socio), b = accNorm(r.participada); if (!a || !b || a === b) return; (A[a] ||= []).push({ b, p: +r.pct || 0 }); (P[b] ||= []).push({ a, p: +r.pct || 0 }); });
+    let nodos = new Set(Object.keys(G.nom));
+    if (!todo && sel) {
+      const Sx = new Set([sel]);
+      const sube = (k) => { (P[k] || []).forEach(({ a }) => { if (!Sx.has(a)) { Sx.add(a); sube(a); } }); };
+      const baja = (k) => { (A[k] || []).forEach(({ b }) => { if (!Sx.has(b)) { Sx.add(b); baja(b); } }); };
+      sube(sel); baja(sel); nodos = Sx;
+    }
+    const ns = [...nodos];
+    if (!ns.length) return '';
+    const niv = {};
+    const calc = (k, vis) => {
+      if (niv[k] != null) return niv[k];
+      if (vis.has(k)) return 0;
+      vis.add(k);
+      const ps = (P[k] || []).filter((x) => nodos.has(x.a)), v = ps.length ? Math.max(...ps.map((x) => calc(x.a, vis) + 1)) : 0;
+      vis.delete(k);
+      niv[k] = v; return v;
+    };
+    ns.forEach((k) => calc(k, new Set()));
+    const filas = []; ns.forEach((k) => { (filas[niv[k]] ||= []).push(k); });
+    const pos = {};
+    filas.forEach((f) => { f.sort((a, b) => String(G.nom[a] || a).localeCompare(String(G.nom[b] || b))); f.forEach((k, j) => { pos[k] = j; }); });
+    for (let it = 0; it < 6; it++) {
+      filas.forEach((f, i) => {
+        if (!i) return;
+        const bc = (k) => { const ps = (P[k] || []).filter((x) => nodos.has(x.a) && niv[x.a] < i); return ps.length ? ps.reduce((s, x) => s + pos[x.a], 0) / ps.length : pos[k]; };
+        f.sort((a, b) => bc(a) - bc(b)); f.forEach((k, j) => { pos[k] = j; });
+      });
+    }
+    for (let i = filas.length - 2; i >= 0; i--) { // de abajo arriba, para que los socios queden encima de sus participadas
+      const f = filas[i], bc = (k) => { const hs = (A[k] || []).filter((x) => nodos.has(x.b)); return hs.length ? hs.reduce((s, x) => s + pos[x.b], 0) / hs.length : pos[k]; };
+      f.sort((a, b) => bc(a) - bc(b)); f.forEach((k, j) => { pos[k] = j; });
+    }
+    const W = 158, H = 44, GX = 26, GY = 100;
+    const grado = (k) => Math.max((A[k] || []).filter((x) => nodos.has(x.b)).length, (P[k] || []).filter((x) => nodos.has(x.a)).length);
+    const wN = {}; ns.forEach((k) => { wN[k] = Math.max(W, 70 * grado(k)); });
+    const anchoF = (f) => f.reduce((s, k) => s + wN[k] + GX, 0) - GX, ancho = Math.max(...filas.map(anchoF)) + 40;
+    const xy = {};
+    filas.forEach((f, i) => { let x = (ancho - anchoF(f)) / 2; f.forEach((k) => { xy[k] = { x, y: 20 + i * (H + GY) }; x += wN[k] + GX; }); });
+    const alto = 20 + filas.length * (H + GY);
+    const soc = new Set(D.rel.map((r) => accNorm(r.participada)).filter(Boolean));
+    const parte = (t) => { const w = String(t).split(' '); const l = []; let cur = ''; w.forEach((x) => { if (`${cur} ${x}`.trim().length > 22 && cur) { l.push(cur); cur = x; } else cur = `${cur} ${x}`.trim(); }); if (cur) l.push(cur); return l.slice(0, 3); };
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ancho}" height="${alto}" viewBox="0 0 ${ancho} ${alto}" font-family="Calibri,Arial,sans-serif"><defs><marker id="accFl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4472c4"/></marker></defs>`;
+    const salidas = {}, llegadas = {};
+    ns.forEach((a) => (A[a] || []).filter((x) => nodos.has(x.b)).forEach((x) => { (salidas[a] ||= []).push(x.b); (llegadas[x.b] ||= []).push(a); }));
+    Object.values(salidas).forEach((l) => l.sort((p, q) => xy[p].x - xy[q].x)); Object.values(llegadas).forEach((l) => l.sort((p, q) => xy[p].x - xy[q].x));
+    const etiquetas = [];
+    ns.forEach((a) => (A[a] || []).filter((x) => nodos.has(x.b)).forEach((x) => {
+      const b = x.b, so = salidas[a], ll = llegadas[b];
+      const x1 = xy[a].x + (wN[a] * (so.indexOf(b) + 1)) / (so.length + 1), y1 = xy[a].y + H, x2 = xy[b].x + (wN[b] * (ll.indexOf(a) + 1)) / (ll.length + 1), y2 = xy[b].y;
+      const ym = y1 + Math.min(34, (y2 - y1) / 3);
+      svg += `<path d="M${x1},${y1} L${x1},${ym} L${x2},${y2 - 22} L${x2},${y2 - 2}" fill="none" stroke="#4472c4" stroke-width="1.4" marker-end="url(#accFl)"/>`;
+      etiquetas.push(`<rect x="${x1 - 31}" y="${y1 + 6}" width="62" height="16" fill="#fff" stroke="#000" stroke-width=".7"/><text x="${x1}" y="${y1 + 18}" font-size="10.5" text-anchor="middle">${n2(x.p)}%</text>`);
+    }));
+    ns.forEach((k) => {
+      const { x, y } = xy[k], es = soc.has(k), l = parte(G.nom[k]), Wk = wN[k];
+      svg += `<rect x="${x}" y="${y}" width="${Wk}" height="${H}" fill="${es ? '#fff9c4' : '#d9f2d0'}" stroke="${k === sel ? '#c00000' : '#000'}" stroke-width="${k === sel ? 2.4 : 0.9}"/>${
+        l.map((t, i) => `<text x="${x + Wk / 2}" y="${y + H / 2 + (i - (l.length - 1) / 2) * 13 + 4}" font-size="11.5" fill="#000" text-anchor="middle"${es ? ' font-weight="600"' : ''}>${esc(t)}</text>`).join('')}`;
+    });
+    return `${svg}${etiquetas.join('')}</svg>`;
+  }
+
+  let accSoc = null, accTodo = false, accTR = null;
+  function vistaAccionariado() {
+    const D = accDatos(), G = accGrafo(D.rel), ed = puede();
+    const soc = new Set(D.rel.map((r) => accNorm(r.participada)).filter(Boolean)), todos = Object.keys(G.nom);
+    const tipo = (k) => (soc.has(k) ? 'Sociedad del grupo' : D.tipos[k] === 'pj' ? 'Sociedad externa' : D.tipos[k] === 'pf' ? 'Persona física' : RX_PJ.test(G.nom[k] || '') ? 'Sociedad externa' : 'Persona física');
+    const selTipo = (k) => (soc.has(k) ? 'Sociedad del grupo' : `<select data-rgacctipo="${esc(k)}"${ed ? '' : ' disabled'}><option value="pf"${tipo(k) === 'Persona física' ? ' selected' : ''}>Persona física</option><option value="pj"${tipo(k) === 'Sociedad externa' ? ' selected' : ''}>Sociedad externa</option></select>`);
+    const empAct = accNorm(empresa()?.nombre ?? '');
+    const sel = accSoc && soc.has(accSoc) ? accSoc : (soc.has(empAct) ? empAct : [...soc][0]);
+    const directos = D.rel.filter((r) => accNorm(r.participada) === sel);
+    const pf = todos.filter((k) => k !== sel && tipo(k) !== 'Sociedad del grupo').map((k) => {
+      const dir = D.rel.filter((r) => accNorm(r.socio) === k && accNorm(r.participada) === sel).reduce((s, r) => s + (+r.pct || 0), 0), tot = accEfectiva(G, k, sel);
+      return { k, dir, ind: tot - dir, tot };
+    }).filter((x) => x.tot > 0.000001).sort((a, b) => b.tot - a.tot);
+    const filiales = [...soc].filter((k) => k !== sel).map((k) => ({ k, dir: D.rel.filter((r) => accNorm(r.socio) === sel && accNorm(r.participada) === k).reduce((s, r) => s + (+r.pct || 0), 0), tot: accEfectiva(G, sel, k) }))
+      .filter((x) => x.tot > 0.000001).sort((a, b) => b.tot - a.tot);
+    const sumDir = directos.reduce((s, r) => s + (+r.pct || 0), 0);
+    const opts = [...soc].sort((a, b) => String(G.nom[a] || a).localeCompare(String(G.nom[b] || b))).map((k) => `<option value="${esc(k)}"${k === sel ? ' selected' : ''}>${esc(G.nom[k])}</option>`).join('');
+    const avisos = D.archivos.flatMap((a) => (a.avisos || []).map((x) => `${a.name}: ${x}`)).concat(
+      [...soc].map((k) => ({ k, s: D.rel.filter((r) => accNorm(r.participada) === k).reduce((s, r) => s + (+r.pct || 0), 0) })).filter((x) => Math.abs(x.s - 100) > 0.01).map((x) => `${G.nom[x.k]}: sus socios suman ${n2(x.s)} % (no el 100 %)`));
+    const caminos = () => {
+      const k = accTR;
+      if (!k || !pf.some((x) => x.k === k)) return '';
+      const cs = accCaminos(G, k, sel), tot = cs.reduce((s, q) => s + q.v, 0);
+      return `<div class="block" style="margin-top:8px;padding:8px 10px"><b>${esc(G.nom[k])} · cómo llega al ${n2(tot)} % de ${esc(G.nom[sel])}</b><table class="tabla rg-tabla" style="width:auto;margin-top:6px"><thead><tr><th>Cadena de participación</th><th>Cálculo</th><th>%</th></tr></thead><tbody>${
+        cs.map((q) => `<tr><td>${q.nodos.map((nn) => esc(G.nom[nn])).join(' → ')}</td><td>${q.pcts.map((p) => `${n2(p)} %`).join(' × ')}</td><td class="num"><b>${n2(q.v)} %</b></td></tr>`).join('')}<tr><td colspan="2"><b>Total</b></td><td class="num">${n2(tot)} %</td></tr></tbody></table>
+        <p class="hint">Sociedades por las que participa: ${esc([...new Set(cs.flatMap((q) => q.nodos.slice(1, -1)))].map((nn) => G.nom[nn]).join(', ') || 'ninguna (participación directa)')}</p></div>`;
+    };
+    return `${ed ? `<div class="dropzone" data-kind="acc" tabindex="0" role="button"><b>Suelta aquí el Excel de accionariado del grupo</b> (organigrama con las casillas de socios y sociedades unidas con flechas y el % de cada participación, o una tabla socio / sociedad participada / %) o pulsa para elegirlo.
+      <input type="file" data-dzkind="acc" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden></div>` : ''}${avisoHtml()}
+      ${avisos.length ? `<p class="aviso">${avisos.map(esc).join('<br>')}</p>` : ''}
+      <section class="block"><h4 class="it-tit">Accionariado · <select data-rgaccsoc="1">${opts || '<option>Sin datos</option>'}</select></h4>
+      <div style="margin:4px 0 6px"><label><input type="checkbox" data-rgacctodo="1"${accTodo ? ' checked' : ''}> Ver todo el grupo</label> <span class="hint">Sin marcar: la sociedad elegida con sus socios (hacia arriba) y sus participadas (hacia abajo). Verde = personas · amarillo = sociedades.</span></div>
+      <div class="acc-esq" style="overflow:auto;background:#fff;border:1px solid var(--line);border-radius:6px;margin-bottom:12px">${accEsquema(D, G, sel, accTodo)}</div>
+      ${sel ? `<div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">
+        <div><h4 class="it-sec">Socios directos · suman ${n2(sumDir)} %</h4><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Socio</th><th>Tipo</th><th>% directo</th></tr></thead><tbody>${
+  directos.slice().sort((a, b) => b.pct - a.pct).map((r) => `<tr><td>${esc(r.socio)}</td><td>${selTipo(accNorm(r.socio))}</td><td class="num">${n2(r.pct)} %</td></tr>`).join('')}</tbody></table></div>
+        <div><h4 class="it-sec">Participación efectiva de personas y socios externos</h4><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Socio</th><th>Tipo</th><th>% directo</th><th>% indirecto</th><th>% total</th><th>Titular real (&gt; 25 %)</th></tr></thead><tbody>${
+  pf.map((x) => {
+    const pfis = tipo(x.k) === 'Persona física', tr = pfis && x.tot > 25;
+    return `<tr${tr ? ` data-rgacctr="${esc(x.k)}" style="cursor:pointer" title="Pulsa para ver cómo llega a este porcentaje"` : ''}><td>${tr ? `<b><u>${esc(G.nom[x.k])}</u></b>` : esc(G.nom[x.k])}</td><td>${selTipo(x.k)}</td><td class="num">${n2(x.dir)} %</td><td class="num">${n2(x.ind)} %</td><td class="num"><b>${n2(x.tot)} %</b></td><td>${tr ? '<b>SÍ</b>' : (!pfis && x.tot > 25 ? `<span class="hint" title="Una sociedad no es titular real: añade sus socios en «Participaciones directas»">sociedad · indica sus socios</span>` : 'no')}</td></tr>`;
+  }).join('')}</tbody></table>${caminos()}</div>
+        <div><h4 class="it-sec">Sociedades participadas (directa e indirectamente)</h4><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Sociedad</th><th>% directo</th><th>% efectivo</th></tr></thead><tbody>${
+  filiales.map((x) => `<tr><td>${esc(G.nom[x.k])}</td><td class="num">${x.dir ? `${n2(x.dir)} %` : ''}</td><td class="num">${n2(x.tot)} %</td></tr>`).join('') || '<tr><td colspan="3" class="c">No participa en otras sociedades</td></tr>'}</tbody></table></div>
+      </div>` : ''}
+      <h4 class="it-sec" style="margin-top:16px">Participaciones directas del grupo · ${D.rel.length}</h4>
+      <div class="wrap"><table class="tabla rg-tabla"><thead><tr><th>Socio</th><th>Sociedad participada</th><th>%</th><th>Origen</th><th></th></tr></thead><tbody>
+      ${D.rel.map((r, i) => `<tr><td><input class="facin" data-rgaccf="${i}|socio" value="${esc(r.socio)}" size="30"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgaccf="${i}|participada" value="${esc(r.participada)}" size="34"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgaccf="${i}|pct" value="${esc(String(r.pct).replace('.', ','))}" size="9" style="text-align:right"${ed ? '' : ' disabled'}></td><td class="hint">${esc((r.origen || 'a mano') + (r.celda ? ` · ${r.celda}` : ''))}</td><td>${ed ? `<button class="small danger" data-act="m-rg-accdel" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="c">Sin datos</td></tr>'}
+      </tbody></table></div>${ed ? '<button class="small" data-act="m-rg-accadd" style="margin:6px 0">+ Añadir participación</button>' : ''}
+      ${D.archivos.length ? `<p class="hint">Archivos leídos: ${D.archivos.map((a) => `${esc(a.name)} (${esc(a.fecha)}, ${a.n} participaciones)${ed ? ` <button class="small" data-act="m-rg-accquitar" data-n="${esc(a.name)}">Quitar</button>` : ''}`).join(' · ')}. El accionariado es del grupo: se ve igual desde todas las empresas.</p>` : ''}
+      </section>`;
+  }
+
+  // ================= Cuentas Anuales Presentadas (unifica certificación, auditoría, informe de gestión, memoria, acuse y nota de despacho) =================
+  const SECC = [['ca', 'Cuentas anuales'], ['cert', 'Certificación'], ['aud', 'Informe de auditoría'], ['ig', 'Informe de gestión'], ['mem', 'Memoria'], ['acu', 'Acuse de entrada'], ['nota', 'Nota de despacho']];
+  let rgSec = 'ca', rgEj = null;
+  const rmEj = () => rgEj ?? (Number(S.ejercicio) || new Date().getFullYear()) - 1;
+  const rmReg = (y) => S.registros.find((r) => r.tipo === 'rmdoc' && r.empresa_id === S.sel && r.ejercicio === y);
+  const rmDe = (y) => JSON.parse(JSON.stringify(rmReg(y)?.datos ?? {}));
+  async function rmGuardar(y, D) {
+    const r = rmReg(y);
+    if (r) {
+      const { error } = await db.from('registros').update({ datos: D }).eq('id', r.id);
+      if (error) return aviso(error.message, true);
+      r.datos = D;
+    } else {
+      const fila = { id: crypto.randomUUID(), empresa_id: S.sel, tipo: 'rmdoc', ejercicio: y, datos: D };
+      const { error } = await db.from('registros').insert(fila);
+      if (error) return aviso(error.message, true);
+      S.registros.push(fila);
+    }
+  }
+  const rmNum = (s) => { const t = String(s ?? '').trim(); if (!t) return null; const neg = /^-|^\(.*\)$/.test(t); const v = parseFloat(t.replace(/[()\-\s.]/g, '').replace(',', '.')); return Number.isNaN(v) ? null : (neg ? -v : v); };
+  // corre un año los años que aparecen en un texto (2025 → 2026, 2.025 → 2.026), sin tocar números de leyes (18/2022)
+  const rmCorrer = (t, base, d = 1) => String(t || '').replace(/(^|[^\d./])(?:(\d{1,2}\/\d{1,2}\/)?)(20\d{2}|2\.0\d{2})(?![\d])/g, (m, pre, fecha, y) => {
+    const n = +y.replace('.', ''); if (n < base - 6 || n > base + 2) return m;
+    const v = n + d; return pre + (fecha || '') + (y.includes('.') ? `${String(v).slice(0, 1)}.${String(v).slice(1)}` : String(v));
+  });
+  const rmCorrerObj = (o, base) => {
+    if (o == null) return o;
+    if (typeof o === 'string') return rmCorrer(o, base);
+    if (Array.isArray(o)) return o.map((x) => rmCorrerObj(x, base));
+    if (typeof o === 'object') { const r = {}; Object.keys(o).forEach((k) => { r[k] = /^(texto|paginas|name|archivo|v|t|pn2|hist)$/.test(k) ? o[k] : rmCorrerObj(o[k], base); }); return r; }
+    return o;
+  };
+  const rmDni = (d) => { d = String(d || '').toUpperCase(); const m = d.match(/^([XYZ]?)(\d{7,8})/); if (!m) return d; const n = +((m[1] ? 'XYZ'.indexOf(m[1]) : '') + m[2]); return m[1] + m[2] + 'TRWAGMYFPDXBNJZSQVHLCKE'[n % 23]; };
+
+  // texto por página; si es un escaneo, OCR en el navegador
+  async function paginasDe(file) {
+    const { lineas, n } = await lineasDe(file);
+    const pags = Array.from({ length: n }, (_, p) => lineas.filter((l) => l.pag === p + 1).map((l) => l.map((i) => i.s).join(' ').replace(/\s+/g, ' ').trim()).join('\n'));
+    if (pags.join('').replace(/\s/g, '').length >= 60 * n) return { paginas: pags, n, ocr: false, lineas };
+    const out = await ocrPdf(file, (m) => aviso(`${file.name}: ${m}`));
+    return { paginas: out, n, ocr: true, lineas: [] };
+  }
+
+  // ---- extractores (misma lógica que la aplicación antigua) ----
+  function rmCasillas(lineas) {
+    const its = []; lineas.forEach((l) => l.forEach((it) => its.push({ s: it.s, x: it.x, y: it.y, p: l.pag })));
+    const num = (s) => /^-?\(?\d{1,3}(\.\d{3})*(,\d+)?\)?$/.test(s);
+    const codes = its.filter((i) => /^\d{5}$/.test(i.s)), v = {}, t = {}, porPag = {};
+    codes.forEach((q) => { (porPag[q.p] ||= []).push(q); });
+    Object.entries(porPag).forEach(([p, cs]) => { // columnas de importes de la página: ejercicio (izquierda) y anterior (derecha)
+      const xs = its.filter((i) => i.p == p && num(i.s) && /,/.test(i.s)).map((i) => i.x).sort((a, b) => a - b), mid = xs.length ? (xs[0] + xs[xs.length - 1]) / 2 : null;
+      cs.forEach((q) => {
+        const sig = cs.filter((o) => Math.abs(o.y - q.y) <= 8 && o.x > q.x + 5).sort((a, b) => a.x - b.x)[0];
+        const en = its.filter((i) => i.p == p && i !== q && Math.abs(i.y - q.y) <= 8 && i.x > q.x + 5 && (!sig || i.x < sig.x)).sort((a, b) => a.x - b.x);
+        let vals = en.filter((i) => num(i.s) && !/^\d{5}$/.test(i.s));
+        if (vals.some((x) => x.s.includes(','))) vals = vals.filter((x) => x.s.includes(','));
+        if (vals.length && !(q.s in v)) {
+          if (vals.length >= 2) v[q.s] = [rmNum(vals[0].s), rmNum(vals[1].s)];
+          else v[q.s] = mid !== null && vals[0].x > mid + 20 ? [null, rmNum(vals[0].s)] : [rmNum(vals[0].s), null];
+        }
+        const txt = en.map((i) => i.s).join(' ').trim();
+        if (txt && !(q.s in t) && /[A-Za-z]/.test(txt)) t[q.s] = txt;
+      });
+    });
+    return { v, t };
+  }
+  function rmCertDeTexto(tx) {
+    const R = {}, T = String(tx).replace(/\r/g, '');
+    let m = T.match(/(D\.|Dª\.?|Dña\.?|Don|Doña)\s+([^,\n]+?),\s*con\s+DNI(?:\s+n[uú]mero)?\s*([0-9XYZ]\d{7}[A-Z0-9]),\s*en\s+calidad\s+de\s+([\s\S]+?)\s+de\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9 .,&-]+?),\s*con\s+(?:CIF|NIF)/);
+    if (m) { R.tratSec = m[1].replace(/^Don$/i, 'D.').replace(/^Doña$/i, 'Dª.'); R.secretario = m[2].trim(); R.secretarioDni = m[3]; const q = m[4].replace(/\s+/g, ' ').trim(); const o = q.match(/^(\S+)\s+del?\s+(.+)$/); R.cargoSec = o ? o[1] : q; R.organo = o ? o[2] : ''; }
+    m = T.match(/Junta\s+General\s+([A-Za-zÁÉÍÓÚáéíóú ]+?)\s+celebrada\s+en\s+([^,\n]+),\s*a\s+(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i); if (m) { R.tipoJunta = m[1].trim(); R.lugar = m[2].trim(); R.fechaJunta = m[3]; }
+    m = T.match(/formuladas\s+en\s+([^,\n]+),\s*a\s+(\d{1,2}\s+de\s+\w+\s+de\s+\d{4}),\s*aprobadas\s+el\s+(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})[\s\S]{0,40}?constan\s+de\s+(\d+)\s+p[aá]ginas/i); if (m) { R.fechaForm = m[2]; R.pagCA = m[4]; }
+    m = T.match(/informe\s+de\s+gesti[oó]n\s+que\s+consta\s+de\s+(\d+)\s+p[aá]ginas/i); if (m) R.pagIG = m[1];
+    m = T.match(/Auditores?\s+de\s+cuentas,?\s+que\s+consta\s+de\s+(\d+)\s+p[aá]ginas/i); if (m) R.pagAud = m[1];
+    m = T.match(/S\.A\.,?\s*([\s\S]{0,40}?no\s+ten[ií]a[\s\S]+?durante\s+el\s+mismo\.)/i) || T.match(/,\s*(no\s+ten[ií]a\s+al\s+principio[\s\S]+?mismo\.)/i); if (m) R.accPropias = m[1].replace(/\s+/g, ' ').replace(/^[,\s]+/, '').trim();
+    m = T.match(/\n\s*V\S{0,2}[.,]?\s*B\S{0,2}[.,]?\s*(D\.|Dª\.?|Dña\.?)?\s*([^\n]+?)\.?\s*\n\s*DNI\s*([0-9XYZ]\d{7}[A-Z0-9])\s*\n\s*([^\n.]+)/i); if (m) { R.tratPres = m[1] || 'D.'; R.presidente = m[2].trim(); R.presidenteDni = rmDni(m[3]); R.cargoPres = m[4].trim(); }
+    if (R.secretarioDni) R.secretarioDni = rmDni(R.secretarioDni);
+    const dist = [], i = T.search(/DISTRIBUCI[OÓ]N\s+DE\s+RESULTADOS/i), j = T.search(/TOTAL,?\s+DISTRIBUIDO/i);
+    if (i >= 0 && j > i) T.slice(i, j).split('\n').slice(1).forEach((l) => { const mm = l.match(/^\s*([A-Za-zÁÉÍÓÚÑáéíóúñ ,().]+?)\s+(-?[\d.]+,\d{2}|-)\s*\.?-?\s*$/); if (mm) dist.push({ c: mm[1].trim(), v: mm[2] === '-' ? '' : String(rmNum(mm[2])) }); });
+    if (dist.length) R.dist = dist;
+    return R;
+  }
+  function rmAudDeTexto(pags) {
+    const T = pags.join('\n'), R = {};
+    let m = T.match(/([A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ ]+?Auditores?,?\s*S\.?L\.?P?\.?)\s*\(([S5]\s?\d{3,5})\)/i); if (m) { R.firma = m[1].trim(); R.roacFirma = m[2].replace(/\s/g, '').replace(/^5(?=\d{4}$)/, 'S'); }
+    m = T.match(/ROAC\s*(S\s?\d{3,5})/i); if (m && !R.roacFirma) R.roacFirma = m[1].replace(/\s/g, '');
+    m = T.match(/\n\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s*\((\d{4,6})\)/); if (m) { R.auditor = m[1]; R.roacAuditor = m[2]; }
+    const ult = pags[pags.length - 1] || ''; m = ult.match(/(\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4})/i); if (m) R.fecha = m[1];
+    m = ult.match(/\d{4}\s*\n+\s*([^\n]*\d+[^\n]*)\n+\s*(\d{5}\s+[^\n]+)/); if (m) { R.domicilio = m[1].trim(); R.cp = m[2].trim(); }
+    m = T.match(/A[ñn]o:?\s*(\d{4})[\s\S]{0,20}?N[uú]mero:?\s*([\d./]+)/i); if (m) R.sello = `${m[1]} · nº ${m[2]}`;
+    R.opinion = /opini[oó]n\s+con\s+salvedades/i.test(T) ? 'Con salvedades' : /opini[oó]n\s+desfavorable/i.test(T) ? 'Desfavorable' : /denegaci[oó]n\s+de\s+opini[oó]n/i.test(T) ? 'Denegada' : 'Favorable';
+    m = T.match(/Sobre la base del trabajo realizado[\s\S]+?aplicaci[oó]n\./i); if (m) R.otraInfo = m[0].replace(/\s+/g, ' ');
+    const i = T.search(/Aspectos\s+m[aá]s\s+relevantes\s+de\s+la\s+auditor[ií]a/i), j = T.search(/Otra\s+informaci[oó]n/i);
+    if (i >= 0) R.aspectos = T.slice(i, j > i ? j : i + 4000).replace(/^.*\n/, '').replace(/\n(?:\d+\s*$|N\s*$)/g, '').trim();
+    R.paginas = String(pags.length);
+    return R;
+  }
+  const IG_SECC = [['s2', '2.- Acontecimientos importantes ocurridos después del cierre del ejercicio'], ['s3', '3.- Evolución previsible de la Sociedad'], ['s4', '4.- Actividades realizadas en materia de Investigación y Desarrollo'],
+    ['s5', '5.- Acciones propias'], ['s6', '6.- Aplazamiento de pago a proveedores'], ['s7', '7.- Descripción de los principales riesgos e incertidumbres a los que se enfrenta la Sociedad.'], ['s8', '8.- Políticas de gestión de riesgos'], ['s9', '9.- OTRAS CUESTIONES']];
+  function rmIgDeTexto(pags) {
+    const T = pags.join('\n'), R = { hist: {} };
+    T.split('\n').forEach((l) => {
+      const m = l.match(/E?\s*jercicio\s+(\d{4})\s+(.+)$/i); if (!m) return;
+      const ns = (m[2].match(/-?\d{1,3}(?:\.\d{3})+|\d+,\d+|-?\d+/g) || []).map((x) => (x.includes(',') ? +x.replace(',', '.') : +x.replace(/\./g, ''))), h = (R.hist[m[1]] ||= {});
+      if (ns.length === 2) { h.cifra = ns[0]; h.res = ns[1]; } else if (ns.length >= 4) { h.activo = ns[0]; h.fp = ns[1]; h.deuda = ns[2]; h.fm = ns[3]; if (ns[4] != null) h.liq = ns[4] >= 10 ? ns[4] / 100 : ns[4]; }
+    });
+    const cortes = IG_SECC.map(([k, t]) => ({ k, i: T.search(new RegExp(`\\n\\s*${t[0]}\\.?-\\s`)) })).filter((x) => x.i >= 0).sort((a, b) => a.i - b.i);
+    const fin = T.search(/\n\s*El\s+informe\s+de\s+gesti[oó]n\s+correspondiente/i);
+    cortes.forEach((q, i) => {
+      const hasta = i + 1 < cortes.length ? cortes[i + 1].i : (fin > q.i ? fin : T.length);
+      R[q.k] = T.slice(q.i, hasta).replace(/^\s*\n?\s*\d\.?-[^\n]*\n/, '').replace(/\n\s*\d\s*\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/([^.:;\n])\n(?=[a-záéíóúñ(])/g, '$1 ').trim();
+    });
+    let m = T.match(/investigaci[oó]n\s+y\s+desarrollo\s+por\s+importe\s+de\s+([\d.]+)\s+euros[\s\S]{0,200}?importe\s+de\s+([\d.]+)\s+euros/i); if (m) { R.id = m[1]; R.idDed = m[2]; }
+    m = T.match(/formulado\s+en\s+(\w+)[\s\S]{0,80}?con\s+fecha\s+(\d{1,2}\s+de\s+\w+\s+de\s+\d\.?\d{3})/i); if (m) { R.lugar = m[1]; R.fechaForm = m[2]; }
+    return R;
+  }
+  function rmMemDeTexto(pags) {
+    const T = pags.map((p) => p.replace(/\n{3,}/g, '\n\n')).join('\n'), notas = [], rx = /\n\s*NOTA\s+(\d{1,2})\.?\s*([^\n]*)/g;
+    let m, prev = null;
+    while ((m = rx.exec(T))) { if (prev) prev.texto = T.slice(prev.ini, m.index).trim(); prev = { n: +m[1], titulo: m[2].trim().replace(/[.\s]+$/, ''), ini: m.index + m[0].length }; notas.push(prev); }
+    if (prev) { const f = T.search(/\n\s*(?:FORMULACI[OÓ]N|DILIGENCIA)[^\n]*\n/i); prev.texto = T.slice(prev.ini, f > prev.ini ? f : T.length).trim(); }
+    return notas.map(({ n, titulo, texto }) => ({ n, titulo, texto, pag: pags.findIndex((p) => new RegExp(`NOTA\\s+${n}\\b`, 'i').test(p)) + 1 || null }));
+  }
+  const DEP_CAMPOS = { acu: [['ident', 'Identificador'], ['ref', 'Referencia del documento'], ['enviado', 'Enviado por'], ['nifEnv', 'NIF del presentante'], ['recibido', 'Recibido en'], ['entrada', 'Número de entrada'], ['fecha', 'Fecha y hora de entrada'], ['firmante', 'Documento firmado por'], ['fechaFirma', 'Fecha de la firma']],
+    nota: [['registro', 'Registro'], ['entidad', 'Entidad'], ['nif', 'NIF'], ['ejercicio', 'Ejercicio de las cuentas'], ['entrada', 'Número de entrada'], ['legajo', 'Número de legajo del depósito'], ['presentado', 'Presentado (asiento)'], ['fechaPres', 'Fecha de presentación'], ['fechaCalif', 'Calificado correcto el'], ['registrador', 'Registrador'], ['fechaFirma', 'Fecha de la firma'], ['huella', 'Huella digital'], ['csv', 'C.S.V.']] };
+  function rmDepDeTexto(tipo, T) {
+    const g = (re, i = 1) => { const m = T.match(re); return m ? m[i].replace(/\s+/g, ' ').trim() : ''; }, R = {};
+    if (tipo === 'acu') {
+      R.ident = g(/Identificador\s+(\S+)/); R.ref = g(/Referencia del documento\s+(\S+)/); R.enviado = g(/Enviado por\s+(.+?)\s+NIF/); R.nifEnv = g(/Enviado por.+?NIF\s+(\S+)/); R.recibido = g(/Recibido en\s+(.+?)(?=\s+N[úu]mero de entrada|\n|$)/);
+      R.entrada = g(/N[úu]mero de entrada\s+(\d{4}\s*\/\s*\d+\s*\/\s*\d+)/).replace(/\s/g, ''); R.fecha = g(/N[úu]mero de entrada.+?Fecha\s+([\d/]+\s+[\d:]+)/); R.firmante = g(/D\.\/D[ªa]\.\s+(.+)/); R.fechaFirma = g(/firmado por:[\s\S]*?Fecha\s+([\d/]+\s+[\d:]+)/);
+      const a = (R.fecha.match(/\d{2}\/\d{2}\/(\d{4})/) || [])[1]; R.ejercicio = a ? String(+a - 1) : '';
+    } else {
+      R.registro = g(/(Registro Mercantil de [A-ZÁÉÍÓÚÑ ]+)/); const m = T.match(/DEP[ÓO]SITO DE CUENTAS DE LA ENTIDAD\s+([\s\S]+?)\s+([A-Z]\d{8}|\d{8}[A-Z])\s/); if (m) { R.entidad = m[1].replace(/\s+/g, ' ').trim(); R.nif = m[2]; }
+      R.ejercicio = g(/ejercicio\s+(\d{4})/i); R.entrada = g(/N[úu]mero de Entrada\s+([\d/]+)/i); R.legajo = g(/n[úu]mero de\s+legajo\s+([\d/]+)/i); R.huella = g(/HUELLA DIGITAL:\s*(\S+)/);
+      const p = T.match(/Presentado\s*\(([^)]+)\)\s*([\d/]+)/); if (p) { R.presentado = p[1]; R.fechaPres = p[2]; } R.fechaCalif = g(/Calificado Correcto\s+([\d/]+)/i);
+      R.registrador = g(/firmado con firma electr[óo]nica reconocida por\s+([^,]+)/i); R.fechaFirma = g(/el d[íi]a\s+([^.\n]+?)\.\s/i); R.csv = g(/C\.S\.V\.:\s*(\S+)/);
+    }
+    return R;
+  }
+  const rmEntradaNorm = (s) => { const p = String(s || '').replace(/\s/g, '').split('/').filter(Boolean); if (p.length !== 3) return ''; const i = p.findIndex((x) => x.length === 4); return i < 0 ? '' : [p[i]].concat(p.filter((x, j) => j !== i)).join('-'); };
+  const rmAnioTexto = (t, nom) => {
+    const m = String(t).match(/ejercicio\s+(?:cerrado\s+(?:al|a)\s+31\/12\/|terminado\s+.*?|)(\d)\.?(\d{3})\b/i) || String(t).match(/31\s+de\s+diciembre\s+de\s+(\d)\.?(\d{3})/i) || String(t).match(/31\/12\/(\d)(\d{3})/);
+    if (m) return +(m[1] + m[2]);
+    const n = String(nom || '').match(/(?:^|\D)(20\d{2})(?:\D|$)/); return n ? +n[1] : rmEj();
+  };
+  // a qué documento corresponde un PDF: por el nombre y, si no, por lo que se está viendo
+  const rmClase = (nombre) => {
+    const n = ` ${nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()} `;
+    return /certific/.test(n) ? 'cert' : /audit/.test(n) ? 'aud' : /gestion/.test(n) ? 'ig' : /memoria/.test(n) ? 'mem' : /acuse/.test(n) ? 'acu' : /despacho|nota/.test(n) ? 'nota' : null;
+  };
+
+  async function cargarRm(files) {
+    if (!S.sel) return aviso('Elige primero la empresa.', true);
+    for (const file of files) {
+      if (!/\.pdf$/i.test(file.name)) { aviso(`${file.name}: solo se leen PDF`, true); continue; }
+      try {
+        const tipo = rmClase(file.name) || rgSec;
+        aviso(`Leyendo ${file.name}…`);
+        const L = await paginasDe(file), texto = L.paginas.join('\n');
+        let R, y;
+        if (tipo === 'ca') {
+          R = rmCasillas(L.lineas);
+          if (!Object.keys(R.v).length) { aviso(`${file.name}: no se encuentran casillas del modelo del Registro Mercantil (¿es un escaneo?)`, true); continue; }
+          const m = (R.t['01101'] || '').match(/(\d)\.?(\d{3})/); y = m ? +(m[1] + m[2]) : rmAnioTexto('', file.name);
+        } else if (tipo === 'cert') { R = rmCertDeTexto(texto); y = rmAnioTexto(texto, file.name); }
+        else if (tipo === 'aud') { R = rmAudDeTexto(L.paginas); y = rmAnioTexto(texto, file.name); }
+        else if (tipo === 'ig') { R = rmIgDeTexto(L.paginas); y = rmAnioTexto(texto, file.name); }
+        else if (tipo === 'mem') { R = { notas: rmMemDeTexto(L.paginas) }; y = rmAnioTexto(texto, file.name); }
+        else { R = rmDepDeTexto(tipo, texto); y = +R.ejercicio || rmAnioTexto(texto, file.name); }
+        const sub = await c.subir(S.sel, `rmdoc-${y}`, 'doc', tipo, file);
+        if (sub.error) throw new Error(sub.error);
+        const D = rmDe(y);
+        D[tipo] = { ...R, origen: 'archivo', fecha: hoy(), n: L.n, ocr: L.ocr, archivo: sub.val, ...(tipo === 'ca' ? {} : { texto: texto.slice(0, 80000) }) };
+        await rmGuardar(y, D);
+        rgEj = y; rgSec = tipo;
+        msg = `${file.name}: ${SECC.find((q) => q[0] === tipo)[1].toLowerCase()} de ${y} leído${L.ocr ? ' con OCR' : ''}`; msgMal = false;
+      } catch (err) { aviso(`${file.name}: ${err.message}`, true); }
+    }
+    render();
+  }
+
+  // valor de una casilla presentada del ejercicio (o, si no, la columna «anterior» de las del siguiente)
+  function rmCasilla(y, code) {
+    const a = rmDe(y).ca?.v?.[code]; if (a && a[0] != null) return a[0];
+    const b = rmDe(y + 1).ca?.v?.[code]; return b && b[1] != null ? b[1] : null;
+  }
+  // borrador: lo del ejercicio, y si no lo del anterior con las fechas y años corridos
+  function rmBorrador(tipo, y) {
+    const D = rmDe(y)[tipo]; if (D) return D;
+    for (let k = 1; k <= 3; k++) {
+      const p = rmDe(y - k)[tipo];
+      if (p) {
+        let r = rmCorrerObj({ ...p }, y - k); for (let i = 1; i < k; i++) r = rmCorrerObj(r, y - k + i);
+        delete r.texto; delete r.archivo; r.origen = 'borrador'; r.desde = y - k;
+        if (tipo === 'cert') (r.dist || []).forEach((x) => { x.v = ''; });
+        if (tipo === 'aud') { r.fecha = ''; r.sello = ''; }
+        if (tipo === 'ig') { r.hist = p.hist; r.fechaForm = ''; r.id = ''; r.idDed = ''; }
+        return r;
+      }
+    }
+    return tipo === 'cert' ? { origen: 'borrador', tratSec: 'D.', cargoSec: 'secretario', organo: 'Consejo de Administración', tipoJunta: 'Ordinaria y Universal', tratPres: 'D.', cargoPres: 'Presidente',
+      dist: [{ c: 'Reservas Voluntarias', v: '' }, { c: 'Reserva de capitalización', v: '' }, { c: 'Distribución de dividendos', v: '' }], accPropias: 'no tenía al principio del ejercicio, ni ha realizado ningún tipo de negocio que implique la adquisición o transmisión de Acciones Propias durante el mismo.' }
+      : tipo === 'aud' ? { origen: 'borrador', opinion: 'Favorable' } : tipo === 'ig' ? { origen: 'borrador', hist: {} } : tipo === 'mem' ? { origen: 'borrador', notas: [] } : null;
+  }
+
+  const inp = (sec, k, v, w, ed) => `<input class="facin" data-rgf="${sec}|${k}" value="${esc(v ?? '')}" size="${w}"${ed ? '' : ' disabled'}>`;
+  const RM_CERT_CAMPOS = [['secretario', 'Secretario/a (nombre)'], ['secretarioDni', 'DNI del secretario/a'], ['cargoSec', 'Cargo del secretario/a'], ['tratSec', 'Tratamiento (D./Dª.)'], ['presidente', 'Presidente/a (nombre)'], ['presidenteDni', 'DNI del presidente/a'],
+    ['cargoPres', 'Cargo del presidente/a'], ['tratPres', 'Tratamiento (D./Dª.)'], ['organo', 'Órgano de administración'], ['tipoJunta', 'Tipo de junta'], ['lugar', 'Lugar'], ['fechaJunta', 'Fecha de la junta'], ['fechaForm', 'Fecha de formulación'],
+    ['pagCA', 'Páginas de las cuentas anuales'], ['pagIG', 'Páginas del informe de gestión'], ['pagAud', 'Páginas del informe de auditoría'], ['accPropias', 'Acciones propias (texto)']];
+  const RM_AUD_CAMPOS = [['firma', 'Sociedad de auditoría'], ['roacFirma', 'Nº ROAC de la sociedad'], ['nifFirma', 'NIF de la sociedad de auditoría'], ['auditor', 'Auditor firmante'], ['roacAuditor', 'Nº ROAC del auditor'], ['domicilio', 'Domicilio'],
+    ['cp', 'Código postal y ciudad'], ['fecha', 'Fecha del informe'], ['opinion', 'Tipo de opinión'], ['sello', 'Sello REA (año y número)'], ['paginas', 'Páginas'], ['otraInfo', 'Conclusión sobre el informe de gestión']];
+  const tablaCampos = (sec, campos, D, ed) => `<table class="tabla rg-tabla" style="width:auto"><tbody>${campos.map(([k, t]) => `<tr><td>${esc(t)}</td><td>${/otraInfo|accPropias/.test(k)
+    ? `<textarea class="facin" data-rgf="${sec}|${k}" rows="3" cols="70"${ed ? '' : ' disabled'}>${esc(D[k] ?? '')}</textarea>` : inp(sec, k, D[k], 44, ed)}</td></tr>`).join('')}</tbody></table>`;
+
+  function secCA(y, D, ed) {
+    const E = D.ca;
+    if (!E) return '<p class="hint">No hay cuentas anuales presentadas de este ejercicio. Suelta a la izquierda el PDF del depósito (formato Registro Mercantil, con casillas).</p>';
+    const filas = Object.keys(E.v).filter((q) => /^[1-6]/.test(q)).sort();
+    const clave = ['10000', '11000', '12000', '20000', '21000', '31000', '32000', '40100', '49100', '49500'].filter((q) => E.v[q]);
+    const lab = (q) => esc(E.t?.[q] ?? '');
+    const f = (v) => (v == null ? '—' : eur(v));
+    return `${clave.length ? `<h4 class="it-sec">Cifras principales</h4><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Casilla</th><th>Concepto</th><th class="num">${y}</th><th class="num">${y - 1}</th></tr></thead><tbody>${clave.map((q) => `<tr><td>${q}</td><td>${lab(q)}</td><td class="num">${f(E.v[q][0])}</td><td class="num">${f(E.v[q][1])}</td></tr>`).join('')}</tbody></table>` : ''}
+      <h4 class="it-sec">Todas las casillas leídas · ${filas.length}</h4><div class="wrap" style="max-height:420px;overflow:auto"><table class="tabla rg-tabla"><thead><tr><th>Casilla</th><th>Concepto</th><th class="num">${y}</th><th class="num">${y - 1}</th></tr></thead><tbody>${filas.map((q) => `<tr><td>${q}</td><td>${lab(q)}</td><td class="num">${f(E.v[q][0])}</td><td class="num">${f(E.v[q][1])}</td></tr>`).join('')}</tbody></table></div>
+      <p class="hint">Leído de ${esc(E.archivo?.nombre ?? '')} (${esc(E.fecha ?? '')}). El ejercicio siguiente usa estas cifras como «ejercicio anterior».</p>`;
+  }
+  function secCert(y, D, ed) {
+    const C = rmBorrador('cert', y) ?? {}, e = empresa(), dr = dregDe(e);
+    const res = rmCasilla(y, '49500'), dist = C.dist ?? [], tot = dist.reduce((s, x) => s + (+x.v || 0), 0), iResto = dist.findIndex((x) => x.v === '' || x.v == null);
+    const dv = (x, i) => (x.v !== '' && x.v != null ? +x.v : (i === iResto && res != null ? Math.round((res - tot) * 100) / 100 : 0));
+    const nom = dr.denominacion || e.nombre, nif = dr.nif || e.cif || '';
+    return `<p class="hint">${C.origen === 'borrador' ? (C.desde ? `Borrador: rellenado con la certificación de ${C.desde} (fechas corridas un año). Revisa fechas, páginas y la distribución del resultado.` : 'Borrador vacío: rellena los datos o suelta la certificación de un ejercicio.') : `Certificación de ${y} guardada.`}
+      ${res == null ? ` No hay cuentas presentadas de ${y}: el resultado del ejercicio no se puede calcular.` : ` Resultado del ejercicio ${y}: ${eur(res)} (cuentas presentadas).`}</p>
+      ${tablaCampos('cert', RM_CERT_CAMPOS, C, ed)}
+      <h4 class="it-sec">Distribución del resultado</h4><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Concepto</th><th class="num">Importe</th></tr></thead><tbody>
+      ${dist.map((x, i) => `<tr><td><input class="facin" data-rgdist="${i}|c" value="${esc(x.c)}" size="34"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgdist="${i}|v" value="${esc(x.v ?? '')}" placeholder="${iResto === i && res != null ? esc(String(dv(x, i))) : ''}" size="14" style="text-align:right"${ed ? '' : ' disabled'}></td></tr>`).join('')}
+      <tr><td><b>Total distribuido</b></td><td class="num"><b>${eur(dist.reduce((s, x, i) => s + dv(x, i), 0))}</b></td></tr></tbody></table>
+      <section class="block rm-hoja"><p style="text-align:center"><b>CERTIFICACION ACTA JUNTA GENERAL</b></p>
+      <p>${esc(C.tratSec)} ${esc(C.secretario)}, con DNI número ${esc(C.secretarioDni)}, en calidad de ${esc(C.cargoSec)} del ${esc(C.organo)} de ${esc(nom)}, con CIF ${esc(String(nif).replace(/^([A-Z])(\d)/, '$1-$2'))}, inscrita en el ${esc(dr.registro || 'Registro Mercantil')}:</p>
+      <p><u><b>CERTIFICA:</b></u></p><p>Que en el libro de actas de dicha sociedad consta transcrita el acta de la Junta General ${esc(C.tipoJunta)} celebrada en ${esc(C.lugar)}, a ${esc(C.fechaJunta)}.</p>
+      <p><u><b>Asistencia:</b></u> Asistieron la totalidad de los socios que representan el 100% del Capital Social, expresándose en el acta sus nombres y la representación que ostentan y constatando la firma de ellos.</p>
+      <p><u><b>Aceptación:</b></u> Aceptaron por unanimidad, la celebración de la Junta y su orden del día, siendo designados así mismo por unanimidad presidente y secretario de la Junta.</p>
+      <p><u><b>Orden del día:</b></u> 1.- Aprobación, si procede, de las Cuentas Anuales del ejercicio cerrado al 31/12/${y}. 2.- Aprobación, si procede, de la propuesta de Aplicación del Resultado del ejercicio.</p>
+      <p><u><b>Acuerdos:</b></u> 1.- Aprobar por unanimidad la gestión del órgano de administración de la sociedad. 2.- Aprobar por unanimidad las Cuentas Anuales, compuestas por el Balance de Situación, la Cuenta de Pérdidas y Ganancias y la Memoria de la sociedad, así como el informe de auditoría del ejercicio iniciado el 01/01/${y} y finalizado el 31/12/${y}, formuladas de conformidad con la legislación vigente y que se acompañan a la presente certificación. 3.- Aprobar por unanimidad la propuesta de distribución del ${res != null && res < 0 ? 'resultado' : 'beneficio'}:</p>
+      <table class="tabla rg-tabla" style="width:auto"><tbody><tr><td>Resultados del ejercicio</td><td class="num">${res != null ? eur(res) : ''}</td></tr>${dist.map((x, i) => `<tr><td>${esc(x.c)}</td><td class="num">${dv(x, i) ? eur(dv(x, i)) : '-'}</td></tr>`).join('')}</tbody></table>
+      <p>Votan a favor de los acuerdos la integridad de los socios con derecho a voto, quedando, por tanto, aprobados por unanimidad.</p>
+      <p>OTRO SI CERTIFICA, que en la misma sesión se extendió el acta correspondiente, la cual fue aprobada por unanimidad por el propio órgano y firmada por el secretario con el Visto bueno del presidente, en la misma fecha.</p>
+      <p>ASI MISMO CERTIFICA, que durante el ejercicio ${y}, la mercantil ${esc(nom)}, ${esc(C.accPropias)}</p>
+      <p>MAS CERTIFICA, que las Cuentas Anuales del ejercicio ${y}, han sido formuladas en ${esc(C.lugar)}, a ${esc(C.fechaForm)}, aprobadas el ${esc(C.fechaJunta)} y que constan de ${esc(C.pagCA)} páginas, cuyos ejemplares se adjuntan a la presente certificación, y son coincidentes con las cuentas anuales auditadas. De igual modo se adjunta un ejemplar del informe de gestión que consta de ${esc(C.pagIG)} páginas, así como un ejemplar del informe de los Auditores de cuentas, que consta de ${esc(C.pagAud)} páginas, debidamente firmado por estos se acompaña como anexo a esta certificación.</p>
+      <p>IGUALMENTE CERTIFICA, que dichas cuentas fueron firmadas por todos los miembros de órgano de administración de la sociedad.</p>
+      <p>Y para que así conste, se libra la presente en ${esc(C.lugar)} a ${esc(C.fechaJunta)}.</p>
+      <p style="margin-top:22px">${esc(C.tratSec)} ${esc(C.secretario)}.<br>DNI ${esc(C.secretarioDni)}<br>${esc(String(C.cargoSec || '').replace(/^./, (q) => q.toUpperCase()))} del ${esc(C.organo)}.</p>
+      <p>Vº. Bº. ${esc(C.tratPres)} ${esc(C.presidente)}.<br>DNI ${esc(C.presidenteDni)}<br>${esc(C.cargoPres)}.</p></section>`;
+  }
+  function secAud(y, D, ed) {
+    const A = rmBorrador('aud', y) ?? {};
+    return `<p class="hint">${A.origen === 'borrador' ? (A.desde ? `Borrador con el informe de ${A.desde}.` : 'Sin informe: suelta el PDF.') : `Informe de auditoría de ${y} guardado.`}</p>${tablaCampos('aud', RM_AUD_CAMPOS, A, ed)}
+      <h4 class="it-sec">Aspectos más relevantes de la auditoría</h4><textarea class="facin" data-rgf="aud|aspectos" rows="14" style="width:100%"${ed ? '' : ' disabled'}>${esc(A.aspectos ?? '')}</textarea>`;
+  }
+  function secIg(y, D, ed) {
+    const G = rmBorrador('ig', y) ?? { hist: {} }, hist = G.hist ?? {}, anios = Object.keys(hist).sort();
+    const HK = [['cifra', 'Cifra de negocios'], ['res', 'Resultado'], ['activo', 'Activo'], ['fp', 'Fondos propios'], ['deuda', 'Deuda'], ['fm', 'Fondo de maniobra'], ['liq', 'Liquidez']];
+    return `<p class="hint">${G.origen === 'borrador' ? (G.desde ? `Borrador con el informe de ${G.desde}.` : 'Sin informe: suelta el PDF.') : `Informe de gestión de ${y} guardado.`}</p>
+      ${anios.length ? `<h4 class="it-sec">Evolución de cifras</h4><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Ejercicio</th>${HK.map((q) => `<th>${q[1]}</th>`).join('')}</tr></thead><tbody>${anios.map((a) => `<tr><td>${a}</td>${HK.map(([k]) => `<td class="num">${hist[a][k] == null ? '' : n2(hist[a][k])}</td>`).join('')}</tr>`).join('')}</tbody></table>` : ''}
+      ${tablaCampos('ig', [['lugar', 'Lugar de formulación'], ['fechaForm', 'Fecha de formulación'], ['id', 'I+D (importe)'], ['idDed', 'I+D (deducción)']], G, ed)}
+      ${IG_SECC.map(([k, t]) => `<h4 class="it-sec">${esc(t)}</h4><textarea class="facin" data-rgf="ig|${k}" rows="5" style="width:100%"${ed ? '' : ' disabled'}>${esc(G[k] ?? '')}</textarea>`).join('')}`;
+  }
+  function secMem(y, D) {
+    const M = D.mem ?? { notas: [] };
+    return `${M.notas?.length ? `<h4 class="it-sec">Índice de la memoria · ${M.notas.length} notas</h4><div class="rg-indice">${M.notas.map((q) => `<button class="small" data-act="m-rg-irpag" data-p="${q.pag ?? ''}" title="${q.pag ? `Página ${q.pag}` : ''}"><b>Nota ${q.n}.</b> ${esc(String(q.titulo || '').slice(0, 70))}${q.pag ? ` <span class="hint">pág. ${q.pag}</span>` : ''}</button>`).join('')}</div>
+      <details><summary>Texto de las notas</summary>${M.notas.map((q) => `<h4>Nota ${q.n}. ${esc(q.titulo)}</h4><pre class="rg-pre">${esc(q.texto ?? '')}</pre>`).join('')}</details>` : '<p class="hint">Suelta el PDF de la memoria para sacar su índice.</p>'}`;
+  }
+  function secDep(tipo, y, D, ed) {
+    const R = D[tipo] ?? {}, otro = D[tipo === 'acu' ? 'nota' : 'acu'];
+    const a = rmEntradaNorm(R.entrada), b = rmEntradaNorm(otro?.entrada);
+    return `${R.archivo ? `<p class="hint">Leído de ${esc(R.archivo.nombre)}</p>` : '<p class="hint">Sin documento para este ejercicio.</p>'}
+      <table class="tabla rg-tabla" style="width:auto"><tbody>${DEP_CAMPOS[tipo].map(([k, t]) => `<tr><td>${esc(t)}</td><td>${inp(tipo, k, R[k], 44, ed)}</td></tr>`).join('')}</tbody></table>
+      ${a && b ? `<p><b>${a === b ? `✓ El número de entrada coincide con el ${tipo === 'acu' ? 'de la nota de despacho' : 'del acuse de entrada'}` : `✖ El número de entrada no coincide con el ${tipo === 'acu' ? 'de la nota de despacho' : 'del acuse de entrada'} (${esc(otro.entrada)})`}</b></p>` : ''}`;
+  }
+
+  function vistaCuentas() {
+    const e = empresa();
+    if (!e) return sinEmpresa;
+    const y = rmEj(), D = rmDe(y), ed = puede();
+    const anios = []; for (let a = (Number(S.ejercicio) || new Date().getFullYear()) + 1; a >= (Number(S.ejercicio) || new Date().getFullYear()) - 8; a--) anios.push(a);
+    const doc = D[rgSec];
+    const cuerpo = rgSec === 'ca' ? secCA(y, D, ed) : rgSec === 'cert' ? secCert(y, D, ed) : rgSec === 'aud' ? secAud(y, D, ed) : rgSec === 'ig' ? secIg(y, D, ed) : rgSec === 'mem' ? secMem(y, D) : secDep(rgSec, y, D, ed);
+    return `<div class="bar"><label><b>Ejercicio de las cuentas</b> <select data-rgej="1">${anios.map((a) => `<option value="${a}"${a === y ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
+      <nav class="subtabs">${SECC.map(([k, l]) => `<button class="${k === rgSec ? 'on' : ''}${rmDe(y)[k]?.archivo ? ' hecho' : ''}" data-act="m-rg-sec" data-s="${k}">${l}${rmDe(y)[k]?.archivo ? ' ✓' : ''}</button>`).join('')}</nav></div>
+      ${avisoHtml()}
+      <div class="rg-split"><div class="rg-izq">${ed ? `<div class="dropzone" data-kind="rmca" tabindex="0" role="button"><b>Suelta aquí el PDF</b> de las cuentas anuales, la certificación, el informe de auditoría, el de gestión, la memoria, el acuse o la nota de despacho (se reconoce por el nombre; si no, va a «${esc(SECC.find((q) => q[0] === rgSec)[1])}»).
+        <input type="file" data-dzkind="rmca" accept=".pdf" multiple hidden></div>` : ''}
+        <div class="rg-visor" data-rgvisor="${rgSec}|${y}">${doc?.archivo ? '<p class="hint">Cargando el PDF…</p>' : '<p class="hint">Sin PDF de este documento.</p>'}</div></div>
+      <div class="rg-der"><section class="block"><h4 class="it-tit">${esc(SECC.find((q) => q[0] === rgSec)[1])} · ejercicio ${y}</h4>${cuerpo}
+        ${doc && ed ? `<p><button class="small danger" data-act="m-rg-rmquitar">Quitar este documento de ${y}</button></p>` : ''}</section></div></div>`;
+  }
+
+  // ---- visor del PDF (mitad izquierda) ----
+  const visorCache = new Map();
+  async function montarVisores() {
+    for (const el of document.querySelectorAll('[data-rgvisor]:not([data-montado])')) {
+      el.dataset.montado = '1';
+      const [tipo, y] = el.dataset.rgvisor.split('|'), arch = tipo === 'esc' ? S.registros.find((r) => r.id === y)?.datos?.archivo : rmDe(+y)[tipo]?.archivo;
+      if (!arch?.path) continue;
+      try {
+        let buf = visorCache.get(arch.path);
+        if (!buf) {
+          const { data, error } = await db.storage.from('documentos').download(arch.path);
+          if (error) throw new Error(error.message);
+          buf = new Uint8Array(await data.arrayBuffer()); visorCache.set(arch.path, buf);
+        }
+        const lib = window.pdfjsLib;
+        lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const pdf = await lib.getDocument({ data: buf.slice() }).promise;
+        el.innerHTML = '';
+        for (let p = 1; p <= pdf.numPages; p++) {
+          if (!el.isConnected) return;
+          const pg = await pdf.getPage(p), vp = pg.getViewport({ scale: 1.4 }), cv = document.createElement('canvas');
+          cv.width = vp.width; cv.height = vp.height; cv.dataset.vp = p; cv.style.cssText = 'width:100%;display:block;margin:0 0 6px;border:1px solid var(--line)';
+          el.appendChild(cv);
+          await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+        }
+      } catch (err) { el.innerHTML = `<p class="hint rg-msg mal">No se pudo mostrar el PDF: ${esc(err.message)}</p>`; }
+    }
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    let tm = null;
+    new MutationObserver(() => { clearTimeout(tm); tm = setTimeout(montarVisores, 60); }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  async function rmCampo(clave, valor) {
+    const [sec, k] = clave.split('|'), y = rmEj(), D = rmDe(y);
+    D[sec] = D[sec] ?? rmBorrador(sec, y) ?? {};
+    D[sec][k] = valor; if (D[sec].origen === 'borrador') D[sec].origen = 'manual';
+    await rmGuardar(y, D);
+  }
+  async function rmDist(clave, valor) {
+    const [i, k] = clave.split('|'), y = rmEj(), D = rmDe(y);
+    D.cert = D.cert ?? rmBorrador('cert', y);
+    if (!D.cert.dist?.[+i]) return;
+    D.cert.dist[+i][k] = valor; if (D.cert.origen === 'borrador') D.cert.origen = 'manual';
+    await rmGuardar(y, D); render();
+  }
+  // datos registrales que trae la identificación de las cuentas (solo rellena lo vacío)
+  function dregDesdeCA(e, d) {
+    const filas = S.registros.filter((r) => r.tipo === 'rmdoc' && r.empresa_id === e.id && r.datos?.ca?.t).sort((a, b) => b.ejercicio - a.ejercicio);
+    if (!filas.length) return;
+    const E = filas[0].datos.ca, t = E.t ?? {}, pon = (k, v) => { if (v && !d[k]) { d[k] = v; d._o[k] = `${E.archivo?.nombre ?? 'cuentas'} (cuentas presentadas ${filas[0].ejercicio})`; } };
+    pon('lei', (String(t['01009'] || '').match(/\b[A-Z0-9]{20}\b/) || [''])[0]); pon('nif', (String(t['01010'] || '').match(/\b[A-Z]\d{7}[0-9A-J]\b/) || [''])[0]); pon('denominacion', String(t['01020'] || '').trim());
+    pon('domicilio', String(t['01022'] || '').replace(/\s+(Municipio|C[oó]digo postal)\b.*$/i, '').trim());
+    const cn = String(t['02001'] || '').match(/^(\d{4})\s*(.*?)\s*(\(\d\))?$/); if (cn) { pon('cnae', cn[1]); pon('cnaeDesc', cn[2]); }
+  }
+
+  // ================= Escrituras =================
+  const ESC_TIPOS = [['CONSTITUCI[OÓ]N', 'Constitución de sociedad'], ['AMPLIACI[OÓ]N DE CAPITAL|AUMENTO DE CAPITAL', 'Ampliación de capital'], ['REDUCCI[OÓ]N DE CAPITAL', 'Reducción de capital'], ['FUSI[OÓ]N', 'Fusión'], ['ESCISI[OÓ]N', 'Escisión'],
+    ['MODIFICACI[OÓ]N DE ESTATUTOS|MODIFICACI[OÓ]N ESTATUTARIA', 'Modificación de estatutos'], ['TRASLADO DE DOMICILIO|CAMBIO DE DOMICILIO', 'Traslado de domicilio'], ['NOMBRAMIENTO', 'Nombramiento de cargos'], ['CESE|DIMISI[OÓ]N', 'Cese de cargos'],
+    ['REVOCACI[OÓ]N', 'Revocación de poderes'], ['PODER', 'Apoderamiento'], ['ELEVACI[OÓ]N A P[UÚ]BLICO', 'Elevación a público de acuerdos sociales'], ['DISOLUCI[OÓ]N|LIQUIDACI[OÓ]N', 'Disolución y liquidación'], ['COMPRAVENTA', 'Compraventa'],
+    ['HIPOTECA|PR[EÉ]STAMO', 'Préstamo / hipoteca'], ['CAMBIO DE DENOMINACI[OÓ]N', 'Cambio de denominación'], ['OBJETO SOCIAL', 'Modificación del objeto social'], ['TRANSFORMACI[OÓ]N', 'Transformación'], ['ACTA', 'Acta notarial']];
+  const ESC_CAMPOS = [['tipo', 'Tipo de escritura'], ['fecha', 'Fecha'], ['lugar', 'Lugar'], ['notario', 'Notario'], ['protocolo', 'Nº de protocolo'], ['comparecen', 'Comparecientes'], ['capital', 'Capital / importe'], ['registro', 'Registro Mercantil'],
+    ['tomo', 'Tomo'], ['folio', 'Folio'], ['hoja', 'Hoja'], ['inscripcion', 'Inscripción'], ['fechaInsc', 'Fecha de inscripción'], ['resumen', 'Resumen']];
+  const ESC_NUM = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, dieciséis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19,
+    veinte: 20, veintiuno: 21, veintiun: 21, veintiuna: 21, veintidos: 22, veintidós: 22, veintitres: 23, veintitrés: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintiséis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29, treinta: 30,
+    cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90, cien: 100, ciento: 100, doscientos: 200, doscientas: 200, trescientos: 300, trescientas: 300, cuatrocientos: 400, cuatrocientas: 400, quinientos: 500, quinientas: 500,
+    seiscientos: 600, seiscientas: 600, setecientos: 700, setecientas: 700, ochocientos: 800, ochocientas: 800, novecientos: 900, novecientas: 900 };
+  function escPalabras(t) {
+    let tot = 0, cur = 0;
+    String(t).toLowerCase().replace(/[^a-záéíóúñ ]/g, ' ').split(/\s+/).filter(Boolean).forEach((w) => {
+      if (w === 'y') return;
+      if (w === 'mil') { tot += (cur || 1) * 1000; cur = 0; return; }
+      if (ESC_NUM[w] != null) cur += ESC_NUM[w];
+    });
+    return tot + cur;
+  }
+  function escExtraer(pags) {
+    const T = pags.join('\n'), T1 = pags.slice(0, 3).join('\n'), U = T1.toUpperCase(), R = {};
+    R.tipo = [...new Set(ESC_TIPOS.filter(([rx]) => new RegExp(`\\b(${rx})`, 'i').test(U)).map((x) => x[1]))].slice(0, 3).join(' · ');
+    let m = T1.match(/N[ÚU]MERO\s+([A-ZÁÉÍÓÚÑ -]{3,80}?)\s*\(?\s*(\d[\d.]*)\s*\)?/i) || T1.match(/(?:n[ºo°]|n[uú]mero)\s*(?:de\s+)?protocolo\s*:?\s*()(\d[\d.]*)/i);
+    if (m) R.protocolo = m[2] || String(escPalabras(m[1]));
+    m = T1.match(/En\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[a-záéíóúñ]+)?)\s*,\s*(?:mi\s+residencia\s*,\s*)?(?:a|el\s+d[ií]a)\s+([a-záéíóúñ ]+?|\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+de\s+(dos\s+mil[a-záéíóúñ ]*|\d{4})/i);
+    if (m) {
+      R.lugar = m[1];
+      const d = /^\d+$/.test(m[2]) ? +m[2] : escPalabras(m[2]), a = /^\d+$/.test(m[4]) ? +m[4] : escPalabras(m[4]);
+      R.fecha = `${d ? `${d} de ` : ''}${m[3].toLowerCase()} de ${a}`;
+    } else { m = T1.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b/); if (m) R.fecha = `${m[1]}/${m[2]}/${m[3]}`; }
+    m = T1.match(/ante\s+m[ií]\s*,?\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ .]+?)\s*,\s*Notari[oa]/i) || T1.match(/(?:Notari[oa])\s+(?:D\.|Dª|Don|Doña)?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ .]+?)\s*(?:,|\n)/);
+    if (m) R.notario = m[1].replace(/\s+/g, ' ').trim();
+    const comp = [], rx = /(?:\bD\.|\bDª\.?|\bDOÑA|\bDON|\bDña\.?)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{4,60}?)\s*,[\s\S]{0,260}?(?:D\.?N\.?I\.?|N\.?I\.?F\.?|N\.?I\.?E\.?)[^0-9XYZ]{0,25}([0-9XYZ][\d.]{7,10}\s?-?\s?[A-Z])/g;
+    let q;
+    while ((q = rx.exec(T1)) && comp.length < 8) { const dni = q[2].replace(/[\s.-]/g, ''); if (!comp.some((x) => x.includes(dni))) comp.push(`${q[1].trim()} (${dni})`); }
+    R.comparecen = comp.join('; ');
+    m = T.match(/capital\s+social[^.]{0,160}?(\d{1,3}(?:\.\d{3})+(?:,\d{2})?|\d+,\d{2})\s*(?:euros|€|EUR)/i); if (m) R.capital = `${m[1]} €`;
+    m = T.match(/REGISTRO\s+MERCANTIL\s+DE\s+([A-ZÁÉÍÓÚÑ]+)/i); if (m) R.registro = `Registro Mercantil de ${m[1][0]}${m[1].slice(1).toLowerCase()}`;
+    m = T.match(/\bTomo\s*:?\s*(\d{1,6})/i); if (m) R.tomo = m[1];
+    m = T.match(/\bFolio\s*:?\s*(\d{1,6})/i); if (m) R.folio = m[1];
+    m = T.match(/\bHoja\s*(?:n[ºo°]\.?|registral)?\s*:?\s*([A-Z]{0,3}-?\s?\d{1,7})/i); if (m) R.hoja = m[1].replace(/\s/g, '');
+    m = T.match(/\bInscripci[oó]n\s*:?\s*(\d{1,4}[ªa]?)/i); if (m) R.inscripcion = m[1];
+    m = T.match(/(?:inscrit[oa]|inscripci[oó]n)[^\n]{0,120}?(\d{1,2}[/.-]\d{1,2}[/.-]\d{4})/i); if (m) R.fechaInsc = m[1];
+    const i = T1.search(/\b(EXPONE[N]?|OTORGA[N]?|DISPOSICIONES|ACUERDOS)\b/); if (i >= 0) R.resumen = `${T1.slice(i, i + 900).replace(/\s+/g, ' ').trim()}…`;
+    return R;
+  }
+  let escSel = null;
+  const escLista = () => S.registros.filter((r) => r.tipo === 'rmesc' && r.empresa_id === S.sel);
+  // las escrituras subidas antes de esta versión solo traen fecha, notario, protocolo, tipo y descripción
+  const escC = (r) => r.datos.c ?? { fecha: r.datos.fecha, notario: r.datos.notario, protocolo: r.datos.protocolo, tipo: r.datos.tipo, resumen: r.datos.desc };
+  async function cargarEscrituras(files) {
+    if (!S.sel) return aviso('Elige primero la empresa.', true);
+    for (const file of files) {
+      try {
+        if (!/\.pdf$/i.test(file.name)) { aviso(`${file.name}: solo se leen PDF`, true); continue; }
+        aviso(`Leyendo ${file.name}…`);
+        const L = await paginasDe(file), R = escExtraer(L.paginas), id = crypto.randomUUID();
+        const sub = await c.subir(S.sel, 'rmesc', id, 'archivo', file);
+        if (sub.error) throw new Error(sub.error);
+        const fila = { id, empresa_id: S.sel, tipo: 'rmesc', ejercicio: null, datos: { c: R, archivo: sub.val, name: file.name, fecha: hoy(), n: L.n, ocr: L.ocr, texto: L.paginas.join('\n\n— página —\n\n').slice(0, 120000) } };
+        const { error } = await db.from('registros').insert(fila);
+        if (error) throw new Error(error.message);
+        S.registros.push(fila); escSel = id;
+        msg = `${file.name}: escritura leída${L.ocr ? ' (OCR)' : ''}${R.tipo ? ` · ${R.tipo}` : ''}`; msgMal = false;
+      } catch (err) { aviso(`${file.name}: ${err.message}`, true); }
+    }
+    render();
+  }
+  function vistaEscrituras() {
+    const e = empresa();
+    if (!e) return sinEmpresa;
+    const D = escLista(), ed = puede();
+    const sel = D.find((x) => x.id === escSel) ?? D[D.length - 1];
+    const lista = D.length ? `<table class="tabla rg-tabla" style="width:100%;margin-bottom:10px"><thead><tr><th>Fecha</th><th>Tipo</th><th>Notario</th><th>Protocolo</th><th>Archivo</th><th></th></tr></thead><tbody>${
+      D.slice().sort((a, b) => String(escC(b).fecha || '').localeCompare(String(escC(a).fecha || ''))).map((x) => `<tr class="${sel && x.id === sel.id ? 'sel-cod' : ''}" data-act="m-rg-escsel" data-id="${x.id}" style="cursor:pointer"><td>${esc(escC(x).fecha || '')}</td><td>${esc(escC(x).tipo || '')}</td><td>${esc(escC(x).notario || '')}</td><td>${esc(escC(x).protocolo || '')}</td><td>${esc(x.datos.name || x.datos.archivo?.nombre || '')}</td><td>${ed ? `<button class="small danger" data-act="m-rg-escdel" data-id="${x.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '';
+    const drop = ed ? `<div class="dropzone" data-kind="rmesc" tabindex="0" role="button"><b>Suelta aquí el PDF de una escritura</b> (o varias) o pulsa para elegirla. Se guarda, se lee (con OCR si es un escaneo) y se sacan tipo, fecha, notario, protocolo, comparecientes, capital e inscripción en el Registro.
+      <input type="file" data-dzkind="rmesc" accept=".pdf" multiple hidden></div>` : '';
+    if (!sel) return `${drop}${avisoHtml()}<p class="vacio">No hay escrituras guardadas de esta empresa.</p>`;
+    const C = escC(sel);
+    const der = `<section class="block rm-hoja"><h4 class="it-tit">${esc(C.tipo || 'Escritura')}</h4><table class="tabla rg-tabla" style="width:100%"><tbody>${ESC_CAMPOS.map(([k, t]) => `<tr><td style="width:24%"><b>${t}</b></td><td>${k === 'resumen' || k === 'comparecen'
+      ? `<textarea class="facin" data-rgesc="${k}" rows="${k === 'resumen' ? 8 : 3}" style="width:100%"${ed ? '' : ' disabled'}>${esc(C[k] || '')}</textarea>`
+      : `<input class="facin" data-rgesc="${k}" value="${esc(C[k] || '')}" style="width:100%"${ed ? '' : ' disabled'}>`}</td></tr>`).join('')}</tbody></table>
+      ${sel.datos.texto ? `<details style="margin-top:10px"><summary>Texto completo (${sel.datos.n} páginas${sel.datos.ocr ? ', leído con OCR' : ''})</summary><pre class="rg-pre">${esc(sel.datos.texto)}</pre></details>` : ''}</section>`;
+    return `${avisoHtml()}<div class="rg-split"><div class="rg-izq"><div class="rg-visor" data-rgvisor="esc|${sel.id}"><p class="hint">Cargando el PDF…</p></div></div><div class="rg-der">${drop}${lista}${der}</div></div>`;
+  }
+  async function escCampo(k, v) {
+    const r = escLista().find((x) => x.id === escSel) ?? escLista().slice(-1)[0];
+    if (!r || !puede()) return;
+    const datos = { ...r.datos, c: { ...escC(r), [k]: v } };
+    const { error } = await db.from('registros').update({ datos }).eq('id', r.id);
+    if (error) return aviso(error.message, true);
+    r.datos = datos;
+  }
+  // la escritura de constitución manda sobre notario, protocolo y fecha de constitución (salvo lo escrito a mano)
+  function dregDesdeEsc(e, d) {
+    const r = S.registros.find((x) => x.tipo === 'rmesc' && x.empresa_id === e.id && /constituc/i.test(escC(x).tipo || ''));
+    if (!r) return;
+    const C = escC(r), o = `${r.datos.name ?? 'escritura'} (escritura de constitución)`;
+    [['notario', C.notario], ['protocolo', C.protocolo], ['fconst', C.fecha]].forEach(([k, v]) => { if (v && d._o[k] !== 'a mano' && d[k] !== v) { d[k] = v; d._o[k] = o; } });
+  }
+
   // ================= Eventos propios =================
   const acciones = {
+    'm-rg-escsel': (d) => { escSel = d.id; render(); },
+    'm-rg-escdel': async (d) => {
+      if (!confirm('¿Quitar esta escritura y su archivo?')) return;
+      const r = escLista().find((x) => x.id === d.id); if (!r) return;
+      if (r.datos.archivo?.path) await db.storage.from('documentos').remove([r.datos.archivo.path]);
+      await db.from('registros').delete().eq('id', r.id);
+      S.registros.splice(S.registros.indexOf(r), 1); render();
+    },
+    'm-rg-sec': (d) => { rgSec = d.s; render(); },
+    'm-rg-irpag': (d) => { const cv = document.querySelector(`[data-rgvisor] canvas[data-vp="${d.p}"]`); cv?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    'm-rg-rmquitar': async () => {
+      if (!confirm('¿Quitar este documento y su archivo?')) return;
+      const y = rmEj(), D = rmDe(y), p = D[rgSec]?.archivo?.path;
+      if (p) await db.storage.from('documentos').remove([p]);
+      delete D[rgSec]; await rmGuardar(y, D); render();
+    },
+    'm-rg-accdel': async (d) => { const D = accDatos(); D.rel.splice(+d.i, 1); await accGuardar(D); render(); },
+    'm-rg-accadd': async () => { const D = accDatos(); D.rel.push({ socio: '', participada: '', pct: 0 }); await accGuardar(D); render(); },
+    'm-rg-accquitar': async (d) => {
+      if (!confirm(`¿Quitar ${d.n} y las participaciones leídas de él?`)) return;
+      const D = accDatos(); D.rel = D.rel.filter((r) => r.origen !== d.n); D.archivos = D.archivos.filter((a) => a.name !== d.n);
+      await accGuardar(D); render();
+    },
     'm-rg-dregtr': () => dregDeTitReal(),
     'm-rg-dregquitar': (d) => dregQuitar(d.n),
     'm-rg-tradd': async (d) => { const D = trlDe(); D[d.c].push({}); await trlGuardar(D); },
@@ -432,12 +1213,32 @@ export function crearRegistral(c) {
     if (t.dataset.rgdreg) dregEditar(t.dataset.rgdreg, t.value);
     else if (t.dataset.rgtr) trlCampo(t.dataset.rgtr, t.value);
     else if (t.dataset.rgtrcab) trlCab(t.dataset.rgtrcab, t.value);
+    else if (t.dataset.rgesc) escCampo(t.dataset.rgesc, t.value);
+    else if (t.dataset.rgf) rmCampo(t.dataset.rgf, t.value);
+    else if (t.dataset.rgdist) rmDist(t.dataset.rgdist, t.value);
+    else if (t.dataset.rgej) { rgEj = +t.value; render(); }
+    else if (t.dataset.rgacctipo) { const D = accDatos(); D.tipos[t.dataset.rgacctipo] = t.value; accGuardar(D).then(render); }
+    else if (t.dataset.rgacctodo) { accTodo = t.checked; render(); }
+    else if (t.dataset.rgaccsoc) { accSoc = t.value; render(); }
+    else if (t.dataset.rgaccf) {
+      const [i, k] = t.dataset.rgaccf.split('|'), D = accDatos();
+      if (!D.rel[+i]) return;
+      D.rel[+i][k] = k === 'pct' ? (parseFloat(t.value.replace('%', '').replace(/\./g, '').replace(',', '.')) || 0) : t.value;
+      accGuardar(D).then(render);
+    }
+  });
+  document.addEventListener('click', (ev) => {
+    const f = ev.target.closest?.('[data-rgacctr]');
+    if (f && !ev.target.closest('select')) { accTR = accTR === f.dataset.rgacctr ? null : f.dataset.rgacctr; render(); }
   });
 
-  const kinds = { dreg: cargarDreg, trl: cargarTitReal };
+  const kinds = { dreg: cargarDreg, trl: cargarTitReal, acc: cargarAccionariado, rmca: cargarRm, rmesc: cargarEscrituras };
   const tabs = {
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', vistaDreg],
     trl: ['Titularidad Real', 'Titulares reales', vistaTitReal],
+    acc: ['Organigrama', 'Socios y participadas', vistaAccionariado],
+    rmca: ['Cuentas Anuales Presentadas', 'Cuentas, certificación, auditoría, gestión, memoria, acuse y nota', vistaCuentas],
+    rmesc: ['Escrituras', 'Notariales', vistaEscrituras],
   };
   return { tabs, kinds, acciones };
 }

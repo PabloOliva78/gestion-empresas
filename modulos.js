@@ -1,11 +1,11 @@
-// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
+﻿// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=41';
 
 import { CAB_SII } from './siicab.js?v=1';
-import { crearRegistral } from './registral.js?v=1';
+import { crearRegistral } from './registral.js?v=2';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -3860,9 +3860,9 @@ export function crearModulos(c) {
         out.push((await w.recognize(cv)).data.text);
       }
     } finally { await w.terminate(); }
-    return out.join('\n');
+    return out;
   };
-  const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
+  const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir,leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
   const subirComo = (kind, files) => (R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 

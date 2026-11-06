@@ -774,3 +774,9 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .rg-tabla td { padding: .2rem .4rem; vertical-align: middle; }
 .rg-pre { white-space: pre-wrap; font-size: 11px; max-height: 300px; overflow: auto; background: rgba(127,127,127,.12); padding: 8px; }
 .rg-msg.mal { color: #b42318; }
+.rg-split { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.1fr); gap: 1rem; align-items: start; }
+.rg-izq { position: sticky; top: var(--tabsH, 64px); }
+.rg-visor { max-height: calc(100vh - 150px); overflow: auto; }
+.rg-indice { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-bottom: 8px; }
+.subtabs button.hecho { font-weight: 600; }
+@media (max-width: 900px) { .rg-split { grid-template-columns: 1fr; } .rg-izq { position: static; } }
