@@ -948,3 +948,8 @@ table.ca-t th:nth-child(3),table.ca-t th:nth-child(4){width:150px}
 .scroll-bal{overflow-x:auto; max-width:100%}
 .ca-pag .ca-cab span{color:#000}
 .est-ok{color:#1e6b34; font-weight:600} .dif-ko{color:#842029; font-weight:700}
+
+/* ===== Bloque 7 · zona de Excel propio e impresión ===== */
+.drop-sii-in{border:2px dashed #7f93bd; border-radius:6px; padding:12px 16px; margin:0 0 12px; background:#f4f7fc; color:var(--ink,#1a2a4a); cursor:pointer; font-size:14px}
+.drop-sii-in:hover,.drop-sii-in.over{background:#e3ebf8; border-color:#1f3864}
+@media print{ .lat,.tabs-wrap,.no-print,header.doc,.tab-tit{display:none!important} .layout{display:block!important} .princ{margin:0!important} }

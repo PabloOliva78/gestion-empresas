@@ -1,8 +1,9 @@
 // Bloque 7 · Estados financieros portados de la aplicación antigua (diseño y cálculo copiados; solo cambia la capa de datos).
 // Datos: el balance de sumas y saldos de cada ejercicio sale de los registros «sys» (botón SYS); las cuentas anuales presentadas, de «rmdoc» (Registro Mercantil);
 // lo presentado del 200/583/592, de «prs»; lo escrito a mano (ID, PN1/PN2/F1, titular real, modelo) se guarda en el navegador por empresa.
+import { leerSYS } from './lectores.js?v=41';
 export function crearEstados(c) {
-  const { S, esc, render, empresa, dz } = c;
+  const { S, esc, render, empresa, dz, db, cargar, puede, filasExcel } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
   const nf = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' });
@@ -35,8 +36,9 @@ export function crearEstados(c) {
   const lsGet = (k, d) => { try { const v = localStorage.getItem(`est7-${S.sel}-${k}`); return v === null ? d : JSON.parse(v); } catch { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem(`est7-${S.sel}-${k}`, JSON.stringify(v)); } catch { /* sin almacenamiento */ } };
   const EMP = () => empresa() ?? {};
-  const ssTab = () => null;
-  const zonaSsTab = () => '';
+  const ssTab = (k) => { const d = lsGet('ssTab-' + k, null); return d && d.lines && d.lines.length ? d : null; };
+  const zonaSsTab = (k) => { const D = ssTab(k), nom = k === 'bs' ? 'balance de situación' : 'cuenta de pérdidas y ganancias';
+    return `<div class="drop-sii-in no-print" data-dropsstab="${k}" tabindex="0" role="button" style="margin-bottom:8px">${D ? `<b>Excel propio: ${esc(D.name)}</b>${D.ej ? ' · ejercicio ' + D.ej : ''} · ${D.lines.length} cuentas. Suelta otro para cambiarlo.` : `<b>Suelta aquí el Excel de esta pestaña</b> (balance de sumas y saldos: cuenta, nombre, saldo de apertura, debe, haber y saldo de cierre). Solo se usa para la ${nom}: no cambia lo que usa el resto de la aplicación. Sin Excel propio se usa el balance de sumas y saldos general.`}</div>${D ? `<button class="small no-print" data-quitarsstab="${k}" style="margin-bottom:8px">Quitar el Excel propio (usar el general)</button>` : ''}`; };
 
   // ================= Balance de sumas y saldos por ejercicio (registros «sys») =================
   // forma de la antigua: {digitos, cuenta, nombre, ap, debe, haber, cierre}; «cierre» = saldo antes de las transacciones de cierre (la PyG sigue en las cuentas 6 y 7)
@@ -54,7 +56,8 @@ export function crearEstados(c) {
   }
   const efParcial = (y) => !sysReg(y) && !!sysReg(y + 1);
   const efNombre = (y) => sysReg(y)?.datos?.nombre ?? '';
-  function efSelHtml() {
+  function efSelHtml() { return efSelHtml0() + efGuardadosHtml(); }
+  function efSelHtml0() {
     const A = efAnios(), y = efSel(); if (!A.length) return '';
     return `<div class="filtros no-print" style="margin:0 0 8px"><label><b>Ejercicio</b> <select data-efej="1">${A.map((a) => `<option value="${a}"${a === y ? ' selected' : ''}>${a}${efParcial(a) ? ' (solo balance, de la apertura de ' + (a + 1) + ')' : ' · ' + esc(efNombre(a))}</option>`).join('')}</select></label> <span class="leyenda">Cada balance de sumas y saldos que cargas se guarda en su año; el desplegable vale para Cuentas anuales, Sumas y saldos, Balance de situación y Pérdidas y ganancias.</span></div>`;
   }
@@ -328,7 +331,7 @@ function paginaTR(ej){
     <h4>III.a Sociedades que intervienen en la cadena de control (participación en el capital)</h4>${tabla('IIIa',['DOCUMENTO TITULAR REAL','NIVEL','DENOMINACIÓN SOCIAL','NACIONALIDAD','PAÍS EXPEDICIÓN','TIPO DOC.','DOCUMENTO','DOMICILIO SOCIAL','DATOS REGISTRALES / LEI'],3)}
     <h4>IV.a Participaciones de las sociedades de la cadena de control</h4>${tabla('IVa',['DOCUMENTO TITULAR REAL','DOCUMENTO PARTICIPANTE','DOCUMENTO PARTICIPADA','% PARTICIPACIÓN DIRECTA'],5)}
     <h4>III.b / IV.b Control a través de derechos de voto</h4>${tabla('IIIb',['DOCUMENTO TITULAR REAL','NIVEL','DENOMINACIÓN SOCIAL','DOCUMENTO','DOCUMENTO PARTICIPANTE','DOCUMENTO PARTICIPADA','% DIRECTA'],2)}
-    </div><p class="leyenda">Datos a mano; se guardan por empresa.</p></section>`;
+    </div><div class="no-print" style="margin-top:8px"><button class="small" data-trpasar="1">Rellenar desde Titularidad real</button> <span class="leyenda">Rellena la página TR (titular real) del depósito de cuentas con los datos de la pestaña Titularidad real.</span></div><p class="leyenda">Datos a mano; se guardan por empresa.</p></section>`;
 }
   // --- antigua l.9120-9161 ---
 function paginaID(ej){
@@ -436,7 +439,7 @@ function vistaCuentasAnuales(){
      let sel=ST.caPag||'ID'; if(!PAGS.some(p=>p[0]===sel)) sel='ID';
      const tabs=PAGS.map(([k,t])=>`<button class="ca-subtab${k===sel?' on':''}" data-capag="${esc(k)}">${k==='*'?'':`<b>${esc(k)}</b> `}${esc(t)}</button>`).join('');
      const cuerpo= sel==='*' ? PAGS.filter(p=>p[2]).map(p=>p[2]()).join('') : PAGS.find(p=>p[0]===sel)[2]();
-     return efSelHtml()+`<section class="block no-print"><h3 class="bt">Creación de un nuevo depósito</h3>${radios}<div class="ca-subtabs">${tabs}</div></section>`+cuerpo; })();
+     return efSelHtml()+`<section class="block no-print"><h3 class="bt">Creación de un nuevo depósito</h3>${radios}<div class="no-print" style="margin:6px 0"><button class="small" data-caxls="1">Exportar a Excel</button> <button class="small" data-caprint="1">Imprimir</button></div><div class="ca-subtabs">${tabs}</div></section>`+cuerpo; })();
 }
   // --- antigua l.9033-9046 ---
 function vistaTef(){ const ej=+ejNum(), y=ST.tefEj? +ST.tefEj : ej-1, n=v=>v===null||v===undefined||isNaN(v)?'—':money(r2(v)), pc=v=>v===null||!isFinite(v)?'—':(v*100).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' %';
@@ -705,12 +708,80 @@ function vistaCis(){ const R=calcIS(), n=v=>v===null||v===undefined||isNaN(v)?'�
     if (el.dataset.cisnuevabin !== undefined) { const y = +el.value; if (y > 1990 && y < ej) { const o = lsGet('cis-' + ej) || {}; o['bin' + y] = o['bin' + y] || 0; lsSet('cis-' + ej, o); render(); } }
   });
 
-  const conEmp = (f) => () => (S.sel ? zonaSys() + f() : sinEmpresa);
+  // ================= Resto del bloque 7: Excel propio de BSit/PyG, balances guardados, TR desde Titularidad real, Excel e impresión =================
+  const TRL_TIPOS = ['Capital > 25 %', 'Derechos de voto > 25 %', 'Control por otros medios', 'Administrador / dirección (asimilado)'];
+  const trlTipoDoc = (d) => (/^[XYZ]\d{7}[A-Z]$/.test(d) ? 'NIE' : /^\d{8}[A-Z]$/.test(d) ? 'DNI' : /^[A-Z]\d{7}[0-9A-J]$/.test(d) ? 'NIF' : d ? 'Pasaporte/otro' : '');
+  async function cargarSsTab(k, file) {
+    let cuentas = null;
+    try { cuentas = leerSYS(await filasExcel(file)); } catch { cuentas = null; }
+    if (!cuentas) { alert(file.name + ': no he encontrado un balance de sumas y saldos (cuenta, nombre, saldo de apertura, debe, haber y saldo de cierre)'); return; }
+    const ej = parseInt((/\b(20\d\d)\b/.exec(file.name) || [])[1] ?? '', 10) || null;
+    lsSet('ssTab-' + k, { name: file.name, ej, lines: cuentas.map((x) => ({ digitos: x.cuenta, cuenta: x.cuenta, nombre: x.nombre, cierre: x.previo, ap: x.apertura, debe: x.debe, haber: x.haber })) });
+    render();
+  }
+  // balances guardados por ejercicio (archivo, nº de cuentas, total activo y resultado); se puede quitar el que no sea
+  function efGuardadosHtml() {
+    const A = efAnios(); if (!A.length) return '';
+    const fila = (y) => { const L = efLineas(y), X = efCtx(L), act = X.val('D', 107), res = EF_PYG.length ? X.val('I', EF_PYG[EF_PYG.length - 1][0]) : 0;
+      const cero = !efParcial(y) && L.filter((l) => /^[1-5]/.test(String(l.digitos)) && Math.abs(+l.cierre || 0) > 0.005).length === 0;
+      return `<tr${cero ? ' style="background:#fde8e8"' : ''}><td>${y}</td><td>${esc(efParcial(y) ? 'saldos de apertura de ' + (y + 1) : efNombre(y))}</td><td class="n">${L.length}</td><td class="n">${money(act)}</td><td class="n">${efParcial(y) ? '-' : money(res)}</td><td>${cero ? '<b>sin saldos de cierre: revisa columnas del Excel</b>' : ''}</td><td>${!efParcial(y) && puede?.() ? `<button class="small" data-ssdel="${y}">Quitar</button>` : ''}</td></tr>`; };
+    return `<details class="no-print" style="margin:0 0 8px"><summary><b>Balances guardados por ejercicio</b> (archivo, nº cuentas, total activo y resultado; quita el que no sea y vuelve a cargarlo)</summary><table class="aud mov" style="width:auto"><thead><tr><th>Ejercicio</th><th>Archivo</th><th>Cuentas</th><th>Total activo</th><th>Resultado</th><th></th><th></th></tr></thead><tbody>${A.map(fila).join('')}</tbody></table></details>`;
+  }
+  // página TR de Cuentas anuales rellenada con la pestaña Titularidad real
+  function trlPasarTR() {
+    const D = S.registros.find((r) => r.tipo === 'titreal' && r.empresa_id === S.sel)?.datos ?? {};
+    D.titulares ??= []; D.sociedades ??= []; D.cadena ??= []; D.cab ??= {};
+    const TR = lsGet('caTR', {}) || {};
+    Object.keys(TR).filter((k) => /^(Ia|Ib|II|IIIa|IIIb|IVa)\|/.test(k)).forEach((k) => delete TR[k]);
+    const per = (x) => [x.nombre, x.paisExp || (/^(DNI|NIE|NIF|DNI-NIF)$/.test(x.tipoDoc || trlTipoDoc(x.doc)) ? 'ES' : (x.nac || '')), x.tipoDoc, x.doc, x.fnac, x.nac, x.res];
+    ['oblig', 'presenta', 'tipo', 'fecha'].forEach((k) => { if (D.cab[k]) TR[k] = D.cab[k]; });
+    const put = (id, i, vals) => vals.forEach((v, j) => { if (v !== undefined && v !== '') TR[id + '|' + i + '|' + j] = v; });
+    const cap = D.titulares.filter((x) => x.tipo === TRL_TIPOS[0] || x.tipo === TRL_TIPOS[2] || !x.tipo), vot = D.titulares.filter((x) => x.tipo === TRL_TIPOS[1]), adm = D.titulares.filter((x) => x.tipo === TRL_TIPOS[3]);
+    cap.forEach((x, i) => put('Ia', i, per(x).concat([x.pctDir, x.pctInd]))); vot.forEach((x, i) => put('Ib', i, per(x).concat([x.pctDir, x.pctInd]))); adm.forEach((x, i) => put('II', i, per(x)));
+    D.sociedades.filter((x) => x.via !== 'voto').forEach((x, i) => put('IIIa', i, [x.titular || '', x.nivel, x.nombre, x.pais, x.paisExp || x.pais, x.tipoDoc || trlTipoDoc(x.doc), x.doc, x.domicilio, x.registro]));
+    D.cadena.filter((x) => x.via !== 'voto').forEach((x, i) => put('IVa', i, [x.titular, x.participante, x.participada, x.pct]));
+    D.sociedades.filter((x) => x.via === 'voto').forEach((x, i) => { const c2 = D.cadena.find((q) => q.via === 'voto' && q.participante === x.doc) || {}; put('IIIb', i, [x.titular || '', x.nivel, x.nombre, x.doc, c2.participante || '', c2.participada || '', c2.pct || x.pct]); });
+    if (!TR.oblig) TR.oblig = 'SI';
+    lsSet('caTR', TR);
+    alert('Declaración TR de Cuentas anuales rellenada: ' + cap.length + ' por capital, ' + vot.length + ' por voto, ' + adm.length + ' asimilados y ' + D.sociedades.length + ' sociedades');
+    render();
+  }
+  // Cuentas anuales a Excel (las mismas líneas y casillas que la hoja de la antigua)
+  function exportarCA() {
+    const CS = caSS(), ss = CS.ss, ssAnt = CS.ssAnt; if (!ss.length || typeof XLSX === 'undefined') return;
+    const mod = caModelo(), modBal = mod === 'mixto' ? 'normal' : mod, modPyg = mod === 'mixto' ? 'abreviado' : mod, vN = caValores(ss, 'cierre'), vA = ssAnt ? caValores(ssAnt, 'cierre') : caValores(ss, 'ap');
+    const rows = [['Cuentas anuales · modelo ' + ({ normal: 'Normal', abreviado: 'Abreviado', pymes: 'PYMES', mixto: 'Mixto' })[mod] + ' del Registro Mercantil'], [nomEmp() + ' · ' + nifEmp()], [], ['Concepto', 'Casilla', 'Ejercicio ' + CS.ej, 'Ejercicio anterior']];
+    [[CA_LINEAS[modBal], modBal, (cd) => /^[123]/.test(cd)], [CA_LINEAS[modPyg], modPyg, (cd) => /^4/.test(cd)]].forEach(([L, m, f]) => L.filter(([cd]) => f(cd)).forEach(([cd, tx]) => rows.push([tx, +cd, vN(cd, m), vA(cd, m)])));
+    const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = [{ wch: 80 }, { wch: 10 }, { wch: 18 }, { wch: 18 }];
+    rows.forEach((r, i) => { [2, 3].forEach((j) => { const ref = XLSX.utils.encode_cell({ r: i, c: j }); if (i > 3 && ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0.00;-#,##0.00;"-"'; }); });
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Cuentas anuales');
+    XLSX.writeFile(wb, `CuentasAnuales_${nifEmp()}_${CS.ej}.xlsx`);
+  }
+  const botonesImp = (xls) => `<div class="no-print" style="margin:6px 0">${xls ? '<button class="small" data-caxls="1">Exportar a Excel</button> ' : ''}<button class="small" data-caprint="1">Imprimir</button></div>`;
+  document.addEventListener('click', async (ev) => {
+    const t = ev.target; if (!t?.closest) return;
+    const z = t.closest('[data-dropsstab]');
+    if (z) { const i = document.createElement('input'); i.type = 'file'; i.accept = '.xlsx,.xls,.csv'; i.onchange = async () => { if (i.files[0]) await cargarSsTab(z.dataset.dropsstab, i.files[0]); }; i.click(); return; }
+    const q = t.closest('[data-quitarsstab]'); if (q) { lsSet('ssTab-' + q.dataset.quitarsstab, null); render(); return; }
+    const d = t.closest('[data-ssdel]');
+    if (d) {
+      const y = +d.dataset.ssdel, reg = sysReg(y); if (!reg || !confirm('¿Quitar el balance de sumas y saldos de ' + y + '?')) return;
+      const { error } = await db.from('registros').delete().eq('id', reg.id); if (error) { alert(error.message); return; }
+      await cargar(); render(); return;
+    }
+    if (t.closest('[data-trpasar]')) { trlPasarTR(); return; }
+    if (t.closest('[data-caxls]')) { exportarCA(); return; }
+    if (t.closest('[data-caprint]')) window.print();
+  });
+  document.addEventListener('dragover', (ev) => { const z = ev.target.closest?.('[data-dropsstab]'); if (z) { ev.preventDefault(); z.classList.add('over'); } });
+  document.addEventListener('dragleave', (ev) => ev.target.closest?.('[data-dropsstab]')?.classList.remove('over'));
+  document.addEventListener('drop', async (ev) => { const z = ev.target.closest?.('[data-dropsstab]'); if (!z) return; ev.preventDefault(); z.classList.remove('over'); const f = ev.dataTransfer.files[0]; if (f) await cargarSsTab(z.dataset.dropsstab, f); });
+  const conEmp = (f, sys = true) => () => (S.sel ? (sys ? zonaSys() : '') + f() : sinEmpresa);
   const tabs = {
     ca: ['Cuentas anuales', 'Registro Mercantil', conEmp(() => vistaCuentasAnuales())],
     bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', conEmp(() => vistaBSS())],
-    bsit: ['Balance de situación', 'BSit', conEmp(() => vistaBSit('bs'))],
-    pyg: ['Pérdidas y ganancias', 'PyG', conEmp(() => vistaBSit('pyg'))],
+    bsit: ['Balance de situación', 'BSit', conEmp(() => botonesImp(false) + vistaBSit('bs'), false)],
+    pyg: ['Pérdidas y ganancias', 'PyG', conEmp(() => botonesImp(false) + vistaBSit('pyg'), false)],
     tef: ['Tipo efectivo y carga fiscal', 'Grupo', conEmp(() => vistaTef())],
     cis: ['Cálculo Impto. Soc.', 'Desde sumas y saldos', conEmp(() => vistaCis())],
   };

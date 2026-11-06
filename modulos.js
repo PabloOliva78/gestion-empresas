@@ -4004,7 +4004,7 @@ export function crearModulos(c) {
   const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303: (...a) => c303(...a), calc349: calcular349, extra: M4.adif });
   Object.assign(tabs, M8.tabs);
   Object.assign(badges, M8.badges);
-  const M7 = crearEstados({ S, esc, render, empresa, dz });
+  const M7 = crearEstados({ S, esc, render, empresa, dz, db, cargar, puede, filasExcel: (f) => filasExcel(f) });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
