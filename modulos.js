@@ -5,6 +5,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=41';
 
 import { CAB_SII } from './siicab.js?v=1';
+import { crearRegistral } from './registral.js?v=1';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -3205,6 +3206,7 @@ export function crearModulos(c) {
     const reg = () => S.registros.find((r) => r.id === d.id);
     ({
       ...acc3,
+      ...R2.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
       'm-iladd': () => ilAnadir(),
       'm-duadel': () => duaQuitar(d.n),
@@ -3842,7 +3844,27 @@ export function crearModulos(c) {
     return chkR?.key === chkClave() ? (chkR.nKo ? { t: `${chkR.nKo} a revisar`, c: 'rojo' } : { t: 'OK', c: 'verde' }) : { t: 'Sin hacer' };
   };
 
-  const subirComo = (kind, files) => (kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  // Bloque 2 (Datos Registrales, Titularidad Real…): ver registral.js
+  const ocrPdf = async (file, aviso) => {
+    const lib = window.pdfjsLib;
+    lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    await cargarTesseract();
+    const w = await window.Tesseract.createWorker('spa'), out = [];
+    try {
+      for (let p = 1; p <= doc.numPages; p++) {
+        aviso?.(`leyendo el escaneo (OCR) página ${p} de ${doc.numPages}…`);
+        const pg = await doc.getPage(p), vp = pg.getViewport({ scale: 2 }), cv = document.createElement('canvas');
+        cv.width = vp.width; cv.height = vp.height;
+        await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+        out.push((await w.recognize(cv)).data.text);
+      }
+    } finally { await w.terminate(); }
+    return out.join('\n');
+  };
+  const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
+  Object.assign(tabs, R2.tabs);
+  const subirComo = (kind, files) => (R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
   return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

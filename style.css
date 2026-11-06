@@ -768,3 +768,9 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .dsec table.dua-t .g3 { border-left: none; }
 .dsec table.dua-t .mid { border-left: none; border-right: none; }
 .dsec table.dua-t th[colspan] { border-bottom: 1px solid #8a9bb8; }
+
+/* Bloque 2: datos registrales y titularidad real */
+.facin { font: inherit; padding: .15rem .35rem; border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: inherit; max-width: 100%; }
+.rg-tabla td { padding: .2rem .4rem; vertical-align: middle; }
+.rg-pre { white-space: pre-wrap; font-size: 11px; max-height: 300px; overflow: auto; background: rgba(127,127,127,.12); padding: 8px; }
+.rg-msg.mal { color: #b42318; }
