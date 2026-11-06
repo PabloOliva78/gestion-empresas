@@ -484,7 +484,9 @@ export function crearRegistral(c) {
         let cur = desdeP1 ? seg : { p1: seg.p2, p2: seg.p1, tail: seg.head, head: seg.tail }; const usados = new Set([seg]); let haciaP = cur.head;
         for (let k = 0; k < 12; k++) {
           if (cur.tail) break;
-          const pt = cur.p2; const nx = segs.find((s) => !usados.has(s) && (cerca(s.p1, pt, 12) || cerca(s.p2, pt, 12)));
+          const pt = cur.p2;
+          if (ents.some((q) => enCaja(pt, q, 3))) break; // la línea termina al llegar a una casilla
+          const nx = segs.find((s) => !usados.has(s) && (cerca(s.p1, pt, 12) || cerca(s.p2, pt, 12)));
           if (!nx) break;
           usados.add(nx);
           cur = cerca(nx.p1, pt, 12) ? nx : { p1: nx.p2, p2: nx.p1, tail: nx.head, head: nx.tail };
@@ -497,11 +499,20 @@ export function crearRegistral(c) {
       };
       pcs.forEach((P) => {
         const cx = (P.x1 + P.x2) / 2, lados = [];
-        segs.forEach((s) => { if (junto(s.p1, P)) lados.push(seguir(s, true)); else if (junto(s.p2, P)) lados.push(seguir(s, false)); });
+        segs.forEach((s) => {
+          if (Math.abs(s.p2.y - s.p1.y) <= 3 && Math.abs(s.p2.x - s.p1.x) > 40) return; // una línea horizontal larga no sale de un %
+          const j1 = junto(s.p1, P), j2 = junto(s.p2, P);
+          if (j1 && j2) { // línea corta con los dos extremos junto al %: se sigue desde el extremo que toca la casilla
+            const d = (p) => Math.hypot(Math.max(P.x1 - p.x, 0, p.x - P.x2), Math.max(P.y1 - p.y, 0, p.y - P.y2));
+            lados.push(seguir(s, d(s.p1) <= d(s.p2)));
+          } else if (j1) lados.push(seguir(s, true));
+          else if (j2) lados.push(seguir(s, false));
+        });
         const vale = lados.filter((l) => l.e && !(l.e.y1 >= P.y1 - 1 && l.e.y2 <= P.y2 + 1));
         let socio = null, dest = null;
-        const conFlecha = vale.filter((l) => l.flecha), sinFlecha = vale.filter((l) => !l.flecha);
-        if (conFlecha.length === 1) { dest = conFlecha[0].e; socio = (sinFlecha.find((l) => l.e !== dest) || vale.find((l) => l.e !== dest && l.haciaP) || {}).e || null; }
+        const mismo = (p, q) => p === q || (p && q && String(p.val).trim() === String(q.val).trim()); // la misma sociedad dibujada en dos casillas
+        const conFlecha = vale.filter((l) => l.flecha).filter((l, i, a) => a.findIndex((m) => mismo(m.e, l.e)) === i), sinFlecha = vale.filter((l) => !l.flecha);
+        if (conFlecha.length === 1) { dest = conFlecha[0].e; socio = (sinFlecha.find((l) => !mismo(l.e, dest)) || vale.find((l) => !mismo(l.e, dest) && l.haciaP) || {}).e || null; }
         if (!socio) socio = ents.filter((q) => q.y2 <= P.y1 + 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => b.y2 - a.y2)[0];
         if (!dest) dest = ents.filter((q) => q.y1 >= P.y2 - 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => a.y1 - b.y1)[0];
         if (socio && dest && socio !== dest) out.push({ socio: String(socio.val).trim(), participada: String(dest.val).trim(), pct: Math.round(pv(P) * 1e6) / 1e6, celda: P.ref });
