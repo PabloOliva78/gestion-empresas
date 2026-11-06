@@ -1,4 +1,4 @@
-﻿// Bloque 2 · Información Registro Mercantil (portado de la aplicación antigua).
+// Bloque 2 · Información Registro Mercantil (portado de la aplicación antigua).
 // Datos Registrales y Titularidad Real: se suelta el PDF o Excel y se leen los datos, con el archivo de origen.
 export function crearRegistral(c) {
   const { db, S, esc, render, cargar, empresa, puede, leerPdf, filasExcel, ocrPdf, eur } = c;
@@ -1046,7 +1046,9 @@ export function crearRegistral(c) {
   async function montarVisores() {
     for (const el of document.querySelectorAll('[data-rgvisor]:not([data-montado])')) {
       el.dataset.montado = '1';
-      const [tipo, y] = el.dataset.rgvisor.split('|'), arch = tipo === 'esc' ? S.registros.find((r) => r.id === y)?.datos?.archivo : rmDe(+y)[tipo]?.archivo;
+      const [tipo, y] = el.dataset.rgvisor.split('|');
+      const arch = tipo === 'esc' ? S.registros.find((r) => r.id === y)?.datos?.archivo
+        : tipo.startsWith('doc:') ? docReg(tipo.split(':')[1], +y)?.datos?.[tipo.split(':')[2]]?.archivo : rmDe(+y)[tipo]?.archivo;
       if (!arch?.path) continue;
       try {
         let buf = visorCache.get(arch.path);
@@ -1199,8 +1201,79 @@ export function crearRegistral(c) {
     [['notario', C.notario], ['protocolo', C.protocolo], ['fconst', C.fecha]].forEach(([k, v]) => { if (v && d._o[k] !== 'a mano' && d[k] !== v) { d[k] = v; d._o[k] = o; } });
   }
 
+  // ================= Actas, Socios y Libros: recuadro para soltar los archivos en su hueco =================
+  const normN = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\.\w{2,4}$/, '').replace(/[_.-]+/g, ' ');
+  function huecoDe(tab, nombre, D) {
+    const n = ` ${normN(nombre)} `, slots = (c.docs?.[tab] ?? []).map(([k]) => k);
+    const pistas = [['instancia', /instancia/], ['acuse', /acuse/], ['nota', /nota.*despacho|despacho/], ['asiento', /asiento/], ['escritura', /escritura|compraventa/], ['titular', /titular/],
+      ['diario', /diario/], ['mayor', /mayor/], ['sys', /sumas|\bsys\b/], ['bsit', /bsit|situacion/], ['libro', /libro|acta|socios/]];
+    const hit = pistas.find(([k, rx]) => slots.includes(k) && rx.test(n));
+    return hit ? hit[0] : (slots.find((k) => !D[k]?.archivo) ?? slots[0]);
+  }
+  let rgDocEj = null; const rgDocSec = {};
+  const docEj = () => rgDocEj ?? Number(S.ejercicio);
+  const docReg = (tab, y) => S.registros.find((x) => x.tipo === `doc-${tab}` && x.empresa_id === S.sel && x.ejercicio === y);
+  async function docGuardar(tab, y, D) {
+    const r = docReg(tab, y);
+    if (r) {
+      const { error } = await db.from('registros').update({ datos: D }).eq('id', r.id);
+      if (error) return aviso(error.message, true);
+      r.datos = D;
+    } else {
+      const fila = { id: crypto.randomUUID(), empresa_id: S.sel, tipo: `doc-${tab}`, ejercicio: y, datos: D };
+      const { error } = await db.from('registros').insert(fila);
+      if (error) return aviso(error.message, true);
+      S.registros.push(fila);
+    }
+  }
+  // misma presentación que Cuentas Anuales Presentadas: ejercicio, un apartado por documento, recuadro para soltar, PDF a la izquierda y datos a la derecha
+  function vistaDocsRg(tab) {
+    const e = empresa();
+    if (!e) return sinEmpresa;
+    const y = docEj(), ed = puede(), slots = c.docs[tab], sec = slots.some(([k]) => k === rgDocSec[tab]) ? rgDocSec[tab] : slots[0][0];
+    const D = docReg(tab, y)?.datos ?? {}, cur = D[sec] ?? {}, nomSec = slots.find(([k]) => k === sec)[1];
+    const anios = []; for (let a = (Number(S.ejercicio) || new Date().getFullYear()) + 1; a >= (Number(S.ejercicio) || new Date().getFullYear()) - 8; a--) anios.push(a);
+    const esPdf = /\.pdf$/i.test(cur.archivo?.nombre ?? '');
+    return `<div class="bar"><label><b>Ejercicio</b> <select data-rgdej="1">${anios.map((a) => `<option value="${a}"${a === y ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
+      <nav class="subtabs">${slots.map(([k, l]) => `<button class="${k === sec ? 'on' : ''}${D[k]?.archivo ? ' hecho' : ''}" data-act="m-rg-dsec" data-t="${tab}" data-s="${k}">${esc(l)}${D[k]?.archivo ? ' ✓' : ''}</button>`).join('')}</nav></div>
+      ${avisoHtml()}
+      <div class="rg-split"><div class="rg-izq">${ed ? `<div class="dropzone" data-kind="doc-${tab}" tabindex="0" role="button"><b>Suelta aquí el archivo</b> (se coloca en su apartado por el nombre; si no se reconoce, en «${esc(nomSec)}») o haz clic para elegirlo.
+        <input type="file" data-dzkind="doc-${tab}" multiple hidden></div>` : ''}
+        <div class="rg-visor"${esPdf ? ` data-rgvisor="doc:${tab}:${sec}|${y}"` : ''}>${cur.archivo ? (esPdf ? '<p class="hint">Cargando el PDF…</p>' : '<p class="hint">Este archivo no es un PDF: ábrelo con el botón.</p>') : '<p class="hint">Sin archivo en este apartado.</p>'}</div></div>
+      <div class="rg-der"><section class="block"><h4 class="it-tit">${esc(nomSec)} · ejercicio ${y}</h4>
+        <table class="tabla rg-tabla rotulos" style="width:auto"><tbody>
+          <tr><td>Fecha</td><td><input type="date" class="facin" data-rgdoc="${tab}|${sec}|fecha" value="${esc(cur.fecha ?? '')}"${ed ? '' : ' disabled'}></td></tr>
+          <tr><td>Referencia (nº de asiento, justificante, observaciones)</td><td><input class="facin" data-rgdoc="${tab}|${sec}|ref" value="${esc(cur.ref ?? '')}" size="44"${ed ? '' : ' disabled'}></td></tr>
+          <tr><td>Archivo</td><td>${cur.archivo?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(cur.archivo.path)}">📎 ${esc(cur.archivo.nombre)}</button>` : '—'}</td></tr>
+        </tbody></table>
+        ${cur.archivo && ed ? `<p><button class="small danger" data-act="m-rg-docdel" data-t="${tab}" data-s="${sec}">Quitar este documento de ${y}</button></p>` : ''}</section></div></div>`;
+  }
+  async function cargarDocs(tab, files) {
+    if (!S.sel) return aviso('Elige primero la empresa.', true);
+    const ej = docEj(), tipo = `doc-${tab}`;
+    for (const f of files) {
+      try {
+        const r = docReg(tab, ej);
+        const D = { ...(r?.datos ?? {}) }, slot = huecoDe(tab, f.name, D);
+        const sub = await c.subir(S.sel, `${tipo}-${ej}`, 'doc', slot, f);
+        if (sub.error) throw new Error(sub.error);
+        D[slot] = { fecha: D[slot]?.fecha ?? '', ref: D[slot]?.ref ?? '', archivo: sub.val };
+        await docGuardar(tab, ej, D); rgDocSec[tab] = slot;
+        msg = `${f.name}: guardado en «${(c.docs[tab].find(([k]) => k === slot) ?? [])[1] ?? slot}» (${ej})`; msgMal = false;
+      } catch (err) { aviso(`${f.name}: ${err.message}`, true); }
+    }
+    render();
+  }
+
   // ================= Eventos propios =================
   const acciones = {
+    'm-rg-dsec': (d) => { rgDocSec[d.t] = d.s; render(); },
+    'm-rg-docdel': async (d) => {
+      if (!confirm('¿Quitar este documento y su archivo?')) return;
+      const y = docEj(), D = { ...(docReg(d.t, y)?.datos ?? {}) }, p = D[d.s]?.archivo?.path;
+      if (p) await db.storage.from('documentos').remove([p]);
+      delete D[d.s]; await docGuardar(d.t, y, D); render();
+    },
     'm-rg-escsel': (d) => { escSel = d.id; render(); },
     'm-rg-escdel': async (d) => {
       if (!confirm('¿Quitar esta escritura y su archivo?')) return;
@@ -1241,6 +1314,11 @@ export function crearRegistral(c) {
     if (t.dataset.rgdreg) dregEditar(t.dataset.rgdreg, t.value);
     else if (t.dataset.rgtr) trlCampo(t.dataset.rgtr, t.value);
     else if (t.dataset.rgtrcab) trlCab(t.dataset.rgtrcab, t.value);
+    else if (t.dataset.rgdej) { rgDocEj = +t.value; render(); }
+    else if (t.dataset.rgdoc) {
+      const [tab, sec, k] = t.dataset.rgdoc.split('|'), y = docEj(), D = { ...(docReg(tab, y)?.datos ?? {}) };
+      D[sec] = { ...(D[sec] ?? {}), [k]: t.value }; docGuardar(tab, y, D);
+    }
     else if (t.dataset.rgesc) escCampo(t.dataset.rgesc, t.value);
     else if (t.dataset.rgf) rmCampo(t.dataset.rgf, t.value);
     else if (t.dataset.rgdist) rmDist(t.dataset.rgdist, t.value);
@@ -1268,5 +1346,9 @@ export function crearRegistral(c) {
     rmca: ['Cuentas Anuales Presentadas', 'Cuentas, certificación, auditoría, gestión, memoria, acuse y nota', vistaCuentas],
     rmesc: ['Escrituras', 'Notariales', vistaEscrituras],
   };
+  [['rmactas', 'Actas', 'Libro de actas'], ['rmsocios', 'Socios', 'Libro registro de socios'], ['rmlibros', 'Libros', 'Libros contables']].forEach(([t, n, s]) => {
+    kinds[`doc-${t}`] = (files) => cargarDocs(t, files);
+    tabs[t] = [n, s, () => vistaDocsRg(t)];
+  });
   return { tabs, kinds, acciones };
 }

@@ -5,7 +5,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=41';
 
 import { CAB_SII } from './siicab.js?v=1';
-import { crearRegistral } from './registral.js?v=8';
+import { crearRegistral } from './registral.js?v=9';
 import { crearModelos } from './modelos.js?v=4';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=3';
@@ -3926,7 +3926,7 @@ export function crearModulos(c) {
     } finally { await w.terminate(); }
     return out;
   };
-  const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir,leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
+  const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir, docs: DOCS, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
   const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, leerPdf: (f) => leerPdf(f) });
   Object.assign(tabs, M4.tabs);
