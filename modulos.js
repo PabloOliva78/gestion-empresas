@@ -2664,14 +2664,14 @@ export function crearModulos(c) {
   const NOM_CONC = [['salarios', 'Total devengado (T. devengado − kilometraje − dietas − indemnizaciones)'], ['km', 'Kilometraje exento'], ['dietas', 'Dietas y manutención'], ['indem', 'Indemnizaciones'],
     ['ssEmp', 'SS empresa'], ['ssTrab', 'SS trabajador'], ['ssTot', 'SS empresa + trabajador (SS empresa + SS trabajador)', 1], ['ret', 'Retenciones'], ['anticipos', 'Anticipos'], ['embargos', 'Embargos'],
     ['seguro', 'Seguro'], ['liquido', 'Líquido'], ['dif', 'Diferencias', 1]];
-  const NOM_DIF = 'Salarios + kilometraje + indemnizaciones + SS empresa − SS empresa y trabajador − retenciones − anticipos − embargos − seguro − líquido';
+  const NOM_DIF = 'Salarios + kilometraje + dietas + indemnizaciones + SS empresa − SS empresa y trabajador − retenciones − anticipos − embargos − seguro − líquido';
   const MM12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
   const rr = (x) => Math.round(x * 100) / 100 + 0;
   const nomReg = (y) => S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === S.sel && r.ejercicio === y);
   const nomCalc = (x) => {
     if (!x || !Object.keys(x).some((k) => !k.startsWith('c_'))) return null;
     const n = (k) => Number(x[k]) || 0, ssTot = n('ssEmp') + n('ssTrab');
-    return { ...x, ssTot: rr(ssTot), dif: rr(n('salarios') + n('km') + n('indem') + n('ssEmp') - ssTot - n('ret') - n('anticipos') - n('embargos') - n('seguro') - n('liquido')) };
+    return { ...x, ssTot: rr(ssTot), dif: rr(n('salarios') + n('km') + n('dietas') + n('indem') + n('ssEmp') - ssTot - n('ret') - n('anticipos') - n('embargos') - n('seguro') - n('liquido')) };
   };
   const nomMes = (y, mm) => nomCalc(nomReg(y)?.datos?.[mm]);
   // nóminas de un periodo (mes «01» o trimestre «1T»): base = devengado + indemnizaciones, y retenciones; null si no hay nóminas cargadas
@@ -2697,6 +2697,152 @@ export function crearModulos(c) {
   };
   const cabNom = (e, y, extra = '') => `<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · Ejercicio ${y}${extra}</span></div>`;
 
+  // ---- Excel de costes salariales del grupo (una hoja por empresa y mes, con los importes por centro de coste) y centros de coste de cada empresa ----
+  const NOM_MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+  const nomNorm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const NOM_STOP = new Set(['de', 's', 'l', 'a', 'sl', 'sa', 'slu', 'sau', 'y']);
+  const nomToks = (s) => nomNorm(s).split(' ').filter((t) => t && !NOM_STOP.has(t));
+  // «CENTRO COSTES POR EMPRESA.xlsx»: centro de coste (dimensión) de cada centro de trabajo de cada empresa
+  const CENTROS_COSTE = {
+    'HEROGRA FERTILIZANTES S.A.': { 'PRACTICAS FORMATIVAS': 'ES016', 'SOCIEDAD': 'ES012HER', 'COMERCIAL OFICINA SEVILLA': 'ES014HER', 'COMERCIAL OFICINA GRANADA': 'ES015HER', 'DIRECCION FABRICA': 'EF200' },
+    'HEROGRA ESPECIALES S.L.': { 'PRACTICAS FORMATIVAS': 'ES016', 'COMERCIAL OFICINA GRANADA': 'ES014', 'FABRICACION GENERAL': 'CP430', 'FABRICACION COBRE': 'CP400', 'ENVASADORA SOLIDOS': 'CP420', 'ENVASADORA LIQUIDOS': 'CP410', 'COORDINADORES CALIDAD': 'ES016' },
+    'HISPALENSE DE LIQUIDOS S.L.': { 'COMERCIAL OFICINA SEVILLA': 'ES012HIS', 'ADMINISTRACION Y FINANZAS': 'ES016', 'FABRICA': 'CP400HIS' },
+    'MAXLOGTRANS S.L.': { 'ADMINISTRACION Y FINANZAS': 'ES016' },
+    'LYS DEL SUR S.L.': { 'DIRECCION Y ADMINISTRACION': 'ES016', 'PLANTA ENVASADO TUBULAR': 'CP420LYS', 'PLANTA ENVASADO BOCA ABIERTA': 'CP400LYS', 'PLANTA BLENDING': 'CP410LYS', 'CARRETILLAS': 'SA510LYS', 'PALAS': 'SA500LYS', 'PLANTA ENVASADO BIG-BAG': 'CP430LYS', 'ALMACEN MOTRIL': 'CP450LYS' },
+    'GESUFER S.L.': { 'PRACTICAS FORMATIVAS': 'ES016', 'SOCIEDAD': 'ES012', 'ADMINISTRACION Y FINANZAS': 'ES016', 'FABRICA FORMACION': 'ES019' },
+    'FERTINOVA S.L.': { 'ALMACEN Y MAQUINARIA': 'CP400' },
+    'PRODUFER S.L.': { 'FABRICA': 'CP400' },
+    'FERTICRONOS S.L.': { 'ENVASADORA LIQUIDOS': 'CP410', 'PLANTA COBRE': 'CP400', 'FABRICACION Y ENVASADOS SOLIDOS': 'CP420', 'FABRICACION LIQUIDOS': 'CP430' },
+    'TECNOPLUS SOLUBLES S.L.': { 'PLANTA COBRE': 'CP400' },
+    'BISARI AGROINNOVATION S.L.': { 'ADMINISTRACION Y FINANZAS': 'ES016' },
+  };
+  const ALIAS_EMP = { 'GESUFER S.L.': 'GESTION UNIFICADA DE FERTILIZANTES S.L.' }; // nombre con el que figura en la aplicación
+  const nomCentros = (e) => {
+    const t = new Set(nomToks(e?.nombre)), k = Object.keys(CENTROS_COSTE).find((x) => nomToks(ALIAS_EMP[x] ?? x).every((w) => t.has(w)));
+    return k ? CENTROS_COSTE[k] : {};
+  };
+  const NOM_ROW = [[/^kilom/, 'km'], [/^dietas/, 'dietas'], [/^indemn/, 'indem'], [/^t devengado/, 'dev'], [/^dto/, 'ssTrab'], [/^i r p f/, 'ret'], [/^seg/, 'seguro'], [/^descuentos/, 'seguro'],
+    [/^anticipos/, 'anticipos'], [/^embargo/, 'embargos'], [/^liquido/, 'liquido'], [/^total s/, 'ssEmp']];
+  // Una hoja del Excel (una empresa, un mes): importes por centro. La columna A lleva los conceptos y una columna «TOTALES» la suma.
+  function nomLeerHoja(rows) {
+    const txt = (v) => (typeof v === 'string' ? v.trim() : ''), num = (v) => (typeof v === 'number' ? v : null);
+    let titulo = '';
+    for (let r = 0; r < 3 && !titulo; r++) for (const v of rows[r] ?? []) { const t = txt(v); if (t && !/resumen/i.test(t)) { titulo = t; break; } }
+    let mes = 0, anio = 0;
+    for (const fila of rows.slice(0, 8)) {
+      const f = fila ?? [];
+      for (let c = 0; c < f.length && !mes; c++) {
+        const i = NOM_MESES.indexOf(txt(f[c]).replace(/\s/g, '').toUpperCase());
+        if (i >= 0) { mes = i + 1; for (let k = c + 1; k < f.length; k++) { const n = num(f[k]) ?? parseInt(txt(f[k]), 10); if (n > 2000 && n < 2100) { anio = n; break; } } }
+      }
+      if (mes) break;
+    }
+    const fil = {};
+    rows.forEach((f, i) => { const k = NOM_ROW.find(([rx]) => rx.test(nomNorm(f?.[0])))?.[1]; if (k && !(k in fil)) fil[k] = i; });
+    const h1 = rows.findIndex((f) => (f ?? []).some((v, c) => c >= 1 && /^centro\b/i.test(txt(v))));
+    if (h1 < 0 || !('dev' in fil)) return { titulo, mes, anio, centros: [] };
+    let tot = -1;
+    for (let r = h1; r <= h1 + 3 && tot < 0; r++) (rows[r] ?? []).forEach((v, c) => { if (tot < 0 && c >= 1 && nomNorm(v) === 'totales') tot = c; });
+    const val = (k, c) => num(rows[fil[k]]?.[c]) ?? 0, ancho = Math.max(...rows.map((f) => (f ?? []).length));
+    const conDatos = (c) => Object.keys(fil).some((k) => Math.abs(val(k, c)) > 0.004);
+    let cols = []; for (let c = 1; c < ancho; c++) if (c !== tot && conDatos(c)) cols.push(c);
+    if (!cols.length && tot >= 1 && conDatos(tot)) cols = [tot]; // hoja de un solo centro: los datos están bajo «TOTALES»
+    const centros = cols.map((c) => {
+      let nombre = txt(rows[h1 + 1]?.[c]); if (!nombre || /^totales$/i.test(nombre)) nombre = txt(rows[h1]?.[c]);
+      const cod = txt(rows[h1 + 2]?.[c]), d = {};
+      Object.keys(fil).forEach((k) => { d[k] = val(k, c); });
+      return { nombre, codigo: /^[A-Z]{2}\d{2,}/i.test(cod) ? cod.toUpperCase() : '', ...d };
+    });
+    return { titulo, mes, anio, centros };
+  }
+  // empresa de la aplicación a la que corresponde una hoja: todas las palabras del título (o del nombre de la hoja) están en su nombre
+  const nomEmpresaDe = (...nombres) => {
+    for (const n of nombres) {
+      const ts = nomToks(n); if (!ts.length) continue;
+      const c = S.empresas.filter((e) => { const t = new Set(nomToks(e.nombre)); return ts.every((w) => t.has(w)); }).sort((a, b) => nomToks(a.nombre).length - nomToks(b.nombre).length);
+      if (c.length) return c[0];
+    }
+    return null;
+  };
+  async function nomCargarExcel(files) {
+    const informe = [], mal = [];
+    for (const f of files.filter((x) => /\.(xlsx|xlsm|xls)$/i.test(x.name))) {
+      try {
+        const wb = window.XLSX.read(await f.arrayBuffer());
+        for (const nombreHoja of wb.SheetNames) {
+          const L = nomLeerHoja(window.XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, defval: null, raw: true }));
+          if (!L.centros.length) { if (L.mes) informe.push(`${nombreHoja}: sin importes`); continue; }
+          const e = nomEmpresaDe(L.titulo, nombreHoja);
+          if (!e) { mal.push(`${nombreHoja}: no reconozco la empresa «${L.titulo}»`); continue; }
+          if (!L.mes || !L.anio) { mal.push(`${nombreHoja}: no encuentro el mes`); continue; }
+          const cc = nomCentros(e), ccK = Object.keys(cc), mm = String(L.mes).padStart(2, '0'), s = (k) => rr(L.centros.reduce((a, c) => a + (c[k] || 0), 0));
+          const centros = L.centros.map((c) => {
+            let codigo = c.codigo, nombre = c.nombre;
+            if (!codigo || /^centro\s*\d+$/i.test(nombre)) { // sin código en la hoja: el de la lista de centros de coste de la empresa
+              const t = new Set(nomToks(nombre)), k = ccK.find((x) => { const w = nomToks(x); return w.length && t.size && (w.every((q) => t.has(q)) || [...t].every((q) => w.includes(q))); }) ?? (ccK.length === 1 ? ccK[0] : '');
+              if (k) { codigo ||= cc[k]; if (/^centro\s*\d+$/i.test(nombre)) nombre = k; }
+            }
+            return { codigo, nombre, salarios: rr(c.dev - c.km - c.dietas - c.indem), km: rr(c.km), dietas: rr(c.dietas), indem: rr(c.indem), ssEmp: rr(c.ssEmp), ssTrab: rr(c.ssTrab), ret: rr(c.ret), anticipos: rr(c.anticipos), embargos: rr(c.embargos), seguro: rr(c.seguro), liquido: rr(c.liquido) };
+          });
+          const nuevo = { salarios: rr(s('dev') - s('km') - s('dietas') - s('indem')), km: s('km'), dietas: s('dietas'), indem: s('indem'), ssEmp: s('ssEmp'), ssTrab: s('ssTrab'), ret: s('ret'), anticipos: s('anticipos'), embargos: s('embargos'), seguro: s('seguro'), liquido: s('liquido') };
+          const reg = S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === e.id && r.ejercicio === L.anio), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+          const previo = datos[mm] ?? {}, mes = {}; Object.keys(previo).forEach((k) => { if (k.startsWith('c_')) mes[k] = previo[k]; }); // se conserva lo de la conciliación de la SS
+          Object.entries(nuevo).forEach(([k, v]) => { if (Math.abs(v) > 0.004) mes[k] = v; });
+          mes._c = centros; datos[mm] = mes;
+          const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: e.id, tipo: 'nominas', ejercicio: L.anio, datos });
+          if (err) mal.push(`${nombreHoja}: ${err}`); else informe.push(`${e.nombre} · ${NOM_MESES[L.mes - 1].toLowerCase()} ${L.anio} · ${centros.length} centro(s)`);
+          nomAsMes = mm;
+        }
+      } catch (err) { mal.push(`${f.name}: ${err.message}`); }
+    }
+    nomMsg = `${informe.length} hoja(s) repartidas: ${informe.join(' · ')}${mal.length ? ` · sin cargar: ${mal.join(' · ')}` : ''}`;
+    await cargar(); render();
+  }
+  let nomMsg = '', nomAsMes = null;
+  const setNomAsMes = (v) => { nomAsMes = v; render(); };
+  // asiento del mes: debe 640.01 / 640.02 / 640.03 / 642.01 por centro de coste; haber 4760.01, 4751.01, 460.01, 462.01 y 4650.01
+  function nomAsiento(e, y, mm) {
+    const x = nomMes(y, mm); if (!x) return null;
+    const n = (k) => Number(x[k]) || 0, cen = (x._c ?? []).filter((c) => c && c.nombre !== undefined);
+    const cuadra = (k) => !cen.length || Math.abs(cen.reduce((a, c) => a + (Number(c[k]) || 0), 0) - n(k)) <= 0.02;
+    const porCentro = cen.length && ['salarios', 'km', 'dietas', 'indem', 'ssEmp'].every(cuadra) ? cen : [{ codigo: '', nombre: '', salarios: n('salarios'), km: n('km'), dietas: n('dietas'), indem: n('indem'), ssEmp: n('ssEmp') }];
+    // líneas como el diario de D365: cuenta de 9 dígitos y, en los gastos, «-centro de coste-» (640000001-ES012HER-); lo que repite cuenta y centro se suma
+    const cta9 = (c) => { const m = /^(\d+)\.(\d+)$/.exec(c), sub = m[2].replace(/^0+/, '') || '0'; return m[1] + '0'.repeat(Math.max(0, 9 - m[1].length - sub.length)) + sub; };
+    const L = [], add = (cuenta, concepto, debe, haber, centro = '') => {
+      if (Math.abs(debe) <= 0.004 && Math.abs(haber) <= 0.004) return;
+      const k = `${cuenta}|${centro}`, p = L.find((l) => l.k === k);
+      if (p) { p.debe = rr(p.debe + debe); p.haber = rr(p.haber + haber); } else L.push({ k, cuenta: cta9(cuenta), concepto, centro, debe: rr(debe), haber: rr(haber) });
+    };
+    const cod = (c) => c.codigo || '';
+    porCentro.forEach((c) => add('640.01', 'Sueldos y salarios (T. devengado)', c.salarios, 0, cod(c)));
+    porCentro.forEach((c) => add('640.02', 'Kilometraje exento', c.km, 0, cod(c)));
+    porCentro.forEach((c) => add('640.03', 'Manutención e indemnizaciones', (Number(c.dietas) || 0) + (Number(c.indem) || 0), 0, cod(c)));
+    porCentro.forEach((c) => add('642.01', 'Seguridad Social a cargo de la empresa', c.ssEmp, 0, cod(c)));
+    add('4760.01', 'Organismos de la Seguridad Social, acreedores (dto. SS + total SS)', 0, n('ssEmp') + n('ssTrab'));
+    add('4751.01', 'H.P. acreedora por retenciones practicadas (I.R.P.F.)', 0, n('ret'));
+    add('460.01', 'Anticipos de remuneraciones', 0, n('anticipos'));
+    add('462.01', 'Embargos', 0, n('embargos'));
+    add('4650.01', 'Remuneraciones pendientes de pago (líquido)', 0, n('liquido'));
+    const seguro = n('seguro'); // sin cuenta asignada: queda fuera del asiento y se avisa
+    L.forEach((l) => { l.cuentaD365 = l.centro ? `${l.cuenta}-${l.centro}-` : l.cuenta; });
+    const debe = rr(L.reduce((a, l) => a + l.debe, 0)), haber = rr(L.reduce((a, l) => a + l.haber, 0));
+    return { L, debe, haber, dif: rr(debe - haber), seguro, asiento: x.c_asiento ?? '', fecha: new Date(Date.UTC(y, +mm, 0)).toISOString().slice(0, 10), concepto: `NOMINAS ${NOM_MESES[+mm - 1]} ${y}` };
+  }
+  async function guardarNomAsiento(v) {
+    const y = Number(S.ejercicio), mm = nomAsMes, reg = nomReg(y); if (!reg || !mm) return;
+    const datos = JSON.parse(JSON.stringify(reg.datos ?? {})); datos[mm] ??= {}; datos[mm].c_asiento = String(v).trim();
+    const err = await guardarRegistro(reg, { datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  function nomAsientoXls() {
+    const e = empresa(), y = Number(S.ejercicio), mm = nomAsMes; if (!e || !mm) return;
+    const A = nomAsiento(e, y, mm); if (!A) return;
+    const filas = [['Fecha', 'Asiento', 'Empresa', 'Tipo de cuenta', 'Cuenta', 'Descripción', 'Débito', 'Crédito'], ...A.L.map((l) => [A.fecha.split('-').reverse().join('/'), A.asiento, e.siglas ?? '', 'Contabilidad', l.cuentaD365, A.concepto, l.debe || null, l.haber || null])];
+    const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(filas), 'Asiento nóminas');
+    window.XLSX.writeFile(wb, `Asiento nominas ${e.siglas || e.nombre} ${y}-${mm}.xlsx`);
+  }
+
   function vistaNom() {
     if (!S.sel) return sinEmpresa;
     const e = empresa(), y = Number(S.ejercicio), ed = puede();
@@ -2707,9 +2853,28 @@ export function crearModulos(c) {
       const cel = MM12.map((mm, i) => (der ? (dat[i] ? `<td class="num${k === 'dif' && Math.abs(dat[i][k]) > 0.01 ? ' dif-ko' : ''}">${fnum(dat[i][k])}</td>` : '<td class="num vacio">—</td>') : celdaNom(mm, k, y, ed))).join('');
       return `<tr class="${k === 'liquido' ? 'sub' : k === 'dif' ? 'verde' : der ? 'cmp' : ''}"><td class="pp" ${k === 'dif' ? `title="${esc(NOM_DIF)}"` : ''}>${esc(t)}</td>${cel}<td class="num ejer">${fnum(tot)}</td></tr>`;
     }).join('');
-    return `${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
-      <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda). «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
-      <section class="prs-card"><div class="wrap"><table class="tprs tnom"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
+    // mes del asiento y de los centros de coste: el elegido, o el último con nóminas
+    const conNom = MM12.filter((mm, i) => dat[i]), mmAs = nomAsMes && conNom.includes(nomAsMes) ? nomAsMes : conNom[conNom.length - 1];
+    const A = mmAs ? nomAsiento(e, y, mmAs) : null, cenMes = mmAs ? (nomMes(y, mmAs)?._c ?? []) : [], cc = nomCentros(e);
+    const selMes = conNom.length ? `<label class="no-print">Mes <select data-nomasmes="1">${conNom.map((mm) => `<option value="${mm}"${mm === mmAs ? ' selected' : ''}>${MESES[+mm - 1][0].toUpperCase() + MESES[+mm - 1].slice(1)} ${y}</option>`).join('')}</select></label>` : '';
+    const f2 = (v) => (Math.abs(Number(v) || 0) > 0.004 ? fnum(v) : '—');
+    const tCentros = cenMes.length ? `<div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Centro de coste</th><th>Salarios</th><th>Kilometraje</th><th>Dietas + indemn.</th><th>SS empresa</th><th>SS trabajador</th><th>Retenciones</th><th>Anticipos</th><th>Embargos</th><th>Líquido</th></tr></thead><tbody>
+      ${cenMes.map((c) => `<tr><td class="pp">${esc([c.codigo, c.nombre].filter(Boolean).join(' · '))}</td><td class="num">${f2(c.salarios)}</td><td class="num">${f2(c.km)}</td><td class="num">${f2((Number(c.dietas) || 0) + (Number(c.indem) || 0))}</td><td class="num">${f2(c.ssEmp)}</td><td class="num">${f2(c.ssTrab)}</td><td class="num">${f2(c.ret)}</td><td class="num">${f2(c.anticipos)}</td><td class="num">${f2(c.embargos)}</td><td class="num">${f2(c.liquido)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="hint">Sin reparto por centros de coste: se rellena al soltar el Excel de costes salariales del grupo.</p>';
+    const fAs = A ? A.fecha.split('-').reverse().join('/') : '';
+    const tAsiento = A ? `<div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th>Fecha</th><th>Asiento</th><th>Empresa</th><th>Tipo de cuenta</th><th>Cuenta</th><th class="pp">Descripción</th><th>Débito</th><th>Crédito</th></tr></thead><tbody>
+      ${A.L.map((l) => `<tr title="${esc(l.concepto)}"><td class="c">${fAs}</td><td class="c">${esc(A.asiento)}</td><td class="c">${esc(e.siglas ?? '')}</td><td>Contabilidad</td><td>${esc(l.cuentaD365)}</td><td class="pp">${esc(A.concepto)}</td><td class="num">${l.debe ? fnum(l.debe) : ''}</td><td class="num">${l.haber ? fnum(l.haber) : ''}</td></tr>`).join('')}
+      <tr class="sub"><td colspan="6" class="pp"><b>Totales</b></td><td class="num"><b>${fnum(A.debe)}</b></td><td class="num"><b>${fnum(A.haber)}</b></td></tr>
+      <tr class="${Math.abs(A.dif) > 0.01 ? 'cf-ko' : 'verde'}"><td colspan="6" class="pp">Diferencia (débito − crédito)</td><td class="num" colspan="2">${fnum(A.dif)}</td></tr></tbody></table></div>
+      <p class="hint">Las líneas de gasto llevan el centro de coste (640000001-ES012HER-); 640000001 sueldos (total devengado − kilometraje − dietas − indemnizaciones), 640000002 kilometraje exento, 640000003 manutención e indemnizaciones, 642000001 SS a cargo de la empresa. 476000001 = dto. SS + total SS, 475100001 I.R.P.F., 460000001 anticipos, 462000001 embargos y 465000001 líquido. Pasa el ratón por una línea para ver su concepto.${A.seguro ? ` <b style="color:#b42318">Hay seguro médico (${fnum(A.seguro)}) sin cuenta asignada: no está en el asiento.</b>` : ''}</p>
+      ${ed ? `<label class="no-print">Nº de asiento <input data-nomasiento="1" value="${esc(A.asiento)}" size="12" placeholder="01019900"></label>` : ''}` : '<p class="hint">Sin nóminas en el cuadro para hacer el asiento.</p>';
+    return `${ed ? dz('nomexcel', 'Suelta aquí el Excel de costes salariales del grupo', '(una hoja por empresa, con el mes y los importes por centro de coste): cada hoja se reparte en el cuadro de su empresa y de su mes. Al total devengado se le restan kilometraje, dietas e indemnizaciones.', '.xlsx,.xls') : ''}
+      ${nomMsg ? `<p class="dash-s">${esc(nomMsg)}</p>` : ''}${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
+      <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda) o suelta el Excel del grupo. «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
+      <section class="prs-card"><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>
+      <section class="dsec"><h3>Asiento de la nómina · ${esc(e.nombre)} ${selMes} ${A && ed ? '<button class="small no-print" data-act="m-nomxls">Descargar Excel</button>' : ''}</h3>${tAsiento}</section>
+      <section class="dsec"><h3>Centros de coste · ${esc(e.nombre)}${mmAs ? ` · ${MESES[+mmAs - 1]} ${y}` : ''}</h3>${tCentros}
+        ${Object.keys(cc).length ? `<p class="hint"><b>Centros de coste de la empresa:</b> ${Object.entries(cc).map(([n, k]) => `${esc(k)} ${esc(n.toLowerCase())}`).join(' · ')}</p>` : ''}</section>`;
   }
 
   // ---- Conciliación Seguridad Social: pagos (asientos PS de la 4760.01) frente a la SS de las nóminas del mes anterior, IT y cursos FUNDAE ----
@@ -3957,6 +4122,7 @@ export function crearModulos(c) {
       'm-iladd': () => ilAnadir(),
       'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
+      'm-nomxls': () => nomAsientoXls(),
       'm-ltfila': () => ltFila(d.mod, d.t, d.on === '1'),
       'm-ltauto': () => ltAuto(),
       'm-calmes': () => setCalMes(d.m),
@@ -4643,7 +4809,7 @@ export function crearModulos(c) {
   const M7 = crearEstados({ S, esc, render, empresa, dz, db, cargar, puede, filasExcel: (f) => filasExcel(f) });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
-  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'nomexcel' ? nomCargarExcel(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

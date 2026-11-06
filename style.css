@@ -1012,3 +1012,7 @@ table.rg-tabla.rotulos td.hint { padding-left: 1rem; }
 
 table.rg-acc th, table.rg-acc td { white-space: nowrap; }
 table.rg-acc td.hint { padding-left: 1rem; }
+
+/* Nóminas: columnas del ancho de su texto */
+table.tnom.nom-fit { width: auto; table-layout: auto; }
+table.tnom.nom-fit th, table.tnom.nom-fit td { white-space: nowrap; width: auto; }
