@@ -4387,9 +4387,11 @@ export function crearModulos(c) {
       if (!S.periodo) return { t: 'Elige periodo' };
       const l = libros();
       if (!l) return { t: '…' };
-      if (!l.R.length) return { t: 'Sin datos' };
-      const man = manPer('m' + m);
-      return imp(calcularRet(m, l.R, Number(S.ejercicio), S.periodo).ret + (m === '111' ? Number(man.t3) || 0 : 0) - (Number(man.c29 ?? man.c4) || 0));
+      if (!l.R.length && !(m === '111' && nomPer(Number(S.ejercicio), perEf(empresa(), S.periodo)))) return { t: 'Sin datos' };
+      const man = manPer('m' + m), ej = Number(S.ejercicio), per = perEf(empresa(), S.periodo);
+      // 111: retenciones de profesionales del libro + retenciones de las nóminas (cuadrante de Nóminas; si no hay, la casilla a mano)
+      const nomR = m === '111' ? (nomPer(ej, per)?.r ?? (Number(nominasMan(S.periodo, per).t3) || 0)) : 0;
+      return imp(calcularRet(m, l.R, ej, S.periodo).ret + nomR - (Number(man.c29 ?? man.c4) || 0));
     };
   });
   [['mod180', '115'], ['mod190', '111'], ['mod193', '123']].forEach(([id, m]) => {
@@ -4397,7 +4399,9 @@ export function crearModulos(c) {
       if (!S.sel) return { t: 'Por empresa' };
       const l = libros();
       if (!l) return { t: '…' };
-      return l.R.length ? { t: fnum(calcularRet(m, l.R, Number(S.ejercicio), '').ret), c: 'amar' } : { t: 'Sin datos' };
+      const ej = Number(S.ejercicio), ps = empresa()?.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'] : Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+      const nomR = m === '111' ? ps.reduce((a, p) => a + (nomPer(ej, p)?.r ?? (Number(nominasMan(p, p).t3) || 0)), 0) : 0; // 190: también las retenciones de nóminas
+      return l.R.length || nomR ? { t: fnum(rr(calcularRet(m, l.R, ej, '').ret + nomR)), c: 'amar' } : { t: 'Sin datos' };
     };
   });
   badges.mod390 = () => {

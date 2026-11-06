@@ -998,7 +998,9 @@ table.lt-t td.lt-c.on { background: #e6f4ea; font-weight: 600; }
 .dsec table.dua-t.dua-fix th { white-space: normal; }
 table.lt-t { width: 100%; }
 table.lt-t th.lt-f, table.lt-t td.lt-f, table.lt-t td.lt-m { width: 1%; white-space: nowrap; }
-.dsec table.dua-t.dua-fix { font-size: clamp(.5rem, .62vw, .78rem); }
-.dsec.dua-s table.dua-t.dua-fix, .dsec.dua-s table.dua-t.dua-fix th, .dsec.dua-s table.dua-t.dua-fix td { font-size: clamp(.5rem, .62vw, .78rem) !important; }
+.dsec table.dua-t.dua-fix { font-size: clamp(.62rem, .74vw, .88rem); }
+.dsec.dua-s table.dua-t.dua-fix, .dsec.dua-s table.dua-t.dua-fix th, .dsec.dua-s table.dua-t.dua-fix td { font-size: clamp(.62rem, .74vw, .88rem) !important; }
 .dsec table.dua-t.dua-fix th, .dsec table.dua-t.dua-fix td { padding: .2rem .25rem; }
 .dsec table.dua-t.dua-fix td.mid { white-space: normal; text-overflow: clip; }
+
+.dsec table.dua-t.dua-fix td.mid, .dsec table.dua-t.dua-fix th.mid { text-align: center !important; }
