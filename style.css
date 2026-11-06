@@ -1030,3 +1030,9 @@ table.tprs.tnom.nom-hoja th, table.tprs.tnom.nom-hoja td { width: auto !importan
 table.tprs.tnom.nom-hoja th { white-space: normal; overflow-wrap: anywhere; }
 table.tprs.tnom.nom-hoja td.num { white-space: nowrap; }
 table.tprs.tnom.nom-hoja td.pp, table.tprs.tnom.nom-hoja th.pp { white-space: normal; max-width: none; width: auto !important; }
+
+/* Columnas redimensionables: asa en el borde derecho de cada cabecera */
+.col-rs { position: absolute; top: 0; right: -3px; bottom: 0; width: 8px; cursor: col-resize; user-select: none; z-index: 5; }
+.col-rs:hover, body.rs-arrastrando .col-rs { background: rgba(59, 130, 246, .35); }
+body.rs-arrastrando { cursor: col-resize; user-select: none; }
+@media print { .col-rs { display: none; } }

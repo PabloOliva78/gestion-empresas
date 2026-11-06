@@ -1,0 +1,99 @@
+// Columnas redimensionables en todas las tablas de la aplicación: se arrastra el borde derecho de la cabecera de una columna
+// y el ancho queda guardado en este navegador (por pestaña y tabla) hasta que se cambie; doble clic en el borde = ancho original.
+const CLAVE = 'colw-v1';
+const leer = () => { try { return JSON.parse(localStorage.getItem(CLAVE) || '{}') || {}; } catch { return {}; } };
+const guardar = (o) => { try { localStorage.setItem(CLAVE, JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
+
+// cabeceras «hoja» (las de una sola columna) y número de columnas, con colspan y rowspan
+function mapa(tabla) {
+  const thead = tabla.tHead;
+  if (!thead || !thead.rows.length) return null;
+  const ocupado = [], hojas = []; let ncols = 0;
+  [...thead.rows].forEach((fila, r) => {
+    ocupado[r] ??= []; let c = 0;
+    [...fila.cells].forEach((celda) => {
+      while (ocupado[r][c]) c++;
+      const cs = celda.colSpan || 1, rs = celda.rowSpan || 1;
+      for (let i = 0; i < rs; i++) { ocupado[r + i] ??= []; for (let j = 0; j < cs; j++) ocupado[r + i][c + j] = true; }
+      if (cs === 1) hojas.push({ celda, col: c });
+      c += cs; ncols = Math.max(ncols, c);
+    });
+  });
+  return { hojas, ncols };
+}
+
+// ancho actual de cada columna (de su cabecera o, si no, de la primera fila del cuerpo)
+function medir(tabla, m) {
+  const w = new Array(m.ncols).fill(null);
+  m.hojas.forEach(({ celda, col }) => { w[col] = celda.getBoundingClientRect().width; });
+  const f = tabla.tBodies[0]?.rows[0];
+  if (f) { let c = 0; [...f.cells].forEach((celda) => { if ((celda.colSpan || 1) === 1 && w[c] === null) w[c] = celda.getBoundingClientRect().width; c += celda.colSpan || 1; }); }
+  const conocidos = w.filter((x) => x !== null), media = conocidos.length ? conocidos.reduce((a, b) => a + b, 0) / conocidos.length : 80;
+  return w.map((x) => Math.max(28, x ?? media));
+}
+
+function aplicar(tabla, w) {
+  tabla.querySelectorAll(':scope > colgroup').forEach((g) => g.remove());
+  const g = document.createElement('colgroup');
+  w.forEach((x) => { const c = document.createElement('col'); c.style.width = `${Math.round(x)}px`; g.appendChild(c); });
+  tabla.insertBefore(g, tabla.firstChild);
+  tabla.style.setProperty('table-layout', 'fixed', 'important');
+  tabla.style.setProperty('width', `${Math.round(w.reduce((a, b) => a + b, 0))}px`, 'important');
+  tabla.style.setProperty('min-width', '0', 'important');
+  tabla.style.setProperty('max-width', 'none', 'important');
+}
+
+function quitar(tabla) {
+  tabla.querySelectorAll(':scope > colgroup').forEach((g) => g.remove());
+  ['table-layout', 'width', 'min-width', 'max-width'].forEach((p) => tabla.style.removeProperty(p));
+}
+
+export function activarRedimension(raiz, pestana) {
+  let n = 0;
+  const preparar = () => {
+    n = 0;
+    const guardado = leer();
+    raiz.querySelectorAll('table').forEach((tabla) => {
+      const m = mapa(tabla);
+      if (!m || m.ncols < 2 || !m.hojas.length) { n++; return; }
+      const idx = n++;
+      if (tabla.dataset.rs) return; // ya preparada
+      const clave = `${pestana()}|${idx}|${m.hojas.map((h) => h.celda.textContent.trim().slice(0, 18)).join('/').slice(0, 140)}`;
+      tabla.dataset.rs = clave;
+      m.hojas.forEach(({ celda }) => {
+        if (celda.querySelector(':scope > .col-rs')) return;
+        if (getComputedStyle(celda).position === 'static') celda.style.position = 'relative';
+        const t = document.createElement('span'); t.className = 'col-rs'; t.title = 'Arrastra para cambiar el ancho de la columna · doble clic: ancho original';
+        celda.appendChild(t);
+      });
+      const w = guardado[clave];
+      if (Array.isArray(w) && w.length === m.ncols) aplicar(tabla, w);
+    });
+  };
+  let reloj = null;
+  new MutationObserver(() => { clearTimeout(reloj); reloj = setTimeout(preparar, 40); }).observe(raiz, { childList: true, subtree: true });
+  preparar();
+
+  raiz.addEventListener('mousedown', (ev) => {
+    const t = ev.target.closest?.('.col-rs'); if (!t || ev.button !== 0) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const celda = t.parentElement, tabla = celda.closest('table'), m = mapa(tabla), h = m?.hojas.find((x) => x.celda === celda);
+    if (!h) return;
+    const w = medir(tabla, m), w0 = w[h.col], x0 = ev.clientX, clave = tabla.dataset.rs;
+    document.body.classList.add('rs-arrastrando');
+    const mover = (e) => { w[h.col] = Math.max(28, w0 + e.clientX - x0); aplicar(tabla, w); };
+    const soltar = () => {
+      document.removeEventListener('mousemove', mover); document.removeEventListener('mouseup', soltar);
+      document.body.classList.remove('rs-arrastrando');
+      const g = leer(); g[clave] = w.map((x) => Math.round(x)); guardar(g);
+      const parar = (e) => { e.stopPropagation(); e.preventDefault(); };
+      window.addEventListener('click', parar, true); setTimeout(() => window.removeEventListener('click', parar, true), 0); // el clic que sigue al arrastre no activa nada
+    };
+    document.addEventListener('mousemove', mover); document.addEventListener('mouseup', soltar);
+  });
+  raiz.addEventListener('dblclick', (ev) => {
+    const t = ev.target.closest?.('.col-rs'); if (!t) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const tabla = t.closest('table'), g = leer(); delete g[tabla.dataset.rs]; guardar(g); quitar(tabla);
+  }, true);
+}
