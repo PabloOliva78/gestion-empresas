@@ -43,3 +43,17 @@ tr.res200 .cas200 { background: #fff; color: var(--ink); }
 .pyg202-it { background: #eef2f9; border: 1px solid #c9d3e6; border-radius: 4px; padding: 2px 6px; } .pyg202-it.act { background: #fff3b8; }
 .pyg202-it small { color: #666; }
 .mini-b { font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid #aeb8d0; background: #f1f3f9; cursor: pointer; border-radius: 3px; }
+.pag200 { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 8px; }
+.pag200 .mini-b.primario { background: var(--ink); color: #fff; border-color: var(--ink); }
+.pag200-img { border: 1px solid #c9d3e6; background: #f4f4f4; padding: 8px; margin: 6px 0 10px; overflow: auto; }
+.pag200-img canvas { display: block; margin: 0 auto; box-shadow: 0 1px 6px rgba(0,0,0,.2); background: #fff; }
+table.t200c td:first-child { white-space: normal; max-width: 620px; font-size: 12.5px; }
+table.t200c td:nth-child(2) { white-space: normal; }
+table.t200c .c200 { display: inline-flex; gap: 4px; align-items: center; margin: 0 14px 2px 0; }
+table.t200c .calc200 { font-size: 11.5px; color: #1f4e9c; }
+table.t200c tr.conimp td:first-child { font-weight: 600; }
+table.t200c.solo tbody tr:not(.conimp) { display: none; }
+.cas200-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 4px 16px; font-size: 13px; }
+.cas200-grid > div { display: flex; gap: 6px; align-items: center; border-bottom: 1px dotted #d6dbe6; padding: 2px 0; }
+.cas200-grid > div b { margin-left: auto; } .cas200-grid > div.usada { background: #fffbdd; }
+table.m200t td.pdfok { background: #e3f4e3; }

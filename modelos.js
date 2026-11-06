@@ -1,7 +1,7 @@
-// Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
+﻿// Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
 // Los datos de cada modelo se guardan en `registros` (tipo m232 / m583, un registro por empresa y ejercicio).
 export function crearModelos(c) {
-  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592 } = c;
+  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592, bancoDe = () => '' } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -87,9 +87,11 @@ export function crearModelos(c) {
       if (!f.ip) { f.ip = 'I'; n++; } if (!f.fj) { f.fj = 'J'; n++; } if (!f.met) { f.met = '1A'; n++; } });
     return n;
   }
+  // presentado: el PDF cargado en esta pestaña o el 232 de Impuestos Presentados (se guarda en el año de presentación, ej + 1)
+  const m232Pres = (ej, D) => !!D.pres || !!regDe('prs', S.sel, ej + 1)?.datos?.['232|A'];
   async function m232Proponer(ej, silencio) {
     const D = m232Reg(ej), A = m232Reg(ej - 1), R = calc232(ej), O = m232Ops(ej);
-    if (D.pres) { if (!silencio) aviso(`El 232 de ${ej} ya está cargado como presentado: no se rehace`, true); return; }
+    if (m232Pres(ej, D)) { if (!silencio) aviso(`El 232 de ${ej} ya está cargado como presentado: no se rehace`, true); return; }
     const ob = new Set(R.filas.filter((x) => x.oblig).map((x) => x.id)), nueva = [];
     Object.entries(O).sort().forEach(([k, v]) => {
       const [nif, op, ip] = k.split('|'); if (!ob.has(nif) || !(Math.abs(v) > 0.005)) return;
@@ -149,7 +151,7 @@ export function crearModelos(c) {
     const ej = m232EjDef(), R = calc232(ej), ob = R.filas.filter((x) => x.oblig), D = m232Reg(ej), ed = puede();
     // como en la antigua: si hay obligados y no hay 232 presentado ni registros a mano, se propone solo desde los libros
     const clave = `${S.sel}|${ej}|${E.length}|${Rr.length}`;
-    if (ed && !auto232.has(clave) && !D.pres) {
+    if (ed && !auto232.has(clave) && !m232Pres(ej, D)) {
       auto232.add(clave);
       const o = !!(ob.length || D.filas.length), falta = !D.filas.some((f) => !f.auto) && ob.length;
       if (falta) setTimeout(() => m232Proponer(ej, true), 0);
@@ -172,7 +174,7 @@ export function crearModelos(c) {
         || `<tr><td colspan="${M232_COLS.length + 2}" class="c">Sin registros: pulsa «Rehacer desde los libros», suelta el 232 presentado o añade líneas</td></tr>`}
       ${F.length ? `<tr class="tot"><td colspan="9">Total ingresos (I) · pagos (P)</td><td class="num">I ${n(tot('I'))}<br>P ${n(tot('P'))}</td><td></td></tr>` : ''}</tbody></table></div>
       <div class="no-print" style="margin-top:6px">${ed ? '<button class="small" data-act="m-232add">+ Añadir registro</button> ' : ''}${ed ? `<button class="small" data-act="m-232prop">Rehacer desde los libros de IVA (${ej})</button> ` : ''}<button class="small primary" data-act="m-232bor">Borrador para presentar</button>
-        <span class="hint">${D.pres ? 'Cargado del 232 presentado.' : `Se rellena solo con las entidades del grupo que superan 250.000 €: 08 arrendamientos (R.I.ALQ), 09 intereses (R.I.INT), resto 01/06 según el 232 de ${ej - 1}; vinculación, provincia y método del año anterior. Los registros que cambies a mano se conservan al rehacer.`}</span></div>
+        <span class="hint">${m232Pres(ej, D) ? 'Cargado del 232 presentado.' : `Se rellena solo con las entidades del grupo que superan 250.000 €: 08 arrendamientos (R.I.ALQ), 09 intereses (R.I.INT), resto 01/06 según el 232 de ${ej - 1}; vinculación, provincia y método del año anterior. Los registros que cambies a mano se conservan al rehacer.`}</span></div>
       ${Object.keys(porE).length ? `<h4 style="margin:10px 0 4px">Resumen por entidad vinculada</h4><div class="wrap"><table class="tabla" style="width:auto"><thead><tr><th>NIF</th><th>Entidad</th><th>Ingresos (I)</th><th>Pagos (P)</th></tr></thead><tbody>${Object.entries(porE).map(([k, o]) => `<tr><td>${esc(k)}</td><td>${esc(o.nom)}</td><td class="num">${n(o.I)}</td><td class="num">${n(o.P)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <h4 style="margin:10px 0 4px">(4) Reducción de rentas de activos intangibles (art. 23 LIS) · (5) Operaciones con paraísos fiscales</h4><p class="hint">Sin datos: si los hubiera, añádelos en Observaciones del cuadro de abajo.</p></section>`;
     const otrasEnt = S.empresas.filter((e) => e.id !== S.sel && e.cif && !R.filas.some((x) => x.id === nifN(e.cif)));
@@ -359,6 +361,7 @@ export function crearModelos(c) {
     const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return cargandoTxt;
     const mov = { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, d = datos592(), ej = String(S.ejercicio), per = S.periodo ?? '', L = calc592De(d, mov, ej, per), cab = d.cab ?? {}, e = empresa(), ed = puede(), dis = ed ? '' : ' disabled';
     const inp = (k, v, ph = '', w = 28) => `<input class="presin" data-m592cab="${k}" value="${esc(v ?? '')}" placeholder="${esc(ph)}" style="width:${w}ch;text-align:left"${dis}>`;
+    const iban592 = empresa()?.datos?.cuenta592 ?? cab.iban ?? '';
     const inpb = (k, v, ph = '') => `<input data-m592cab="${k}" value="${esc(v ?? '')}" placeholder="${esc(ph)}"${dis}>`;
     const tabla = (lst, fab) => `<div class="wrap" style="overflow-x:auto"><table class="tabla"><thead><tr><th>Nº asiento</th><th>Concepto</th><th>Clave producto</th>${fab ? '<th>Descripción</th>' : ''}<th>Fecha</th><th>Justificante</th><th>Kilogramos</th><th>Kg no reciclados</th><th>Régimen fiscal</th><th>${fab ? 'Destinatario' : 'Proveedor'}</th><th>NIF</th><th></th></tr></thead><tbody>
       ${lst.map((r) => `<tr><td>${esc(r.asiento)}</td><td>${esc(r.concepto)}</td><td>${esc(r.clave)}</td>${fab ? `<td>${esc(r.desc)}</td>` : ''}<td class="c">${esc(r.fecha)}</td><td>${esc(r.justificante)}</td><td class="num">${nf3(r.kg)}</td><td class="num">${nf3(r.kgnr)}</td><td>${esc(r.regimen)}</td><td>${esc(r.nombre)}</td><td>${esc(r.nif)}</td><td>${ed ? `<button class="small" data-act="m-592del" data-l="${fab ? 'fab' : 'aic'}" data-k="${esc([r.asiento, r.fecha, r.justificante, r.kg].join('|'))}">✕</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="${fab ? 12 : 11}" class="c">Sin movimientos en el periodo</td></tr>`}
@@ -377,7 +380,7 @@ export function crearModelos(c) {
       <div class="f303-sec">Periodo de liquidación</div>
       <div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${esc(ej)}</span></span><span class="idbox"><b>Período</b><span>${esc(/^\d\d$/.test(per) ? `${per} ${MES_L[+per - 1]}` : per || 'Anual')}</span></span>
         <span class="idbox grow"><b>Número de Referencia</b>${inpb(`nrc_${ej}-${per}`, cab[`nrc_${ej}-${per}`], 'NRC del pago')}</span></div>
-      <div class="f303-id"><span class="idbox"><b>Importe ingreso</b><span>${nf3(Math.max(0, L.res))}</span></span><span class="idbox grow"><b>IBAN</b>${inpb('iban', cab.iban, 'ES00 0000 0000 00 0000000000')}</span></div>
+      <div class="f303-id"><span class="idbox"><b>Importe ingreso</b><span>${nf3(Math.max(0, L.res))}</span></span><span class="idbox grow"><b>IBAN${bancoDe(iban592) ? ' · ' + esc(bancoDe(iban592)) : ''}</b><input data-ibanmod="592" class="iban" value="${esc(iban592)}" placeholder="ES00 0000 0000 00 0000000000"${dis}></span></div>
       <div class="f303-sec">Datos de Contacto</div>
       <div class="f303-id"><span class="idbox grow"><b>Persona de contacto</b>${inpb('contacto', cab.contacto, '')}</span><span class="idbox"><b>Teléfono</b>${inpb('tel', cab.tel, '')}</span><span class="idbox"><b>Fax</b>${inpb('fax', cab.fax, '')}</span><span class="idbox grow"><b>E-mail</b>${inpb('email', cab.email, '')}</span></div>
       <div class="f303-sec">Liquidación</div>

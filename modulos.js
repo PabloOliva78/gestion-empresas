@@ -1,4 +1,4 @@
-// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
+﻿// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
@@ -6,9 +6,10 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=10';
-import { crearModelos } from './modelos.js?v=6';
+import { crearModelos } from './modelos.js?v=7';
 import { crearModelos2 } from './modelos2.js?v=1';
-import { crearModelos3 } from './modelos3.js?v=1';
+import { crearModelos3 } from './modelos3.js?v=2';
+import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=4';
 import { crearEstados } from './estados.js?v=3';
 
@@ -324,6 +325,22 @@ export function crearModulos(c) {
     const ini = `${ej}-${mm[0]}-01`, fin = `${ej}-${mm[1]}-31`;
     return os.some((o) => (o.alta || '0000-00-00') <= fin && (o.estado === 'ALTA' || (o.baja && o.baja >= ini)));
   }
+  // 232: obligados de un ejercicio = empresas con registros en su 232 y las sociedades del grupo que figuran en el 232 de otra con más de 250.000 € (sin datos de ese año se toma el último de los dos anteriores)
+  const nifN232 = (n) => String(n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '');
+  const m232Datos = (id, y) => S.registros.find((r) => r.tipo === 'm232' && r.empresa_id === id && r.ejercicio === y)?.datos;
+  function m232Obligados(ej) {
+    for (const y of [ej, ej - 1, ej - 2]) {
+      const M = new Set(); let hay = false;
+      S.empresas.forEach((E) => {
+        const R = m232Datos(E.id, y); if (!R) return;
+        if (R.oblig || R.filas?.length) { hay = true; M.add(E.id); }
+        const T = {}; (R.filas ?? []).forEach((f) => { const k = nifN232(f.nif); T[k] = (T[k] || 0) + Math.abs(parseES(String(f.imp || 0)) || 0); });
+        Object.entries(T).forEach(([n, v]) => { if (v > 250000) { const o = S.empresas.find((x) => nifN232(x.cif) === n); if (o) M.add(o.id); } });
+      });
+      if (hay) return M;
+    }
+    return new Set();
+  }
   function obligaciones(e, ej, ix) {
     const sig = String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, out = [];
     const uso = (m) => [ej - 1, ej, ej + 1].some((y) => ix.usado.has(`${e.id}|${y}|${m}`));
@@ -340,7 +357,7 @@ export function crearModulos(c) {
     if (obl583(e)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
     if (uso('INT')) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
     if (uso('A22')) ['1T', '2T', '3T', '4T'].forEach((p) => add('A22', p, ej, ej, 'A22'));
-    if (uso('232')) add('232', 'A', ej - 1, ej, '232');
+    if (uso('232') || m232Obligados(ej - 1).has(e.id)) { add('232', 'A', ej - 1, ej, '232'); const o232 = out[out.length - 1]; o232.pres = o232.pres || !!m232Datos(e.id, ej - 1)?.pres; } // el 232 del ejercicio anterior, en noviembre
     add('390', 'A', ej, ej, '390'); add('200', 'A', ej, ej + 1, '200'); add('190', 'A', ej, ej, '190');
     if (uso('180') || out.some((o) => o.mod === '115')) add('180', 'A', ej, ej, '180');
     if (uso('193') || uso('123')) add('193', 'A', ej, ej, '193');
@@ -362,7 +379,7 @@ export function crearModulos(c) {
         if (cmgMod && cmgMod !== o.mod) return;
         const st = estadoOb(o, hoy);
         tot[st]++; if (g.n[st] !== undefined) g.n[st]++;
-        g.cel[o.mod === '583' ? 9 : o.mod === '200' ? 5 : colMes(o.per)].push({ mod: o.mod, st, per: o.per, fin: o.fin });
+        g.cel[o.mod === '583' ? 9 : o.mod === '200' ? 5 : o.mod === '232' ? 10 : colMes(o.per)].push({ mod: o.mod, st, per: o.per, fin: o.fin });
       });
       G.push(g);
     });
@@ -1595,6 +1612,19 @@ export function crearModulos(c) {
   const RET_MODELOS = { '111T': '111 · Rendimientos del trabajo', 111: '111 · Actividades económicas', 115: '115 · Arrendamientos', 123: '123 · Capital mobiliario', '-': 'No declarar' };
   const retOv = () => S.registros.find((r) => r.tipo === 'retclave' && r.empresa_id === S.sel)?.datos ?? {};
   const claveLinea = (l) => `${l.factura}|${l.nif}|${l.fecha}|${l.codigo}|${l.base}`;
+
+  // calcularRet con la clave elegida a mano por línea (retclave): 111, 111T, 115, 123 o «-» = no declarar. Sin reclasificaciones, igual que calcularRet
+  const calcularRetOv = (modelo, R, ej, per) => {
+    const base = calcularRet(modelo, R, ej, per), ov = retOv();
+    if (!Object.keys(ov).length) return base;
+    const r = base.periodo, claves = { 111: ['111', '111T'], 115: ['115'], 123: ['123'] }[modelo], ya = new Set(base.lineas);
+    const lineas = R.filter((l) => { if (l.fecha < r.desde || l.fecha > r.hasta) return false; const o = ov[claveLinea(l)]; return o ? o !== '-' && claves.includes(o) : ya.has(l); })
+      .sort((a, b) => a.nif.localeCompare(b.nif) || a.fecha.localeCompare(b.fecha));
+    const suma = (a, k) => a.reduce((t, l) => t + l[k], 0), mp = new Map();
+    for (const l of lineas) { const a = mp.get(l.nif) ?? { nif: l.nif, nombre: l.nombre, base: 0, ret: 0 }; a.base += l.base; a.ret -= l.cuota; mp.set(l.nif, a); }
+    const porCodigo = base.porCodigo.map((x) => { const y = lineas.filter((l) => l.codigo === x.codigo); return { ...x, base: suma(y, 'base'), ret: -suma(y, 'cuota') }; });
+    return { ...base, lineas, porCodigo, base: suma(lineas, 'base'), ret: -suma(lineas, 'cuota') + 0, perceptores: new Set(lineas.map((l) => l.nif).filter(Boolean)).size, porNif: [...mp.values()] };
+  };
   async function guardarRetClave(id, v) {
     const reg = S.registros.find((r) => r.tipo === 'retclave' && r.empresa_id === S.sel);
     const datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
@@ -2679,7 +2709,7 @@ export function crearModulos(c) {
       } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
     }
     // 4) liquidaciones pendientes de presentar
-    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.imp ?? calc[o.mod] ?? null })) : [];
+    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.imp ?? calc[o.mod] ?? null })) : [];
     const siiTxt = [];
     [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
       const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
@@ -3072,6 +3102,9 @@ export function crearModulos(c) {
         if (ANUALES.includes(modelo)) per = 'A';
         else if (!['583', '202', 'A22'].includes(modelo) && per) per = perEf(e, per);
         const val = valoresPresentado(modelo, casillasPDF(pags), t);
+        // 200: páginas con sus casillas, bases imponibles negativas y liquidación (cuota 00562 y resultado 00621) leídas del PDF entero
+        const x200 = modelo === '200' ? leer200(pags, ejDecl) : null;
+        if (x200) { if (x200.cuota !== undefined) val.cuota = x200.cuota; if (x200.res !== undefined) val.res = x200.res; }
         const ref = `${f.name}|${f.size}`;
         let aviso = '';
         if (modelo && Object.keys(val).length) {
@@ -3083,7 +3116,7 @@ export function crearModulos(c) {
             regs.set(k, r);
           }
           const clave = `${modelo}|${per || 'A'}`;
-          r.datos[clave] = { ...(r.datos[clave] ?? {}), ...val };
+          r.datos[clave] = { ...(r.datos[clave] ?? {}), ...val, ...(x200 ? { est200: x200.est200, bin: x200.bin } : {}) };
           const err = await guardarRegistro(r.ex, { ...(r.ex ? {} : { id: r.id }), empresa_id: e.id, tipo: 'prs', ejercicio: ej, datos: r.datos });
           if (err) throw new Error(err);
           r.ex ??= { id: r.id };
@@ -3930,7 +3963,7 @@ export function crearModulos(c) {
   };
   const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir, docs: DOCS, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
-  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, leerPdf: (f) => leerPdf(f) });
+  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f) });
   Object.assign(tabs, M4.tabs);
   // 303 de un periodo (con sus ajustes y la compensación disponible) y casilla total de retenciones de cada modelo, para el 390 y los resúmenes anuales
   const c303 = (E, R, ej, p) => calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) });
@@ -3940,10 +3973,11 @@ export function crearModulos(c) {
     const m = S.registros.find((r) => r.tipo === 'm111' && r.empresa_id === S.sel && r.ejercicio === ej)?.datos?.[per] ?? {}, mv = (k) => Number(m[k]) || 0, np = nomPer(ej, per);
     return (np ? np.r : 0) + mv('t3') + mv('k06') + c.ret + ['k12', 'k15', 'k18', 'k21', 'k24', 'k27'].reduce((a, k) => a + mv(k), 0);
   };
-  const M5 = crearModelos2({ S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet });
+  const M5 = crearModelos2({ S, esc, empresa, grande, calcularRet: calcularRetOv, calcular349, c303, nomPer, totalRet });
   Object.assign(tabs, M5.tabs);
-  const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS });
+  const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS, urlPdf: async (path) => { const { data } = await db.storage.from('documentos').createSignedUrl(path, 300); return data?.signedUrl ?? null; } });
   Object.assign(tabs, M6.tabs);
+  Object.assign(badges, M6.badges);
   const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta });
   Object.assign(tabs, M8.tabs);
   Object.assign(badges, M8.badges);
