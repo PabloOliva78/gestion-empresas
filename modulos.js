@@ -9,7 +9,7 @@ import { crearRegistral } from './registral.js?v=8';
 import { crearModelos } from './modelos.js?v=4';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=3';
-import { crearEstados } from './estados.js?v=2';
+import { crearEstados } from './estados.js?v=3';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -3940,7 +3940,7 @@ export function crearModulos(c) {
   const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta });
   Object.assign(tabs, M8.tabs);
   Object.assign(badges, M8.badges);
-  const M7 = crearEstados({ S, esc, render, empresa });
+  const M7 = crearEstados({ S, esc, render, empresa, dz });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
   const subirComo = (kind, files) => (M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));

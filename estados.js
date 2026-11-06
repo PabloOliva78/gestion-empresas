@@ -2,7 +2,7 @@
 // Datos: el balance de sumas y saldos de cada ejercicio sale de los registros «sys» (botón SYS); las cuentas anuales presentadas, de «rmdoc» (Registro Mercantil);
 // lo presentado del 200/583/592, de «prs»; lo escrito a mano (ID, PN1/PN2/F1, titular real, modelo) se guarda en el navegador por empresa.
 export function crearEstados(c) {
-  const { S, esc, render, empresa } = c;
+  const { S, esc, render, empresa, dz } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
   const nf = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' });
@@ -496,7 +496,9 @@ function vistaTef(){ const ej=+ejNum(), y=ST.tefEj? +ST.tefEj : ej-1, n=v=>v===n
     const e = document.querySelector('.bss-n'); if (e) e.textContent = q ? n + ' de ' + t + ' cuentas' : '';
   }
 
-  const conEmp = (f) => () => (S.sel ? f() : sinEmpresa);
+  // zona para soltar el balance de sumas y saldos (la misma que el botón SYS: se guarda por empresa y ejercicio)
+  const zonaSys = () => (dz ? dz('sys', 'Suelta aquí el balance de sumas y saldos', '(Excel de Dynamics: cuenta, nombre, saldo de apertura, débito, crédito y saldo de cierre; el ejercicio se toma del nombre del archivo) o pulsa para elegirlo') : '');
+  const conEmp = (f) => () => (S.sel ? zonaSys() + f() : sinEmpresa);
   const tabs = {
     ca: ['Cuentas anuales', 'Registro Mercantil', conEmp(() => vistaCuentasAnuales())],
     bss: ['Balance de Sumas y Saldos', 'Cuentas del ejercicio', conEmp(() => vistaBSS())],
