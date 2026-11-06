@@ -8,6 +8,7 @@ import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=10';
 import { crearModelos } from './modelos.js?v=6';
 import { crearModelos2 } from './modelos2.js?v=1';
+import { crearModelos3 } from './modelos3.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=4';
 import { crearEstados } from './estados.js?v=3';
 
@@ -3271,6 +3272,7 @@ export function crearModulos(c) {
       ...acc3,
       ...R2.acciones,
       ...M4.acciones,
+      ...M6.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
       'm-iladd': () => ilAnadir(),
       'm-duadel': () => duaQuitar(d.n),
@@ -3940,13 +3942,15 @@ export function crearModulos(c) {
   };
   const M5 = crearModelos2({ S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet });
   Object.assign(tabs, M5.tabs);
+  const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS });
+  Object.assign(tabs, M6.tabs);
   const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta });
   Object.assign(tabs, M8.tabs);
   Object.assign(badges, M8.badges);
   const M7 = crearEstados({ S, esc, render, empresa, dz });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
-  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
   return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

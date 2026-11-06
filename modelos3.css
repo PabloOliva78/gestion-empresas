@@ -1,0 +1,45 @@
+/* Bloque 4 · modelos 200 y 202 (copiado de la aplicación antigua) */
+.grid200 input.presin, .f202 input.presin, table.m200t input.presin { width: 110px; text-align: right; border: 1px solid #c9d3e6; background: #fffdf3; font: inherit; font-size: 14px; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.grid200 input.presin:hover, .grid200 input.presin:focus, table.m200t input.presin:focus { border-color: #b9c7e4; background: #fffdf0; }
+.man-lbl { color: var(--muted); font-size: 14px; font-weight: 400; }
+.sinp { color: #b98a00; font-style: italic; font-size: 14px; }
+.m200-bal { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+table.m200t { width: auto; table-layout: auto; border-collapse: collapse; }
+table.m200t th, table.m200t td { white-space: nowrap; padding: 4px 12px; border-bottom: 1px solid var(--line); }
+table.m200t th { background: #e8edf8; color: var(--ink); text-align: left; font-weight: 600; }
+table.m200t td.n { text-align: right; font-variant-numeric: tabular-nums; }
+table.m200t td.c { text-align: center; }
+table.m200t td.dif-ko { background: #f8d7da; color: #842029; font-weight: 700; }
+table.m200t td.nota200 { white-space: normal; max-width: 0; line-height: 1.4; }
+table.m200liq th:nth-child(2), table.m200liq td:nth-child(2) { white-space: normal !important; width: 230px; min-width: 230px; max-width: 230px; line-height: 1.25; }
+table.m200t tr.cab200 td { background: #eef2f9; font-weight: 700; color: var(--ink); }
+table.m200t tr.tot200 td { background: #fffbdd; font-weight: 700; }
+table.m200t tr.res200 td { background: var(--ink); color: #fff; font-weight: 700; }
+table.m200liq td.razon { font-size: 12px; color: #555; white-space: normal; max-width: 420px; }
+.cas200 { display: inline-block; background: var(--ink); color: #fff; font-size: 12px; padding: 0 6px; border-radius: 2px; }
+tr.res200 .cas200 { background: #fff; color: var(--ink); }
+.h200c { margin: 8px 0 4px; font-size: 14px; color: var(--ink); }
+.grid200 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; align-items: start; }
+.grid200 .blq200 { min-width: 0; overflow: auto; }
+.grid200 .blq200.ancho200 { grid-column: 1 / -1; }
+.grid200 .fila3-200 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 20px; align-items: start; }
+@media (max-width: 1300px) { .grid200 { grid-template-columns: 1fr; } .grid200 .fila3-200 { grid-template-columns: 1fr; } }
+/* 202 · impreso de la AEAT */
+.f202 .sec202 { display: inline-block; background: #f0841f; color: #fff; font-weight: 700; padding: 3px 14px; margin-top: 12px; }
+.f202 .box202 { border: 1px solid #9a9a9a; background: #fdf1e6; padding: 8px 14px; margin-bottom: 6px; }
+.f202 .chk202 { display: block; padding: 2px 0; font-size: 13px; }
+.f202 .sub202 { margin: 8px 0 2px; }
+.f202 .h202 { font-weight: 700; margin: 10px 0 4px; }
+.f202 .l202 { display: grid; grid-template-columns: 1fr 210px; align-items: center; gap: 8px; padding: 2px 0; border-bottom: 1px dotted #d9c3ad; }
+.f202 .l202.dos { grid-template-columns: 1fr 200px 200px; } .f202 .l202.tres { grid-template-columns: 150px 200px 90px 120px 200px; }
+.f202 .l202 .t2 { text-align: right; }
+.f202 .c202 { display: grid; grid-template-columns: 34px 1fr; border: 1px solid #9a9a9a; background: #fff; }
+.f202 .c202 b { background: #fff; border-right: 1px solid #9a9a9a; text-align: center; font-weight: 400; padding: 2px; }
+.f202 .c202 input { border: none; text-align: right; padding: 2px 6px; font: inherit; width: 100%; box-sizing: border-box; background: #fff; }
+.f202 .c202 .v { text-align: right; padding: 2px 6px; font-weight: 700; background: #eef2f9; }
+.f202 .c202.vacia { border: none; background: transparent; } .f202 .c202h { text-align: center; font-weight: 600; }
+.f202 .c202 input.editado { background: #fff3b8; }
+.pyg202-lista { margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; }
+.pyg202-it { background: #eef2f9; border: 1px solid #c9d3e6; border-radius: 4px; padding: 2px 6px; } .pyg202-it.act { background: #fff3b8; }
+.pyg202-it small { color: #666; }
+.mini-b { font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid #aeb8d0; background: #f1f3f9; cursor: pointer; border-radius: 3px; }
