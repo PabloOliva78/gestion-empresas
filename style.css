@@ -780,3 +780,9 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .rg-indice { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-bottom: 8px; }
 .subtabs button.hecho { font-weight: 600; }
 @media (max-width: 900px) { .rg-split { grid-template-columns: 1fr; } .rg-izq { position: static; } }
+
+/* Enunciados y títulos de campos: amarillo palo, como en el Excel */
+:root { --titulo-bg: #fff2cc; --titulo-ink: #3a3000; --titulo-line: #e6d594; }
+th, .kv th, .ficha dt, .rg-tabla.rotulos td:first-child { background: var(--titulo-bg) !important; color: var(--titulo-ink) !important; }
+th { border-color: var(--titulo-line) !important; }
+th small { color: #7a6a1a !important; }

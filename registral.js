@@ -1,4 +1,4 @@
-// Bloque 2 · Información Registro Mercantil (portado de la aplicación antigua).
+﻿// Bloque 2 · Información Registro Mercantil (portado de la aplicación antigua).
 // Datos Registrales y Titularidad Real: se suelta el PDF o Excel y se leen los datos, con el archivo de origen.
 export function crearRegistral(c) {
   const { db, S, esc, render, cargar, empresa, puede, leerPdf, filasExcel, ocrPdf, eur } = c;
@@ -126,7 +126,7 @@ export function crearRegistral(c) {
     return `${ed ? `<div class="dropzone" data-kind="dreg" tabindex="0" role="button"><b>Suelta aquí el PDF o Excel con los datos registrales</b> (nota simple, certificado IRUS, declaración de titularidad real, ficha de la sociedad…) o pulsa para elegirlo. Se extraen NIF, IRUS, CNAE, Registro Mercantil, tomo, libro, folio, sección, hoja, inscripción, LEI, domicilio y fecha de constitución.
       <input type="file" data-dzkind="dreg" accept=".pdf,.xlsx,.xls,.csv" multiple hidden></div>` : ''}${avisoHtml()}${av}
       <section class="block"><h4 class="it-tit">Datos registrales · ${esc(e.nombre)}</h4>
-      <table class="tabla rg-tabla"><thead><tr><th>Dato</th><th>Valor</th><th>Tomado de</th></tr></thead><tbody>
+      <table class="tabla rg-tabla rotulos"><thead><tr><th>Dato</th><th>Valor</th><th>Tomado de</th></tr></thead><tbody>
       ${DREG_CAMPOS.map(([k, t]) => `<tr><td><b>${t}</b></td><td><input class="facin" data-rgdreg="${k}" value="${esc(d[k] ?? '')}" size="${/denominacion|domicilio|cnaeDesc|registro/.test(k) ? 48 : 22}"${ed ? '' : ' disabled'}></td><td class="hint">${esc(d._o[k] ?? '')}</td></tr>`).join('')}
       </tbody></table>
       ${ed ? '<p><button class="small" data-act="m-rg-dregtr">Tomar Registro Mercantil, tomo, folio y hoja de Titularidad real</button></p>' : ''}
@@ -393,7 +393,7 @@ export function crearRegistral(c) {
       <section class="block"><h4 class="it-tit">Titularidad real · ${esc(e.nombre)}${e.cif ? ` · NIF ${esc(e.cif)}` : ''}</h4>
       <p class="hint">${sinT ? 'Sin titulares reales. Si ninguna persona física tiene más del 25 % (directo o indirecto) ni controla por otros medios, se declaran como titulares reales asimilados los administradores (art. 4.2.b Ley 10/2010).'
     : 'Revisa los datos extraídos: puedes corregir cualquier casilla, quitar o añadir líneas. Titular real: persona física con más del 25 % del capital o de los derechos de voto, directa o indirectamente, o que ejerza el control por otros medios.'}</p>
-      <table class="tabla rg-tabla" style="width:auto;margin-bottom:12px"><tbody>${[['oblig', 'Obligada a presentar la identificación del titular real (SI/NO)'], ['presenta', 'Presenta por primera vez o actualiza/ratifica (SI/NO)'],
+      <table class="tabla rg-tabla rotulos" style="width:auto;margin-bottom:12px"><tbody>${[['oblig', 'Obligada a presentar la identificación del titular real (SI/NO)'], ['presenta', 'Presenta por primera vez o actualiza/ratifica (SI/NO)'],
     ['tipo', 'Tipo de actualización (PRIMERA / ACTUALIZACIÓN / RECTIFICACIÓN)'], ['fecha', 'Fecha en que se produce el cambio (DD.MM.AAAA)']]
     .map(([k, t]) => `<tr><td>${t}</td><td><input class="facin" data-rgtrcab="${k}" value="${esc(D.cab[k] || '')}" size="14"${ed ? '' : ' disabled'}></td></tr>`).join('')}</tbody></table>
       ${tabla(D.titulares, TRL_CAMPOS, 'titulares', 'I-II. Titulares reales (personas físicas)')}
@@ -928,7 +928,7 @@ export function crearRegistral(c) {
     ['pagCA', 'Páginas de las cuentas anuales'], ['pagIG', 'Páginas del informe de gestión'], ['pagAud', 'Páginas del informe de auditoría'], ['accPropias', 'Acciones propias (texto)']];
   const RM_AUD_CAMPOS = [['firma', 'Sociedad de auditoría'], ['roacFirma', 'Nº ROAC de la sociedad'], ['nifFirma', 'NIF de la sociedad de auditoría'], ['auditor', 'Auditor firmante'], ['roacAuditor', 'Nº ROAC del auditor'], ['domicilio', 'Domicilio'],
     ['cp', 'Código postal y ciudad'], ['fecha', 'Fecha del informe'], ['opinion', 'Tipo de opinión'], ['sello', 'Sello REA (año y número)'], ['paginas', 'Páginas'], ['otraInfo', 'Conclusión sobre el informe de gestión']];
-  const tablaCampos = (sec, campos, D, ed) => `<table class="tabla rg-tabla" style="width:auto"><tbody>${campos.map(([k, t]) => `<tr><td>${esc(t)}</td><td>${/otraInfo|accPropias/.test(k)
+  const tablaCampos = (sec, campos, D, ed) => `<table class="tabla rg-tabla rotulos" style="width:auto"><tbody>${campos.map(([k, t]) => `<tr><td>${esc(t)}</td><td>${/otraInfo|accPropias/.test(k)
     ? `<textarea class="facin" data-rgf="${sec}|${k}" rows="3" cols="70"${ed ? '' : ' disabled'}>${esc(D[k] ?? '')}</textarea>` : inp(sec, k, D[k], 44, ed)}</td></tr>`).join('')}</tbody></table>`;
 
   function secCA(y, D, ed) {
@@ -992,7 +992,7 @@ export function crearRegistral(c) {
     const R = D[tipo] ?? {}, otro = D[tipo === 'acu' ? 'nota' : 'acu'];
     const a = rmEntradaNorm(R.entrada), b = rmEntradaNorm(otro?.entrada);
     return `${R.archivo ? `<p class="hint">Leído de ${esc(R.archivo.nombre)}</p>` : '<p class="hint">Sin documento para este ejercicio.</p>'}
-      <table class="tabla rg-tabla" style="width:auto"><tbody>${DEP_CAMPOS[tipo].map(([k, t]) => `<tr><td>${esc(t)}</td><td>${inp(tipo, k, R[k], 44, ed)}</td></tr>`).join('')}</tbody></table>
+      <table class="tabla rg-tabla rotulos" style="width:auto"><tbody>${DEP_CAMPOS[tipo].map(([k, t]) => `<tr><td>${esc(t)}</td><td>${inp(tipo, k, R[k], 44, ed)}</td></tr>`).join('')}</tbody></table>
       ${a && b ? `<p><b>${a === b ? `✓ El número de entrada coincide con el ${tipo === 'acu' ? 'de la nota de despacho' : 'del acuse de entrada'}` : `✖ El número de entrada no coincide con el ${tipo === 'acu' ? 'de la nota de despacho' : 'del acuse de entrada'} (${esc(otro.entrada)})`}</b></p>` : ''}`;
   }
 
@@ -1149,7 +1149,7 @@ export function crearRegistral(c) {
       <input type="file" data-dzkind="rmesc" accept=".pdf" multiple hidden></div>` : '';
     if (!sel) return `${drop}${avisoHtml()}<p class="vacio">No hay escrituras guardadas de esta empresa.</p>`;
     const C = escC(sel);
-    const der = `<section class="block rm-hoja"><h4 class="it-tit">${esc(C.tipo || 'Escritura')}</h4><table class="tabla rg-tabla" style="width:100%"><tbody>${ESC_CAMPOS.map(([k, t]) => `<tr><td style="width:24%"><b>${t}</b></td><td>${k === 'resumen' || k === 'comparecen'
+    const der = `<section class="block rm-hoja"><h4 class="it-tit">${esc(C.tipo || 'Escritura')}</h4><table class="tabla rg-tabla rotulos" style="width:100%"><tbody>${ESC_CAMPOS.map(([k, t]) => `<tr><td style="width:24%"><b>${t}</b></td><td>${k === 'resumen' || k === 'comparecen'
       ? `<textarea class="facin" data-rgesc="${k}" rows="${k === 'resumen' ? 8 : 3}" style="width:100%"${ed ? '' : ' disabled'}>${esc(C[k] || '')}</textarea>`
       : `<input class="facin" data-rgesc="${k}" value="${esc(C[k] || '')}" style="width:100%"${ed ? '' : ' disabled'}>`}</td></tr>`).join('')}</tbody></table>
       ${sel.datos.texto ? `<details style="margin-top:10px"><summary>Texto completo (${sel.datos.n} páginas${sel.datos.ocr ? ', leído con OCR' : ''})</summary><pre class="rg-pre">${esc(sel.datos.texto)}</pre></details>` : ''}</section>`;
