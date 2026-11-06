@@ -786,3 +786,10 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 th, .kv th, .ficha dt, .rg-tabla.rotulos td:first-child { background: var(--titulo-bg) !important; color: var(--titulo-ink) !important; }
 th { border-color: var(--titulo-line) !important; }
 th small { color: #7a6a1a !important; }
+
+/* Bloque 4 · modelos 232 y 583 */
+.f-row.l1 { grid-template-columns: 1fr 340px; }
+.f583-chk { display: flex; gap: .5rem; align-items: center; padding: .4rem 1rem; }
+.f583-inst { border-bottom: 3px solid #e3e8f2; }
+.tabla tr.fila-sel td { background: #fff3cd; }
+.facin.editado { background: #fffbe3; }

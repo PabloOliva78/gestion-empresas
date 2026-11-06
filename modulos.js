@@ -6,6 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=3';
+import { crearModelos } from './modelos.js?v=1';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -3207,6 +3208,7 @@ export function crearModulos(c) {
     ({
       ...acc3,
       ...R2.acciones,
+      ...M4.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
       'm-iladd': () => ilAnadir(),
       'm-duadel': () => duaQuitar(d.n),
@@ -3864,7 +3866,9 @@ export function crearModulos(c) {
   };
   const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir,leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
-  const subirComo = (kind, files) => (R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, leerPdf: (f) => leerPdf(f) });
+  Object.assign(tabs, M4.tabs);
+  const subirComo = (kind, files) => (M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
   return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
