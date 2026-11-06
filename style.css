@@ -1016,3 +1016,10 @@ table.rg-acc td.hint { padding-left: 1rem; }
 /* Nóminas: columnas del ancho de su texto */
 table.tnom.nom-fit { width: auto; table-layout: auto; }
 table.tnom.nom-fit th, table.tnom.nom-fit td { white-space: nowrap; width: auto; }
+
+/* Nóminas: el ancho de cada columna sigue a su texto (gana a la tabla fija de .tprs y al ancho mínimo de .tnom) */
+table.tprs.tnom.nom-fit { table-layout: auto !important; width: max-content !important; min-width: 0 !important; max-width: none; }
+table.tprs.tnom.nom-fit th, table.tprs.tnom.nom-fit td { width: auto !important; min-width: 0 !important; white-space: nowrap; padding-left: .5rem; padding-right: .5rem; }
+table.tprs.tnom.nom-fit td.in input { width: 11ch !important; min-width: 0 !important; }
+table.tprs.tnom.nom-fit td.pp, table.tprs.tnom.nom-fit th.pp { white-space: normal; max-width: 26em; }
+table.nom-hoja th.nom-cc { font-weight: 400; font-size: .78rem; color: #4a5a85; background: #eef2fb; }

@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=160';
+import { crearModulos } from './modulos.js?v=161';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -157,7 +157,7 @@ const GRUPOS = [
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], '', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
   ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], '', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
-  ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
+  ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['11.- ADMINISTRACIÓN', ['usuarios', 'envio'], '', 'Usuarios, roles y acceso a las empresas.'],
 ];
 const TABS = {

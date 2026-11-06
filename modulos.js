@@ -2722,7 +2722,7 @@ export function crearModulos(c) {
     return k ? CENTROS_COSTE[k] : {};
   };
   const NOM_ROW = [[/^kilom/, 'km'], [/^dietas/, 'dietas'], [/^indemn/, 'indem'], [/^t devengado/, 'dev'], [/^dto/, 'ssTrab'], [/^i r p f/, 'ret'], [/^seg/, 'seguro'], [/^descuentos/, 'seguro'],
-    [/^anticipos/, 'anticipos'], [/^embargo/, 'embargos'], [/^liquido/, 'liquido'], [/^total s/, 'ssEmp']];
+    [/^anticipos/, 'anticipos'], [/^embargo/, 'embargos'], [/^liquido/, 'liquido'], [/^base irpf/, 'base'], [/^total s/, 'ssEmp']];
   // Una hoja del Excel (una empresa, un mes): importes por centro. La columna A lleva los conceptos y una columna «TOTALES» la suma.
   function nomLeerHoja(rows) {
     const txt = (v) => (typeof v === 'string' ? v.trim() : ''), num = (v) => (typeof v === 'number' ? v : null);
@@ -2782,7 +2782,7 @@ export function crearModulos(c) {
               const t = new Set(nomToks(nombre)), k = ccK.find((x) => { const w = nomToks(x); return w.length && t.size && (w.every((q) => t.has(q)) || [...t].every((q) => w.includes(q))); }) ?? (ccK.length === 1 ? ccK[0] : '');
               if (k) { codigo ||= cc[k]; if (/^centro\s*\d+$/i.test(nombre)) nombre = k; }
             }
-            return { codigo, nombre, salarios: rr(c.dev - c.km - c.dietas - c.indem), km: rr(c.km), dietas: rr(c.dietas), indem: rr(c.indem), ssEmp: rr(c.ssEmp), ssTrab: rr(c.ssTrab), ret: rr(c.ret), anticipos: rr(c.anticipos), embargos: rr(c.embargos), seguro: rr(c.seguro), liquido: rr(c.liquido) };
+            return { codigo, nombre, salarios: rr(c.dev - c.km - c.dietas - c.indem), km: rr(c.km), dietas: rr(c.dietas), indem: rr(c.indem), ssEmp: rr(c.ssEmp), ssTrab: rr(c.ssTrab), ret: rr(c.ret), anticipos: rr(c.anticipos), embargos: rr(c.embargos), seguro: rr(c.seguro), liquido: rr(c.liquido), base: rr(c.base) };
           });
           const nuevo = { salarios: rr(s('dev') - s('km') - s('dietas') - s('indem')), km: s('km'), dietas: s('dietas'), indem: s('indem'), ssEmp: s('ssEmp'), ssTrab: s('ssTrab'), ret: s('ret'), anticipos: s('anticipos'), embargos: s('embargos'), seguro: s('seguro'), liquido: s('liquido') };
           const reg = S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === e.id && r.ejercicio === L.anio), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
@@ -2853,30 +2853,52 @@ export function crearModulos(c) {
       const cel = MM12.map((mm, i) => (der ? (dat[i] ? `<td class="num${k === 'dif' && Math.abs(dat[i][k]) > 0.01 ? ' dif-ko' : ''}">${fnum(dat[i][k])}</td>` : '<td class="num vacio">—</td>') : celdaNom(mm, k, y, ed))).join('');
       return `<tr class="${k === 'liquido' ? 'sub' : k === 'dif' ? 'verde' : der ? 'cmp' : ''}"><td class="pp" ${k === 'dif' ? `title="${esc(NOM_DIF)}"` : ''}>${esc(t)}</td>${cel}<td class="num ejer">${fnum(tot)}</td></tr>`;
     }).join('');
-    // mes del asiento y de los centros de coste: el elegido, o el último con nóminas
-    const conNom = MM12.filter((mm, i) => dat[i]), mmAs = nomAsMes && conNom.includes(nomAsMes) ? nomAsMes : conNom[conNom.length - 1];
-    const A = mmAs ? nomAsiento(e, y, mmAs) : null, cenMes = mmAs ? (nomMes(y, mmAs)?._c ?? []) : [], cc = nomCentros(e);
-    const selMes = conNom.length ? `<label class="no-print">Mes <select data-nomasmes="1">${conNom.map((mm) => `<option value="${mm}"${mm === mmAs ? ' selected' : ''}>${MESES[+mm - 1][0].toUpperCase() + MESES[+mm - 1].slice(1)} ${y}</option>`).join('')}</select></label>` : '';
-    const f2 = (v) => (Math.abs(Number(v) || 0) > 0.004 ? fnum(v) : '—');
-    const tCentros = cenMes.length ? `<div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Centro de coste</th><th>Salarios</th><th>Kilometraje</th><th>Dietas + indemn.</th><th>SS empresa</th><th>SS trabajador</th><th>Retenciones</th><th>Anticipos</th><th>Embargos</th><th>Líquido</th></tr></thead><tbody>
-      ${cenMes.map((c) => `<tr><td class="pp">${esc([c.codigo, c.nombre].filter(Boolean).join(' · '))}</td><td class="num">${f2(c.salarios)}</td><td class="num">${f2(c.km)}</td><td class="num">${f2((Number(c.dietas) || 0) + (Number(c.indem) || 0))}</td><td class="num">${f2(c.ssEmp)}</td><td class="num">${f2(c.ssTrab)}</td><td class="num">${f2(c.ret)}</td><td class="num">${f2(c.anticipos)}</td><td class="num">${f2(c.embargos)}</td><td class="num">${f2(c.liquido)}</td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="hint">Sin reparto por centros de coste: se rellena al soltar el Excel de costes salariales del grupo.</p>';
+    return `${ed ? dz('nomexcel', 'Suelta aquí el Excel de costes salariales del grupo', '(una hoja por empresa, con el mes y los importes por centro de coste): cada hoja se reparte en el cuadro de su empresa y de su mes. Al total devengado se le restan kilometraje, dietas e indemnizaciones. El asiento y la hoja del mes están en «Nóminas mes en curso».', '.xlsx,.xls') : ''}
+      ${nomMsg ? `<p class="dash-s">${esc(nomMsg)}</p>` : ''}${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
+      <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda) o suelta el Excel del grupo. «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
+      <section class="prs-card"><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
+  }
+
+  // ---- Nóminas mes en curso: la hoja del Excel del periodo (todas las columnas, con su centro de coste debajo) y el asiento contable por centro de coste ----
+  const NOM_HOJA = [['km', 'KILOMET.EXENT'], ['dietas', 'DIETAS MANUT'], ['indem', 'INDEMNIZAC'], ['dev', 'T.DEVENGADO'], ['ssTrab', 'DTO. S.S.'], ['ret', 'I.R.P.F.'], ['seguro', 'SEG.MEDICO'], ['anticipos', 'ANTICIPOS'],
+    ['embargos', 'EMBARGOS'], ['liquido', 'LIQUIDO'], ['base', 'BASE IRPF'], ['ssEmp', 'TOTAL S.S.']];
+  // hoja del mes tal y como venía en el Excel: T. devengado = salarios + kilometraje + dietas + indemnizaciones
+  function nomHojaMes(y, mm) {
+    const cen = nomMes(y, mm)?._c; if (!cen?.length) return null;
+    const v = (c, k) => (k === 'dev' ? (Number(c.salarios) || 0) + (Number(c.km) || 0) + (Number(c.dietas) || 0) + (Number(c.indem) || 0) : Number(c[k]) || 0);
+    return { cen, filas: NOM_HOJA.map(([k, t]) => ({ k, t, v: cen.map((c) => (k === 'base' && c.base === undefined ? null : rr(v(c, k)))), tot: cen.every((c) => k === 'base' && c.base === undefined) ? null : rr(cen.reduce((a, c) => a + v(c, k), 0)) })) };
+  }
+  function nomHojaXls() {
+    const e = empresa(), y = Number(S.ejercicio), mm = nomAsMes; if (!e || !mm) return;
+    const H = nomHojaMes(y, mm); if (!H) return;
+    const filas = [[`RESUMEN CONTABLE DE NOMINA CORRESPONDIENTE AL MES DE ${NOM_MESES[+mm - 1]} ${y}`], [e.nombre], [], ['', ...H.cen.map((c) => c.nombre), 'TOTALES'], ['', ...H.cen.map((c) => c.codigo), ''], ...H.filas.map((f) => [f.t, ...f.v, f.tot])];
+    const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(filas), 'Nómina del mes');
+    window.XLSX.writeFile(wb, `Nomina ${e.siglas || e.nombre} ${y}-${mm}.xlsx`);
+  }
+  function vistaNomMes() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), y = Number(S.ejercicio), ed = puede(), conNom = MM12.filter((mm) => nomMes(y, mm));
+    if (!conNom.length) return `${cabNom(e, y)}<p class="hint">Sin nóminas de ${y} para esta empresa: suelta el Excel de costes salariales en la pestaña «Nóminas».</p>`;
+    const actual = String(new Date().getMonth() + 1).padStart(2, '0'), mmAs = nomAsMes && conNom.includes(nomAsMes) ? nomAsMes : conNom.includes(actual) ? actual : conNom[conNom.length - 1];
+    nomAsMes = mmAs; // las descargas y el nº de asiento usan el periodo que se está viendo
+    const nombreMes = MESES[+mmAs - 1][0].toUpperCase() + MESES[+mmAs - 1].slice(1);
+    const selMes = `<label class="no-print">Periodo <select data-nomasmes="1">${conNom.map((mm) => `<option value="${mm}"${mm === mmAs ? ' selected' : ''}>${MESES[+mm - 1][0].toUpperCase() + MESES[+mm - 1].slice(1)} ${y}</option>`).join('')}</select></label>`;
+    const H = nomHojaMes(y, mmAs), A = nomAsiento(e, y, mmAs), f2 = (n) => (n === null || n === undefined ? '' : Math.abs(n) > 0.004 ? fnum(n) : '0,00');
+    const tHoja = H ? `<div class="wrap"><table class="tprs tnom nom-fit nom-hoja"><thead><tr><th class="pp" rowspan="2">${esc(e.nombre)}</th>${H.cen.map((c) => `<th>${esc(c.nombre)}</th>`).join('')}<th rowspan="2">TOTALES</th></tr>
+      <tr>${H.cen.map((c) => `<th class="nom-cc">${esc(c.codigo || '—')}</th>`).join('')}</tr></thead><tbody>
+      ${H.filas.map((f) => `<tr class="${f.k === 'liquido' ? 'sub' : ''}"><td class="pp">${esc(f.t)}</td>${f.v.map((n) => `<td class="num">${f2(n)}</td>`).join('')}<td class="num ejer">${f2(f.tot)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="hint">Este mes no tiene el reparto por centros de coste: vuelve a soltar el Excel del grupo en «Nóminas».</p>';
     const fAs = A ? A.fecha.split('-').reverse().join('/') : '';
     const tAsiento = A ? `<div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th>Fecha</th><th>Asiento</th><th>Empresa</th><th>Tipo de cuenta</th><th>Cuenta</th><th class="pp">Descripción</th><th>Débito</th><th>Crédito</th></tr></thead><tbody>
       ${A.L.map((l) => `<tr title="${esc(l.concepto)}"><td class="c">${fAs}</td><td class="c">${esc(A.asiento)}</td><td class="c">${esc(e.siglas ?? '')}</td><td>Contabilidad</td><td>${esc(l.cuentaD365)}</td><td class="pp">${esc(A.concepto)}</td><td class="num">${l.debe ? fnum(l.debe) : ''}</td><td class="num">${l.haber ? fnum(l.haber) : ''}</td></tr>`).join('')}
       <tr class="sub"><td colspan="6" class="pp"><b>Totales</b></td><td class="num"><b>${fnum(A.debe)}</b></td><td class="num"><b>${fnum(A.haber)}</b></td></tr>
       <tr class="${Math.abs(A.dif) > 0.01 ? 'cf-ko' : 'verde'}"><td colspan="6" class="pp">Diferencia (débito − crédito)</td><td class="num" colspan="2">${fnum(A.dif)}</td></tr></tbody></table></div>
-      <p class="hint">Las líneas de gasto llevan el centro de coste (640000001-ES012HER-); 640000001 sueldos (total devengado − kilometraje − dietas − indemnizaciones), 640000002 kilometraje exento, 640000003 manutención e indemnizaciones, 642000001 SS a cargo de la empresa. 476000001 = dto. SS + total SS, 475100001 I.R.P.F., 460000001 anticipos, 462000001 embargos y 465000001 líquido. Pasa el ratón por una línea para ver su concepto.${A.seguro ? ` <b style="color:#b42318">Hay seguro médico (${fnum(A.seguro)}) sin cuenta asignada: no está en el asiento.</b>` : ''}</p>
-      ${ed ? `<label class="no-print">Nº de asiento <input data-nomasiento="1" value="${esc(A.asiento)}" size="12" placeholder="01019900"></label>` : ''}` : '<p class="hint">Sin nóminas en el cuadro para hacer el asiento.</p>';
-    return `${ed ? dz('nomexcel', 'Suelta aquí el Excel de costes salariales del grupo', '(una hoja por empresa, con el mes y los importes por centro de coste): cada hoja se reparte en el cuadro de su empresa y de su mes. Al total devengado se le restan kilometraje, dietas e indemnizaciones.', '.xlsx,.xls') : ''}
-      ${nomMsg ? `<p class="dash-s">${esc(nomMsg)}</p>` : ''}${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
-      <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda) o suelta el Excel del grupo. «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
-      <section class="prs-card"><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>
-      <section class="dsec"><h3>Asiento de la nómina · ${esc(e.nombre)} ${selMes} ${A && ed ? '<button class="small no-print" data-act="m-nomxls">Descargar Excel</button>' : ''}</h3>${tAsiento}</section>
-      <section class="dsec"><h3>Centros de coste · ${esc(e.nombre)}${mmAs ? ` · ${MESES[+mmAs - 1]} ${y}` : ''}</h3>${tCentros}
-        ${Object.keys(cc).length ? `<p class="hint"><b>Centros de coste de la empresa:</b> ${Object.entries(cc).map(([n, k]) => `${esc(k)} ${esc(n.toLowerCase())}`).join(' · ')}</p>` : ''}</section>`;
+      <p class="hint">Las cuentas 640 y 642 van una línea por centro de coste (640000001-ES012HER-): 640000001 sueldos (total devengado − kilometraje − dietas − indemnizaciones), 640000002 kilometraje exento, 640000003 manutención e indemnizaciones y 642000001 SS a cargo de la empresa. 476000001 = dto. SS + total SS, 475100001 I.R.P.F., 460000001 anticipos, 462000001 embargos y 465000001 líquido. Pasa el ratón por una línea para ver su concepto.${A.seguro ? ` <b style="color:#b42318">Hay seguro médico (${fnum(A.seguro)}) sin cuenta asignada: no está en el asiento.</b>` : ''}</p>
+      ${ed ? `<label class="no-print">Nº de asiento <input data-nomasiento="1" value="${esc(A.asiento)}" size="12" placeholder="01019900"></label>` : ''}` : '<p class="hint">Sin nóminas para hacer el asiento.</p>';
+    return `${cabNom(e, y, ` · ${nombreMes}`)}<div class="fc-cab no-print">${selMes}</div>
+      <section class="dsec"><h3>Resumen contable de nómina · ${esc(nombreMes)} ${y} ${H ? '<button class="small no-print" data-act="m-nomhoja">Descargar hoja Excel</button>' : ''}</h3>${tHoja}</section>
+      <section class="dsec"><h3>Asiento contable por centro de coste · ${esc(nombreMes)} ${y} ${A && ed ? '<button class="small no-print" data-act="m-nomxls">Descargar asiento Excel</button>' : ''}</h3>${tAsiento}</section>`;
   }
-
   // ---- Conciliación Seguridad Social: pagos (asientos PS de la 4760.01) frente a la SS de las nóminas del mes anterior, IT y cursos FUNDAE ----
   const casaCta = (pref, dig) => {
     const m = /^(\d+)[.,](\d+)$/.exec(pref);
@@ -3328,6 +3350,7 @@ export function crearModulos(c) {
   tabs.dua = ['DUA-H1', 'Importaciones · IVA diferido', vistaDua];
   tabs.lt = ['Liquidaciones Tributarias', 'Modelos y periodos de cada empresa', vistaLt];
   tabs.calf = ['Calendario Fiscal', 'Plazos y domiciliaciones', vistaCalFiscal];
+  tabs.nommes = ['Nóminas mes en curso', 'Hoja del mes y asiento por centro de coste', vistaNomMes];
   tabs.notif = ['Notificaciones y requerimientos', 'Plazos de respuesta', vistaNotif];
 
   // ---------- Impuestos locales: IBI, IAE, IVTM, vados · periodo voluntario y domiciliación (un registro «iloc» por recibo, con su PDF en Storage) ----------
@@ -4123,6 +4146,7 @@ export function crearModulos(c) {
       'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
       'm-nomxls': () => nomAsientoXls(),
+      'm-nomhoja': () => nomHojaXls(),
       'm-ltfila': () => ltFila(d.mod, d.t, d.on === '1'),
       'm-ltauto': () => ltAuto(),
       'm-calmes': () => setCalMes(d.m),
