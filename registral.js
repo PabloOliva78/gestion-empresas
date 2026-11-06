@@ -693,9 +693,9 @@ export function crearRegistral(c) {
         <p class="hint">Sociedades por las que participa: ${esc([...new Set(cs.flatMap((q) => q.nodos.slice(1, -1)))].map((nn) => G.nom[nn]).join(', ') || 'ninguna (participación directa)')}</p></div>`;
     };
     return `${ed ? `<div class="dropzone" data-kind="acc" tabindex="0" role="button"><b>Suelta aquí el Excel de accionariado del grupo</b> (organigrama con las casillas de socios y sociedades unidas con flechas y el % de cada participación, o una tabla socio / sociedad participada / %) o pulsa para elegirlo.
-      <input type="file" data-dzkind="acc" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden></div>` : ''}${avisoHtml()}
-      ${avisos.length ? `<p class="aviso">${avisos.map(esc).join('<br>')}</p>` : ''}
-      <section class="block"><h4 class="it-tit">Accionariado · <select data-rgaccsoc="1">${opts || '<option>Sin datos</option>'}</select></h4>
+      <input type="file" data-dzkind="acc" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden></div>` : ''}${msg ? `<p class="leyenda">${esc(msg)}</p>` : ''}
+      ${avisos.length ? `<ul class="avisos">${[...new Set(avisos)].map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+      <section class="block acc-clon"><h4 class="it-tit">Accionariado · <select data-rgaccsoc="1">${opts || '<option>Sin datos</option>'}</select></h4>
       <div style="margin:4px 0 6px"><label><input type="checkbox" data-rgacctodo="1"${accTodo ? ' checked' : ''}> Ver todo el grupo</label> <span class="hint">Sin marcar: la sociedad elegida con sus socios (hacia arriba) y sus participadas (hacia abajo). Verde = personas · amarillo = sociedades.</span></div>
       <div class="acc-esq" style="overflow:auto;background:#fff;border:1px solid var(--line);border-radius:6px;margin-bottom:12px">${accEsquema(D, G, sel, accTodo)}</div>
       ${sel ? `<div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">

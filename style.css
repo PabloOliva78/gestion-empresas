@@ -793,3 +793,27 @@ th small { color: #7a6a1a !important; }
 .f583-inst { border-bottom: 3px solid #e3e8f2; }
 .tabla tr.fila-sel td { background: #fff3cd; }
 .facin.editado { background: #fffbe3; }
+
+/* Modelo 592 con la estructura del impreso de la AEAT */
+.f592 { background: #fff; padding: 14px 18px; font-size: .86rem; border: 1px solid #1f3a7a; color: #1f3864; margin-bottom: 1rem; }
+.f592-top { display: grid; grid-template-columns: 160px 1fr 110px; border: 1px solid #9aa3b5; margin-bottom: 10px; }
+.f592-of { padding: 8px; text-align: center; border-right: 1px solid #9aa3b5; }
+.f592-tit { text-align: center; padding: 8px; } .f592-tit .t1 { font-size: 1.1rem; font-weight: 700; } .f592-tit .t2 { font-size: 1rem; font-weight: 700; } .f592-tit .t3 { font-size: .85rem; font-weight: 700; }
+.f592-mod { text-align: center; padding: 8px; border-left: 1px solid #9aa3b5; font-weight: 700; } .f592-mod b { font-size: 1.6rem; }
+.f592-sec { font-weight: 700; margin: 12px 0 4px; color: #333; }
+.f592-box { border: 1px solid #9aa3b5; padding: 6px 10px; margin-bottom: 8px; }
+.f592-r { display: flex; flex-wrap: wrap; gap: 6px 40px; padding: 3px 0; } .f592-r i { color: #1f4e9c; font-style: normal; }
+.f592 input.presin { border: 1px solid #c9d3e6; background: #fffdf3; padding: 1px 4px; font: inherit; }
+table.f592-liq { width: 100%; border-collapse: collapse; } table.f592-liq th { font-weight: 700; border-bottom: 1px solid #9aa3b5; padding: 4px 6px; text-align: center; } table.f592-liq td { padding: 4px 6px; }
+.f592-tot { text-align: right; margin-top: 10px; font-weight: 700; } .f592-tot b { font-size: 1rem; margin-left: 12px; }
+
+/* Organigrama: avisos y tablas como en la aplicación antigua */
+ul.avisos { background: #fff2cc; border: 1px solid #efd9a0; color: #5c4300; border-radius: 5px; padding: 10px 14px 10px 30px; margin: 0 0 16px; font-size: 14px; max-height: 220px; overflow: auto; }
+ul.avisos li { margin: 2px 0; }
+.leyenda { font-size: 14px; color: var(--muted); margin: 0 0 10px; }
+.acc-clon table.tabla { border-collapse: collapse; font-size: 14px; color: #002060; }
+.acc-clon table.tabla td { padding: 2px 6px; border: 0; border-left: 1px dotted #8ea9db; border-right: 1px dotted #8ea9db; }
+.acc-clon table.tabla th { padding: 10px 6px; border: 1px solid #e6d594; font-weight: 400; font-size: 14px; text-transform: none; letter-spacing: 0; }
+.acc-clon .small { border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 4px 10px; font-size: 12px; }
+.acc-clon .facin { border: 1px solid transparent; background: transparent; padding: 1px 3px; }
+.acc-clon .facin:hover, .acc-clon .facin:focus { border-color: #8ea9db; background: #fff; }
