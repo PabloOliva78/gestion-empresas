@@ -1,7 +1,7 @@
-﻿// Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
+// Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
 // Los datos de cada modelo se guardan en `registros` (tipo m232 / m583, un registro por empresa y ejercicio).
 export function crearModelos(c) {
-  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592, bancoDe = () => '' } = c;
+  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592, bancoDe = () => '', calc303, calc349 } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -644,7 +644,8 @@ export function crearModelos(c) {
     const C = D.cfg, ej = ejercicio(), O = calcIntra(D, rep, sop), tol = +C.tol || 0;
     const mesDe = (l) => { const f = fechaUtc(l.fecha); return f && f.getUTCFullYear() === ej ? f.getUTCMonth() + 1 : 0; };
     const bienE = (l) => l.codigo === 'R.UE', bienA = (l) => COD_AIB.includes(l.codigo);
-    const SV = D.serv.map((s) => ({ fac: s.fac ?? s.factura ?? '', base: +s.base || 0, fecha: s.fecha ? fechaUtc(s.fecha) : null }));
+    const SV = D.serv.map((fac) => { const ls = rep.filter((l) => String(l.factura || '').trim() === String(fac || '').trim()), l0 = ls[0], nif = l0 ? String(l0.nif || '') : '';
+      return { fac, fecha: l0 ? fechaUtc(l0.fecha) : null, nif, nombre: l0 ? (l0.nombre || '') : '', pais: nif ? nif.slice(0, 2).toUpperCase().replace('EL', 'GR') : '', base: r2(ls.filter(bienE).reduce((s, l) => s + (+l.base || 0), 0)), ok: !!l0 }; });
     const servF = new Set(SV.map((x) => kf(x.fac)));
     const est = (a, b, d) => (Math.abs(a) < 0.005 && Math.abs(b) < 0.005 ? '<span class="sinp">Sin operaciones</span>' : Math.abs(d) <= tol
       ? '<b class="ok" style="color:#0a6;background:#e6f6ec;padding:1px 8px;border-radius:3px">Cuadra</b>' : '<b class="dif-ko" style="color:#a4161a;background:#fde7e7;padding:1px 8px;border-radius:3px">Revisar</b>');
@@ -665,8 +666,9 @@ export function crearModelos(c) {
     const resumen = `<table class="aud mov it-t"><thead><tr><th rowspan="2">Mes</th><th colspan="4">EXPEDICIONES / ENTREGAS (clave E)</th><th colspan="4">INTRODUCCIONES / ADQUISICIONES (clave A)</th></tr>
       <tr><th>Intrastat (valor facturado)</th><th>Modelo 349 clave E (entregas de bienes)</th><th>Diferencia</th><th>Estado</th><th>Intrastat (valor facturado)</th><th>Modelo 349 clave A (adquisiciones de bienes)</th><th>Diferencia</th><th>Estado</th></tr></thead>
       <tbody>${filasRes}<tr class="tot200"><td>TOTAL ${ej}</td>${tot.map((v, k) => `<td class="n">${nf2(v)}</td>${k === 2 || k === 5 ? '<td></td>' : ''}`).join('')}</tr></tbody></table>`;
-    const serv = `<table class="aud mov it-t"><thead><tr><th>Factura</th><th>Fecha</th><th>Base 349 (€)</th></tr></thead><tbody>
-      ${SV.map((s) => `<tr><td>${esc(s.fac)}</td><td class="c">${s.fecha ? fdmy(s.fecha) : '<b class="dif-ko">No encontrada</b>'}</td><td class="n">${guion(s.base)}</td></tr>`).join('') || '<tr><td colspan="3" class="c">Ninguno</td></tr>'}</tbody></table>`;
+    const serv = `<table class="aud mov it-t"><thead><tr><th>Factura</th><th>Fecha</th><th>NIF</th><th>Nombre</th><th>País</th><th>Base 349 (€)</th><th></th></tr></thead><tbody>
+      ${SV.map((s, i) => `<tr><td>${esc(s.fac)}</td><td class="c">${s.ok ? fdmy(s.fecha) : '<b class="dif-ko">No encontrada</b>'}</td><td>${esc(s.nif)}</td><td>${esc(s.nombre)}</td><td class="c">${esc(s.pais)}</td><td class="n">${guion(s.base)}</td><td class="no-print">${puede() ? `<button class="small" data-act="m-intraservdel" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('')}
+      ${puede() ? '<tr class="no-print"><td><input class="facin" data-intraservadd="1" placeholder="Nº de factura" size="16"></td><td colspan="6" class="hint">Escribe el nº de factura del libro de repercutido; el resto se rellena solo.</td></tr>' : ''}</tbody></table>`;
     // conciliación por nº de factura: líneas Intrastat del mes frente al 349 (libros) del mismo mes
     const calcMes = (m) => ['Expedición', 'Introducción'].map((fl) => {
       const otro = fl === 'Expedición' ? 'llegada (introducción)' : 'expedición', M = new Map();
@@ -709,7 +711,14 @@ export function crearModelos(c) {
       const e349 = r2(rep.filter((l) => mesDe(l) === sel && bienE(l)).reduce((s, l) => s + (+l.base || 0), 0)), a349 = r2(sop.filter((l) => mesDe(l) === sel && bienA(l)).reduce((s, l) => s + (+l.base || 0), 0));
       const ok = (v) => Math.abs(v) <= Math.max(tol, 0.01);
       const fila = (t, ta, a, tb, b, acc) => { const d = r2(a - b), bien = ok(d); return `<tr class="${bien ? 'cf-ok' : 'cf-ko'}"><td>${t}</td><td>${ta}</td><td class="n">${nf2(a)}</td><td>${tb}</td><td class="n">${nf2(b)}</td><td class="n">${guion(d)}</td><td>${bien ? '✓ Cuadra' : `✖ ${acc}`}</td></tr>`; };
-      const filas = [fila('Entregas intracomunitarias', '349 clave E', e349, 'Intrastat expediciones', itE, 'Ver las facturas en rojo de abajo'), fila('Adquisiciones intracomunitarias', '349 clave A', a349, 'Intrastat introducciones', itI, 'Ver las facturas en rojo de abajo')];
+      // 303 y 349 del mes (mismo cálculo que los modelos): casilla 59 y 10 frente a las claves del 349 y al Intrastat
+      const pMes = String(sel).padStart(2, '0'); let c59 = null, c10 = null, neg10 = 0, k349 = null;
+      try { const C3 = calc303(rep, sop, ej, pMes); c59 = r2(C3.G.entregas.base); neg10 = r2(sop.filter((l) => mesDe(l) === sel && /^S\.UE/.test(l.codigo || '') && (+l.base || 0) < 0).reduce((s, l) => s + (+l.base || 0), 0)); c10 = r2(C3.G.intra.base + neg10); const P9 = calc349(rep, sop, ej, pMes).porClave; k349 = (k) => r2((P9.find((x) => x.clave === k) || {}).importe || 0); } catch { /* sin datos del 303 */ }
+      const k349E = k349 ? k349('E') : e349, k349AI = k349 ? r2(k349('A') + k349('I')) : r2(a349);
+      const filas = [...(c59 === null ? [] : [fila('Entregas intracomunitarias', '303 casilla 59', c59, '349 clave E (neto)', k349E, 'El 303 y el 349 deben llevar las mismas facturas R.UE: revisa los códigos del libro')]),
+        fila(c59 === null ? 'Entregas intracomunitarias' : '', '349 clave E (neto)', k349E, 'Intrastat expediciones', itE, 'Ver las facturas en rojo de abajo'),
+        ...(c10 === null ? [] : [fila('Adquisiciones intracomunitarias', neg10 ? `303 casilla 10 + negativas en 14 y 40 (${nf2(neg10)})` : '303 casilla 10', c10, '349 claves A + I (neto)', k349AI, 'Abonos de servicios intracomunitarios: deben ir igual en el 303 (10-11 o 14-15) y en el 349 (clave I o rectificación)')]),
+        fila(c10 === null ? 'Adquisiciones intracomunitarias' : '', '349 clave A', k349 ? k349('A') : a349, 'Intrastat introducciones', itI, 'Ver las facturas en rojo de abajo')];
       const MOT = [['solo349', 'Factura de bienes en el 349 sin Intrastat', 'Si es un servicio, codifícala en el libro como servicio (clave S / I); si es un bien, genera su línea Intrastat en Dynamics'],
         ['negativa', 'Línea negativa que no está en el Intrastat', 'Si es un descuento o devolución de bienes, declárala en Dynamics como flujo contrario (llegada / expedición) con el mismo nº de factura; si es un servicio, ponle el código de servicio'],
         ['abono', 'Abono sin declarar en el Intrastat', 'Genera en Dynamics la llegada (abono de emitidas) o la expedición (abono de recibidas) con el mismo nº de factura'],
@@ -738,6 +747,7 @@ export function crearModelos(c) {
   // ================= Eventos propios =================
   const acciones = {
     'm-intraconcmes': (d) => { intraConcMes = +d.m; render(); },
+    'm-intraservdel': async (d) => { const D = datosIntra(); if (!D) return; D.serv.splice(+d.i, 1); await guardarIntra(D); render(); },
     'm-intrames': (d) => { intraMes = +d.m; render(); },
     'm-intradel': async (d) => { const D = datosIntra(); if (!D) return; D.rows.splice(+d.i, 1); await guardarIntra(D); render(); },
     'm-intrapega': () => intraAnadirFilas(String(document.getElementById('intraPega')?.value ?? '').split(/\r?\n/).map((l) => l.split('\t'))),
@@ -773,6 +783,7 @@ export function crearModelos(c) {
   document.addEventListener('change', async (ev) => {
     const t = ev.target; if (!t.dataset) return;
     const d = t.dataset;
+    if (d.intraservadd) { const v = t.value.trim(); if (v) { const D = datosIntra(); if (D) { D.serv.push(v); await guardarIntra(D); } } return void render(); }
     if (d.m232ej !== undefined) { ej232 = +t.value || null; return void render(); }
     if (d.m232cab) { const ej = m232EjDef(), D = m232Reg(ej); D.cab[d.m232cab] = t.value.trim(); return void m232Guardar(ej, D); }
     if (d.m232f) {
@@ -813,5 +824,17 @@ export function crearModelos(c) {
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
   };
-  return { tabs, kinds, acciones };
+  // datos para Conciliaciones fiscales › Análisis Diferencias (583, 592 e Intrastat por mes); null mientras cargan
+  const adif = {
+    tiene583: () => S.registros.some((r) => r.tipo === 'm583' && r.empresa_id === S.sel),
+    c583: (ej) => { const M = grande('may-mov'); return M ? calc583(ej, M) : null; },
+    tiene592: () => obl592(empresa()),
+    c592: (ej, per) => { const cur = big('m592-mov', () => ({ fab: [], aic: [] })); return cur ? calc592De(datos592(), { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, String(ej), per) : null; },
+    intra: (ej) => {
+      const D = datosIntra(), E = grande('fact-E'), R = grande('fact-R'); if (!D || !E || !R) return null;
+      const O = calcIntra(D, E, R).filter((o) => o.anio === ej);
+      return (mes, fl) => r2(O.filter((o) => o.mes === mes && o.flujoConc === fl).reduce((s, o) => s + o.impConc, 0));
+    },
+  };
+  return { tabs, kinds, acciones, adif };
 }

@@ -1,4 +1,4 @@
-﻿// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
+// Bloques 1 y 2 (información tributaria y registral), todo declarativo.
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
@@ -10,7 +10,7 @@ import { crearModelos } from './modelos.js?v=8';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=4';
+import { crearConciliaciones } from './conciliaciones.js?v=5';
 import { crearEstados } from './estados.js?v=3';
 
 export function crearModulos(c) {
@@ -3985,7 +3985,7 @@ export function crearModulos(c) {
   };
   const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir, docs: DOCS, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
-  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f) });
+  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f), calc303: (...a) => c303(...a), calc349: calcular349 });
   Object.assign(tabs, M4.tabs);
   // 303 de un periodo (con sus ajustes y la compensación disponible) y casilla total de retenciones de cada modelo, para el 390 y los resúmenes anuales
   const c303 = (E, R, ej, p) => calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) });
@@ -4000,7 +4000,7 @@ export function crearModulos(c) {
   const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS, urlPdf: async (path) => { const { data } = await db.storage.from('documentos').createSignedUrl(path, 300); return data?.signedUrl ?? null; } });
   Object.assign(tabs, M6.tabs);
   Object.assign(badges, M6.badges);
-  const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta });
+  const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303: (...a) => c303(...a), calc349: calcular349, extra: M4.adif });
   Object.assign(tabs, M8.tabs);
   Object.assign(badges, M8.badges);
   const M7 = crearEstados({ S, esc, render, empresa, dz });

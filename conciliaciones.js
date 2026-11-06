@@ -1,7 +1,7 @@
 // Bloque 8 · conciliaciones fiscales portadas de la aplicación antigua (diseño y cálculo copiados; solo cambia la capa de datos).
 // Datos: libros de IVA, SII y mayor llegan de `grande()`; lo presentado, de «Impuestos Presentados» (prsVal); las nóminas, de la pestaña Nóminas.
 export function crearConciliaciones(c) {
-  const { S, esc, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta } = c;
+  const { S, esc, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303, calc349, extra } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -403,7 +403,12 @@ export function crearConciliaciones(c) {
     if (M && M.length) { CONC = calcConc(M, PER); pers.forEach((p) => { try { CM[p] = calcConc(M, p); } catch { /* periodo sin datos */ } }); }
     out.ctasMes = CM; out.pers = pers;
     if (CONC) out.ctas = CONC.filas.filter((f) => !concSinImp(f.k)).map((f) => { const X = explicaDifCuenta(f, CONC.R, M); return { k: f.k, tipo: 'cta', txt: `Cta ${f.cuenta.split(',')[0]} · ${f.nombre}`, modelo: f.modelo, dec: f.imp, con: f.saldo, d: f.imp === null ? null : f.dif, ejD: f.imp === null ? 0 : X.difEj, antD: f.imp === null ? 0 : X.pend, causa: X.texto }; });
-    ['111', '115', '123', '200', '202', '303'].forEach((m) => {
+    // 303 y 349 de cada mes del periodo (mismo cálculo que los modelos); null si faltan los libros
+    const RE = lib('fact-E') ?? [], mesesDe = (p) => (/T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : [+p]);
+    const fmCache = {}, fm = (p) => fmCache[p] ??= mesesDe(p).map((x) => { try { const pp = String(x).padStart(2, '0'); return { mes: x, C3: calc303(RE, lib('fact-R') ?? [], ej, pp), K: calc349(RE, lib('fact-R') ?? [], ej, pp) }; } catch { return null; } }).filter(Boolean);
+    const it = extra?.intra(ej), c583 = extra?.tiene583() ? extra.c583(ej) : null, c592 = extra?.tiene592() ? extra.c592(ej, '') : null;
+    const lista = ['111', '115', '123', '200', '202', '303', '349'].concat(c583 ? ['583'] : []).concat(c592 ? ['592'] : []);
+    lista.forEach((m) => {
       const filas = [], add = (o) => filas.push(o);
       /* 1) cuenta contable frente al modelo: el saldo arrastrado indica lo que viene de ejercicios anteriores */
       if (CONC) CONC.filas.filter((f) => new RegExp(`MODELO ${m}\\b`).test(f.modelo || '')).forEach((f) => {
@@ -433,6 +438,41 @@ export function crearConciliaciones(c) {
             add({ tipo: 'per', txt, per: perTxt(f.per), dec: s, con: k, d, ejD: d, antD: 0, causa: d > 0 ? 'Más cuota en el SII que en el libro: facturas en el SII que no están en el libro del periodo (o fecha distinta)' : 'Más cuota en el libro que en el SII: facturas sin enviar al SII o enviadas en otro periodo' });
           }));
         } catch { /* sin datos del SII */ }
+        if (!trim) pers.forEach((p) => {
+          const res = pv(ej, '303', p, 'res'); if (res === null) return; const F = fm(p); if (!F.length) return;
+          const calc = r2(F.reduce((s, x) => s + x.C3.c46 + x.C3.c77 - x.C3.c78, 0)), d = r2(res - calc); if (Math.abs(d) <= MARGEN) return;
+          add({ tipo: 'per', txt: 'Resultado (46 + IVA diferido 77 − compensado 78) presentado frente a calculado', per: perTxt(p), dec: res, con: calc, d, ejD: d, antD: 0, causa: 'Facturas registradas en el libro después de presentar o reclasificadas; compara la pestaña Modelo 303 del periodo con lo presentado' });
+        });
+      }
+      if (m === '349') {
+        try {
+          pers.forEach((p) => {
+            const F = fm(p); if (!F.length) return;
+            const cl = (k) => r2(F.reduce((s, x) => s + ((x.K.porClave.find((y) => y.clave === k) || {}).importe || 0), 0)), e = cl('E'), a = cl('A');
+            const c59 = r2(F.reduce((s, x) => s + x.C3.G.entregas.base, 0)), itE = it ? r2(F.reduce((s, x) => s + it(x.mes, 'Expedición'), 0)) : null, itI = it ? r2(F.reduce((s, x) => s + it(x.mes, 'Introducción'), 0)) : null;
+            const pe = pv(ej, '349', p, 'E');
+            if (Math.abs(c59 - e) > MARGEN) add({ tipo: 'per', txt: '303 casilla 59 frente a 349 clave E', per: perTxt(p), dec: c59, con: e, d: r2(c59 - e), ejD: r2(c59 - e), antD: 0, causa: 'Entregas intracomunitarias en el 303 que el 349 no recoge (o al revés): revisa NIF intracomunitario y clave de cada factura' });
+            if (itE !== null && (itE || itI)) {
+              if (Math.abs(e - itE) > 1) add({ tipo: 'per', txt: '349 clave E frente a Intrastat', per: perTxt(p), dec: e, con: itE, d: r2(e - itE), ejD: r2(e - itE), antD: 0, causa: 'Servicios o portes en facturas de bienes, abonos declarados en el otro flujo o facturas fuera de plazo; detalle por factura en Conciliación 349 - Intrastat' });
+              if (Math.abs(a - itI) > 1) add({ tipo: 'per', txt: '349 clave A frente a Intrastat', per: perTxt(p), dec: a, con: itI, d: r2(a - itI), ejD: r2(a - itI), antD: 0, causa: 'Adquisiciones sin Intrastat (servicios, umbral) o al revés; detalle en Conciliación 349 - Intrastat' });
+            }
+            if (pe !== null && Math.abs(pe - e) > MARGEN) add({ tipo: 'per', txt: '349 clave E presentado frente a calculado', per: perTxt(p), dec: pe, con: e, d: r2(pe - e), ejD: r2(pe - e), antD: 0, causa: 'Facturas añadidas o reclasificadas después de presentar' });
+          });
+        } catch { /* sin datos del 349 */ }
+      }
+      if (m === '583' && c583) {
+        c583.pers.filter((p) => p !== '0A').forEach((p) => {
+          const v = pv(ej, '583', p, 'res'), cc = c583.tot(p);
+          if (v === null) { if (cc) add({ tipo: 'per', txt: `583 · ${p}`, per: `${p} ${ej}`, dec: null, con: cc, d: null, ejD: 0, antD: 0, causa: `Calculado ${money(cc)} sin declaración en Impuestos Presentados` }); return; }
+          const d = r2(v - cc); if (Math.abs(d) > MARGEN) add({ tipo: 'per', txt: `583 · ${p}`, per: `${p} ${ej}`, dec: v, con: cc, d, ejD: d, antD: 0, causa: 'Retribuciones del trimestre distintas a las declaradas o minoración de la base no aplicada' });
+        });
+      }
+      if (m === '592' && c592) {
+        ['1T', '2T', '3T', '4T'].filter((p) => R.m1 >= +p[0] * 3).forEach((p) => {
+          const L592 = extra.c592(ej, p); if (!L592) return; const cc = L592.res, v = pv(ej, '592', p, 'res');
+          if (v === null) { if (cc) add({ tipo: 'per', txt: `592 · ${p}`, per: `${p} ${ej}`, dec: null, con: cc, d: null, ejD: 0, antD: 0, causa: `Calculado ${money(cc)} sin declaración en Impuestos Presentados` }); return; }
+          const d = r2(v - cc); if (Math.abs(d) > MARGEN) add({ tipo: 'per', txt: `592 · ${p}`, per: `${p} ${ej}`, dec: v, con: cc, d, ejD: d, antD: 0, causa: 'Kilos de plástico no reciclado distintos a los declarados o deducciones/compensaciones no recogidas' });
+        });
       }
       if (m === '202') { [['1P', 4], ['2P', 10], ['3P', 12]].filter(([, mm]) => R.m1 >= mm).forEach(([p]) => { const v = pv(ej, '202', p, 'res'); if (v === null) add({ tipo: 'per', txt: `Pago fraccionado ${p}`, per: `${p} ${ej}`, dec: null, con: null, d: 0, ejD: 0, antD: 0, causa: 'No está en Impuestos Presentados: la cuenta 4730.05 no se puede cuadrar con ese pago' }); }); }
       if (m === '200') { const v = pv(ej - 1, '200', 'A', 'res'); if (v === null) add({ tipo: 'per', txt: `Modelo 200 del ejercicio ${ej - 1}`, per: String(ej - 1), dec: null, con: null, d: 0, ejD: 0, antD: 0, causa: `No está en Impuestos Presentados: las cuentas 4709/4752 de ${ej} se cuadran con el 200 de ${ej - 1}` }); }
@@ -480,6 +520,21 @@ export function crearConciliaciones(c) {
     else if (m === '115') C = [
       { t: 'Base alquileres', pres: (p) => P('base', p), cont: [['Facturas recibidas', (p) => fac(/^I\.ALQ/, 'base', p).v]], lin: (p) => fac(/^I\.ALQ/, 'base', p).L, campo: 'base' },
       { t: 'Retenciones alquileres', pres: (p) => P('ret', p), cont: [['Facturas recibidas', (p) => fac(/^I\.ALQ/, 'ret', p).v], [prof47512 ? 'Cta 4751.03' : 'Cta 4751.02', (p) => cta(prof47512 ? '4751.03' : '4751.02', ['S'], p)]], lin: (p) => fac(/^I\.ALQ/, 'ret', p).L, campo: 'ret' }];
+    else if (m === '303' || m === '349') {
+      const RE = lib('fact-E') ?? [], RR = lib('fact-R') ?? [], FM = {};
+      const fm = (p) => FM[p] ??= (/T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : [+p]).map((x) => { try { const pp = String(x).padStart(2, '0'); return { mes: x, C3: calc303(RE, RR, ej, pp), K: calc349(RE, RR, ej, pp) }; } catch { return null; } }).filter(Boolean);
+      if (m === '303') C = [
+        { t: 'IVA diferido importación (77)', pres: (p) => P('adu', p), cont: [['Calculado', (p) => r2(fm(p).reduce((s, x) => s + (+x.C3.c77 || 0), 0))]] },
+        { t: 'Resultado', pres: (p) => P('res', p), cont: [['Calculado (46 + 77 − 78)', (p) => r2(fm(p).reduce((s, x) => s + x.C3.c46 + x.C3.c77 - x.C3.c78, 0))]] }];
+      else {
+        const cl = (p, k) => r2(fm(p).reduce((s, x) => s + ((x.K.porClave.find((y) => y.clave === k) || {}).importe || 0), 0)), itf = extra?.intra(ej);
+        const itv = (p, fl) => (itf ? r2(fm(p).reduce((s, x) => s + itf(x.mes, fl), 0)) : null);
+        C = [{ t: 'Entregas (E)', pres: (p) => P('E', p), cont: [['349 calculado', (p) => cl(p, 'E')], ['303 casilla 59', (p) => r2(fm(p).reduce((s, x) => s + x.C3.G.entregas.base, 0))], ['Intrastat expedición', (p) => itv(p, 'Expedición')]] },
+          { t: 'Adquisiciones (A)', pres: (p) => P('A', p), cont: [['349 calculado', (p) => cl(p, 'A')], ['Intrastat introducción', (p) => itv(p, 'Introducción')]] },
+          { t: 'Servicios prestados (S)', pres: (p) => P('S', p), cont: [['349 calculado', (p) => cl(p, 'S')]] },
+          { t: 'Servicios adquiridos (I)', pres: (p) => P('I', p), cont: [['349 calculado', (p) => cl(p, 'I')]] }];
+      }
+    }
     else C = [
       { t: 'Base capital mobiliario', pres: (p) => P('base', p), cont: [['Contabilidad', (p) => { try { const f = calcAudi('123').filas.find((x) => x.per === p); return f ? f.k1 : 0; } catch { return 0; } }]] },
       { t: 'Retenciones capital mobiliario', pres: (p) => P('ret', p), cont: [['Cta 4751.04', (p) => cta('4751.04', ['S'], p)], ['Facturas recibidas', (p) => fac(/^I\.DV/, 'ret', p).v]], lin: (p) => fac(/^I\.DV/, 'ret', p).L, campo: 'ret' }];
@@ -512,8 +567,9 @@ export function crearConciliaciones(c) {
   function vistaAdif() {
     if (!S.sel) return sinEmpresa;
     const M = lib('may-mov'); if (!M || !lib('fact-R') || !lib('fact-E') || !lib('sii-E') || !lib('sii-R')) return cargandoTxt;
+    if ((extra?.tiene592() && extra.c592(ejNum(), '') === null) || (extra?.tiene583() && extra.c583(ejNum()) === null) || (extra && extra.intra(ejNum()) === null)) return cargandoTxt;
     const A = calcAdif(M), ej = A.ej, g = (v) => (v === null || v === undefined ? '-' : money(v));
-    const MENS = /^(111|115|123)$/;
+    const MENS = /^(111|115|123|303|349)$/;
     A.mods.forEach((x) => { if (MENS.test(x.m)) x.mens = adifMensual(x.m, M); x.difs = x.filas.filter((f) => f.tipo !== 'cta' && !(x.mens && f.tipo === 'per') && f.d !== null && Math.abs(f.d) > MARGEN); x.avs = x.filas.filter((f) => f.tipo !== 'cta' && !x.mens && f.dec === null).length; });
     const res = `<table class="aud mov it-t" style="width:auto"><thead><tr><th>Modelo</th><th>Diferencias</th><th>Del ejercicio ${ej}</th><th>De ejercicios anteriores</th><th>Estado</th></tr></thead><tbody>${A.mods.map((x) => {
       const n = x.difs.length, ejD = r2(x.difs.reduce((s, f) => s + (f.ejD || 0), 0)), antD = r2(x.difs.reduce((s, f) => s + (f.antD || 0), 0)), nm = x.mens ? x.mens.nDif : 0, n2 = n + nm, av2 = x.avs;
@@ -525,7 +581,7 @@ export function crearConciliaciones(c) {
       return `<section class="block" id="adif-${x.m}"><h3 class="bt">Modelo ${x.m} · ejercicio ${ej}</h3>${F.length ? `<table class="aud mov it-t"><thead><tr><th>Concepto</th><th>Periodo</th><th>Declarado / impuesto</th><th>Contabilidad / libros</th><th>Diferencia</th><th>Del ejercicio</th><th>De ejercicios anteriores</th><th>Por qué se produce y desglose</th></tr></thead><tbody>
         ${F.map((f) => `<tr class="${f.d && Math.abs(f.d) > MARGEN ? 'cf-ko' : ''}"><td>${esc(f.txt)}</td><td class="c">${esc(f.per)}</td><td class="n">${g(f.dec)}</td><td class="n">${g(f.con)}</td><td class="n"><b>${g(f.d)}</b></td><td class="n">${f.ejD ? money(f.ejD) : '-'}</td><td class="n">${f.antD ? money(f.antD) : '-'}</td><td style="white-space:normal;min-width:320px">${esc(f.causa)}</td></tr>`).join('')}</tbody></table>` : '<p class="leyenda">✓ Sin diferencias en el periodo.</p>'}</section>`;
     }).join('');
-    return `${bloqueAvisos([`Análisis del ejercicio ${ej} hasta el último periodo presentado (${fdate(A.R.hasta)}; no depende del periodo elegido): para cada modelo, la cuenta contable frente al impuesto (lo arrastrado antes del 01/01/${ej} es de ejercicios anteriores; el resto, del ejercicio) y lo declarado frente a la contabilidad y los libros, periodo a periodo, con la causa probable. Los modelos 349, 583 y 592 y el resultado recalculado del 303 todavía no entran en este análisis.`])}
+    return `${bloqueAvisos([`Análisis del ejercicio ${ej} hasta el último periodo presentado (${fdate(A.R.hasta)}; no depende del periodo elegido): para cada modelo, la cuenta contable frente al impuesto (lo arrastrado antes del 01/01/${ej} es de ejercicios anteriores; el resto, del ejercicio) y lo declarado frente a la contabilidad y los libros, periodo a periodo, con la causa probable.`])}
       <section class="block"><h3 class="bt">Resumen por modelo</h3>${res}</section>${det}
       ${A.ctas ? `<section class="block" id="adif-ctas"><h3 class="bt">Cuentas contables que concilian impuestos · saldo a ${fdate(A.R.hasta)} · margen ±1 €</h3><table class="aud mov it-t"><thead><tr><th>Cuenta</th><th>Modelo</th><th>Impuesto</th><th>Saldo</th><th>Diferencia</th><th>Del ejercicio</th><th>De ejercicios anteriores</th><th>Estado</th></tr></thead><tbody>${A.ctas.map((f) => { const ko = f.d !== null && Math.abs(f.d) > 1; return `<tr class="${ko ? 'cf-ko' : ''}"><td>${esc(f.txt)}</td><td class="gris">${esc(f.modelo || '')}</td><td class="n">${g(f.dec)}</td><td class="n">${g(f.con)}</td><td class="n adif-d"><b>${g(f.d)}</b></td><td class="n">${f.ejD ? money(f.ejD) : '-'}</td><td class="n">${f.antD ? money(f.antD) : '-'}</td><td>${f.dec === null ? '• Sin declaración' : ko ? '<span style="color:#b42318">✖ No cuadra</span>' : '<span style="color:#1a7f37">✓ Cuadra</span>'}</td></tr>`; }).join('')}</tbody></table>
         ${A.ctas.filter((f) => f.d !== null && Math.abs(f.d) > 1).map((f) => `<h4 style="margin:18px 0 4px">${esc(f.txt)} · ${esc(f.modelo || '')} · diferencia ${money(f.d)}, mes a mes</h4>${adifCuentaMes(f.k, A, M)}`).join('')}</section>` : ''}`;
@@ -538,9 +594,10 @@ export function crearConciliaciones(c) {
   }));
   const datosPagador = () => {
     const E = empresa(), nif = String(E.cif || '');
-    let razon = String(E.nombre || '').toUpperCase().trim();
+    const cen = E.datos?.aeat?.censo ?? {}; // consulta censal de la AEAT (pestaña Datos Identificativos Censales)
+    let razon = String(cen.razon || E.nombre || '').toUpperCase().trim();
     if (!/\bS\.?\s?[AL]\.?U?\.?$/.test(razon)) razon += /^A/.test(nif) ? ' S.A.' : /^B/.test(nif) ? ' S.L.' : '';
-    return { nif, razon, muni: String(E.datos?.municipio || 'GRANADA').toUpperCase(), hoy: new Date() };
+    return { nif, razon, muni: String(cen.fiscal?.municipio || cen.social?.municipio || E.datos?.municipio || 'GRANADA').toUpperCase(), hoy: new Date() };
   };
   const lim = (v) => String(v ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '');
   function descargarPdf(bytes, nombre) {
