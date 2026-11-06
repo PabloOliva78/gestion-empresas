@@ -469,7 +469,8 @@ export function crearRegistral(c) {
     }
     return res;
   }
-  const accNorm = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?\s?L\.?U?|S\.?\s?A\.?U?|SL|SA|SLU)\b\.?/g, '').replace(/[^A-Z0-9Ñ ]/g, ' ').replace(/\b(DE|DEL|LA|LAS|LOS|EL|Y)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const accNorm = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?\s?L\.?U?|S\.?\s?A\.?U?|SL|SA|SLU)\b\.?/g, '').replace(/[^A-Z0-9Ñ ]/g, ' ').replace(/\b(DE|DEL|LA|LAS|LOS|EL|Y)\b/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^MAXLOGTRANS$/, 'MAXIMA LOGISTICA EN TRANSPORTE').replace(/^HEROGRA FER$/, 'HEROGRA FERTILIZANTES'); // nombres abreviados del Excel
   // el mismo socio con el mismo % en la misma sociedad, escrito de dos formas («LUIS MARTIN» y «LUIS MARTIN AGUADO»): se queda el nombre más completo
   function accUnir(rel) {
     const tok = (s) => accNorm(s).split(' ').filter(Boolean);
@@ -480,6 +481,8 @@ export function crearRegistral(c) {
     rel = rel.filter((r) => (r.hoja ?? 0) === ultima[accNorm(r.participada)]);
     // «RESTO» no es un socio: es el conjunto de los demás y repite el % de otro socio de la misma sociedad
     rel = rel.filter((r) => accNorm(r.socio) !== 'RESTO' || !rel.some((q) => q !== r && accNorm(q.socio) !== 'RESTO' && accNorm(q.participada) === accNorm(r.participada) && Math.abs((+q.pct || 0) - (+r.pct || 0)) < 1e-6));
+    // el mismo socio con dos % distintos en la misma sociedad: el pequeño suele ser el de otro socio mal enlazado, se queda el mayor
+    rel = rel.filter((r) => !rel.some((q) => q !== r && accNorm(q.socio) === accNorm(r.socio) && accNorm(q.participada) === accNorm(r.participada) && (+q.pct || 0) > (+r.pct || 0)));
     return rel.filter((r, i) => {
       const a = tok(r.socio), p = accNorm(r.participada);
       return !rel.some((q, j) => j !== i && accNorm(q.participada) === p && Math.abs((+q.pct || 0) - (+r.pct || 0)) < 1e-6 && dentro(a, tok(q.socio)));
@@ -528,8 +531,8 @@ export function crearRegistral(c) {
         const mismo = (p, q) => p === q || (p && q && String(p.val).trim() === String(q.val).trim()); // la misma sociedad dibujada en dos casillas
         const conFlecha = vale.filter((l) => l.flecha).filter((l, i, a) => a.findIndex((m) => mismo(m.e, l.e)) === i), sinFlecha = vale.filter((l) => !l.flecha);
         if (conFlecha.length === 1) { dest = conFlecha[0].e; socio = (sinFlecha.find((l) => !mismo(l.e, dest)) || vale.find((l) => !mismo(l.e, dest) && l.haciaP) || {}).e || null; }
-        if (!socio) socio = ents.filter((q) => q.y2 <= P.y1 + 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => b.y2 - a.y2)[0];
-        if (!dest) dest = ents.filter((q) => q.y1 >= P.y2 - 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => a.y1 - b.y1)[0];
+        if (!socio) socio = ents.filter((q) => q.y2 <= P.y1 + 2 && P.y1 - q.y2 <= 100 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => b.y2 - a.y2)[0];
+        if (!dest) dest = ents.filter((q) => q.y1 >= P.y2 - 2 && q.y1 - P.y2 <= 100 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => a.y1 - b.y1)[0];
         if (socio && dest && socio !== dest) out.push({ socio: String(socio.val).trim(), participada: String(dest.val).trim(), pct: Math.round(pv(P) * 1e6) / 1e6, celda: P.ref, hoja: nh });
         else avisos.push(`Porcentaje ${P.ref} (${pv(P).toFixed(4)} %): no se encuentra ${socio ? 'la sociedad participada' : 'el socio'}`);
       });
