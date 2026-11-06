@@ -502,8 +502,152 @@ export function crearModelos(c) {
       </tbody></table></div>${ed ? '<button class="small no-print" data-act="m-a22add" style="margin-top:6px">+ Añadir solicitud</button>' : ''}</section>${a22Bloque(Sx)}`;
   }
 
+  // ================= Intrastat · líneas de Dynamics y exportación .txt (formato AEAT) =================
+  // La conciliación con el 349 está en el bloque de conciliaciones; aquí van las líneas, los avisos y los ficheros.
+  const INTRA_COLS = ['Fecha', 'Dirección', 'País/región', 'Provincia de origen o destino', 'Código de transacción', 'Transporte', 'Código Intrastat de la mercancía', 'Peso', 'Importe de la factura', 'Importe estadístico', 'NIF', 'Código de artículo', 'Categoría', 'Factura'];
+  const INTRA_ISO3 = { AUT: 'AT', BEL: 'BE', BGR: 'BG', CYP: 'CY', CZE: 'CZ', DEU: 'DE', DNK: 'DK', EST: 'EE', ESP: 'ES', FIN: 'FI', FRA: 'FR', GRC: 'GR', HRV: 'HR', HUN: 'HU', IRL: 'IE', ITA: 'IT', LTU: 'LT', LUX: 'LU', LVA: 'LV', MLT: 'MT', NLD: 'NL', POL: 'PL', PRT: 'PT', ROU: 'RO', SWE: 'SE', SVN: 'SI', SVK: 'SK', XI: 'XI' };
+  const INTRA_CFG0 = { tol: 1, incoterm: 'DDP', regimen: '1', ncDef: '31052090', txtServ: 'SERVICIOS', nifIntro: 'Sí' };
+  const MES_MAY = MES_L.map((m) => m.toUpperCase());
+  const nf2 = (v) => Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const guion = (v) => (Math.abs(v) < 0.005 ? '-' : eur(v));
+  let intraMes = 0, intraF = {}, intraFich = [];
+  const intraCur = () => big('intra', () => ({ rows: [], serv: [], cfg: {}, exp: {} }));
+  const datosIntra = () => {
+    const cur = intraCur(); if (!cur) return null; const d = cur.datos;
+    return { rows: d.rows ?? [], serv: d.serv ?? [], cfg: { ...INTRA_CFG0, ...(d.cfg ?? {}) }, exp: { per: String(new Date().getMonth() + 1).padStart(2, '0'), flujo: 'ambos', ...(d.exp ?? {}) } };
+  };
+  const guardarIntra = (D) => bigGuardar('intra', D);
+  const intraTx = (x) => String(x ?? '').trim().replace(/\s+/g, '').toUpperCase();
+  const intraNifN = (x) => String(x ?? '').toUpperCase().replace(/[\s.-]/g, '');
+  const intraNum = (x) => { if (x === null || x === undefined || x === '') return null; if (typeof x === 'number') return x; const n = parseNum(String(x)); return n === null || Number.isNaN(n) ? null : n; };
+  const kf = (v) => String(v ?? '').toUpperCase().replace(/\s+/g, '');
+  const COD_AIB = ['S.UE.NR', 'S.UE.RD', 'S.UE.SR'];
+  // cálculo de las columnas grises (Año → Importe conciliación), igual que TablaIntrastat
+  function calcIntra(D, rep, sop) {
+    const C = D.cfg, entregas = rep.filter((l) => l.codigo === 'R.UE'), adq = sop.filter((l) => COD_AIB.includes(l.codigo));
+    const nifRUE = new Set(entregas.map((l) => intraNifN(l.nif))), nifSUE = new Set(adq.map((l) => intraNifN(l.nif)));
+    const facRUE = new Set(entregas.map((l) => kf(l.factura)).filter(Boolean)), facSUE = new Set(adq.map((l) => kf(l.factura)).filter(Boolean));
+    return D.rows.map((r) => {
+      const f = fechaUtc(r[0]), o = { r, fecha: f };
+      o.anio = f ? f.getUTCFullYear() : ''; o.mes = f ? f.getUTCMonth() + 1 : '';
+      const dir = String(r[1] ?? '').trim().toLowerCase(); o.flujo = /^distribuci|^expedici|^salida/.test(dir) ? 'Expedición' : /^llegada|^introducci|^entrada/.test(dir) ? 'Introducción' : '';
+      const p = String(r[2] ?? '').trim().toUpperCase(); o.em = p === '' ? '' : p.length === 2 ? p : (INTRA_ISO3[p] || '');
+      o.servicio = !f ? '' : (C.txtServ && String(r[12] || '').toUpperCase().includes(String(C.txtServ).toUpperCase()) ? 'Sí' : 'No');
+      o.nc = !f ? '' : (String(r[6] ?? '').trim() || C.ncDef);
+      const x = intraNifN(r[10]), pref = o.em === 'GR' ? 'EL' : o.em, iso = INTRA_ISO3[x.slice(0, 3)] || '';
+      o.nifExp = x === '' ? '' : (iso && Number.isNaN(+x.charAt(2))) ? (iso === 'GR' ? 'EL' : iso) + x.slice(3) : (/^\d+$/.test(x) ? pref + x : x);
+      o.incluir = (!f || o.servicio === 'Sí') ? 0 : 1;
+      o.valor = o.incluir === 1 ? (intraNum(r[8]) || 0) : 0;
+      const av = [];
+      if (f) {
+        if (o.servicio === 'Sí') av.push('• Servicio: excluido del fichero');
+        else {
+          if (o.em === '') av.push('✖ País no reconocido'); if (String(r[3] ?? '').trim() === '') av.push('✖ Sin provincia'); if (!((intraNum(r[7]) || 0) > 0)) av.push('✖ Peso 0');
+          if (o.flujo === 'Expedición' && (o.nifExp.length < 4 || o.nifExp.length > 14 || o.nifExp.slice(0, 2) !== (o.em === 'GR' ? 'EL' : o.em))) av.push('✖ NIF IVA no válido');
+          if (String(r[6] ?? '').trim() === '') av.push('• NC por defecto');
+          if (o.flujo === 'Introducción' && String(r[4] ?? '').trim() === '12') av.push('• Naturaleza 12 en llegada: revisar');
+        }
+      }
+      o.avisos = av.join(' | ');
+      // la línea suma en su partida original: un abono de emitidas declarado como llegada cuenta en expediciones (en negativo) y al revés
+      const fk = kf(r[13]);
+      o.flujoConc = o.incluir !== 1 ? '' : fk ? ((o.flujo === 'Introducción' && facRUE.has(fk) && !facSUE.has(fk)) ? 'Expedición' : (o.flujo === 'Expedición' && facSUE.has(fk) && !facRUE.has(fk)) ? 'Introducción' : o.flujo)
+        : (o.flujo === 'Introducción' && nifRUE.has(o.nifExp) && !nifSUE.has(o.nifExp)) ? 'Expedición' : (o.flujo === 'Expedición' && !nifRUE.has(o.nifExp) && nifSUE.has(o.nifExp)) ? 'Introducción' : o.flujo;
+      o.impConc = o.flujoConc === '' ? 0 : (o.flujoConc === o.flujo ? 1 : -1) * o.valor;
+      return o;
+    });
+  }
+  function lineaIntra(o, C) {
+    const nf = (x, d) => { const n = intraNum(x); return n === null ? '' : n.toFixed(d).replace('.', ','); };
+    const pr = String(o.r[3] ?? '').trim(), prov = pr === '' ? '' : (/^\d+$/.test(pr) ? pr.padStart(2, '0') : intraTx(pr));
+    const cn = String(o.r[4] ?? '').trim(), nat = /^\d+$/.test(cn) ? cn.padStart(2, '0') : intraTx(cn);
+    const nif = (o.flujo === 'Introducción' && C.nifIntro !== 'Sí') ? '' : o.nifExp;
+    return `${[o.em, prov, intraTx(C.incoterm), nat, intraTx(o.r[5]), '', intraTx(o.nc), o.em, intraTx(C.regimen), nf(o.r[7], 3), '', nf(o.r[8], 2), nf(o.r[9], 2), nif].join(';')};`;
+  }
+  async function intraAnadirFilas(filas) {
+    const D = datosIntra(); if (!D) return; let n = 0;
+    filas.forEach((r) => {
+      if (!r || !r.some((v) => v !== null && v !== '')) return; if (String(r[0] ?? '').trim().toLowerCase() === 'fecha') return; // cabecera
+      const f = fechaUtc(r[0]); if (!f) return;
+      const fila = INTRA_COLS.map((_, j) => { const v = r[j]; return v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v); }); fila[0] = fdmy(f); D.rows.push(fila); n++;
+    });
+    await guardarIntra(D); aviso(`${n} línea(s) Intrastat añadidas`);
+  }
+  async function cargarIntra(files) {
+    for (const f of files) { const sh = await hojasExcel(f); if (sh[0]) await intraAnadirFilas(sh[0].rows); }
+  }
+  function intraFiltrar() {
+    const q = (k) => String(intraF[k] || '').trim().toUpperCase(); let n = 0, t = 0;
+    const imp = q('imp').replace(/\s/g, ''), nimp = (x) => x.replace(/\./g, '').replace(',', '.');
+    document.querySelectorAll('tr[data-fnif]').forEach((tr) => { t++;
+      const ok = (!q('fac') || (tr.dataset.ffac || '').includes(q('fac'))) && (!q('nif') || tr.dataset.fnif.includes(q('nif'))) && (!q('pais') || tr.dataset.fpais.includes(q('pais'))) && (!q('flujo') || tr.dataset.fflujo.includes(q('flujo')))
+        && (!imp || tr.dataset.fimp.split(/\s+/).some((v) => v && (nimp(v) === nimp(imp) || v.startsWith(imp) || nimp(v).startsWith(nimp(imp)))));
+      tr.style.display = ok ? '' : 'none'; if (ok) n++; });
+    const e = document.querySelector('.it-nfil'); if (e) e.textContent = Object.values(intraF).some((v) => String(v || '').trim()) ? `${n} de ${t} líneas` : '';
+  }
+  function vistaIntra() {
+    if (!S.sel) return sinEmpresa;
+    const D = datosIntra(), Er = grande('fact-E'), Rr = grande('fact-R');
+    if (!D || !Er || !Rr) return cargandoTxt;
+    const C = D.cfg, ej = ejercicio(), O = calcIntra(D, Er, Rr), ed = puede(), dis = ed ? '' : ' disabled';
+    const cfgIn = (k, t, w) => `<label style="display:inline-flex;gap:6px;align-items:center;margin:2px 14px 2px 0">${t} <input class="facin" data-intracfg="${k}" value="${esc(C[k])}" size="${w || 8}"${dis}></label>`;
+    const cfg = `<div>${cfgIn('tol', 'Tolerancia (€):', 5)}${cfgIn('incoterm', 'Condiciones de entrega (Incoterm):', 5)}${cfgIn('regimen', 'Régimen estadístico:', 3)}${cfgIn('ncDef', 'NC para producto sin código:', 10)}${cfgIn('txtServ', 'Texto en Categoría que identifica servicios:', 12)}
+      <label style="display:inline-flex;gap:6px;align-items:center">Exportar NIF en introducciones <select data-intracfg="nifIntro"${dis}>${['Sí', 'No'].map((v) => `<option${C.nifIntro === v ? ' selected' : ''}>${v}</option>`).join('')}</select></label></div>`;
+    // tabla de líneas del ejercicio
+    const idx0 = O.map((o, i) => [o, i]).filter(([o]) => o.anio === ej || o.anio === '');
+    const mSel = intraMes, idx = mSel ? idx0.filter(([o]) => o.mes === mSel) : idx0;
+    const nMes = (m) => idx0.filter(([o]) => o.mes === m).length;
+    const subtabs = `<span class="it-subtabs no-print"><button class="small${mSel ? '' : ' primary'}" data-act="m-intrames" data-m="0">Todos (${idx0.length})</button>${MES_L.map((t, i) => (nMes(i + 1) ? `<button class="small${mSel === i + 1 ? ' primary' : ''}" data-act="m-intrames" data-m="${i + 1}">${t.slice(0, 3)} (${nMes(i + 1)})</button>` : '')).join('')}</span>`;
+    const filtros = `<div class="fc-cab no-print it-fil">Buscar: ${[['fac', 'Nº factura'], ['nif', 'CIF / NIF'], ['pais', 'País'], ['flujo', 'Flujo'], ['imp', 'Importe']].map(([k, t]) => `<label>${t} <input data-intrafil="${k}" value="${esc(intraF[k] || '')}" size="${k === 'flujo' ? 11 : 12}"></label>`).join(' ')} <span class="it-nfil hint"></span></div>`;
+    const celda = (v, i, j) => { const t = v instanceof Date ? fdmy(fechaUtc(v)) : (v == null ? '' : String(v)); return `<td><input class="facin" data-intracel="${i}|${j}" value="${esc(t)}" size="${Math.max(4, Math.min(28, t.length + 1))}"${dis}></td>`; };
+    const lineas = D.rows.length ? `<div class="wrap" style="max-height:520px;overflow:auto"><table class="tabla"><thead><tr><th></th>${INTRA_COLS.map((c) => `<th>${c}</th>`).join('')}<th class="gris">Año</th><th class="gris">Mes</th><th class="gris">Flujo</th><th class="gris">Estado miembro</th><th class="gris">Servicio</th><th class="gris">NC exportar</th><th class="gris">NIF exportar</th><th class="gris">Incluir</th><th class="gris">Valor facturado (€)</th><th class="gris">Avisos</th><th class="gris">Flujo conciliación</th><th class="gris">Importe conciliación (€)</th></tr></thead><tbody>
+      ${idx.map(([o, i]) => `<tr data-ffac="${esc(String(o.r[13] || '')).toUpperCase()}" data-fnif="${esc(`${o.r[10] || ''} ${o.nifExp || ''}`).toUpperCase()}" data-fpais="${esc(`${o.r[2] || ''} ${o.em || ''}`).toUpperCase()}" data-fflujo="${esc(`${o.flujo} ${o.flujoConc}`).toUpperCase()}" data-fimp="${esc([o.r[8], o.r[9], o.valor, o.impConc].map((v) => `${v ?? ''} ${typeof v === 'number' ? nf2(v) : ''}`).join(' '))}"><td>${ed ? `<button class="small" data-act="m-intradel" data-i="${i}" title="Quitar esta línea">✖</button>` : ''}</td>${INTRA_COLS.map((_, j) => celda(j === 0 ? (o.fecha ? fdmy(o.fecha) : o.r[0]) : o.r[j], i, j)).join('')}
+        <td class="c">${o.anio}</td><td class="c">${o.mes}</td><td>${o.flujo}</td><td class="c">${o.em}</td><td class="c">${o.servicio}</td><td>${esc(o.nc)}</td><td>${esc(o.nifExp)}</td><td class="c">${o.incluir}</td><td class="num">${guion(o.valor)}</td>
+        <td class="${/✖/.test(o.avisos) ? 'fila-pend' : ''}">${esc(o.avisos)}</td><td>${o.flujoConc}</td><td class="num">${guion(o.impConc)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="hint">${idx.length} línea(s) ${mSel ? `de ${MES_L[mSel - 1].toLowerCase()} ` : ''}de ${ej}${D.rows.length > idx0.length ? ` · ${D.rows.length - idx0.length} de otros ejercicios guardadas` : ''}. Las celdas blancas se pueden corregir; las grises se calculan solas.</p>` : '<p class="hint">Sin datos: suelta la descarga de Dynamics o pégala abajo.</p>';
+    // exportación
+    const E = D.exp, meses = /^\dT$/.test(E.per) ? [1, 2, 3].map((k) => (+E.per[0] - 1) * 3 + k) : [+E.per];
+    const flujos = E.flujo === 'ambos' ? ['Expedición', 'Introducción'] : [E.flujo];
+    intraFich = []; meses.forEach((m) => flujos.forEach((fl) => {
+      const sel = O.filter((o) => o.anio === ej && o.mes === m && o.flujo === fl && o.incluir === 1), excl = O.filter((o) => o.anio === ej && o.mes === m && o.flujo === fl && o.incluir === 0).length;
+      const err = sel.filter((o) => /✖/.test(o.avisos)).length, nombre = `INTRASTAT_${fl === 'Expedición' ? 'E' : 'I'}_${ej}_${String(m).padStart(2, '0')}.txt`;
+      const estado = (sel.length === 0 ? 'Sin líneas en este mes' : sel.length > 1000 ? '⚠ Más de 1000 líneas: dividir en varias declaraciones' : err ? `⚠ ${err} línea(s) con errores (✖ en columna Avisos)` : '✓ Listo para exportar') + (excl ? ` · ${excl} servicio(s) excluido(s)` : '');
+      intraFich.push({ fl, m, nombre, estado, txt: sel.map((o) => lineaIntra(o, C)).join('\r\n'), n: sel.length });
+    }));
+    const exp = `<div class="fc-cab"><label>Periodo <select data-intraexp="per"${dis}>${Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((v) => `<option value="${v}"${E.per === v ? ' selected' : ''}>${v} - ${MES_L[+v - 1]}</option>`).join('')}${['1T', '2T', '3T', '4T'].map((v) => `<option value="${v}"${E.per === v ? ' selected' : ''}>${v} (3 ficheros por flujo)</option>`).join('')}</select></label>
+        <label>Flujo <select data-intraexp="flujo"${dis}>${[['ambos', 'Expedición + Introducción (ficheros separados)'], ['Expedición', 'Expedición'], ['Introducción', 'Introducción']].map(([v, t]) => `<option value="${v}"${E.flujo === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label></div>
+      ${intraFich.map((f, k) => `<div class="block" style="margin:8px 0"><b>Declaración ${f.fl === 'Expedición' ? 'EXPEDICIÓN (E)' : 'INTRODUCCIÓN (I)'} - ${MES_MAY[f.m - 1]} ${ej}</b> · ${f.n} línea(s) · <span class="${/✖|⚠/.test(f.estado) ? 'fila-pend' : ''}">${esc(f.estado)}</span>
+        <div style="margin:6px 0"><button class="small" data-act="m-intradesc" data-k="${k}"${f.n ? '' : ' disabled'}>⬇ Descargar ${esc(f.nombre)}</button> <button class="small" data-act="m-intracopia" data-k="${k}"${f.n ? '' : ' disabled'}>Copiar</button></div>
+        ${f.n ? `<pre style="max-height:160px;overflow:auto;background:#f7f7f7;padding:6px;font-size:11px">${esc(f.txt)}</pre>` : ''}</div>`).join('')}
+      <p class="hint">Formato de línea: EM;Provincia;Incoterm;Naturaleza;Transporte;Puerto;NC;País origen;Régimen;Masa kg;Unid.supl.;Valor facturado;Valor estadístico;NIF IVA. Guarda el .txt en una carpeta llamada AEAT y en la Sede (Intrastat > Presentación por fichero) indica flujo, mes y año.</p>`;
+    setTimeout(intraFiltrar, 0);
+    return `${avisoHtml()}<section class="block"><h3 class="bt">INTRASTAT · ${ej}</h3>
+      <p class="hint">Distribuciones = Expedición, Llegadas = Introducción. País ISO3 → ISO2. Servicios (Categoría con «${esc(C.txtServ)}») se excluyen; producto sin NC toma el NC por defecto. Avisos: ✖ = error que hay que corregir antes de presentar; • = informativo. El 349 se calcula desde los libros registro (R.UE y S.UE.NR/RD/SR).</p>
+      ${cfg}<p class="hint no-print">La conciliación con el modelo 349 está en Conciliaciones → Conciliación 349 - Intrastat.</p></section>
+      <section class="block"><h3 class="bt">Descarga de Dynamics (13 columnas + nº de factura)</h3>
+      ${ed ? `<div class="dropzone" data-kind="intra" tabindex="0" role="button"><b>Suelta aquí el Excel o CSV de Dynamics</b> o haz clic para elegirlo (se añade a lo que hay)
+        <input type="file" data-dzkind="intra" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden></div>
+      <div class="no-print" style="margin:8px 0"><textarea id="intraPega" rows="3" style="width:100%;font-size:11px" placeholder="…o pega aquí las filas copiadas de Excel (13 columnas más el nº de factura opcional: ${INTRA_COLS.join(', ')})"></textarea>
+        <button class="small" data-act="m-intrapega">Añadir lo pegado</button> <button class="small" data-act="m-intravaciar">Vaciar las líneas de ${ej}</button>${mSel ? ` <button class="small" data-act="m-intravaciarmes" data-m="${mSel}">Vaciar las líneas de ${MES_L[mSel - 1].toLowerCase()}</button>` : ''} ${subtabs}</div>` : `<div class="no-print">${subtabs}</div>`}
+      ${D.rows.length ? filtros : ''}${lineas}</section>
+      <section class="block"><h3 class="bt">Exportación Intrastat (formato AEAT .txt)</h3>${exp}</section>`;
+  }
+
   // ================= Eventos propios =================
   const acciones = {
+    'm-intrames': (d) => { intraMes = +d.m; render(); },
+    'm-intradel': async (d) => { const D = datosIntra(); if (!D) return; D.rows.splice(+d.i, 1); await guardarIntra(D); render(); },
+    'm-intrapega': () => intraAnadirFilas(String(document.getElementById('intraPega')?.value ?? '').split(/\r?\n/).map((l) => l.split('\t'))),
+    'm-intravaciar': async () => {
+      const ej = ejercicio(); if (!confirm(`¿Quitar todas las líneas Intrastat de ${ej}?`)) return;
+      const D = datosIntra(); if (!D) return; D.rows = D.rows.filter((r) => { const f = fechaUtc(r[0]); return f && f.getUTCFullYear() !== ej; }); await guardarIntra(D); render();
+    },
+    'm-intravaciarmes': async (d) => {
+      const m = +d.m, ej = ejercicio(); if (!confirm(`¿Vaciar las líneas Intrastat de ${MES_L[m - 1].toLowerCase()} ${ej}?`)) return;
+      const D = datosIntra(); if (!D) return; D.rows = D.rows.filter((r) => { const f = fechaUtc(r[0]); return !(f && f.getUTCFullYear() === ej && f.getUTCMonth() + 1 === m); }); await guardarIntra(D); intraMes = 0; render();
+    },
+    'm-intradesc': (d) => { const f = intraFich[+d.k]; if (!f) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([`${f.txt}\r\n`], { type: 'text/plain' })); a.download = f.nombre; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },
+    'm-intracopia': (d) => { const f = intraFich[+d.k]; if (f && navigator.clipboard) navigator.clipboard.writeText(f.txt).then(() => aviso(`Copiado: ${f.nombre}`)); },
     'm-592del': async (d) => { const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return; const mov = cur.datos; mov[d.l] = (mov[d.l] ?? []).filter((r) => [r.asiento, r.fecha, r.justificante, r.kg].join('|') !== d.k); await bigGuardar('m592-mov', mov); render(); },
     'm-a22add': async () => { const D = a22Datos(); D.filas.push({ per: `1T ${S.ejercicio}` }); await a22Guardar(D); render(); },
     'm-a22del': async (d) => { const D = a22Datos(); D.filas.splice(+d.i, 1); await a22Guardar(D); render(); },
@@ -538,6 +682,9 @@ export function crearModelos(c) {
       else { const [id, k] = d.m232.split('|'); D.man[id] ??= {}; D.man[id][k] = k === 'otras' ? (parseNum(t.value) || 0) : t.value; }
       await m232Guardar(ej, D); return void render();
     }
+    if (d.intracfg) { const D = datosIntra(); if (!D) return; D.cfg[d.intracfg] = d.intracfg === 'tol' ? (parseNum(t.value) || 0) : t.value; await guardarIntra(D); return void render(); }
+    if (d.intraexp) { const D = datosIntra(); if (!D) return; D.exp[d.intraexp] = t.value; await guardarIntra(D); return void render(); }
+    if (d.intracel) { const [i, j] = d.intracel.split('|').map(Number), D = datosIntra(); if (!D) return; if (D.rows[i]) { D.rows[i][j] = t.value; await guardarIntra(D); } return void render(); }
     if (d.m592cab) { const x = datos592(); x.cab ??= {}; x.cab[d.m592cab] = d.m592cab === 'tipo' ? (parseNum(t.value) ?? 0.45) : t.value; await guardar592(x); return void render(); }
     if (d.m592comp) { const x = datos592(); x.comp ??= {}; const v = parseNum(t.value); if (!v) delete x.comp[d.m592comp]; else x.comp[d.m592comp] = v; await guardar592(x); return void render(); }
     if (d.a22) { const [i, k] = d.a22.split('|'), D = a22Datos(); if (!D.filas[+i]) return; D.filas[+i][k] = t.value.trim(); return void a22Guardar(D); }
@@ -552,8 +699,11 @@ export function crearModelos(c) {
     else if (d.m583chk) m583Guardar((E) => { E[d.m583chk] = t.checked; });
   });
 
-  const kinds = { m232: cargar232, m592: cargar592, a22: a22Cargar };
+  document.addEventListener('input', (ev) => { const k = ev.target.dataset?.intrafil; if (!k) return; intraF = { ...intraF, [k]: ev.target.value }; intraFiltrar(); });
+
+  const kinds = { m232: cargar232, m592: cargar592, a22: a22Cargar, intra: cargarIntra };
   const tabs = {
+    modintra: ['Intrastat', 'Fichero AEAT', vistaIntra],
     mod592: ['Modelo 592', 'Envases de plástico', vista592],
     moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],

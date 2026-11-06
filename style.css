@@ -817,3 +817,10 @@ ul.avisos li { margin: 2px 0; }
 .acc-clon .small { border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 4px 10px; font-size: 12px; }
 .acc-clon .facin { border: 1px solid transparent; background: transparent; padding: 1px 3px; }
 .acc-clon .facin:hover, .acc-clon .facin:focus { border-color: #8ea9db; background: #fff; }
+
+/* 592: como el impreso de la antigua (ancho 1080-1180 px, cabecera de la liquidación sin fondo azul) */
+.f592 { min-width: 1080px; max-width: 1180px; font-size: 13px; border-color: #8c9ab3; }
+table.f592-liq th { background: transparent; color: #000; font-weight: 700; border: 0; border-bottom: 1px solid #9aa3b5; padding: 4px 6px; text-align: center; }
+table.f592-liq td { border: 0; padding: 4px 6px; }
+table.f592-liq { border: 0; }
+.tabla th.gris { background: #7a8aa8; }
