@@ -407,7 +407,7 @@ export function crearModulos(c) {
   }
   function tablaOb(titulo, pago) {
     const ej = Number(S.ejercicio), hoy = hoyUtc(), ix = presIndex(), ed = puede();
-    let L = empOrden().flatMap((e) => obligaciones(e, ej, ix));
+    let L = empOrden().filter((e) => pago || !S.sel || e.id === S.sel).flatMap((e) => obligaciones(e, ej, ix)); // liquidaciones: solo la empresa elegida
     if (pago) L = L.filter((o) => MODS_PAGO.includes(o.mod));
     L = filtroLista(L, hoy).sort((a, b) => a.fin - b.fin || String(a.e.nombre).localeCompare(String(b.e.nombre)) || a.mod.localeCompare(b.mod));
     const dom = (o) => { let t = o.fin - 5 * 864e5; while (!esHabil(t)) t -= 864e5; return t; };
@@ -2842,7 +2842,7 @@ export function crearModulos(c) {
       <p class="hint">Pincha en cualquier recuadro o fila para ir a su pestaña.</p></div>`;
   }
   tabs.ini = ['Inicio', 'Resumen del periodo', vistaInicio];
-  tabs.liq = ['Liquidaciones Presentar', 'Todas las empresas', vistaLiq];
+  tabs.liq = ['Liquidaciones Presentar', 'Empresa elegida', vistaLiq];
   tabs.venc = ['Pagos Domiciliados Impuestos', 'Todas las empresas', vistaVenc];
   tabs.iloc = ['Impuestos Locales', 'IBI · IAE · IVTM', vistaIloc];
   tabs.dua = ['DUA-H1', 'Importaciones · IVA diferido', vistaDua];
