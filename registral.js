@@ -469,7 +469,16 @@ export function crearRegistral(c) {
     }
     return res;
   }
-  const accNorm = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?\s?L\.?U?|S\.?\s?A\.?U?|SL|SA|SLU)\b\.?/g, '').replace(/[^A-Z0-9Ñ ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const accNorm = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(S\.?\s?L\.?U?|S\.?\s?A\.?U?|SL|SA|SLU)\b\.?/g, '').replace(/[^A-Z0-9Ñ ]/g, ' ').replace(/\b(DE|DEL|LA|LAS|LOS|EL|Y)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  // el mismo socio con el mismo % en la misma sociedad, escrito de dos formas («LUIS MARTIN» y «LUIS MARTIN AGUADO»): se queda el nombre más completo
+  function accUnir(rel) {
+    const tok = (s) => accNorm(s).split(' ').filter(Boolean);
+    const dentro = (a, b) => a.length >= 2 && a.length < b.length && a.every((t) => b.includes(t));
+    return rel.filter((r, i) => {
+      const a = tok(r.socio), p = accNorm(r.participada);
+      return !rel.some((q, j) => j !== i && accNorm(q.participada) === p && Math.abs((+q.pct || 0) - (+r.pct || 0)) < 1e-6 && dentro(a, tok(q.socio)));
+    });
+  }
   function accRelaciones(H) {
     const out = [], avisos = [];
     H.forEach(({ celdas, segs }) => {
@@ -570,7 +579,7 @@ export function crearRegistral(c) {
       if (!R.rel.length && R.err) { aviso(`${file.name}: no se ha podido leer (${R.err.message})`, true); continue; }
       const D = accDatos(), vistos = new Set();
       D.rel = D.rel.filter((r) => r.origen !== file.name);
-      R.rel.forEach((r) => {
+      accUnir(R.rel).forEach((r) => {
         const k = `${accNorm(r.socio)}|${accNorm(r.participada)}`;
         vistos.add(k); r.origen = file.name; // si el mismo enlace sale en varias hojas, manda el último (la hoja TOTAL, que es la consolidada)
         D.rel = D.rel.filter((x) => `${accNorm(x.socio)}|${accNorm(x.participada)}` !== k); D.rel.push(r);
