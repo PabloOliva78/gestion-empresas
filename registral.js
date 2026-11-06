@@ -1,5 +1,7 @@
 // Bloque 2 · Información Registro Mercantil (portado de la aplicación antigua).
 // Datos Registrales y Titularidad Real: se suelta el PDF o Excel y se leen los datos, con el archivo de origen.
+import { crearEnvio } from './envio.js?v=1';
+
 export function crearRegistral(c) {
   const { db, S, esc, render, cargar, empresa, puede, leerPdf, filasExcel, ocrPdf, eur } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
@@ -1350,5 +1352,7 @@ export function crearRegistral(c) {
     kinds[`doc-${t}`] = (files) => cargarDocs(t, files);
     tabs[t] = [n, s, () => vistaDocsRg(t)];
   });
+  const EV = crearEnvio(c); // 11.- Administración · Enviar documentación
+  Object.assign(tabs, EV.tabs); Object.assign(acciones, EV.acciones);
   return { tabs, kinds, acciones };
 }
