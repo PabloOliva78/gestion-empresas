@@ -13,7 +13,26 @@ export function crearEnvio(c) {
     rmdoc: 'Cuentas anuales presentadas', 'arch-emitidas': 'Libro de IVA emitidas', 'arch-recibidas': 'Libro de IVA recibidas', 'arch-extractos': 'Extractos', 'arch-sys': 'Sumas y saldos', 'arch-sii': 'SII',
     'arch-nominas': 'Nóminas', 'doc-rmactas': 'Actas', 'doc-rmsocios': 'Socios', 'doc-rmlibros': 'Libros', 'doc-rmca': 'Cuentas anuales (depósito)', 'doc-rmcert': 'Certificación', 'doc-rmaud': 'Auditoría',
     'doc-rmig': 'Informe de gestión', 'doc-rmmem': 'Memoria', 'doc-rmacu': 'Acuse de entrada', 'doc-rmnota': 'Nota de despacho' };
-  const nomTipo = (t) => TIPOS[t] ?? t.replace(/^(doc|arch)-/, '');
+  // Los PDF de impuestos presentados se clasifican por modelo: Intrastat (exportaciones e importaciones UE), 111, 115, 123, 202, 303, 349, 583, 592, 180, 190, 193…
+  const MOD_ORDEN = ['INT', '111', '115', '123', '202', '303', '349', '583', '592', '180', '190', '193', '200', '232', 'A22'];
+  const MESES_N = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const modeloDe = (datos, nombre) => {
+    const n = String(nombre ?? '').toUpperCase();
+    if (/EXPORTACIONES\s+UE|IMPORTACIONES\s+UE|INTRASTAT/.test(n)) return 'INT';
+    const m = String(datos?.modelo ?? '').trim().toUpperCase();
+    if (m && m !== '?') return m;
+    return (/\b(111|115|123|180|190|193|200|202|232|303|349|583|592|A22)\b/.exec(n) || [])[1] ?? '';
+  };
+  const periodoTxt = (datos, nombre) => {
+    const p = String(datos?.periodo ?? ''), n = String(nombre ?? '').toLowerCase();
+    if (/^\d\d$/.test(p) && +p >= 1 && +p <= 12) return cap(MESES_N[+p - 1]);
+    if (p && p !== 'A') return p;
+    const i = MESES_N.findIndex((x) => n.includes(x));
+    return i >= 0 ? cap(MESES_N[i]) : (p === 'A' ? 'Anual' : '');
+  };
+  const ordenTipo = (t) => (t.startsWith('mod:') ? (MOD_ORDEN.indexOf(t.slice(4)) < 0 ? 50 : MOD_ORDEN.indexOf(t.slice(4))) : 100);
+  const nomTipo = (t) => (t.startsWith('mod:') ? (t === 'mod:INT' ? 'Intrastat' : t === 'mod:?' ? 'Impuestos presentados (sin clasificar)' : `Modelo ${t.slice(4)}`) : TIPOS[t] ?? t.replace(/^(doc|arch)-/, ''));
 
   // todos los archivos guardados de la empresa: cualquier objeto {nombre, path} dentro de los datos de sus registros
   function archivos() {
@@ -21,15 +40,25 @@ export function crearEnvio(c) {
     const mira = (o, r, clave, prof) => {
       if (!o || typeof o !== 'object' || prof > 3) return;
       if (typeof o.path === 'string' && typeof o.nombre === 'string') {
-        if (!vistos.has(o.path)) { vistos.add(o.path); out.push({ path: o.path, nombre: o.nombre, tipo: r.tipo, ej: r.ejercicio ?? '', clave }); }
+        if (!vistos.has(o.path)) {
+          vistos.add(o.path);
+          const a = { path: o.path, nombre: o.nombre, tipo: r.tipo, ej: r.ejercicio ?? '', clave };
+          if (r.tipo === 'prspdf' || r.tipo === 'pres') { // clasificado por modelo, con el flujo (exportaciones / importaciones) y el periodo como apartado
+            const m = modeloDe(r.datos, o.nombre), n = o.nombre.toUpperCase();
+            a.tipo = `mod:${m || '?'}`;
+            a.ap = [m === 'INT' ? (/EXPORTACIONES/.test(n) ? 'Exportaciones UE (expediciones)' : /IMPORTACIONES/.test(n) ? 'Importaciones UE (introducciones)' : '') : '', periodoTxt(r.datos, o.nombre)].filter(Boolean).join(' · ');
+          }
+          out.push(a);
+        }
         return;
       }
       for (const [k, v] of Object.entries(o)) mira(v, r, prof === 0 ? k : clave, prof + 1);
     };
     S.registros.filter((r) => r.empresa_id === S.sel).forEach((r) => mira(r.datos, r, '', 0));
-    return out.sort((a, b) => nomTipo(a.tipo).localeCompare(nomTipo(b.tipo)) || String(b.ej).localeCompare(String(a.ej)) || a.nombre.localeCompare(b.nombre));
+    return out.sort((a, b) => ordenTipo(a.tipo) - ordenTipo(b.tipo) || nomTipo(a.tipo).localeCompare(nomTipo(b.tipo)) || String(b.ej).localeCompare(String(a.ej)) || a.nombre.localeCompare(b.nombre));
   }
   const apartado = (a) => {
+    if (a.ap !== undefined) return a.ap;
     const d = docs[a.tipo.replace(/^doc-/, '')]?.find(([k]) => k === a.clave);
     return d ? d[1] : (/^(titulares|sociedades|cadena)$/.test(a.clave) ? '' : a.clave);
   };
@@ -42,7 +71,7 @@ export function crearEnvio(c) {
     if (!S.sel) return '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
     if (empAnt !== S.sel) { sel.clear(); empAnt = S.sel; }
     const todos = archivos(), vis = visibles(), e = empresa();
-    const tipos = [...new Set(todos.map((a) => a.tipo))].sort((a, b) => nomTipo(a).localeCompare(nomTipo(b)));
+    const tipos = [...new Set(todos.map((a) => a.tipo))].sort((a, b) => ordenTipo(a) - ordenTipo(b) || nomTipo(a).localeCompare(nomTipo(b)));
     const ejs = [...new Set(todos.map((a) => String(a.ej)).filter(Boolean))].sort().reverse();
     const marcados = todos.filter((a) => sel.has(a.path)).length;
     return `<p class="hint">Archivos guardados de <b>${esc(e?.nombre ?? '')}</b>. Marca los que quieras enviar, escribe el correo y pulsa «Preparar correo»: se descarga un archivo .eml con todo adjunto, que se abre en tu Outlook o Gmail y se envía desde tu cuenta.</p>

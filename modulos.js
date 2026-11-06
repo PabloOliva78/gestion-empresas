@@ -5,7 +5,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=42';
 
 import { CAB_SII } from './siicab.js?v=1';
-import { crearRegistral } from './registral.js?v=10';
+import { crearRegistral } from './registral.js?v=11';
 import { crearModelos } from './modelos.js?v=10';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearModelos3 } from './modelos3.js?v=2';
@@ -3924,7 +3924,7 @@ export function crearModulos(c) {
         if (a.coste && Math.abs(r.coste - a.coste) / a.coste > 0.2) al.push(`${r.m}: el coste de personal varía ${pc((r.coste - a.coste) / a.coste)} frente a ${a.m} (${n(a.coste)} → ${n(r.coste)})`);
       } });
     const f4 = R.map((r) => `<tr><td class="pp">${r.m[0].toUpperCase() + r.m.slice(1)}</td><td class="num">${pc(r.tIrpf)}</td><td class="num">${pc(r.tSS)}</td><td class="num">${pc(r.ssTrab)}</td><td class="num">${n(r.coste)}</td></tr>`).join('');
-    const tabla = (tit, cab, cuerpo) => `<section class="prs-card"><div class="prs-h">${tit}</div><div class="wrap"><table class="tprs tnom"><thead><tr>${cab.map((c, i) => `<th${i ? '' : ' class="pp"'}>${c}</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div></section>`;
+    const tabla = (tit, cab, cuerpo) => `<section class="prs-card"><div class="prs-h">${tit}</div><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr>${cab.map((c, i) => `<th${i ? '' : ' class="pp"'}>${c}</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div></section>`;
     return `${cabNom(e, y)}
       <p class="hint">Control del cuadrante de la gestoría (pestaña Nóminas) frente al 111 y al 190 presentados (pestaña Impuestos Presentados). Base sujeta = devengado − kilometraje − dietas (exentos); las indemnizaciones se toman como sujetas. ✓ = cuadra (±0,90 €).${hay ? '' : ` <b>No hay nóminas de ${y}: rellénalas en 9.- Nóminas.</b>`}</p>
       ${tabla(`1 · Cuadrante frente al modelo 111 (rendimientos del trabajo) · ${y}`, [trim ? 'Trimestre' : 'Mes', 'Base cuadrante', '111 percepciones [02+05]', 'Dif.', 'IRPF cuadrante', '111 retenciones [03+06]', 'Dif.', 'Tipo medio'],
@@ -3948,11 +3948,13 @@ export function crearModulos(c) {
         const e = S.empresas.find((x) => x.cif && t.includes(x.cif)) ?? S.empresas.find((x) => x.cif === nifDe(t)) ?? empresa();
         if (!e) { informe.push(`⚠ ${f.name}: elige la empresa`); continue; }
         const h = cabeceraPresentado(t);
-        const modelo = h.modelo || (/\b(A22|\d{3})\b/.exec(f.name) || [])[1] || '';
+        // si el PDF no trae el modelo, se clasifica por el nombre: «EXPORTACIONES UE / IMPORTACIONES UE …» son Intrastat
+        const modelo = h.modelo || (/EXPORTACIONES\s+UE|IMPORTACIONES\s+UE|INTRASTAT/i.test(f.name) ? 'INT' : (/\b(A22|\d{3})\b/.exec(f.name) || [])[1]) || '';
         const ejDecl = h.ej || Number(S.ejercicio);
         // el 200 (Impuesto sobre Sociedades) se presenta al año siguiente: se guarda en el año de presentación
         const ej = ['200', '232'].includes(modelo) ? (Number((/(?:realizada el|presentada el d[ií]a):?\s*\d\d-\d\d-(20\d\d)/i.exec(t) || [])[1]) || ejDecl + 1) : ejDecl;
         let per = h.per;
+        if (modelo === 'INT' && !per) { const i = NOM_MESES.findIndex((m) => f.name.toUpperCase().includes(m)); if (i >= 0) per = String(i + 1).padStart(2, '0'); } // mes que figura en el nombre
         if (ANUALES.includes(modelo)) per = 'A';
         else if (!['583', '202', 'A22'].includes(modelo) && per) per = perEf(e, per);
         const val = valoresPresentado(modelo, casillasPDF(pags), t);
