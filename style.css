@@ -1023,3 +1023,10 @@ table.tprs.tnom.nom-fit th, table.tprs.tnom.nom-fit td { width: auto !important;
 table.tprs.tnom.nom-fit td.in input { width: 11ch !important; min-width: 0 !important; }
 table.tprs.tnom.nom-fit td.pp, table.tprs.tnom.nom-fit th.pp { white-space: normal; max-width: 26em; }
 table.nom-hoja th.nom-cc { font-weight: 400; font-size: .78rem; color: #4a5a85; background: #eef2fb; }
+
+/* Hoja del mes: todas las columnas de centros del mismo ancho */
+table.tprs.tnom.nom-hoja { table-layout: fixed !important; min-width: 0 !important; max-width: none; }
+table.tprs.tnom.nom-hoja th, table.tprs.tnom.nom-hoja td { width: auto !important; min-width: 0 !important; padding: .3rem .5rem; }
+table.tprs.tnom.nom-hoja th { white-space: normal; overflow-wrap: anywhere; }
+table.tprs.tnom.nom-hoja td.num { white-space: nowrap; }
+table.tprs.tnom.nom-hoja td.pp, table.tprs.tnom.nom-hoja th.pp { white-space: normal; max-width: none; width: auto !important; }

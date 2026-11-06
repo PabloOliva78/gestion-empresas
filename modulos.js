@@ -2721,6 +2721,7 @@ export function crearModulos(c) {
     const t = new Set(nomToks(e?.nombre)), k = Object.keys(CENTROS_COSTE).find((x) => nomToks(ALIAS_EMP[x] ?? x).every((w) => t.has(w)));
     return k ? CENTROS_COSTE[k] : {};
   };
+  const NOM_KEYS = ['km', 'dietas', 'indem', 'dev', 'ssTrab', 'ret', 'seguro', 'anticipos', 'embargos', 'liquido', 'base', 'ssEmp'];
   const NOM_ROW = [[/^kilom/, 'km'], [/^dietas/, 'dietas'], [/^indemn/, 'indem'], [/^t devengado/, 'dev'], [/^dto/, 'ssTrab'], [/^i r p f/, 'ret'], [/^seg/, 'seguro'], [/^descuentos/, 'seguro'],
     [/^anticipos/, 'anticipos'], [/^embargo/, 'embargos'], [/^liquido/, 'liquido'], [/^base irpf/, 'base'], [/^total s/, 'ssEmp']];
   // Una hoja del Excel (una empresa, un mes): importes por centro. La columna A lleva los conceptos y una columna «TOTALES» la suma.
@@ -2745,12 +2746,14 @@ export function crearModulos(c) {
     for (let r = h1; r <= h1 + 3 && tot < 0; r++) (rows[r] ?? []).forEach((v, c) => { if (tot < 0 && c >= 1 && nomNorm(v) === 'totales') tot = c; });
     const val = (k, c) => num(rows[fil[k]]?.[c]) ?? 0, ancho = Math.max(...rows.map((f) => (f ?? []).length));
     const conDatos = (c) => Object.keys(fil).some((k) => Math.abs(val(k, c)) > 0.004);
-    let cols = []; for (let c = 1; c < ancho; c++) if (c !== tot && conDatos(c)) cols.push(c);
+    // todas las columnas de centros que trae la hoja (con nombre o código en su cabecera), tengan o no importes
+    const cab = (c) => txt(rows[h1 + 1]?.[c]) || txt(rows[h1]?.[c]), fin = tot >= 1 ? tot : ancho;
+    let cols = []; for (let c = 1; c < fin; c++) if ((cab(c) && !/^totales$/i.test(cab(c))) || conDatos(c)) cols.push(c);
     if (!cols.length && tot >= 1 && conDatos(tot)) cols = [tot]; // hoja de un solo centro: los datos están bajo «TOTALES»
     const centros = cols.map((c) => {
       let nombre = txt(rows[h1 + 1]?.[c]); if (!nombre || /^totales$/i.test(nombre)) nombre = txt(rows[h1]?.[c]);
       const cod = txt(rows[h1 + 2]?.[c]), d = {};
-      Object.keys(fil).forEach((k) => { d[k] = val(k, c); });
+      NOM_KEYS.forEach((k) => { d[k] = val(k, c); }); // 0 en lo que la hoja no trae
       return { nombre, codigo: /^[A-Z]{2}\d{2,}/i.test(cod) ? cod.toUpperCase() : '', ...d };
     });
     return { titulo, mes, anio, centros };
@@ -2810,8 +2813,7 @@ export function crearModulos(c) {
     const cta9 = (c) => { const m = /^(\d+)\.(\d+)$/.exec(c), sub = m[2].replace(/^0+/, '') || '0'; return m[1] + '0'.repeat(Math.max(0, 9 - m[1].length - sub.length)) + sub; };
     const L = [], add = (cuenta, concepto, debe, haber, centro = '') => {
       if (Math.abs(debe) <= 0.004 && Math.abs(haber) <= 0.004) return;
-      const k = `${cuenta}|${centro}`, p = L.find((l) => l.k === k);
-      if (p) { p.debe = rr(p.debe + debe); p.haber = rr(p.haber + haber); } else L.push({ k, cuenta: cta9(cuenta), concepto, centro, debe: rr(debe), haber: rr(haber) });
+      L.push({ cuenta: cta9(cuenta), concepto, centro, debe: rr(debe), haber: rr(haber) }); // una línea por columna (centro de coste) de la hoja
     };
     const cod = (c) => c.codigo || '';
     porCentro.forEach((c) => add('640.01', 'Sueldos y salarios (T. devengado)', c.salarios, 0, cod(c)));
@@ -2884,7 +2886,7 @@ export function crearModulos(c) {
     const nombreMes = MESES[+mmAs - 1][0].toUpperCase() + MESES[+mmAs - 1].slice(1);
     const selMes = `<label class="no-print">Periodo <select data-nomasmes="1">${conNom.map((mm) => `<option value="${mm}"${mm === mmAs ? ' selected' : ''}>${MESES[+mm - 1][0].toUpperCase() + MESES[+mm - 1].slice(1)} ${y}</option>`).join('')}</select></label>`;
     const H = nomHojaMes(y, mmAs), A = nomAsiento(e, y, mmAs), f2 = (n) => (n === null || n === undefined ? '' : Math.abs(n) > 0.004 ? fnum(n) : '0,00');
-    const tHoja = H ? `<div class="wrap"><table class="tprs tnom nom-fit nom-hoja"><thead><tr><th class="pp" rowspan="2">${esc(e.nombre)}</th>${H.cen.map((c) => `<th>${esc(c.nombre)}</th>`).join('')}<th rowspan="2">TOTALES</th></tr>
+    const tHoja = H ? `<div class="wrap"><table class="tprs tnom nom-hoja" style="width:${15 + (H.cen.length + 1) * 11}em"><colgroup><col style="width:15em">${H.cen.map(() => '<col style="width:11em">').join('')}<col style="width:11em"></colgroup><thead><tr><th class="pp" rowspan="2">${esc(e.nombre)}</th>${H.cen.map((c) => `<th>${esc(c.nombre)}</th>`).join('')}<th rowspan="2">TOTALES</th></tr>
       <tr>${H.cen.map((c) => `<th class="nom-cc">${esc(c.codigo || '—')}</th>`).join('')}</tr></thead><tbody>
       ${H.filas.map((f) => `<tr class="${f.k === 'liquido' ? 'sub' : ''}"><td class="pp">${esc(f.t)}</td>${f.v.map((n) => `<td class="num">${f2(n)}</td>`).join('')}<td class="num ejer">${f2(f.tot)}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="hint">Este mes no tiene el reparto por centros de coste: vuelve a soltar el Excel del grupo en «Nóminas».</p>';
