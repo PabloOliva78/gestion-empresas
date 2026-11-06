@@ -321,6 +321,7 @@ export function crearModulos(c) {
   function alta115(e, ej, per) {
     const os = (e?.datos?.aeat?.obligaciones ?? []).filter((o) => /ARREND/i.test(o.descripcion ?? ''));
     if (!os.length || !per) return false;
+    if (os.some((o) => o.estado === 'ALTA')) return true; // activado en las obligaciones del censo: siempre obligatorio
     const mm = /^\d\d$/.test(per) ? [per, per] : /^[1-4]T$/.test(per) ? [String((+per[0] - 1) * 3 + 1).padStart(2, '0'), String(+per[0] * 3).padStart(2, '0')] : ['01', '12'];
     const ini = `${ej}-${mm[0]}-01`, fin = `${ej}-${mm[1]}-31`;
     return os.some((o) => (o.alta || '0000-00-00') <= fin && (o.estado === 'ALTA' || (o.baja && o.baja >= ini)));
@@ -341,6 +342,13 @@ export function crearModulos(c) {
     }
     return new Set();
   }
+  const MEMO123 = new WeakMap(); // libro R → `${ej}|${periodo}` → ¿hay retenciones del 123?
+  function tiene123(R, ej, p) {
+    let m = MEMO123.get(R); if (!m) MEMO123.set(R, (m = new Map()));
+    const k = `${ej}|${p}`;
+    if (!m.has(k)) { let v = false; try { v = Math.abs(calcularRet('123', R, ej, p).ret) > 0.005; } catch { /* sin datos */ } m.set(k, v); }
+    return m.get(k);
+  }
   function obligaciones(e, ej, ix) {
     const sig = String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, out = [];
     const uso = (m) => [ej - 1, ej, ej + 1].some((y) => ix.usado.has(`${e.id}|${y}|${m}`));
@@ -350,7 +358,9 @@ export function crearModulos(c) {
       out.push({ e, mod, per, yP, yPres, clave, pk, fin: plazoMod(mod, yP, per), pres: ix.hecho.has(`${e.id}|${yPres}|${clave}|${pk}`), imp: valPres(e.id, yPres, clave, pk) });
     };
     pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (alta115(e, ej, p)) add('115', p, ej, ej, '115'); });
-    if (uso('123')) pers.forEach((p) => add('123', p, ej, ej, '123'));
+    // 123: solo los periodos con datos (presentado o retenciones de capital en el libro cargado)
+    const R123 = GR.get(`fact-R|${e.id}`);
+    pers.forEach((p) => { if (ix.hecho.has(`${e.id}|${ej}|123|${p}`) || (Array.isArray(R123) && R123.length && tiene123(R123, ej, p))) add('123', p, ej, ej, '123'); });
     if (uso('349')) pers.forEach((p) => add('349', p, ej, ej, '349'));
     if (obl592(e)) pers.forEach((p) => add('592', p, ej, ej, '592'));
     if (!trim || uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
