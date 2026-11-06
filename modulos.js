@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=10';
-import { crearModelos } from './modelos.js?v=4';
+import { crearModelos } from './modelos.js?v=6';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=4';
 import { crearEstados } from './estados.js?v=3';
