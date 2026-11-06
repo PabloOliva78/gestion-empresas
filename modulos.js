@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=42';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=43';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=11';

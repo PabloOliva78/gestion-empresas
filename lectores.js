@@ -280,7 +280,7 @@ export function leerLibroIVA(filas) {
     const fecha = fechaIso(f[c.fe]);
     out.push({ asiento: String(f[c.as] ?? ''), factura, fecha, ff: fechaIso(f[c.ff]) || fecha, nif: String(f[c.nif] ?? '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), base: numero(f[c.ba]), pct: numero(f[c.pc]), cuota: numero(f[c.cu]), codigo,
-      sentido: /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) ? 'E' : 'R' });
+      sentido: /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) || /^S\.NC\.ISP\.A/.test(codigo) ? 'E' : 'R' }); // S.NC.ISP.A (ISP autorrepercutida) siempre va en el libro repercutido
   }
   return out.length ? out : null;
 }
@@ -665,8 +665,11 @@ export function calcular303(libroE, libroR, ej, periodo, man = {}, opc = {}) {
   const pct = man.pct65 === undefined || man.pct65 === '' ? 100 : Number(man.pct65);
   const c66 = c46 * pct / 100;
   // casilla 77: con diferimiento del IVA a la importación, las cuotas de los DUA; sin ellos, a mano (como en la antigua)
-  const c77 = (G.dua.base || G.dua.cuota) ? G.dua.cuota : m('c77');
-  const hayDua = !!(G.dua.base || G.dua.cuota);
+  // El IVA diferido (77) es el de los DUA de la fecha del propio DUA (fecha de la factura) dentro del periodo; la deducción (32-33) va por la fecha de registro.
+  // Un DUA de diciembre contabilizado en enero se deduce en enero pero su IVA diferido es de diciembre (así lo presenta la Sede).
+  const dua77 = libroR.filter((l) => G303.dua[1].includes(l.codigo) && (l.ff || l.fecha) >= r.desde && (l.ff || l.fecha) <= r.hasta);
+  const hayDua = !!(G.dua.base || G.dua.cuota || dua77.length);
+  const c77 = hayDua ? sum(dua77, 'cuota') : m('c77');
   // operaciones a tipos distintos de 4, 10 y 21 % (5 % y 2 %): se suman a la cuota devengada y se enseñan en filas aparte, con la casilla por verificar
   const otros = [[5, G.rg5], [2, G.rg2]].filter(([, x]) => x.base || x.cuota).map(([tipo, x]) => ({ tipo, base: x.base, cuota: x.cuota }));
   const c110 = m('c110') ? Math.abs(m('c110')) : (opc.c110 ?? 0); // pendiente de periodos previos (lo calcula la vista desde el 303 anterior)
