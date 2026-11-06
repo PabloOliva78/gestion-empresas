@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=127';
+import { crearModulos } from './modulos.js?v=128';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -65,7 +65,7 @@ async function cargar() {
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
     // las facturas (libros de IVA y SII) pesan mucho: se piden aparte, solo al abrir su pestaña
-    db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R,may-mov)')
+    db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R,may-mov,m592-mov,a22src)')
     .not('tipo', 'like', 'sii-raw-%'),
   ]);
   S.empresas = e.data ?? [];

@@ -1,7 +1,7 @@
 // Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
 // Los datos de cada modelo se guardan en `registros` (tipo m232 / m583, un registro por empresa y ejercicio).
 export function crearModelos(c) {
-  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf } = c;
+  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592 } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -266,8 +266,255 @@ export function crearModelos(c) {
       <div class="f303-sec">Calendario del ejercicio ${R.ej}</div>${resumen}</div>`;
   }
 
+  // ---------- Registros grandes (se piden aparte, solo al abrir la pestaña) ----------
+  const BIG = new Map(); // `${tipo}|${empresa}` → {id, datos} (null mientras carga)
+  function big(tipo, def) {
+    const k = `${tipo}|${S.sel}`; if (BIG.has(k)) return BIG.get(k);
+    BIG.set(k, null);
+    db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle()
+      .then(({ data }) => { BIG.set(k, { id: data?.id, datos: data?.datos ?? def() }); render(); });
+    return null;
+  }
+  async function bigGuardar(tipo, datos) {
+    const k = `${tipo}|${S.sel}`, cur = BIG.get(k) ?? {};
+    if (cur.id) { const { error } = await db.from('registros').update({ datos }).eq('id', cur.id); if (error) alert(error.message); }
+    else { cur.id = crypto.randomUUID(); const { error } = await db.from('registros').insert({ id: cur.id, empresa_id: S.sel, tipo, ejercicio: null, datos }); if (error) alert(error.message); }
+    BIG.set(k, { id: cur.id, datos });
+  }
+  const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  async function hojasExcel(file) {
+    const wb = window.XLSX.read(await file.arrayBuffer(), { cellDates: true });
+    return wb.SheetNames.map((name) => ({ name, rows: window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true }) }));
+  }
+  const fechaUtc = (v) => {
+    if (v instanceof Date) return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+    if (typeof v === 'number') return new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5);
+    const s = String(v ?? ''); let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    m = s.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/); return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : null;
+  };
+  const fdmy = (d) => (d ? `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` : '');
+  const nf3 = (n) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  const k3 = (v) => (+v).toLocaleString('es-ES', { maximumFractionDigits: 3 });
+  const MES_L = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  // ================= Modelo 592 · impuesto especial sobre los envases de plástico no reutilizables =================
+  // Igual que la hoja Mod592 del Excel: liquidación a partir de la contabilidad de fabricantes y del libro registro de existencias AIC.
+  const datos592 = () => { const r = regDe('m592', S.sel, null) ?? S.registros.find((x) => x.tipo === 'm592' && x.empresa_id === S.sel); return { cab: { tipo: 0.45 }, comp: {}, ...(r?.datos ?? {}) }; };
+  async function guardar592(d) {
+    const ex = S.registros.find((x) => x.tipo === 'm592' && x.empresa_id === S.sel);
+    if (ex) { ex.datos = d; const { error } = await db.from('registros').update({ datos: d }).eq('id', ex.id); if (error) alert(error.message); }
+    else { const fila = { id: crypto.randomUUID(), empresa_id: S.sel, tipo: 'm592', ejercicio: null, datos: d }; S.registros.push(fila); const { error } = await db.from('registros').insert(fila); if (error) alert(error.message); }
+  }
+  const rango592 = (ej, per) => (/^[1-4]T$/.test(per) ? [Date.UTC(ej, (+per[0] - 1) * 3, 1), Date.UTC(ej, +per[0] * 3, 1)]
+    : /^\d\d$/.test(per) ? [Date.UTC(ej, +per - 1, 1), Date.UTC(ej, +per, 1)] : [Date.UTC(ej, 0, 1), Date.UTC(ej + 1, 0, 1)]);
+  function calc592De(d, mov, ej, per) {
+    const [t0, t1] = rango592(+ej, per), tipo = +(d.cab.tipo === undefined ? 0.45 : d.cab.tipo) || 0;
+    const t = (r) => fechaUtc(r.fecha)?.getTime(), en = (r) => t(r) >= t0 && t(r) < t1, c = (r) => String(r.concepto ?? '').trim().charAt(0), rg = (r) => String(r.regimen ?? '').trim().charAt(0).toLowerCase();
+    const fab = mov.fab.filter(en), aic = mov.aic.filter(en), s = (l, k) => Math.round(l.reduce((a, r) => a + (+r[k] || 0), 0) * 1000) / 1000;
+    const devF = fab.filter((r) => c(r) === '4' && rg(r) === 'a'), devA = aic.filter((r) => c(r) === '1' && rg(r) === 'a');
+    const kg = Math.round((s(devF, 'kg') + s(devA, 'kg')) * 1000) / 1000, base = Math.round((s(devF, 'kgnr') + s(devA, 'kgnr')) * 1000) / 1000;
+    const dedKg = Math.round((s(fab.filter((r) => c(r) === '3'), 'kgnr') + s(aic.filter((r) => ['2', '3', '4'].includes(c(r))), 'kgnr')) * 1000) / 1000;
+    // como el Excel: cuota del periodo = (base acumulada hasta fin de periodo − base acumulada anterior) × tipo, redondeando cada acumulado
+    const antes = (r) => t(r) < t0, hasta = (r) => t(r) < t1;
+    const suma = (filtro, k) => Math.round((mov.fab.filter((r) => filtro(r) && c(r) === '4' && rg(r) === 'a').reduce((a, r) => a + (+r[k] || 0), 0)
+      + mov.aic.filter((r) => filtro(r) && c(r) === '1' && rg(r) === 'a').reduce((a, r) => a + (+r[k] || 0), 0)) * 1000) / 1000;
+    const kgAc = suma(hasta, 'kg'), baseAc = suma(hasta, 'kgnr'), cuotaAc = r2(baseAc * tipo), dedAc = r2(r2(suma(antes, 'kgnr') * tipo) + dedKg * tipo);
+    const cuota = r2(r2(suma(hasta, 'kgnr') * tipo) - r2(suma(antes, 'kgnr') * tipo)), ded = r2(dedKg * tipo), comp = +((d.comp ?? {})[`${ej}-${per}`]) || 0, res = r2(cuotaAc - dedAc - comp);
+    return { ej, per, tipo, kg, base, cuota, dedKg, ded, comp, res, kgAc, baseAc, cuotaAc, dedAc, fab, aic, nFab: mov.fab.length, nAic: mov.aic.length };
+  }
+  // importar los registros desde un Excel (como las tablas D y E de la hoja Mod592, o un listado con esas columnas)
+  async function cargar592(files) {
+    const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return;
+    const mov = cur.datos; mov.fab ??= []; mov.aic ??= []; let nF = 0, nA = 0;
+    for (const file of files) {
+      let sheets; try { sheets = await hojasExcel(file); } catch (e) { aviso(`${file.name}: ${e.message}`, true); continue; }
+      const col = (H, rx) => H.findIndex((h) => rx.test(h));
+      sheets.forEach((sh) => { for (let i = 0; i < sh.rows.length; i++) {
+        const H = (sh.rows[i] ?? []).map((v) => norm(v));
+        if (!(H.some((h) => /^kilogramos/.test(h)) && H.some((h) => /^concepto/.test(h)) && H.some((h) => /^fecha/.test(h)))) continue;
+        const esFab = H.some((h) => /^descripcion producto/.test(h));
+        const I = { as: col(H, /^n asiento/), con: col(H, /^concepto/), cla: col(H, /^clave producto/), des: col(H, /^descripcion producto/), fe: col(H, /^fecha/), ju: col(H, /^justificante/),
+          kg: col(H, /^kilogramos/), nr: col(H, /^kg no reciclados/), re: col(H, /^regimen fiscal/), no: col(H, /^(destinatario|proveedor)/), nif: col(H, /^nif/) };
+        for (let j = i + 1; j < sh.rows.length; j++) {
+          const r = sh.rows[j] ?? [], first = String(r[I.as] ?? r[I.con] ?? '').trim();
+          if (/^totales?$/i.test(first)) break;
+          const num = (v) => (typeof v === 'number' ? v : parseNum(v));
+          if (!String(r[I.con] ?? '').trim() || num(r[I.kg]) === null) continue;
+          const fecha = fechaUtc(r[I.fe]);
+          const fila = { asiento: String(r[I.as] ?? ''), concepto: String(r[I.con] ?? ''), clave: String(r[I.cla] ?? ''), desc: I.des >= 0 ? String(r[I.des] ?? '') : '', fecha: fdmy(fecha), justificante: String(r[I.ju] ?? ''),
+            kg: num(r[I.kg]) || 0, kgnr: num(r[I.nr]) ?? num(r[I.kg]) ?? 0, regimen: String(r[I.re] ?? ''), nombre: String(r[I.no] ?? ''), nif: String(r[I.nif] ?? ''), arch: file.name };
+          const lista = esFab ? mov.fab : mov.aic, k = [fila.asiento, fila.fecha, fila.justificante, fila.kg].join('|');
+          if (lista.some((x) => [x.asiento, x.fecha, x.justificante, x.kg].join('|') === k)) continue; // sin duplicar
+          lista.push(fila); if (esFab) nF++; else nA++;
+        }
+        i++;
+      } });
+      await bigGuardar('m592-mov', mov);
+      aviso(`${file.name}: ${nA} movimientos del libro registro AIC y ${nF} de la contabilidad de fabricantes añadidos (sin duplicar)`);
+    }
+  }
+  function vista592() {
+    if (!S.sel) return sinEmpresa;
+    if (!obl592(empresa())) return avisos(['El modelo 592 solo está activado para Herogra Fertilizantes, Herogra Especiales y Lysur']);
+    const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return cargandoTxt;
+    const mov = { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, d = datos592(), ej = String(S.ejercicio), per = S.periodo ?? '', L = calc592De(d, mov, ej, per), cab = d.cab ?? {}, e = empresa(), ed = puede(), dis = ed ? '' : ' disabled';
+    const inp = (k, v, ph = '', w = 28) => `<input class="presin" data-m592cab="${k}" value="${esc(v ?? '')}" placeholder="${esc(ph)}" style="width:${w}ch;text-align:left"${dis}>`;
+    const tabla = (lst, fab) => `<div class="wrap" style="overflow-x:auto"><table class="tabla"><thead><tr><th>Nº asiento</th><th>Concepto</th><th>Clave producto</th>${fab ? '<th>Descripción</th>' : ''}<th>Fecha</th><th>Justificante</th><th>Kilogramos</th><th>Kg no reciclados</th><th>Régimen fiscal</th><th>${fab ? 'Destinatario' : 'Proveedor'}</th><th>NIF</th><th></th></tr></thead><tbody>
+      ${lst.map((r) => `<tr><td>${esc(r.asiento)}</td><td>${esc(r.concepto)}</td><td>${esc(r.clave)}</td>${fab ? `<td>${esc(r.desc)}</td>` : ''}<td class="c">${esc(r.fecha)}</td><td>${esc(r.justificante)}</td><td class="num">${nf3(r.kg)}</td><td class="num">${nf3(r.kgnr)}</td><td>${esc(r.regimen)}</td><td>${esc(r.nombre)}</td><td>${esc(r.nif)}</td><td>${ed ? `<button class="small" data-act="m-592del" data-l="${fab ? 'fab' : 'aic'}" data-k="${esc([r.asiento, r.fecha, r.justificante, r.kg].join('|'))}">✕</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="${fab ? 12 : 11}" class="c">Sin movimientos en el periodo</td></tr>`}
+      ${lst.length ? `<tr class="tot"><td colspan="${fab ? 6 : 5}">TOTALES</td><td class="num">${nf3(lst.reduce((s, r) => s + (+r.kg || 0), 0))}</td><td class="num">${nf3(lst.reduce((s, r) => s + (+r.kgnr || 0), 0))}</td><td colspan="4"></td></tr>` : ''}</tbody></table></div>`;
+    return `${ed ? `<div class="dropzone" data-kind="m592" tabindex="0" role="button"><b>Suelta aquí el Excel con el libro registro de existencias AIC y/o la contabilidad de fabricantes</b> (como las tablas D y E de la hoja Mod592) · cargados: ${L.nAic} movimientos AIC y ${L.nFab} de fabricantes
+      <input type="file" data-dzkind="m592" accept=".xlsx,.xls,.xlsm" multiple hidden></div>` : ''}${avisoHtml()}
+      ${avisos(['Liquidación como la hoja Mod592 del Excel: base = kg no reciclados de las adquisiciones intracomunitarias sujetas (concepto 1, régimen a) y de las entregas de fabricante sujetas (concepto 4, régimen a) del periodo × tipo impositivo; deducción = kg no reciclados de devoluciones, envíos fuera, inadecuación o destrucción (art. 80) × tipo impositivo. Plazo: hasta el día 20 del mes siguiente (calendario AEAT)'])}
+      <div class="f592">
+      <div class="f592-top"><div class="f592-of"><b>Oficina Gestora:</b><br>${inp('oficina', cab.oficina, 'D18200', 8)}<br>${inp('ofnom', cab.ofnom, 'Granada', 12)}</div>
+        <div class="f592-tit"><div class="t1">Impuesto especial sobre los envases de plástico no reutilizables</div><div class="t2">Declaración - Liquidación</div><div class="t3">${L.res > 0.005 ? 'Ingreso con Domiciliación del Pago' : L.res < -0.005 ? 'A devolver / compensar' : 'Sin actividad o resultado cero'}</div></div>
+        <div class="f592-mod">Modelo<br><b>592</b></div></div>
+      <div class="f592-sec">Identificación</div>
+      <div class="f592-box"><div class="f592-r"><span><i>N.I.F.:</i> <b>${esc(e.cif)}</b></span><span><i>Apellidos y nombre o razón social:</i> <b>${esc(e.nombre)}</b></span></div>
+        <div class="f592-r"><span><i>Domicilio fiscal:</i> ${inp('domfis', cab.domfis, 'PG JUNCARIL CL LOJA', 40)}</span></div>
+        <div class="f592-r"><span><i>Localidad y provincia:</i> ${inp('locfis', cab.locfis, '18220 ALBOLOTE (GRANADA)', 40)}</span></div></div>
+      <div class="f592-box"><div class="f592-r"><span><i>Domicilio, localidad y provincia:</i> ${inp('domest', cab.domest, 'Establecimiento', 52)}</span><span><i>CIP:</i> ${inp('cip', cab.cip, 'ES00018AP028G', 16)}</span></div></div>
+      <div class="f592-sec">Periodo de liquidación</div>
+      <div class="f592-box"><div class="f592-r"><span><i>Ejercicio:</i> <b>${esc(ej)}</b></span><span><i>Periodo:</i> <b>${esc(/^\d\d$/.test(per) ? `${per} ${MES_L[+per - 1]}` : per || 'Anual')}</b></span></div></div>
+      <div class="f592-box"><div class="f592-r"><span><i>Número de Referencia:</i> ${inp(`nrc_${ej}-${per}`, cab[`nrc_${ej}-${per}`], 'NRC del pago', 22)}</span></div>
+        <div class="f592-r"><span><i>Importe ingreso:</i> <b>${eur(Math.max(0, L.res))}</b></span></div>
+        <div class="f592-r"><span><i>Iban:</i> <input class="presin" data-m592cab="iban" value="${esc(cab.iban ?? '')}" placeholder="ES00 0000 0000 00 0000000000" style="width:30ch;text-align:left"${dis}></span></div></div>
+      <div class="f592-sec">Datos de Contacto</div>
+      <div class="f592-box"><div class="f592-r"><span><i>Persona de contacto:</i> ${inp('contacto', cab.contacto, '', 34)}</span></div>
+        <div class="f592-r"><span><i>Teléfono:</i> ${inp('tel', cab.tel, '', 14)}</span><span><i>Fax:</i> ${inp('fax', cab.fax, '', 14)}</span></div>
+        <div class="f592-r"><span><i>E-mail:</i> ${inp('email', cab.email, '', 34)}</span></div></div>
+      <div class="f592-sec">Liquidación <span class="nota">· tipo de obligado <select data-m592cab="obligado"${dis}>${['Adquirente intracomunitario', 'Fabricante', 'Fabricante y adquirente intracomunitario', 'Importador'].map((o) => `<option${(cab.obligado || 'Adquirente intracomunitario') === o ? ' selected' : ''}>${o}</option>`).join('')}</select> · tipo impositivo ${inp('tipo', cab.tipo ?? 0.45, '0,45', 6)} €/kg</span></div>
+      <div class="f592-box"><table class="f592-liq"><thead><tr><th></th><th>Epígrafe</th><th>Cantidad (2)</th><th>Base Imponible (3)</th><th>Tipo Impositivo (4)</th><th>Cuota íntegra (5)</th><th>Deducción (6)</th><th>Compensación (7)</th><th>Cuota íntegra Total (8)</th></tr></thead>
+        <tbody><tr><td>1</td><td>P0 Plásticos</td><td class="num">${nf3(L.kgAc)}</td><td class="num">${nf3(L.baseAc)}</td><td class="num">${Number(L.tipo).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</td><td class="num">${eur(L.cuotaAc)}</td><td class="num">${eur(L.dedAc)}</td>
+          <td class="num"><input class="presin" data-m592comp="${ej}-${per}" value="${L.comp ? fmtIn(L.comp) : ''}" placeholder="0,00" style="width:10ch"${dis}></td><td class="num"><b>${eur(L.res)}</b></td></tr></tbody></table>
+        <div class="f592-tot">Cuota íntegra Total a Ingresar <b>${eur(L.res)}</b></div>
+        <p class="hint">Como el impreso de la AEAT: cantidad y base acumuladas hasta el fin del periodo; la deducción incluye lo ya liquidado en periodos anteriores (${eur(r2(L.dedAc - L.ded))}) y las deducciones del art. 80 del periodo (${eur(L.ded)}, ${nf3(L.dedKg)} kg).</p></div></div>
+      <section class="block"><h3 class="bt">E. Libro registro de existencias – adquirentes intracomunitarios (${L.aic.length} del periodo)</h3>${tabla(L.aic, false)}</section>
+      <section class="block"><h3 class="bt">D. Contabilidad de fabricantes (${L.fab.length} del periodo)</h3>${tabla(L.fab, true)}</section>`;
+  }
+
+  // ================= Modelo A22 · solicitudes de devolución del impuesto especial sobre envases de plástico =================
+  const A22_CAMPOS = [['per', 'Periodo (trimestre)', 8], ['fpres', 'Fecha de presentación', 11], ['motivo', 'Motivo (exportación, envío UE, no reutilizable…)', 26], ['kg', 'Kg de plástico no reciclado', 10],
+    ['imp', 'Importe solicitado (€)', 11], ['estado', 'Estado', 12], ['fdev', 'Fecha devolución', 11], ['dev', 'Importe devuelto (€)', 11], ['obs', 'Observaciones', 24]];
+  const A22_CFG0 = { cae: 'ES00019FP001Q', a2: '2', a4: '1', a9: '19', v2: 'D', v5: '3', v10: 'CLIENTE', tipo: 0.45, nifs: { 'PLASTICOS VANGUARDIA': 'A28118230' }, kg: { DVZ498: 0.104, MAB559: 0.059 }, desde: '', hasta: '' };
+  const a22Reg = () => S.registros.find((x) => x.tipo === 'a22' && x.empresa_id === S.sel);
+  const a22Datos = () => { const r = a22Reg(); return { filas: [], cfg: {}, ...(r?.datos ?? {}) }; };
+  async function a22Guardar(d) {
+    const ex = a22Reg();
+    if (ex) { ex.datos = d; const { error } = await db.from('registros').update({ datos: d }).eq('id', ex.id); if (error) alert(error.message); }
+    else { const fila = { id: crypto.randomUUID(), empresa_id: S.sel, tipo: 'a22', ejercicio: null, datos: d }; S.registros.push(fila); const { error } = await db.from('registros').insert(fila); if (error) alert(error.message); }
+  }
+  const a22Cfg = () => ({ ...A22_CFG0, ...a22Datos().cfg });
+  const a22Src = () => { const cur = big('a22src', () => ({ compras: [], ventas: [], archivos: [] })); return cur ? { compras: [], ventas: [], archivos: [], ...cur.datos } : null; };
+  const a22N = (v) => (typeof v === 'number' ? v : (parseNum(v) || 0));
+  async function a22Cargar(files) {
+    const cur = big('a22src', () => ({ compras: [], ventas: [], archivos: [] })); if (!cur) return;
+    const Sx = { compras: [], ventas: [], archivos: [], ...cur.datos }; let nc = 0, nv = 0;
+    for (const f of files) {
+      let sh = []; try { sh = await hojasExcel(f); } catch (e) { aviso(`${f.name}: ${e.message}`, true); continue; }
+      const porAnio = sh.some((s) => /^(compras|ventas)\b/i.test(s.name ?? '') && !/consolid/i.test(s.name ?? ''));
+      sh.forEach((s) => {
+        const nm = String(s.name ?? ''), esC = /compra/i.test(nm), esV = /venta/i.test(nm); if (!esC && !esV) return; if (porAnio && /consolid/i.test(nm)) return;
+        const hr = s.rows.findIndex((r) => r && r.some((v) => /^fecha$/i.test(String(v ?? '').trim())) && r.some((v) => /^factura$/i.test(String(v ?? '').trim()))); if (hr < 0) return;
+        const H = s.rows[hr].map((v) => String(v ?? '').trim().toLowerCase()), ix = (rx) => H.findIndex((h) => rx.test(h));
+        const iF = ix(/^fecha$/), iFa = ix(/^factura$/), iP = ix(/^producto$/), iQ = ix(/^cantidad$/);
+        if (esC) {
+          const iPr = ix(/^proveedor/), iL = ix(/^lote$/), iI = ix(/^importe/);
+          s.rows.slice(hr + 1).forEach((r) => { if (!r || !r[iFa] || !r[iF]) return; const fa = String(r[iFa]).trim(); if (Sx.compras.some((x) => x.fa === fa)) return; const d = fechaUtc(r[iF]); if (!d) return;
+            Sx.compras.push({ fa, fecha: d.toISOString().slice(0, 10), prov: String(r[iPr] ?? '').trim(), prod: String(r[iP] ?? '').trim(), q: a22N(r[iQ]), lote: String(r[iL] ?? '').trim(), imp: a22N(r[iI]) }); nc++; });
+        } else {
+          const iCl = ix(/^cliente/), iKg = ix(/^kg/), iPa = ix(/^pa[ií]s/), iI = ix(/^importe/);
+          s.rows.slice(hr + 1).forEach((r, j) => { if (!r || !r[iFa] || !r[iF]) return; const d = fechaUtc(r[iF]); if (!d) return;
+            const k = `${String(r[iFa]).trim()}|${String(r[iP] ?? '').trim()}|${a22N(r[iQ])}|${nm}|${j}`; if (Sx.ventas.some((x) => x.k === k)) return;
+            Sx.ventas.push({ k, fa: String(r[iFa]).trim(), fecha: d.toISOString().slice(0, 10), cli: String(r[iCl] ?? '').trim(), prod: String(r[iP] ?? '').trim(), q: a22N(r[iQ]), kg: a22N(r[iKg]), pais: String(r[iPa] ?? '').trim(), imp: a22N(r[iI]) }); nv++; });
+        }
+      });
+      Sx.archivos = (Sx.archivos ?? []).filter((a) => a !== f.name).concat([f.name]);
+    }
+    await bigGuardar('a22src', Sx);
+    aviso(`A22: ${nc} compras y ${nv} líneas de venta leídas`);
+  }
+  function a22Calc(Sx) {
+    const C = a22Cfg(), fac = (prod) => { const k = Object.keys(C.kg).find((x) => String(prod).toUpperCase().includes(x.toUpperCase())); return k ? +C.kg[k] : (/50\s*%\s*R/i.test(prod) ? 0.059 : 0.104); };
+    const nif = (prov) => { const k = Object.keys(C.nifs).find((x) => String(prov).toUpperCase().includes(x.toUpperCase())); return k ? C.nifs[k] : ''; };
+    const lots = Sx.compras.slice().sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.lote).localeCompare(String(b.lote))).map((c) => ({ ...c, rest: c.q, asig: 0, asigF: 0, n: 0, fac: new Set(), paises: new Set(), ini: null, fin: null }));
+    const esFuera = (v) => v.pais && !/^espa[ñn]a$/i.test(v.pais);
+    // todas las ventas por fecha consumen los lotes por orden de compra hasta completarlos; un lote solo sirve a ventas posteriores a su fecha de compra
+    const lin = new Map(); let sinLote = 0;
+    Sx.ventas.slice().sort((a, b) => a.fecha.localeCompare(b.fecha) || a.fa.localeCompare(b.fa)).forEach((v) => {
+      let q = v.q;
+      for (const L of lots) {
+        if (q <= 0) break; if (L.rest <= 0) continue; if (L.fecha >= v.fecha) break;
+        const t = Math.min(q, L.rest); L.rest -= t; q -= t; L.asig += t; L.fac.add(v.fa); L.paises.add(v.pais); L.ini = L.ini || v.fecha; L.fin = v.fecha;
+        if (esFuera(v)) { L.asigF += t; const k = `${L.fa}|${v.fa}`; if (!lin.has(k)) lin.set(k, { L, v, q: 0 }); lin.get(k).q += t; }
+      }
+      if (q > 0) sinLote += q;
+    });
+    lots.forEach((L) => { L.n = L.fac.size; });
+    const ok = (d) => (!C.desde || d >= C.desde) && (!C.hasta || d <= C.hasta);
+    const ventas = [...lin.values()].filter((x) => ok(x.v.fecha)).map((x) => { const kg = +(x.q * fac(x.L.prod)).toFixed(3);
+      return { comp: x.L.fa, venta: x.v.fa, fecha: x.v.fecha, cod: String(+(String(x.v.cli).match(/^\s*(\d+)/) || [0, ''])[1] || ''), cli: String(x.v.cli).replace(/^\s*\d+\s*-\s*/, ''), prod: x.L.prod, q: x.q, kg, imp: r2(kg * C.tipo), pais: x.v.pais }; });
+    const usadas = new Set(ventas.map((v) => v.comp));
+    const compras = lots.filter((L) => usadas.has(L.fa)).map((L) => { const kg = +(L.q * fac(L.prod)).toFixed(3); return { fa: L.fa, fecha: L.fecha, nif: nif(L.prov), prov: L.prov, prod: L.prod, q: L.q, kg, cuota: r2(kg * C.tipo) }; });
+    const trim = {}; ventas.forEach((v) => { const t = `${v.fecha.slice(0, 4)}-${Math.ceil(+v.fecha.slice(5, 7) / 3)}T`; const o = (trim[t] ??= { kg: 0, imp: 0, q: 0, n: 0 }); o.kg += v.kg; o.q += v.q; o.imp += v.imp; o.n++; });
+    return { S: Sx, C, lots, ventas, compras, trim, sinLote };
+  }
+  function a22Csv(tipo) {
+    const Sx = a22Src(); if (!Sx) return;
+    const R = a22Calc(Sx), C = R.C, d = (s) => fdmy(new Date(`${s}T00:00:00Z`)), py = (v) => { const t = String(v); return /[.e]/.test(t) ? t : `${t}.0`; }, n3 = (v) => py(+v.toFixed(3)), n2 = (v) => py(+v.toFixed(2));
+    const q = (x) => { const t = String(x ?? ''); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const filas = tipo === 'adq' ? R.compras.slice().sort((a, b) => a.fa.localeCompare(b.fa)).map((c) => [c.fa, d(c.fecha), C.a2, '', C.a4, c.nif, c.prov, C.cae, C.a9, c.prod, c.q, n3(c.kg), n2(c.cuota)])
+      : R.ventas.slice().sort((a, b) => a.venta.localeCompare(b.venta) || a.comp.localeCompare(b.comp)).map((v) => [v.comp, C.v2, v.venta, d(v.fecha), C.v5, v.cod, v.cli, v.prod, v.q, C.v10, n3(v.kg), n2(v.imp)]);
+    const b = new TextEncoder().encode(`﻿${filas.map((r) => r.map(q).join(',')).join('\r\n')}\r\n`); // UTF-8 con BOM, separado por comas
+    const rng = (C.desde || '').slice(0, 4) + (C.hasta && C.hasta.slice(0, 4) !== (C.desde || '').slice(0, 4) ? `-${C.hasta.slice(0, 4)}` : '');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([b], { type: 'text/csv' }));
+    a.download = `${tipo === 'adq' ? 'ADQUISICION' : 'VENTA'}_A22_${empresa().siglas || empresa().cif}${rng ? `_${rng}` : ''}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+  }
+  function a22Bloque(Sx) {
+    const R = a22Calc(Sx), C = R.C, n = (v) => eur(v), ed = puede(), dis = ed ? '' : ' disabled';
+    const tq = Object.entries(R.trim).sort(), tv = R.ventas.reduce((a, v) => a + v.imp, 0), tk = R.ventas.reduce((a, v) => a + v.kg, 0);
+    const inp = (k, v, w) => `<input class="facin" data-a22cfg="${k}" value="${esc(v ?? '')}" size="${w || 10}"${dis}>`;
+    return `<section class="block"><h3 class="bt">A22 desde el Excel del ERP · plástico de compras nacionales vendido a clientes fuera de España</h3>
+      ${ed ? `<div class="dropzone" data-kind="a22" tabindex="0" role="button"><b>Suelta aquí el Excel del ERP</b> (hojas «Compras 1L …» y «Ventas 1L …» de cada año) o pulsa para elegirlo. Se juntan las compras y ventas de todos los años y se reparten por lote.
+        <input type="file" data-dzkind="a22" accept=".xlsx,.xls,.xlsm" multiple hidden></div>` : ''}
+      <p class="hint">Cargado: ${Sx.compras.length} compras (lotes) y ${Sx.ventas.length} líneas de venta${(Sx.archivos ?? []).length ? ` de ${esc(Sx.archivos.join(', '))}` : ''}. ${Sx.compras.length && ed ? '<button class="small no-print" data-act="m-a22borrar">Quitar lo cargado</button>' : ''}</p>
+      ${Sx.compras.length ? `<p class="hint">Criterio: las facturas a clientes, por fecha, consumen los lotes de compra nacional en orden hasta completar cada lote y pasan al siguiente (un lote solo para ventas posteriores a su compra). Al A22 van las líneas de clientes fuera de España (UE y exportación). Kg de plástico = unidades × kg/ud del envase comprado; importe = kg × ${String(C.tipo).replace('.', ',')} €/kg.${R.sinLote ? ` Ventas sin lote asignado: ${R.sinLote.toLocaleString('es-ES')} unidades.` : ''}</p>
+      <div class="no-print" style="margin:6px 0">Periodo de la solicitud: desde <input type="date" data-a22cfg="desde" value="${esc(C.desde)}"${dis}> hasta <input type="date" data-a22cfg="hasta" value="${esc(C.hasta)}"${dis}> · <button class="small primary" data-act="m-a22csv" data-t="adq">Descargar ADQUISICION .csv (${R.compras.length})</button> <button class="small primary" data-act="m-a22csv" data-t="venta">Descargar VENTA .csv (${R.ventas.length})</button> ${ed ? '<button class="small" data-act="m-a22pasar">Pasar a solicitudes por trimestre</button>' : ''}</div>
+      <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap">
+       <div><h4 style="margin:4px 0">Por trimestre de venta</h4><div class="wrap"><table class="tabla" style="width:auto"><thead><tr><th>Trimestre</th><th>Líneas</th><th>Unidades</th><th>Kg plástico</th><th>A devolver</th></tr></thead><tbody>${tq.map(([t, o]) => `<tr><td>${t}</td><td class="num">${o.n}</td><td class="num">${k3(o.q)}</td><td class="num">${k3(o.kg)}</td><td class="num">${n(o.imp)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="num">${R.ventas.length}</td><td class="num">${k3(R.ventas.reduce((a, v) => a + v.q, 0))}</td><td class="num">${k3(tk)}</td><td class="num">${n(tv)}</td></tr></tbody></table></div></div>
+       <div><h4 style="margin:4px 0">Resumen por lote</h4><div class="wrap" style="max-height:420px;overflow:auto"><table class="tabla" style="width:auto"><thead><tr><th>Lote</th><th>Factura compra</th><th>Fecha</th><th>Producto</th><th>Comprado</th><th>Asignado a ventas</th><th>De ello fuera de España</th><th>Resto</th><th>Fact. venta</th><th>Países</th><th>Primera</th><th>Última</th></tr></thead><tbody>${R.lots.map((L) => `<tr><td>${esc(L.lote)}</td><td>${esc(L.fa)}</td><td>${fdmy(new Date(`${L.fecha}T00:00:00Z`))}</td><td>${esc(L.prod)}</td><td class="num">${k3(L.q)}</td><td class="num">${k3(L.asig)}</td><td class="num">${k3(L.asigF)}</td><td class="num">${k3(L.rest)}</td><td class="num">${L.n}</td><td>${esc([...L.paises].join(', '))}</td><td>${L.ini ? fdmy(new Date(`${L.ini}T00:00:00Z`)) : ''}</td><td>${L.fin ? fdmy(new Date(`${L.fin}T00:00:00Z`)) : ''}</td></tr>`).join('')}</tbody></table></div></div>
+      </div>
+      <details class="no-print" style="margin-top:8px"><summary>Datos fijos de los ficheros (CAE, códigos, NIF proveedores, kg/ud)</summary><p>CAE / nº registro ${inp('cae', C.cae, 16)} · adquisición campos 3, 5 y 9: ${inp('a2', C.a2, 3)} ${inp('a4', C.a4, 3)} ${inp('a9', C.a9, 3)} · venta campos 2, 5 y 10: ${inp('v2', C.v2, 3)} ${inp('v5', C.v5, 3)} ${inp('v10', C.v10, 9)} · tipo €/kg ${inp('tipo', C.tipo, 5)}</p>
+        <p>NIF de proveedores (nombre=NIF; …): ${inp('nifs', Object.entries(C.nifs).map(([a, b]) => `${a}=${b}`).join('; '), 50)}</p><p>Kg de plástico no reciclado por unidad (código=kg; …): ${inp('kg', Object.entries(C.kg).map(([a, b]) => `${a}=${b}`).join('; '), 50)}</p></details>` : ''}
+    </section>`;
+  }
+  function vistaA22() {
+    if (!S.sel) return sinEmpresa;
+    const Sx = a22Src(); if (!Sx) return cargandoTxt;
+    const D = a22Datos().filas, ej = String(S.ejercicio), ed = puede(), dis = ed ? '' : ' disabled';
+    const L = D.map((r, i) => ({ r, i })).filter((x) => !x.r.per || String(x.r.per).includes(ej)), s = (k) => r2(L.reduce((a, x) => a + (parseNum(x.r[k]) || 0), 0));
+    return `${avisos(['Modelo A22: solicitud de devolución del Impuesto especial sobre los envases de plástico no reutilizables (envases enviados fuera del territorio, exportados, destrucción, etc.). Se presenta por periodos trimestrales en los que se haya producido el hecho que da derecho a la devolución. Relacionado con el modelo 592.'])}${avisoHtml()}
+      <section class="block"><h3 class="bt">Modelo A22 · Devoluciones IEEPNR · ${esc(empresa().nombre)} · ${ej}</h3>
+      <div class="wrap" style="overflow-x:auto"><table class="tabla" style="width:auto"><thead><tr>${A22_CAMPOS.map((c) => `<th>${c[1]}</th>`).join('')}<th class="no-print"></th></tr></thead><tbody>
+      ${L.map(({ r, i }) => `<tr>${A22_CAMPOS.map(([k, , w]) => `<td><input class="facin" data-a22="${i}|${k}" value="${esc(r[k] || '')}" size="${w}"${/^f/.test(k) ? ' placeholder="dd/mm/aaaa"' : ''}${dis}></td>`).join('')}<td class="no-print">${ed ? `<button class="small" data-act="m-a22del" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="${A22_CAMPOS.length + 1}" class="c">Sin solicitudes en ${ej}</td></tr>`}
+      ${L.length ? `<tr class="tot"><td colspan="3">Total ${ej}</td><td class="num">${fmtIn(s('kg'))}</td><td class="num">${eur(s('imp'))}</td><td></td><td></td><td class="num">${eur(s('dev'))}</td><td>Pendiente: ${eur(r2(s('imp') - s('dev')))}</td><td></td></tr>` : ''}
+      </tbody></table></div>${ed ? '<button class="small no-print" data-act="m-a22add" style="margin-top:6px">+ Añadir solicitud</button>' : ''}</section>${a22Bloque(Sx)}`;
+  }
+
   // ================= Eventos propios =================
   const acciones = {
+    'm-592del': async (d) => { const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return; const mov = cur.datos; mov[d.l] = (mov[d.l] ?? []).filter((r) => [r.asiento, r.fecha, r.justificante, r.kg].join('|') !== d.k); await bigGuardar('m592-mov', mov); render(); },
+    'm-a22add': async () => { const D = a22Datos(); D.filas.push({ per: `1T ${S.ejercicio}` }); await a22Guardar(D); render(); },
+    'm-a22del': async (d) => { const D = a22Datos(); D.filas.splice(+d.i, 1); await a22Guardar(D); render(); },
+    'm-a22csv': (d) => a22Csv(d.t),
+    'm-a22borrar': async () => { if (!confirm('¿Quitar las compras y ventas cargadas para el A22?')) return; await bigGuardar('a22src', { compras: [], ventas: [], archivos: [] }); render(); },
+    'm-a22pasar': async () => {
+      const Sx = a22Src(); if (!Sx) return; const R = a22Calc(Sx), D = a22Datos();
+      Object.entries(R.trim).forEach(([t, o]) => { const per = `${t.slice(5)} ${t.slice(0, 4)}`, x = D.filas.find((r) => r.per === per);
+        const v = { per, motivo: 'Envíos fuera de España (UE y exportación)', kg: String(+o.kg.toFixed(3)).replace('.', ','), imp: o.imp.toFixed(2).replace('.', ',') }; if (x) Object.assign(x, v); else D.filas.push(v); });
+      await a22Guardar(D); render();
+    },
     'm-232add': async () => { const ej = m232EjDef(), D = m232Reg(ej); D.filas.push({ fj: 'J', ip: 'I', met: '1A' }); await m232Guardar(ej, D); render(); },
     'm-232prop': () => m232Proponer(m232EjDef(), false),
     'm-232bor': () => m232Borrador(m232EjDef()),
@@ -291,13 +538,24 @@ export function crearModelos(c) {
       else { const [id, k] = d.m232.split('|'); D.man[id] ??= {}; D.man[id][k] = k === 'otras' ? (parseNum(t.value) || 0) : t.value; }
       await m232Guardar(ej, D); return void render();
     }
+    if (d.m592cab) { const x = datos592(); x.cab ??= {}; x.cab[d.m592cab] = d.m592cab === 'tipo' ? (parseNum(t.value) ?? 0.45) : t.value; await guardar592(x); return void render(); }
+    if (d.m592comp) { const x = datos592(); x.comp ??= {}; const v = parseNum(t.value); if (!v) delete x.comp[d.m592comp]; else x.comp[d.m592comp] = v; await guardar592(x); return void render(); }
+    if (d.a22) { const [i, k] = d.a22.split('|'), D = a22Datos(); if (!D.filas[+i]) return; D.filas[+i][k] = t.value.trim(); return void a22Guardar(D); }
+    if (d.a22cfg) {
+      const k = d.a22cfg, D = a22Datos(), C = { ...D.cfg };
+      if (k === 'nifs' || k === 'kg') { const o = {}; t.value.split(';').forEach((p) => { const [a, b] = p.split('='); if (a && b) o[a.trim()] = k === 'kg' ? parseNum(b.trim()) : b.trim(); }); C[k] = o; }
+      else C[k] = k === 'tipo' ? (parseNum(t.value) || 0.45) : t.value.trim();
+      D.cfg = C; await a22Guardar(D); return void render();
+    }
     if (d.m583i) { const [k, cmp] = d.m583i.split('|'); m583Guardar((E) => { const I = E.inst[+k]; if (/^q\d$/.test(cmp)) { I.q = I.q ?? ['', '', '', '']; const v = parseNum(t.value); I.q[+cmp[1]] = v === null ? '' : v; } else I[cmp] = t.value.trim(); }); }
     else if (d.m583sel) m583Guardar((E) => { E[d.m583sel] = t.value.trim(); });
     else if (d.m583chk) m583Guardar((E) => { E[d.m583chk] = t.checked; });
   });
 
-  const kinds = { m232: cargar232 };
+  const kinds = { m232: cargar232, m592: cargar592, a22: a22Cargar };
   const tabs = {
+    mod592: ['Modelo 592', 'Envases de plástico', vista592],
+    moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
   };

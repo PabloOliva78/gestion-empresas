@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=3';
-import { crearModelos } from './modelos.js?v=1';
+import { crearModelos } from './modelos.js?v=2';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -3866,7 +3866,7 @@ export function crearModulos(c) {
   };
   const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir,leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
-  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, leerPdf: (f) => leerPdf(f) });
+  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, leerPdf: (f) => leerPdf(f) });
   Object.assign(tabs, M4.tabs);
   const subirComo = (kind, files) => (M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
