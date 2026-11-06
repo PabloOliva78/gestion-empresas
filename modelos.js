@@ -359,36 +359,35 @@ export function crearModelos(c) {
     const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return cargandoTxt;
     const mov = { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, d = datos592(), ej = String(S.ejercicio), per = S.periodo ?? '', L = calc592De(d, mov, ej, per), cab = d.cab ?? {}, e = empresa(), ed = puede(), dis = ed ? '' : ' disabled';
     const inp = (k, v, ph = '', w = 28) => `<input class="presin" data-m592cab="${k}" value="${esc(v ?? '')}" placeholder="${esc(ph)}" style="width:${w}ch;text-align:left"${dis}>`;
+    const inpb = (k, v, ph = '') => `<input data-m592cab="${k}" value="${esc(v ?? '')}" placeholder="${esc(ph)}"${dis}>`;
     const tabla = (lst, fab) => `<div class="wrap" style="overflow-x:auto"><table class="tabla"><thead><tr><th>Nº asiento</th><th>Concepto</th><th>Clave producto</th>${fab ? '<th>Descripción</th>' : ''}<th>Fecha</th><th>Justificante</th><th>Kilogramos</th><th>Kg no reciclados</th><th>Régimen fiscal</th><th>${fab ? 'Destinatario' : 'Proveedor'}</th><th>NIF</th><th></th></tr></thead><tbody>
       ${lst.map((r) => `<tr><td>${esc(r.asiento)}</td><td>${esc(r.concepto)}</td><td>${esc(r.clave)}</td>${fab ? `<td>${esc(r.desc)}</td>` : ''}<td class="c">${esc(r.fecha)}</td><td>${esc(r.justificante)}</td><td class="num">${nf3(r.kg)}</td><td class="num">${nf3(r.kgnr)}</td><td>${esc(r.regimen)}</td><td>${esc(r.nombre)}</td><td>${esc(r.nif)}</td><td>${ed ? `<button class="small" data-act="m-592del" data-l="${fab ? 'fab' : 'aic'}" data-k="${esc([r.asiento, r.fecha, r.justificante, r.kg].join('|'))}">✕</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="${fab ? 12 : 11}" class="c">Sin movimientos en el periodo</td></tr>`}
       ${lst.length ? `<tr class="tot"><td colspan="${fab ? 6 : 5}">TOTALES</td><td class="num">${nf3(lst.reduce((s, r) => s + (+r.kg || 0), 0))}</td><td class="num">${nf3(lst.reduce((s, r) => s + (+r.kgnr || 0), 0))}</td><td colspan="4"></td></tr>` : ''}</tbody></table></div>`;
     return `${ed ? `<div class="dropzone" data-kind="m592" tabindex="0" role="button"><b>Suelta aquí el Excel con el libro registro de existencias AIC y/o la contabilidad de fabricantes</b> (como las tablas D y E de la hoja Mod592) · cargados: ${L.nAic} movimientos AIC y ${L.nFab} de fabricantes
       <input type="file" data-dzkind="m592" accept=".xlsx,.xls,.xlsm" multiple hidden></div>` : ''}${avisoHtml()}
       ${avisos(['Liquidación como la hoja Mod592 del Excel: base = kg no reciclados de las adquisiciones intracomunitarias sujetas (concepto 1, régimen a) y de las entregas de fabricante sujetas (concepto 4, régimen a) del periodo × tipo impositivo; deducción = kg no reciclados de devoluciones, envíos fuera, inadecuación o destrucción (art. 80) × tipo impositivo. Plazo: hasta el día 20 del mes siguiente (calendario AEAT)'])}
-      <div class="f592">
-      <div class="f592-top"><div class="f592-of"><b>Oficina Gestora:</b><br>${inp('oficina', cab.oficina, 'D18200', 8)}<br>${inp('ofnom', cab.ofnom, 'Granada', 12)}</div>
-        <div class="f592-tit"><div class="t1">Impuesto especial sobre los envases de plástico no reutilizables</div><div class="t2">Declaración - Liquidación</div><div class="t3">${L.res > 0.005 ? 'Ingreso con Domiciliación del Pago' : L.res < -0.005 ? 'A devolver / compensar' : 'Sin actividad o resultado cero'}</div></div>
-        <div class="f592-mod">Modelo<br><b>592</b></div></div>
-      <div class="f592-sec">Identificación</div>
-      <div class="f592-box"><div class="f592-r"><span><i>N.I.F.:</i> <b>${esc(e.cif)}</b></span><span><i>Apellidos y nombre o razón social:</i> <b>${esc(e.nombre)}</b></span></div>
-        <div class="f592-r"><span><i>Domicilio fiscal:</i> ${inp('domfis', cab.domfis, 'PG JUNCARIL CL LOJA', 40)}</span></div>
-        <div class="f592-r"><span><i>Localidad y provincia:</i> ${inp('locfis', cab.locfis, '18220 ALBOLOTE (GRANADA)', 40)}</span></div></div>
-      <div class="f592-box"><div class="f592-r"><span><i>Domicilio, localidad y provincia:</i> ${inp('domest', cab.domest, 'Establecimiento', 52)}</span><span><i>CIP:</i> ${inp('cip', cab.cip, 'ES00018AP028G', 16)}</span></div></div>
-      <div class="f592-sec">Periodo de liquidación</div>
-      <div class="f592-box"><div class="f592-r"><span><i>Ejercicio:</i> <b>${esc(ej)}</b></span><span><i>Periodo:</i> <b>${esc(/^\d\d$/.test(per) ? `${per} ${MES_L[+per - 1]}` : per || 'Anual')}</b></span></div></div>
-      <div class="f592-box"><div class="f592-r"><span><i>Número de Referencia:</i> ${inp(`nrc_${ej}-${per}`, cab[`nrc_${ej}-${per}`], 'NRC del pago', 22)}</span></div>
-        <div class="f592-r"><span><i>Importe ingreso:</i> <b>${eur(Math.max(0, L.res))}</b></span></div>
-        <div class="f592-r"><span><i>Iban:</i> <input class="presin" data-m592cab="iban" value="${esc(cab.iban ?? '')}" placeholder="ES00 0000 0000 00 0000000000" style="width:30ch;text-align:left"${dis}></span></div></div>
-      <div class="f592-sec">Datos de Contacto</div>
-      <div class="f592-box"><div class="f592-r"><span><i>Persona de contacto:</i> ${inp('contacto', cab.contacto, '', 34)}</span></div>
-        <div class="f592-r"><span><i>Teléfono:</i> ${inp('tel', cab.tel, '', 14)}</span><span><i>Fax:</i> ${inp('fax', cab.fax, '', 14)}</span></div>
-        <div class="f592-r"><span><i>E-mail:</i> ${inp('email', cab.email, '', 34)}</span></div></div>
-      <div class="f592-sec">Liquidación <span class="nota">· tipo de obligado <select data-m592cab="obligado"${dis}>${['Adquirente intracomunitario', 'Fabricante', 'Fabricante y adquirente intracomunitario', 'Importador'].map((o) => `<option${(cab.obligado || 'Adquirente intracomunitario') === o ? ' selected' : ''}>${o}</option>`).join('')}</select> · tipo impositivo ${inp('tipo', cab.tipo ?? 0.45, '0,45', 6)} €/kg</span></div>
-      <div class="f592-box"><table class="f592-liq"><thead><tr><th></th><th>Epígrafe</th><th>Cantidad (2)</th><th>Base Imponible (3)</th><th>Tipo Impositivo (4)</th><th>Cuota íntegra (5)</th><th>Deducción (6)</th><th>Compensación (7)</th><th>Cuota íntegra Total (8)</th></tr></thead>
+      <div class="f303">
+      <div class="f303-top"><div class="ag"><b>Oficina Gestora</b><small>${inp('oficina', cab.oficina, 'D18200', 8)} ${inp('ofnom', cab.ofnom, 'Granada', 12)}</small></div>
+        <div class="tt">Impuesto especial sobre los envases de plástico no reutilizables. Declaración - Liquidación<br><span class="nota">${L.res > 0.005 ? 'Ingreso con Domiciliación del Pago' : L.res < -0.005 ? 'A devolver / compensar' : 'Sin actividad o resultado cero'}</span></div>
+        <div class="mod"><small>Modelo</small><b>592</b></div></div>
+      <div class="f303-sec">Identificación</div>
+      <div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e.cif)}</span></span><span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(e.nombre)}</span></span></div>
+      <div class="f303-id"><span class="idbox grow"><b>Domicilio fiscal</b>${inpb('domfis', cab.domfis, 'PG JUNCARIL CL LOJA')}</span><span class="idbox grow"><b>Localidad y provincia</b>${inpb('locfis', cab.locfis, '18220 ALBOLOTE (GRANADA)')}</span></div>
+      <div class="f303-id"><span class="idbox grow"><b>Domicilio, localidad y provincia del establecimiento</b>${inpb('domest', cab.domest, 'Establecimiento')}</span><span class="idbox"><b>CIP</b>${inpb('cip', cab.cip, 'ES00018AP028G')}</span></div>
+      <div class="f303-sec">Periodo de liquidación</div>
+      <div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${esc(ej)}</span></span><span class="idbox"><b>Período</b><span>${esc(/^\d\d$/.test(per) ? `${per} ${MES_L[+per - 1]}` : per || 'Anual')}</span></span>
+        <span class="idbox grow"><b>Número de Referencia</b>${inpb(`nrc_${ej}-${per}`, cab[`nrc_${ej}-${per}`], 'NRC del pago')}</span></div>
+      <div class="f303-id"><span class="idbox"><b>Importe ingreso</b><span>${nf3(Math.max(0, L.res))}</span></span><span class="idbox grow"><b>IBAN</b>${inpb('iban', cab.iban, 'ES00 0000 0000 00 0000000000')}</span></div>
+      <div class="f303-sec">Datos de Contacto</div>
+      <div class="f303-id"><span class="idbox grow"><b>Persona de contacto</b>${inpb('contacto', cab.contacto, '')}</span><span class="idbox"><b>Teléfono</b>${inpb('tel', cab.tel, '')}</span><span class="idbox"><b>Fax</b>${inpb('fax', cab.fax, '')}</span><span class="idbox grow"><b>E-mail</b>${inpb('email', cab.email, '')}</span></div>
+      <div class="f303-sec">Liquidación</div>
+      <div class="f303-id"><span class="idbox grow"><b>Tipo de obligado</b><select data-m592cab="obligado"${dis} style="flex:1;border:0;background:transparent;font:inherit;padding:.4rem .9rem">${['Adquirente intracomunitario', 'Fabricante', 'Fabricante y adquirente intracomunitario', 'Importador'].map((o) => `<option${(cab.obligado || 'Adquirente intracomunitario') === o ? ' selected' : ''}>${o}</option>`).join('')}</select></span>
+        <span class="idbox"><b>Tipo impositivo (€/kg)</b>${inpb('tipo', cab.tipo ?? 0.45, '0,45')}</span></div>
+      <div class="wrap" style="padding:0 1rem"><table class="f592-liq"><thead><tr><th></th><th>Epígrafe</th><th>Cantidad (2)</th><th>Base Imponible (3)</th><th>Tipo Impositivo (4)</th><th>Cuota íntegra (5)</th><th>Deducción (6)</th><th>Compensación (7)</th><th>Cuota íntegra Total (8)</th></tr></thead>
         <tbody><tr><td>1</td><td>P0 Plásticos</td><td class="num">${nf3(L.kgAc)}</td><td class="num">${nf3(L.baseAc)}</td><td class="num">${Number(L.tipo).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</td><td class="num">${eur(L.cuotaAc)}</td><td class="num">${eur(L.dedAc)}</td>
-          <td class="num"><input class="presin" data-m592comp="${ej}-${per}" value="${L.comp ? fmtIn(L.comp) : ''}" placeholder="0,00" style="width:10ch"${dis}></td><td class="num"><b>${eur(L.res)}</b></td></tr></tbody></table>
-        <div class="f592-tot">Cuota íntegra Total a Ingresar <b>${eur(L.res)}</b></div>
-        <p class="hint">Como el impreso de la AEAT: cantidad y base acumuladas hasta el fin del periodo; la deducción incluye lo ya liquidado en periodos anteriores (${eur(r2(L.dedAc - L.ded))}) y las deducciones del art. 80 del periodo (${eur(L.ded)}, ${nf3(L.dedKg)} kg).</p></div></div>
+          <td class="num"><span class="bx man"><input data-m592comp="${ej}-${per}" value="${L.comp ? fmtIn(L.comp) : ''}" placeholder="0,00"${dis}></span></td><td class="num"><b>${eur(L.res)}</b></td></tr></tbody></table></div>
+      <div class="f-row l1"><span class="lb"><b>Cuota íntegra Total a Ingresar</b></span><span class="bx final"><b>8</b><span class="v">${nf3(L.res)}</span></span></div>
+      <p class="hint" style="padding:0 1rem">Como el impreso de la AEAT: cantidad y base acumuladas hasta el fin del periodo; la deducción incluye lo ya liquidado en periodos anteriores (${eur(r2(L.dedAc - L.ded))}) y las deducciones del art. 80 del periodo (${eur(L.ded)}, ${nf3(L.dedKg)} kg).</p></div>
       <section class="block"><h3 class="bt">E. Libro registro de existencias – adquirentes intracomunitarios (${L.aic.length} del periodo)</h3>${tabla(L.aic, false)}</section>
       <section class="block"><h3 class="bt">D. Contabilidad de fabricantes (${L.fab.length} del periodo)</h3>${tabla(L.fab, true)}</section>`;
   }

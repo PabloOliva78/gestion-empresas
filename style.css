@@ -824,3 +824,29 @@ table.f592-liq th { background: transparent; color: #000; font-weight: 700; bord
 table.f592-liq td { border: 0; padding: 4px 6px; }
 table.f592-liq { border: 0; }
 .tabla th.gris { background: #7a8aa8; }
+
+/* campos escribibles dentro de las cajas de identificación (592) */
+.idbox input { flex: 1; min-width: 160px; border: 0; background: #fffbe3; padding: .4rem .9rem; font: inherit; color: #1f3864; }
+.f303-top .ag input.presin { width: 9ch; text-align: left; }
+
+/* 390 y resúmenes anuales 180 / 190 / 193: cuadro de meses o trimestres como en la antigua */
+.ficha { display: flex; flex-wrap: wrap; gap: 6px 30px; margin-bottom: 12px; font-size: .9rem; }
+.ficha div { display: flex; gap: 7px; } .ficha dt { color: var(--muted); font-weight: 400; } .ficha dd { margin: 0; font-weight: 600; } .ficha .nom { font-size: .95rem; }
+.m390 { min-width: 0; overflow: visible; } .scroll390 { overflow-x: auto; }
+table.t390 { min-width: 2600px; table-layout: auto; font-size: .88rem; border-collapse: collapse; }
+table.t390 th { white-space: nowrap; padding: 4px 6px; background: #d9d9d9; color: #1f3864; border: 1px solid #b4b4b4; font-weight: 400; }
+table.t390 th.mes { font-weight: 700; letter-spacing: .3px; } table.t390 th.vacio { color: #8a8f99; } table.t390 th.ejer { background: #fff3a8; }
+table.t390 th.c390 { position: sticky; left: 0; z-index: 2; min-width: 300px; }
+table.t390 td { padding: 3px 6px; white-space: nowrap; border: none; border-right: 1px solid #c9ced8; border-bottom: 1px solid #eef0f4; }
+table.t390 td.bi { border-right: 1px dotted #c9ced8; }
+table.t390 td:first-child { white-space: normal; min-width: 300px; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 1px solid #9aa7bd; border-left: 2px solid #1f3864; }
+table.t390 td.ref { color: var(--muted); } table.t390 td.ejer { background: #fffbd6; font-weight: 600; }
+table.t390 tr.sec td { background: #eef2f9; color: #1f3864; font-weight: 700; } table.t390 tr.sec td:first-child { border-left: 3px solid #1f3864; }
+table.t390 tr.gap td { height: 12px; border: none !important; background: transparent !important; padding: 0; }
+table.t390 tr.sub td { background: #fff9c4; font-weight: 700; border-top: 1px solid #1f3864; border-bottom: 1px solid #1f3864; } table.t390 tr.sub td:first-child { background: #fff9c4; }
+table.t390 tr.verde td { background: #d5f5d5; font-weight: 700; border-top: 1px solid #1f3864; border-bottom: 1px solid #1f3864; } table.t390 tr.verde td:first-child { background: #d5f5d5; }
+table.t390 tr.cab td { font-weight: 700; color: #1f3864; background: #fafbfd; } table.t390 tr.cmp td { color: var(--muted); font-style: italic; }
+table.t390 tr.gini td { border-top: 1px solid #1f3864; } table.t390 tr.gfin td { border-bottom: 1px solid #1f3864; }
+table.t390 td.bi, table.t390 th.bi, table.t390 th.mes { border-left: 3px solid #1f3864; } table.t390 td.ci, table.t390 th.ci, table.t390 th.mes { border-right: 3px solid #1f3864; }
+table.t390 th.mes { border-top: 2px solid #1f3864; }
+table.t390.tanual td.bi, table.t390.tanual th.bi, table.t390.tanual th.mes { border-left: 1px solid #c9ced8; } table.t390.tanual td.ci, table.t390.tanual th.ci, table.t390.tanual th.mes { border-right: 1px solid #c9ced8; }

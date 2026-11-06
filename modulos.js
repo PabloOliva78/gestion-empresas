@@ -6,7 +6,9 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=4';
-import { crearModelos } from './modelos.js?v=3';
+import { crearModelos } from './modelos.js?v=4';
+import { crearModelos2 } from './modelos2.js?v=1';
+import { crearConciliaciones } from './conciliaciones.js?v=1';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -1367,6 +1369,23 @@ export function crearModulos(c) {
   const cabRet = (c) => `<div class="bar"><span class="chip">${c.periodo.desde.split('-').reverse().join('/')} – ${c.periodo.hasta.split('-').reverse().join('/')}</span>
     ${S.periodo ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral.</span>'}<span class="space"></span></div>`;
 
+  // casillas amarillas del 111/115/123 (se guardan por periodo) y cuenta de cargo de cada modelo
+  document.addEventListener('change', async (ev) => {
+    const t = ev.target, d = t.dataset ?? {};
+    if (d.manret) {
+      const [modelo, k] = d.manret.split('|'), tipo = 'm' + modelo, reg = manDe(tipo), per = S.periodo || 'anual';
+      const datos = JSON.parse(JSON.stringify(reg?.datos ?? {})); datos[per] ??= {}; datos[per][k] = parseES(t.value);
+      const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo, ejercicio: Number(S.ejercicio), datos });
+      if (err) return void alert(err);
+      await cargar(); render();
+    } else if (d.ibanmod) {
+      const e = empresa(); if (!e) return;
+      const { error } = await db.from('empresas').update({ datos: { ...(e.datos ?? {}), [`cuenta${d.ibanmod}`]: t.value.trim() } }).eq('id', e.id);
+      if (error) return void alert(error.message);
+      await cargar(); render();
+    }
+  });
+
   function vistaRet(modelo) {
     if (!S.sel) return sinEmpresa;
     const R = grande('fact-R');
@@ -1376,31 +1395,70 @@ export function crearModulos(c) {
     const m = manPer('m' + modelo);
     const np = modelo === '111' ? nomPer(Number(S.ejercicio), perEf(empresa(), S.periodo)) : null; // percepciones y retenciones de nómina: del cuadrante de Nóminas
     const num = (k) => (np && k === 't2' ? np.s : np && k === 't3' ? np.r : Number(m[k]) || 0);
+    // Mismo aspecto que el 303: impreso de la AEAT con casillas; las amarillas se escriben a mano y se guardan por periodo
+    const ro = puede() ? '' : ' readonly', e = empresa(), p = S.periodo, mv = (k) => Number(m[k]) || 0;
+    const ent = (n, v) => `<span class="bx"><b>${n}</b><span class="v">${v}</span></span>`;
+    const bxn = (n, v, cls = '') => `<span class="bx ${cls}"><b>${n}</b><span class="v">${fnum(v)}</span></span>`;
+    const bxi = (n, v) => `<span class="bx"><b>${n}</b><span class="v">${v}</span></span>`;
+    const man = (n, k, ent_ = false) => `<span class="bx man"><b>${n}</b><input data-manret="${modelo}|${k}" value="${ent_ ? (mv(k) || 0) : fnum(mv(k))}"${ro}></span>`;
+    const fila = (lb, a = '', t = '', q = '', cls = '') => `<div class="f-row ${cls}"><span class="lb">${lb}</span><span class="c1">${a}</span><span class="c2">${t}</span><span class="c3">${q}</span></div>`;
+    const cab = (a, t, q) => fila('', `<span class="hd">${a}</span>`, `<span class="hd">${t}</span>`, `<span class="hd">${q}</span>`, 'head');
+    const sec = (t) => `<div class="f303-sec">${t}</div>`;
+    const sub = (t) => fila(`<b>${t}</b>`);
+    const nota = (t) => ` <span class="nota">(${t})</span>`;
+    const iban = e?.datos?.[`cuenta${modelo}`] ?? '';
+    const aeat = (tit) => `<div class="f303-top"><div class="ag"><b>Agencia Tributaria</b><small>Borrador para transcribir en la Sede Electrónica</small></div>
+      <div class="tt">${tit}</div><div class="mod"><small>Modelo</small><b>${modelo}</b></div></div>
+      ${sec('Identificación')}<div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e?.cif)}</span></span>
+      <span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(e?.nombre)}</span></span></div>
+      ${sec('Devengo')}<div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${esc(S.ejercicio)}</span></span><span class="idbox"><b>Período</b><span>${esc(p || '—')}</span></span></div>`;
     let tabla;
     if (modelo === '111') {
-      const f = (ap, con, c1, n, c2, p, c3, r, cls = '') => `<tr class="${cls}"><td>${ap}</td><td>${con}</td><td class="cas">${c1}</td><td class="num">${n}</td><td class="cas">${c2}</td>
-        <td class="num">${nom(p)}</td><td class="cas">${c3}</td><td class="num">${nom(r)}</td></tr>`;
-      const z = (ap, con, a) => f(ap, con, a, 0, a + 1, 0, a + 2, 0);
-      const sumaRet = num('t3') + c.ret;
-      tabla = `<thead><tr><th>Apartado</th><th>Concepto</th><th>Cas.</th><th>Nº perceptores</th><th>Cas.</th><th>Percepciones (€)</th><th>Cas.</th><th>Retenciones (€)</th></tr></thead><tbody>
-        ${f('I. Rendimientos del trabajo', 'Dinerarios', 1, num('t1'), 2, num('t2'), 3, num('t3'))}${z('I. Rendimientos del trabajo', 'En especie', 4)}
-        ${f('II. Rendimientos de actividades económicas', 'Dinerarios', 7, c.perceptores, 8, c.base, 9, c.ret)}${z('II. Rendimientos de actividades económicas', 'En especie', 10)}
-        ${z('III. Premios por juegos, concursos, rifas…', 'Dinerarios', 13)}${z('III. Premios por juegos, concursos, rifas…', 'En especie', 16)}
-        ${z('IV. Ganancias patrimoniales - aprovechamientos forestales', 'Dinerarias', 19)}${z('IV. Ganancias patrimoniales - aprovechamientos forestales', 'En especie', 22)}
-        ${z('V. Contraprestaciones por cesión de derechos de imagen', 'Ingresos a cuenta', 25)}
-        <tr class="sec"><td colspan="8"><b>LIQUIDACIÓN</b></td></tr>
-        ${f('', 'Suma de retenciones e ingresos a cuenta', 28, '', '', '', '', sumaRet, 'tot').replace('<td class="cas"></td><td class="num"></td><td class="cas"></td>', '<td class="cas">28</td><td class="num"></td><td class="cas"></td>')}
-        ${f('', 'A deducir: resultados a ingresar de anteriores autoliquidaciones (complementaria)', 29, '', '', '', '', num('c29'))}
-        ${f('', '<b>RESULTADO A INGRESAR</b>', 30, '', '', '', '', sumaRet - num('c29'), 'tot final')}</tbody>`;
+      const z = (a, b, c_) => fila('', man(a, `k${a}`, true), man(b, `k${b}`), man(c_, `k${c_}`));
+      const aut = np ? { n: 0, s: np.s, r: np.r } : { n: 0, s: 0, r: 0 };
+      const ret = aut.r + mv('t3') + mv('k06') + c.ret + mv('k12') + mv('k15') + mv('k18') + mv('k21') + mv('k24') + mv('k27');
+      tabla = `${aeat('Retenciones e ingresos a cuenta. Rendimientos del trabajo y de actividades económicas, premios y determinadas ganancias patrimoniales e imputaciones de rentas. Autoliquidación')}
+        ${sec('Liquidación')}${cab('Nº de perceptores', 'Importe de las percepciones', 'Importe de las retenciones')}
+        ${sub('Rendimientos del trabajo')}
+        ${fila(`Rendimientos dinerarios${nota('02 total devengado y 03 IRPF de la pestaña Nóminas, o líneas I.NM; + ajuste')}`, bxi('01', aut.n), bxn('02', aut.s), bxn('03', aut.r))}
+        ${fila('Ajuste a mano (nóminas que no están en el libro)', man('+01', 't1', true), man('+02', 't2'), man('+03', 't3'))}
+        ${fila(`Rendimientos en especie${nota('valor percepciones · ingresos a cuenta')}`, man('04', 'k04', true), man('05', 'k05'), man('06', 'k06'))}
+        ${sub('Rendimientos de actividades económicas')}
+        ${fila(`Rendimientos dinerarios${nota('del libro de soportado')}`, bxi('07', c.perceptores), bxn('08', c.base), bxn('09', c.ret))}
+        ${fila('Rendimientos en especie', man('10', 'k10', true), man('11', 'k11'), man('12', 'k12'))}
+        ${sub('Premios por la participación en juegos, concursos, rifas o combinaciones aleatorias')}
+        ${fila('Premios en metálico', man('13', 'k13', true), man('14', 'k14'), man('15', 'k15'))}${fila('Premios en especie', man('16', 'k16', true), man('17', 'k17'), man('18', 'k18'))}
+        ${sub('Ganancias patrimoniales derivadas de los aprovechamientos forestales de los vecinos en montes públicos')}
+        ${fila('Percepciones dinerarias', man('19', 'k19', true), man('20', 'k20'), man('21', 'k21'))}${fila('Percepciones en especie', man('22', 'k22', true), man('23', 'k23'), man('24', 'k24'))}
+        ${sub('Contraprestaciones por la cesión de derechos de imagen: ingresos a cuenta')}
+        ${fila('Contraprestaciones dinerarias o en especie', man('25', 'k25', true), man('26', 'k26'), man('27', 'k27'))}
+        ${sec('Total liquidación')}
+        ${fila('<b>Suma de retenciones e ingresos a cuenta ( [03] + [06] + [09] + [12] + [15] + [18] + [21] + [24] + [27] )</b>', '', '', bxn('28', ret, 'tot'))}
+        ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', man('29', 'c29'))}
+        ${fila('<b>Resultado a ingresar ( [28] − [29] )</b>', '', '', bxn('30', ret - mv('c29'), 'final'))}`;
+    } else if (modelo === '115') {
+      tabla = `${aeat('Retenciones e ingresos a cuenta. Rendimientos procedentes del arrendamiento o subarrendamiento de inmuebles urbanos. Autoliquidación')}
+        ${sec('Liquidación')}
+        ${fila('Número de perceptores', '', '', bxi('01', c.perceptores))}
+        ${fila('Base de las retenciones e ingresos a cuenta', '', '', bxn('02', c.base))}
+        ${fila('Retenciones e ingresos a cuenta', '', '', bxn('03', c.ret))}
+        ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', man('04', 'c4'))}
+        ${fila('<b>Resultado a ingresar ( [03] − [04] )</b>', '', '', bxn('05', c.ret - mv('c4'), 'final'))}`;
     } else {
-      const f = (t, cas, v, cls = '') => `<tr class="${cls}"><td>${t}</td><td class="cas">${cas}</td><td class="num">${v}</td></tr>`;
-      tabla = `<thead><tr><th>Concepto</th><th>Cas.</th><th>Importe (€)</th></tr></thead><tbody>
-        ${f('Nº de perceptores', 1, c.perceptores)}${f('Base de las retenciones e ingresos a cuenta', 2, nom(c.base))}${f('Retenciones e ingresos a cuenta', 3, nom(c.ret))}
-        ${f('A deducir: resultados a ingresar de anteriores autoliquidaciones (complementaria)', 4, nom(num('c4')))}${f('<b>RESULTADO A INGRESAR</b>', 5, nom(c.ret - num('c4')), 'tot final')}</tbody>`;
+      const dv = c.porCodigo.filter((x) => /^I\.DV/.test(x.codigo)), rs = c.porCodigo.filter((x) => !/^I\.DV/.test(x.codigo));
+      const sm = (a, k) => a.reduce((t, x) => t + x[k], 0), nd = c.lineas.filter((l) => /^I\.DV/.test(l.codigo)).length, nr = c.lineas.length - nd;
+      tabla = `${aeat('Retenciones e ingresos a cuenta. Rentas o rendimientos del capital mobiliario y de determinadas ganancias patrimoniales. Autoliquidación')}
+        ${sec('Liquidación')}${cab('Número de rentas', 'Base de retenciones e ingresos a cuenta', 'Retenciones e ingresos a cuenta')}
+        ${sub('Dividendos y otras rentas de participación en fondos propios (I.DV, I.DV.E)')}${fila('', bxi('01', nd), bxn('04', sm(dv, 'base')), bxn('07', sm(dv, 'ret')))}
+        ${sub('Resto de rentas (I.INT…)')}${fila('', bxi('02', nr), bxn('05', sm(rs, 'base')), bxn('08', sm(rs, 'ret')))}
+        ${sub('Totales')}${fila('', bxi('03', c.lineas.length), bxn('06', c.base), bxn('09', c.ret, 'tot'))}
+        ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', man('', 'c4'))}
+        ${fila('<b>Resultado a ingresar ( [09] − a deducir )</b>', '', '', bxn('', c.ret - mv('c4'), 'final'))}`;
     }
     const lin = c.lineas.slice(0, 200).map((l) => `<tr><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td><td>${esc(l.factura)}</td><td>${fmt(l.fecha)}</td>${celdasNum(l.base)}<td class="num">${esc(l.pct)}</td>${celdasNum(l.cuota)}</tr>`).join('');
-    return `${cabRet(c)}<div class="bar"><span class="space"></span>${puede() ? `<button data-act="m-manret" data-m="${modelo}">Ajustes manuales</button>` : ''}</div>
-      <div class="wrap"><table class="tabla tabla-it m303">${tabla}</table></div>
+    return `<div class="f303-top-bar"><label>Cuenta de cargo del ${modelo} <input data-ibanmod="${modelo}" class="iban" value="${esc(iban)}"${ro}></label>
+        ${S.periodo ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral.</span>'}</div>
+      <div class="f303">${tabla}</div>
       <h4 class="it-sec">Detalle de origen (trazabilidad)</h4>
       <div class="wrap"><table class="tabla"><thead><tr><th>Código</th><th>Concepto</th><th>Hoja origen</th><th class="num">Base</th><th class="num">Retención</th></tr></thead><tbody>
         ${c.porCodigo.map((x) => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.concepto)}</td><td>Libro de IVA soportado</td>${celdasNum(x.base)}${celdasNum(x.ret)}</tr>`).join('')}
@@ -3868,6 +3926,19 @@ export function crearModulos(c) {
   Object.assign(tabs, R2.tabs);
   const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, leerPdf: (f) => leerPdf(f) });
   Object.assign(tabs, M4.tabs);
+  // 303 de un periodo (con sus ajustes y la compensación disponible) y casilla total de retenciones de cada modelo, para el 390 y los resúmenes anuales
+  const c303 = (E, R, ej, p) => calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) });
+  const totalRet = (modelo, R, ej, per) => {
+    const c = calcularRet(modelo, R, ej, per);
+    if (modelo !== '111') return c.ret;
+    const m = S.registros.find((r) => r.tipo === 'm111' && r.empresa_id === S.sel && r.ejercicio === ej)?.datos?.[per] ?? {}, mv = (k) => Number(m[k]) || 0, np = nomPer(ej, per);
+    return (np ? np.r : 0) + mv('t3') + mv('k06') + c.ret + ['k12', 'k15', 'k18', 'k21', 'k24', 'k27'].reduce((a, k) => a + mv(k), 0);
+  };
+  const M5 = crearModelos2({ S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet });
+  Object.assign(tabs, M5.tabs);
+  const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta });
+  Object.assign(tabs, M8.tabs);
+  Object.assign(badges, M8.badges);
   const subirComo = (kind, files) => (M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
   return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };

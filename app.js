@@ -1,5 +1,5 @@
 ﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=129';
+import { crearModulos } from './modulos.js?v=131';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -155,7 +155,7 @@ const GRUPOS = [
     'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
   ['5.- CUENTAS CONTABLES', ['bss', 'c4650', 'c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
-  ['8.- CONCILIACIONES FISCALES', ['conc'], '', 'Todas las conciliaciones fiscales y contables.'],
+  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], '', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['11.- ADMINISTRACIÓN', ['usuarios'], '', 'Usuarios, roles y acceso a las empresas.'],
 ];
@@ -174,7 +174,7 @@ const TABS = {
   c642: ['642', 'Seguridad Social a cargo de la empresa', () => vistaConciliaciones(['642'])],
   ssconc: ['Nóminas y Seguridad Social', '476 · 465 · 640 · 642', () => vistaConciliaciones(['476', '465', '640', '642'])],
   ssobl: ['Obligaciones laborales', 'RLC/RNT y nóminas', () => vistaObligaciones({ area: 'laboral' })],
-  conc: ['Todas las conciliaciones', 'Todas las cuentas', () => vistaConciliaciones()],
+  concall: ['Todas las conciliaciones', 'Todas las cuentas', () => vistaConciliaciones()],
   usuarios: ['Usuarios y roles', 'Accesos y empresas', () => vistaUsuarios(), true],
 };
 const AREA_TAB = { chkf: 'fiscal', rmobl: 'mercantil', ssobl: 'laboral' };
@@ -197,7 +197,7 @@ const BADGES_APP = {
   ficha: () => ({ t: 'Por empresa' }), opemp: () => ({ t: `${S.empresas.length} empresas` }),
   m303: () => badgeConc(['4700', '4750', '472', '477']), m111: () => badgeConc(['4751']), m200: () => badgeConc(['4752', '473', '474']),
   c47: () => badgeConc(['47']), c465: () => badgeConc(['465']), c640: () => badgeConc(['640']), c642: () => badgeConc(['642']),
-  ssconc: () => badgeConc(['476', '465', '640', '642']), conc: () => badgeConc(null),
+  ssconc: () => badgeConc(['476', '465', '640', '642']), concall: () => badgeConc(null),
   usuarios: () => ({ t: `${S.usuarios.length} usuarios` }),
 };
 const insignia = (id) => {
