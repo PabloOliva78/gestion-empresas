@@ -207,7 +207,8 @@ export function crearModulos(c) {
       <td>${verArchivo(D[k]?.archivo)}</td><td class="acciones">${puede()
     ? `<button class="small" data-act="m-doc-edit" data-m="${id}" data-slot="${k}">${D[k] ? 'Editar' : 'Añadir'}</button>
         ${D[k] ? `<button class="small danger" data-act="m-doc-del" data-m="${id}" data-slot="${k}">Quitar</button>` : ''}` : ''}</td></tr>`).join('');
-    return `<div class="bar"><span class="chip">${hecho} de ${DOCS[id].length} · ejercicio ${esc(S.ejercicio)}</span></div>
+    const zona = puede() && /^rm(actas|socios|libros)$/.test(id) ? dz('registro-' + id, 'Suelta aquí los archivos de ' + ({ rmactas: 'actas', rmsocios: 'socios', rmlibros: 'libros' })[id], '(PDF o Excel; el hueco se reconoce por el nombre: libro, instancia, acuse, nota, asiento…) o pulsa para elegirlos', '.pdf,.xlsx,.xls,.csv') : '';
+    return `<div class="bar"><span class="chip">${hecho} de ${DOCS[id].length} · ejercicio ${esc(S.ejercicio)}</span></div>${zona}
       <div class="wrap"><table class="tabla"><thead><tr><th>Documento</th><th>Fecha</th><th>Referencia</th><th>Archivo</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>`;
   }
@@ -1739,7 +1740,7 @@ export function crearModulos(c) {
 
   // ---------- Botones del lateral: un archivo por tipo, solo se ve el nombre ----------
   const ARCH = { emitidas: 'Emitidas', recibidas: 'Recibidas', extractos: 'Extractos', sys: 'SYS', sii: 'SII', nominas: 'Nóminas' };
-  let archKind = 'impuestos';
+  let archKind = 'impuestos', forzarTab = null;
   const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\.\w{2,4}$/, '').replace(/[_.\-]+/g, ' ');
   const archivosDe = (k) => S.registros.filter((r) => r.tipo === 'arch-' + k && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
 
@@ -1775,7 +1776,9 @@ export function crearModulos(c) {
     else if (slot === 'acuse') tab = 'rmacu';
     else if (slot === 'nota') tab = 'rmnota';
     else if (/escritura/.test(n)) return { tab: 'rmesc' };
-    return tab && DOCS[tab]?.some(([k]) => k === slot) ? { tab, slot } : null;
+    const r = tab && DOCS[tab]?.some(([k]) => k === slot) ? { tab, slot } : null;
+    if (forzarTab && DOCS[forzarTab]) return { tab: forzarTab, slot: r && r.tab === forzarTab ? r.slot : DOCS[forzarTab].some(([k]) => k === slot) ? slot : DOCS[forzarTab][0][0] }; // soltado en la propia pestaña
+    return r;
   }
 
   async function cargarRegistro(files) {
@@ -1818,7 +1821,7 @@ export function crearModulos(c) {
       const err = await guardarRegistro(c.reg, { ...(c.reg ? {} : { id: crypto.randomUUID() }), empresa_id: c.empresa, tipo: 'doc-' + c.tab, ejercicio: c.ej, datos: c.datos });
       if (err) informe.push(`✖ ${tabs[c.tab][0]}: ${err}`);
     }
-    estado('');
+    estado(''); forzarTab = null;
     await cargar(); render();
     alert(informe.join('\n') || 'No se cargó ningún archivo.');
   }
@@ -3943,7 +3946,7 @@ export function crearModulos(c) {
   const M7 = crearEstados({ S, esc, render, empresa, dz });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
-  const subirComo = (kind, files) => (M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
   return { duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
