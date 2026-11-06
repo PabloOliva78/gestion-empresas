@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=10';
-import { crearModelos } from './modelos.js?v=7';
+import { crearModelos } from './modelos.js?v=8';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
@@ -1234,11 +1234,16 @@ export function crearModulos(c) {
     const nota = (t) => ` <span class="nota">(${t})</span>`;
     const pp = p ? prevPer(ej, p) : null;
     const prevTxt = pp ? (/^\d\d$/.test(pp[1]) ? `${pp[1]}/${pp[0]}` : `${pp[1]} ${pp[0]}`) : '—';
-    const t = c.c71 > 0 ? 'ing' : c.c71 < 0 ? 'comp' : 'cero';
+    // 303 presentado del mismo periodo (pestaña Presentados): manda sobre lo calculado en 78, 87 y 71, como en la antigua
+    const P3 = p ? { apl: prsVal(ej, '303', perEf(e, p), 'apl'), c87: prsVal(ej, '303', perEf(e, p), 'c87'), liq: prsVal(ej, '303', perEf(e, p), 'liq') } : {};
+    const hay = (v) => v !== undefined && v !== null && v !== '', etP = hay(P3.apl) || hay(P3.c87) || hay(P3.liq) ? nota(`303 de ${perEf(e, p)}, pestaña Presentados`) : '';
+    const c71v = hay(P3.liq) ? Number(P3.liq) : c.c71, c78v = hay(P3.apl) ? Number(P3.apl) : c.c78, c87v = hay(P3.c87) ? Number(P3.c87) : c.c87;
+    const ultimo = p === '4T' || p === '12';
+    const t = c71v > 0.005 ? 'ing' : c71v < -0.005 ? (ultimo ? 'dev' : 'comp') : 'cero';
     const chk = (l, on) => `<span class="chk"><span class="cb${on ? ' on' : ''}">✕</span>${l}</span>`;
     const iban = e?.datos?.cuenta303 ?? '';
     const det = c.detalle.map((x) => `<tr><td>${esc(x.codigo)}</td><td>${x.libro === 'E' ? 'Repercutido' : 'Soportado'}</td><td class="num">${x.n}</td>${celdasNum(x.base)}${celdasNum(x.cuota)}</tr>`).join('');
-    return `<div class="f303-top-bar"><label>Cuenta de cargo del 303 <input data-iban class="iban" value="${esc(iban)}"${ro}></label>
+    return `<div class="f303-top-bar">
         <label class="rect"><input type="checkbox" data-rectif${rectif303 ? ' checked' : ''}> Llevar facturas con base negativa a modificación (14-15 y 40-41)</label>
         ${p ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral: el 303 es por periodo.</span>'}</div>
       <div class="f303">
@@ -1286,15 +1291,15 @@ export function crearModulos(c) {
         ${fila('Atribuible a la Administración del Estado', '', '', bx('66', c.c66))}
         ${fila(`IVA a la importación liquidado por la Aduana pendiente de ingreso${nota('suma de DUA, DUARED, DUALCNR y DUALCRED')}`, '', '', bx('77', c.c77))}
         ${fila(`Cuotas a compensar pendientes de periodos previos${nota(`303 de ${prevTxt}: 87 + resultado a compensar (71), pestaña Presentados`)}`, '', '', bx('110', c.c110))}
-        ${fila('Cuotas a compensar de periodos previos aplicadas en este periodo', '', '', inp('78', 'c78', c.c78))}
-        ${fila('Cuotas a compensar de periodos previos pendientes para periodos posteriores ( [110] − [78] )', '', '', bx('87', c.c87))}
+        ${hay(P3.apl) ? fila(`Cuotas a compensar de periodos previos aplicadas en este periodo${etP}`, '', '', bx('78', c78v)) : fila('Cuotas a compensar de periodos previos aplicadas en este periodo', '', '', inp('78', 'c78', c.c78))}
+        ${fila(`Cuotas a compensar de periodos previos pendientes para periodos posteriores${hay(P3.c87) ? etP : ' ( [110] − [78] )'}`, '', '', bx('87', c87v))}
         ${fila('Exclusivamente para sujetos pasivos que tributan conjuntamente a la Administración del Estado y a las Haciendas Forales. Resultado de la regularización anual', '', '', inp('68', 'c68', c.c68))}
         ${fila('<b>Resultado ( [66] + [77] − [78] + [68] )</b>', '', '', bx('69', c.c69, 'tot'))}
         ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', inp('70', 'c70', c.c70))}
-        ${fila('<b>Resultado de la liquidación ( [69] − [70] )</b>', '', '', bx('71', c.c71, 'final'))}
-        ${sec('Tipo de declaración')}<div class="f-chk">${chk('A ingresar', t === 'ing')}${chk('A compensar', t === 'comp')}${chk('A devolver o compensar (a elegir en el último periodo)', false)}${chk('Sin actividad o resultado cero', t === 'cero')}</div>
-        ${sec('Domiciliación del pago')}
-        ${fila(`Cuenta de cargo (IBAN) del 303 · importe a ingresar ${fnum(Math.max(c.c71, 0))} · <b>${esc(bancoDe(iban))}</b>`, '', '', `<input class="iban" data-iban value="${esc(iban)}"${ro}>`)}
+        ${fila(`<b>Resultado de la liquidación${hay(P3.liq) ? etP : ' ( [69] − [70] )'}</b>`, '', '', bx('71', c71v, 'final'))}
+        ${sec('Tipo de declaración')}<div class="f-chk">${chk('A ingresar', t === 'ing')}${chk('A compensar', t === 'comp')}${chk('A devolver o compensar (a elegir en el último periodo)', t === 'dev')}${chk('Sin actividad o resultado cero', t === 'cero')}</div>
+        ${c71v > 0.005 ? `${sec('Domiciliación del pago')}
+        ${fila(`Cuenta de cargo (IBAN) del 303 · importe a ingresar ${fnum(c71v)} · <b>${esc(bancoDe(iban))}</b>`, '', '', `<input class="iban" data-iban value="${esc(iban)}"${ro}>`)}` : ''}
       </div>
       ${p ? cuadre303(E, R, c, p, ej) : ''}
       <p class="hint">Borrador de trabajo: los importes salen del libro de IVA por código de impuesto y fecha. Las casillas en amarillo se rellenan a mano y se guardan por periodo. Las casillas marcadas «por verificar» hay que comprobarlas en el modelo oficial.</p>`;
@@ -1432,11 +1437,12 @@ export function crearModulos(c) {
       ${sec('Identificación')}<div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e?.cif)}</span></span>
       <span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(e?.nombre)}</span></span></div>
       ${sec('Devengo')}<div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${esc(S.ejercicio)}</span></span><span class="idbox"><b>Período</b><span>${esc(p || '—')}</span></span></div>`;
-    let tabla;
+    let tabla, importe = 0;
     if (modelo === '111') {
       const z = (a, b, c_) => fila('', man(a, `k${a}`, true), man(b, `k${b}`), man(c_, `k${c_}`));
-      const aut = np ? { n: 0, s: np.s, r: np.r } : { n: 0, s: 0, r: 0 };
-      const ret = aut.r + mv('t3') + mv('k06') + c.ret + mv('k12') + mv('k15') + mv('k18') + mv('k21') + mv('k24') + mv('k27');
+      const aut = { n: mv('t1'), s: (np ? np.s : 0) + mv('t2'), r: (np ? np.r : 0) + mv('t3') }; // nÃ³minas + ajuste a mano, como en la antigua
+      const ret = aut.r + mv('k06') + c.ret + mv('k12') + mv('k15') + mv('k18') + mv('k21') + mv('k24') + mv('k27');
+      importe = ret - mv('c29');
       tabla = `${aeat('Retenciones e ingresos a cuenta. Rendimientos del trabajo y de actividades económicas, premios y determinadas ganancias patrimoniales e imputaciones de rentas. Autoliquidación')}
         ${sec('Liquidación')}${cab('Nº de perceptores', 'Importe de las percepciones', 'Importe de las retenciones')}
         ${sub('Rendimientos del trabajo')}
@@ -1457,6 +1463,7 @@ export function crearModulos(c) {
         ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', man('29', 'c29'))}
         ${fila('<b>Resultado a ingresar ( [28] − [29] )</b>', '', '', bxn('30', ret - mv('c29'), 'final'))}`;
     } else if (modelo === '115') {
+      importe = c.ret - mv('c4');
       tabla = `${aeat('Retenciones e ingresos a cuenta. Rendimientos procedentes del arrendamiento o subarrendamiento de inmuebles urbanos. Autoliquidación')}
         ${sec('Liquidación')}
         ${fila('Número de perceptores', '', '', bxi('01', c.perceptores))}
@@ -1467,18 +1474,27 @@ export function crearModulos(c) {
     } else {
       const dv = c.porCodigo.filter((x) => /^I\.DV/.test(x.codigo)), rs = c.porCodigo.filter((x) => !/^I\.DV/.test(x.codigo));
       const sm = (a, k) => a.reduce((t, x) => t + x[k], 0), nd = c.lineas.filter((l) => /^I\.DV/.test(l.codigo)).length, nr = c.lineas.length - nd;
+      // como el impreso: columnas = dividendos / resto de rentas / totales; filas = número, base y retenciones, más lo que no está en el libro (a mano)
+      const n1 = nd + mv('d01'), n2 = nr + mv('x01'), b1 = sm(dv, 'base') + mv('d04'), b2 = sm(rs, 'base') + mv('x02'), r1 = sm(dv, 'ret') + mv('d07'), r2_ = sm(rs, 'ret') + mv('x03');
+      importe = (r1 + r2_) - mv('c4');
       tabla = `${aeat('Retenciones e ingresos a cuenta. Rentas o rendimientos del capital mobiliario y de determinadas ganancias patrimoniales. Autoliquidación')}
-        ${sec('Liquidación')}${cab('Número de rentas', 'Base de retenciones e ingresos a cuenta', 'Retenciones e ingresos a cuenta')}
-        ${sub('Dividendos y otras rentas de participación en fondos propios (I.DV, I.DV.E)')}${fila('', bxi('01', nd), bxn('04', sm(dv, 'base')), bxn('07', sm(dv, 'ret')))}
-        ${sub('Resto de rentas (I.INT…)')}${fila('', bxi('02', nr), bxn('05', sm(rs, 'base')), bxn('08', sm(rs, 'ret')))}
-        ${sub('Totales')}${fila('', bxi('03', c.lineas.length), bxn('06', c.base), bxn('09', c.ret, 'tot'))}
+        ${sec('Liquidación')}${cab('Dividendos y otras rentas de participación en fondos propios de entidades', 'Resto de rentas', 'Totales')}
+        ${fila('Número de rentas', bxi('01', n1), bxi('02', n2), bxi('03', n1 + n2))}
+        ${fila('Base de retenciones e ingresos a cuenta', bxn('04', b1), bxn('05', b2), bxn('06', b1 + b2))}
+        ${fila('Retenciones e ingresos a cuenta', bxn('07', r1), bxn('08', r2_), bxn('09', r1 + r2_, 'tot'), 'tot')}
+        ${sub('Importes que no están en el libro de soportado (se suman a las casillas de arriba)')}
+        ${fila('Número de rentas añadidas a mano', man('+01', 'd01', true), man('+02', 'x01', true))}
+        ${fila('Base añadida a mano', man('+04', 'd04'), man('+05', 'x02'))}
+        ${fila('Retenciones añadidas a mano', man('+07', 'd07'), man('+08', 'x03'))}
         ${fila('A deducir (exclusivamente en caso de autoliquidación complementaria)', '', '', man('', 'c4'))}
-        ${fila('<b>Resultado a ingresar ( [09] − a deducir )</b>', '', '', bxn('', c.ret - mv('c4'), 'final'))}`;
+        ${fila('<b>Resultado a ingresar ( [09] − a deducir )</b>', '', '', bxn('', importe, 'final'), 'res')}`;
     }
     const lin = c.lineas.slice(0, 200).map((l) => `<tr><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td><td>${esc(l.factura)}</td><td>${fmt(l.fecha)}</td>${celdasNum(l.base)}<td class="num">${esc(l.pct)}</td>${celdasNum(l.cuota)}</tr>`).join('');
-    return `<div class="f303-top-bar"><label>Cuenta de cargo del ${modelo} <input data-ibanmod="${modelo}" class="iban" value="${esc(iban)}"${ro}></label>
-        ${S.periodo ? '' : '<span class="hint">Elige un periodo (trimestre o mes) en la barra lateral.</span>'}</div>
-      <div class="f303">${tabla}</div>
+    const chkR = (l, on) => `<span class="chk"><span class="cb${on ? ' on' : ''}">✕</span>${l}</span>`;
+    const tipoDecl = `${sec('Tipo de declaración')}<div class="f-chk">${chkR('A ingresar', importe > 0.005)}${chkR('Negativa (sin retenciones en el periodo)', Math.abs(importe) <= 0.005)}</div>`
+      + (importe > 0.005 ? `${sec('Domiciliación del pago')}${fila(`Cuenta de cargo (IBAN) del ${modelo} · importe a ingresar ${fnum(importe)} · <b>${esc(bancoDe(iban))}</b>`, '', '', `<input class="iban" data-ibanmod="${modelo}" value="${esc(iban)}"${ro}>`)}` : '');
+    return `${S.periodo ? '' : '<div class="f303-top-bar"><span class="hint">Elige un periodo (trimestre o mes) en la barra lateral.</span></div>'}
+      <div class="f303">${tabla}${tipoDecl}</div>
       <h4 class="it-sec">Detalle de origen (trazabilidad)</h4>
       <div class="wrap"><table class="tabla"><thead><tr><th>Código</th><th>Concepto</th><th>Hoja origen</th><th class="num">Base</th><th class="num">Retención</th></tr></thead><tbody>
         ${c.porCodigo.map((x) => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.concepto)}</td><td>Libro de IVA soportado</td>${celdasNum(x.base)}${celdasNum(x.ret)}</tr>`).join('')}

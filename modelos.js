@@ -378,7 +378,7 @@ export function crearModelos(c) {
       <div class="f303-id"><span class="idbox grow"><b>Domicilio fiscal</b>${inpb('domfis', cab.domfis, 'PG JUNCARIL CL LOJA')}</span><span class="idbox grow"><b>Localidad y provincia</b>${inpb('locfis', cab.locfis, '18220 ALBOLOTE (GRANADA)')}</span></div>
       <div class="f303-id"><span class="idbox grow"><b>Domicilio, localidad y provincia del establecimiento</b>${inpb('domest', cab.domest, 'Establecimiento')}</span><span class="idbox"><b>CIP</b>${inpb('cip', cab.cip, 'ES00018AP028G')}</span></div>
       <div class="f303-sec">Periodo de liquidación</div>
-      <div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${esc(ej)}</span></span><span class="idbox"><b>Período</b><span>${esc(/^\d\d$/.test(per) ? `${per} ${MES_L[+per - 1]}` : per || 'Anual')}</span></span>
+      <div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${esc(ej)}</span></span><span class="idbox"><b>Período</b><span>${esc(/^\d\d$/.test(per) ? `${per} ${MES_L[+per - 1].charAt(0) + MES_L[+per - 1].slice(1).toLowerCase()}` : per || 'Anual')}</span></span>
         <span class="idbox grow"><b>Número de Referencia</b>${inpb(`nrc_${ej}-${per}`, cab[`nrc_${ej}-${per}`], 'NRC del pago')}</span></div>
       <div class="f303-id"><span class="idbox"><b>Importe ingreso</b><span>${nf3(Math.max(0, L.res))}</span></span><span class="idbox grow"><b>IBAN${bancoDe(iban592) ? ' · ' + esc(bancoDe(iban592)) : ''}</b><input data-ibanmod="592" class="iban" value="${esc(iban592)}" placeholder="ES00 0000 0000 00 0000000000"${dis}></span></div>
       <div class="f303-sec">Datos de Contacto</div>
