@@ -572,8 +572,7 @@ export function crearRegistral(c) {
       D.rel = D.rel.filter((r) => r.origen !== file.name);
       R.rel.forEach((r) => {
         const k = `${accNorm(r.socio)}|${accNorm(r.participada)}`;
-        if (vistos.has(k)) return;
-        vistos.add(k); r.origen = file.name;
+        vistos.add(k); r.origen = file.name; // si el mismo enlace sale en varias hojas, manda el último (la hoja TOTAL, que es la consolidada)
         D.rel = D.rel.filter((x) => `${accNorm(x.socio)}|${accNorm(x.participada)}` !== k); D.rel.push(r);
       });
       D.archivos = D.archivos.filter((a) => a.name !== file.name).concat([{ name: file.name, fecha: hoy(), n: vistos.size, avisos: R.avisos }]);
