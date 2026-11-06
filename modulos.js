@@ -318,8 +318,15 @@ export function crearModulos(c) {
     return n('res') ?? n('imp');
   };
   // 115: solo si el censo lo tiene de ALTA en el periodo (si está de baja o no aparece, no se pone)
+  // Censo de Herogra Fertilizantes que la antigua traía de serie (IT_SEMILLA): se usa mientras no se cargue su consulta de la AEAT
+  const OBL_SEMILLA = { A18341404: [
+    { descripcion: 'IRPF RETENCION TRABAJO PERSONAL', periodicidad: 'MENSUAL', alta: '2007-05-28', baja: '', modif: '2011-02-14', estado: 'ALTA' },
+    { descripcion: 'IRPF-ISS. RET.ARREND.INMUEBLES URBANOS', periodicidad: 'MENSUAL', alta: '2021-01-01', baja: '', modif: '2021-10-07', estado: 'ALTA' },
+    { descripcion: 'IRPF PAGO FRACCIONADO (PROF.-EMPRES.)', periodicidad: 'TRIMESTRAL', alta: '1994-04-01', baja: '1994-08-26', modif: '2007-07-19', estado: 'BAJA' },
+    { descripcion: 'IS/ IRNR CON EP. DECLARACIÓN ANUAL', periodicidad: 'ANUAL', alta: '1994-09-22', baja: '', modif: '2007-08-08', estado: 'ALTA' },
+    { descripcion: 'IMP. SOBRE EL VALOR AÑADIDO.', periodicidad: 'MENSUAL', alta: '2007-05-28', baja: '', modif: '2011-02-14', estado: 'ALTA' }] };
   function alta115(e, ej, per) {
-    const os = (e?.datos?.aeat?.obligaciones ?? []).filter((o) => /ARREND/i.test(o.descripcion ?? ''));
+    const os = (e?.datos?.aeat?.obligaciones ?? OBL_SEMILLA[e?.cif] ?? []).filter((o) => /ARREND/i.test(o.descripcion ?? ''));
     if (!os.length || !per) return false;
     if (os.some((o) => o.estado === 'ALTA')) return true; // activado en las obligaciones del censo: siempre obligatorio
     const mm = /^\d\d$/.test(per) ? [per, per] : /^[1-4]T$/.test(per) ? [String((+per[0] - 1) * 3 + 1).padStart(2, '0'), String(+per[0] * 3).padStart(2, '0')] : ['01', '12'];
@@ -342,11 +349,11 @@ export function crearModulos(c) {
     }
     return new Set();
   }
-  const MEMO123 = new WeakMap(); // libro R → `${ej}|${periodo}` → ¿hay retenciones del 123?
-  function tiene123(R, ej, p) {
-    let m = MEMO123.get(R); if (!m) MEMO123.set(R, (m = new Map()));
-    const k = `${ej}|${p}`;
-    if (!m.has(k)) { let v = false; try { v = Math.abs(calcularRet('123', R, ej, p).ret) > 0.005; } catch { /* sin datos */ } m.set(k, v); }
+  const MEMO_RET = new WeakMap(); // libro R → `${modelo}|${ej}|${periodo}` → ¿hay retenciones de ese modelo?
+  function tieneRet(mod, R, ej, p) {
+    let m = MEMO_RET.get(R); if (!m) MEMO_RET.set(R, (m = new Map()));
+    const k = `${mod}|${ej}|${p}`;
+    if (!m.has(k)) { let v = false; try { v = Math.abs(calcularRet(mod, R, ej, p).ret) > 0.005; } catch { /* sin datos */ } m.set(k, v); }
     return m.get(k);
   }
   function obligaciones(e, ej, ix) {
@@ -357,10 +364,11 @@ export function crearModulos(c) {
       const pk = ANUAL.test(mod) ? 'A' : per;
       out.push({ e, mod, per, yP, yPres, clave, pk, fin: plazoMod(mod, yP, per), pres: ix.hecho.has(`${e.id}|${yPres}|${clave}|${pk}`), imp: valPres(e.id, yPres, clave, pk) });
     };
-    pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (alta115(e, ej, p)) add('115', p, ej, ej, '115'); });
+    const R115 = GR.get(`fact-R|${e.id}`); // 115: obligatorio si está de alta en el censo y, aunque no, en los periodos con retenciones de alquileres
+    pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (alta115(e, ej, p) || ix.hecho.has(`${e.id}|${ej}|115|${p}`) || (Array.isArray(R115) && R115.length && tieneRet('115', R115, ej, p))) add('115', p, ej, ej, '115'); });
     // 123: solo los periodos con datos (presentado o retenciones de capital en el libro cargado)
     const R123 = GR.get(`fact-R|${e.id}`);
-    pers.forEach((p) => { if (ix.hecho.has(`${e.id}|${ej}|123|${p}`) || (Array.isArray(R123) && R123.length && tiene123(R123, ej, p))) add('123', p, ej, ej, '123'); });
+    pers.forEach((p) => { if (ix.hecho.has(`${e.id}|${ej}|123|${p}`) || (Array.isArray(R123) && R123.length && tieneRet('123', R123, ej, p))) add('123', p, ej, ej, '123'); });
     if (uso('349')) pers.forEach((p) => add('349', p, ej, ej, '349'));
     if (obl592(e)) pers.forEach((p) => add('592', p, ej, ej, '592'));
     if (!trim || uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
