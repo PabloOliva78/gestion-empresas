@@ -123,15 +123,17 @@ export function crearRegistral(c) {
     if (!e) return sinEmpresa;
     const d = dregDe(e); dregDesdeCenso(e, d); dregDesdeCA(e, d); dregDesdeEsc(e, d);
     const ed = puede();
+    // al abrir la pestaña, si faltan tomo, folio y hoja y hay cuentas anuales cargadas, se toman de ellas (una vez por empresa y sesión)
+    if (ed && !(d.tomo && d.folio && d.hoja) && !dregCAProbado.has(e.id)) { dregCAProbado.add(e.id); setTimeout(() => dregDeCuentas(true), 0); }
     const av = d.nif && nifEmp() && d.nif !== nifEmp() ? `<p class="aviso">El NIF leído (${esc(d.nif)}) no coincide con el de la empresa seleccionada (${esc(nifEmp())})</p>` : '';
     const arch = d._arch;
     return `${ed ? `<div class="dropzone" data-kind="dreg" tabindex="0" role="button"><b>Suelta aquí el PDF o Excel con los datos registrales</b> (nota simple, certificado IRUS, declaración de titularidad real, ficha de la sociedad…) o pulsa para elegirlo. Se extraen NIF, IRUS, CNAE, Registro Mercantil, tomo, libro, folio, sección, hoja, inscripción, LEI, domicilio y fecha de constitución.
       <input type="file" data-dzkind="dreg" accept=".pdf,.xlsx,.xls,.csv" multiple hidden></div>` : ''}${avisoHtml()}${av}
       <section class="block"><h4 class="it-tit">Datos registrales · ${esc(e.nombre)}</h4>
       <table class="tabla rg-tabla rotulos"><thead><tr><th>Dato</th><th>Valor</th><th>Tomado de</th></tr></thead><tbody>
-      ${DREG_CAMPOS.map(([k, t]) => `<tr><td><b>${t}</b></td><td><input class="facin" data-rgdreg="${k}" value="${esc(d[k] ?? '')}" size="${/denominacion|domicilio|cnaeDesc|registro/.test(k) ? 48 : 22}"${ed ? '' : ' disabled'}></td><td class="hint">${esc(d._o[k] ?? '')}</td></tr>`).join('')}
+      ${DREG_CAMPOS.map(([k, t]) => `<tr><td><b>${t}</b></td><td><input class="facin" data-rgdreg="${k}" value="${esc(d[k] ?? '')}" size="${Math.max(12, String(d[k] ?? '').length + 2)}"${ed ? '' : ' disabled'}></td><td class="hint">${esc(d._o[k] ?? '')}</td></tr>`).join('')}
       </tbody></table>
-      ${ed ? '<p><button class="small" data-act="m-rg-dregtr">Tomar Registro Mercantil, tomo, folio y hoja de Titularidad real</button></p>' : ''}
+      ${ed ? '<p><button class="small" data-act="m-rg-dregca">Tomar Registro Mercantil, tomo, folio y hoja de las cuentas anuales presentadas</button> <button class="small" data-act="m-rg-dregtr">Tomar Registro Mercantil, tomo, folio y hoja de Titularidad real</button></p>' : ''}
       ${arch.length ? `<p class="hint">Archivos leídos: ${arch.map((a) => `${esc(a.name)} (${esc(a.fecha)})${ed ? ` <button class="small" data-act="m-rg-dregquitar" data-n="${esc(a.name)}">Quitar</button>` : ''}`).join(' · ')}</p>
       <details><summary>Ver el texto extraído</summary>${arch.map((a) => `<h4>${esc(a.name)}</h4><pre class="rg-pre">${esc(a.texto ?? '')}</pre>`).join('')}</details>` : ''}
       </section>`;
@@ -150,6 +152,39 @@ export function crearRegistral(c) {
     d._arch = d._arch.filter((a) => a.name !== nombre);
     Object.keys(d._o).forEach((k) => { if (d._o[k] === nombre) { delete d._o[k]; delete d[k]; } });
     await dregGuardar(e, d);
+  }
+  // datos registrales de la solicitud de depósito que lleva el PDF de las cuentas anuales: «Registro Mercantil de …» y «Datos Registrales: Tomo … Folio … Nº Hoja Registral …»
+  function dregRegDeCA(texto) {
+    const T = String(texto || '').replace(/\r/g, ''), R = {};
+    let m = T.match(/Datos\s+Registrales\s*:?\s*Tomo\s*:?[\s_]*(\d{1,6})\s*Folio\s*:?[\s_]*(\d{1,6})\s*N[ºo°.]*\s*Hoja\s+Registral\s*:?[\s_]*([A-Z]{0,3}-?\s?\d{1,7})/i);
+    if (m) { R.tomo = m[1]; R.folio = m[2]; R.hoja = m[3].replace(/\s/g, ''); }
+    m = T.match(/SOLICITUD\s+DE\s+PRESENTACI[OÓ]N\s+EN\s+EL\s+REGISTRO\s+MERCANTIL\s+DE[\s_]*([A-ZÁÉÍÓÚÑ]+(?: [A-ZÁÉÍÓÚÑ]+)?)/);
+    if (m) R.registro = `Registro Mercantil de ${m[1].toLowerCase().replace(/(^|\s)(\S)/g, (x, a, b) => a + b.toUpperCase())}`;
+    return R;
+  }
+  let dregCAProbado = new Set();
+  // rellena registro, tomo, folio y hoja con los de las cuentas anuales presentadas ya cargadas (del último ejercicio que los traiga)
+  async function dregDeCuentas(auto = false) {
+    const e = empresa(); if (!e) return;
+    const filas = S.registros.filter((r) => r.tipo === 'rmdoc' && r.empresa_id === e.id && r.datos?.ca?.archivo?.path).sort((a, b) => b.ejercicio - a.ejercicio);
+    if (!filas.length) { if (!auto) { msg = 'No hay cuentas anuales cargadas en 2.- Registro Mercantil › Cuentas anuales presentadas'; msgMal = true; render(); } return; }
+    const d = dregDe(e); let R = {}, de = null;
+    for (const f of filas) {
+      try {
+        let x = f.datos.ca.reg;
+        if (!x) {
+          const { data, error } = await db.storage.from('documentos').download(f.datos.ca.archivo.path);
+          if (error) throw new Error(error.message);
+          const { lineas } = await lineasDe(data);
+          x = dregRegDeCA(lineas.map((l) => l.map((i) => i.s).join(' ')).join('\n'));
+        }
+        if (x.tomo || x.folio || x.hoja) { R = x; de = f; break; }
+      } catch (err) { if (!auto) aviso(`${f.datos.ca.archivo.nombre}: ${err.message}`, true); }
+    }
+    let n = 0;
+    ['registro', 'tomo', 'folio', 'hoja'].forEach((k) => { if (R[k] && (!d[k] || !auto && d._o[k] !== 'a mano')) { if (d[k] !== R[k]) n++; d[k] = R[k]; d._o[k] = `${de.datos.ca.archivo.nombre} (cuentas presentadas ${de.ejercicio})`; } });
+    if (n) { msg = `${n} dato(s) registrales tomados de las cuentas anuales presentadas ${de.ejercicio}`; msgMal = false; await dregGuardar(e, d); }
+    else if (!auto) { msg = Object.keys(R).length ? 'Los datos registrales ya coinciden con los de las cuentas anuales' : 'No encuentro tomo, folio y hoja en las cuentas anuales cargadas'; msgMal = !Object.keys(R).length; render(); }
   }
   async function dregDeTitReal() {
     const e = empresa(); if (!e) return;
@@ -740,8 +775,8 @@ export function crearRegistral(c) {
   filiales.map((x) => `<tr><td>${esc(G.nom[x.k])}</td><td class="num">${x.dir ? `${n2(x.dir)} %` : ''}</td><td class="num">${n2(x.tot)} %</td></tr>`).join('') || '<tr><td colspan="3" class="c">No participa en otras sociedades</td></tr>'}</tbody></table></div>
       </div>` : ''}
       <h4 class="it-sec" style="margin-top:16px">Participaciones directas del grupo · ${D.rel.length}</h4>
-      <div class="wrap"><table class="tabla rg-tabla"><thead><tr><th>Socio</th><th>Sociedad participada</th><th>%</th><th>Origen</th><th></th></tr></thead><tbody>
-      ${D.rel.map((r, i) => `<tr><td><input class="facin" data-rgaccf="${i}|socio" value="${esc(r.socio)}" size="30"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgaccf="${i}|participada" value="${esc(r.participada)}" size="34"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgaccf="${i}|pct" value="${esc(String(r.pct).replace('.', ','))}" size="9" style="text-align:right"${ed ? '' : ' disabled'}></td><td class="hint">${esc((r.origen || 'a mano') + (r.celda ? ` · ${r.celda}` : ''))}</td><td>${ed ? `<button class="small danger" data-act="m-rg-accdel" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="c">Sin datos</td></tr>'}
+      <div class="wrap"><table class="tabla rg-tabla rg-acc" style="width:auto"><thead><tr><th>Socio</th><th>Sociedad participada</th><th>%</th><th>Origen</th><th></th></tr></thead><tbody>
+      ${D.rel.map((r, i) => `<tr><td><input class="facin" data-rgaccf="${i}|socio" value="${esc(r.socio)}" size="${Math.max(10, ...D.rel.map((x) => String(x.socio ?? '').length)) + 2}"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgaccf="${i}|participada" value="${esc(r.participada)}" size="${Math.max(10, ...D.rel.map((x) => String(x.participada ?? '').length)) + 2}"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgaccf="${i}|pct" value="${esc(String(r.pct).replace('.', ','))}" size="${Math.max(6, ...D.rel.map((x) => String(x.pct ?? '').length)) + 1}" style="text-align:right"${ed ? '' : ' disabled'}></td><td class="hint">${esc((r.origen || 'a mano') + (r.celda ? ` · ${r.celda}` : ''))}</td><td>${ed ? `<button class="small danger" data-act="m-rg-accdel" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="c">Sin datos</td></tr>'}
       </tbody></table></div>${ed ? '<button class="small" data-act="m-rg-accadd" style="margin:6px 0">+ Añadir participación</button>' : ''}
       ${D.archivos.length ? `<p class="hint">Archivos leídos: ${D.archivos.map((a) => `${esc(a.name)} (${esc(a.fecha)}, ${a.n} participaciones)${ed ? ` <button class="small" data-act="m-rg-accquitar" data-n="${esc(a.name)}">Quitar</button>` : ''}`).join(' · ')}. El accionariado es del grupo: se ve igual desde todas las empresas.</p>` : ''}
       </section>`;
@@ -911,6 +946,7 @@ export function crearRegistral(c) {
           R = rmCasillas(L.lineas);
           if (!Object.keys(R.v).length) { aviso(`${file.name}: no se encuentran casillas del modelo del Registro Mercantil (¿es un escaneo?)`, true); continue; }
           const m = (R.t['01101'] || '').match(/(\d)\.?(\d{3})/); y = m ? +(m[1] + m[2]) : rmAnioTexto('', file.name);
+          R.reg = dregRegDeCA(texto); // registro, tomo, folio y hoja de la solicitud de depósito
         } else if (tipo === 'cert') { R = rmCertDeTexto(texto); y = rmAnioTexto(texto, file.name); }
         else if (tipo === 'aud') { R = rmAudDeTexto(L.paginas); y = rmAnioTexto(texto, file.name); }
         else if (tipo === 'ig') { R = rmIgDeTexto(L.paginas); y = rmAnioTexto(texto, file.name); }
@@ -1096,6 +1132,7 @@ export function crearRegistral(c) {
     const filas = S.registros.filter((r) => r.tipo === 'rmdoc' && r.empresa_id === e.id && r.datos?.ca?.t).sort((a, b) => b.ejercicio - a.ejercicio);
     if (!filas.length) return;
     const E = filas[0].datos.ca, t = E.t ?? {}, pon = (k, v) => { if (v && !d[k]) { d[k] = v; d._o[k] = `${E.archivo?.nombre ?? 'cuentas'} (cuentas presentadas ${filas[0].ejercicio})`; } };
+    Object.entries(E.reg ?? {}).forEach(([k, v]) => pon(k, v));
     pon('lei', (String(t['01009'] || '').match(/\b[A-Z0-9]{20}\b/) || [''])[0]); pon('nif', (String(t['01010'] || '').match(/\b[A-Z]\d{7}[0-9A-J]\b/) || [''])[0]); pon('denominacion', String(t['01020'] || '').trim());
     pon('domicilio', String(t['01022'] || '').replace(/\s+(Municipio|C[oó]digo postal)\b.*$/i, '').trim());
     const cn = String(t['02001'] || '').match(/^(\d{4})\s*(.*?)\s*(\(\d\))?$/); if (cn) { pon('cnae', cn[1]); pon('cnaeDesc', cn[2]); }
@@ -1300,6 +1337,7 @@ export function crearRegistral(c) {
       await accGuardar(D); render();
     },
     'm-rg-dregtr': () => dregDeTitReal(),
+    'm-rg-dregca': () => dregDeCuentas(false),
     'm-rg-dregquitar': (d) => dregQuitar(d.n),
     'm-rg-tradd': async (d) => { const D = trlDe(); D[d.c].push({}); await trlGuardar(D); },
     'm-rg-trdel': async (d) => { const D = trlDe(); D[d.c].splice(+d.i, 1); await trlGuardar(D); },

@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=158';
+import { crearModulos } from './modulos.js?v=159';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -283,6 +283,7 @@ let focoCelda = null;
 const ATTR_CELDA = ['data-prs', 'data-nom', 'data-id', 'data-fce', 'data-sie', 'data-il'];
 // Impuestos locales: doble clic en una fila con PDF lo abre
 root.addEventListener('dblclick', (ev) => { const du = ev.target.closest?.('[data-duasel]'); if (du && !ev.target.closest('button,select')) { ev.preventDefault(); M.duaAbrir(du.dataset.duasel); return; }
+  const pa = ev.target.closest?.('[data-prsabrir]'); if (pa && !ev.target.closest('input,select,button')) { ev.preventDefault(); M.abrirPrs(pa.dataset.prsabrir); return; }
   const nt = ev.target.closest?.('[data-ntpdf]'); if (nt && !ev.target.closest('select,button,textarea,input')) { ev.preventDefault(); M.abrirArch(nt.dataset.ntpdf); return; }
   const tr = ev.target.closest?.('[data-ilpdf]'); if (tr && !ev.target.closest('select,button')) { ev.preventDefault(); M.abrirArch(tr.dataset.ilpdf); } });
 function restaurarFoco() {
@@ -778,6 +779,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.ilver !== undefined) return void M.setIlVer(t.value);
   if (t.dataset.il) return void M.guardarIl(t.dataset.il, t.value);
   if (t.dataset.lt) return void M.setLt(t.dataset.lt, t.checked);
+  if (t.dataset.calanio !== undefined) return void M.calSetAnio(t.value);
   if (t.dataset.ltmodo) return void M.setLtModo(t.dataset.ltmodo, t.value);
   if (t.dataset.ltfreq) return void M.setLtFreq(t.dataset.ltfreq, t.value);
   if (t.dataset.pgmes !== undefined) return void M.setPgMes(t.value);

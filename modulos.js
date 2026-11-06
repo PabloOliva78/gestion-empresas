@@ -274,7 +274,9 @@ export function crearModulos(c) {
   const hoyUtc = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
   const habilF = (y, m, d) => { let t = Date.UTC(y, m - 1, d); while (!esHabil(t)) t += 864e5; return t; };
   // fin de plazo de presentación según la regla general del calendario de la AEAT
-  const plazoMod = (mod, y, per) => {
+  // con el calendario del contribuyente de la AEAT cargado (303, 111, 115, 123, 592, 202 y 200) se usa su fin de plazo; si no, la regla general
+  const plazoMod = (mod, y, per) => plazoOficial(mod, y, per)?.fin ?? plazoRegla(mod, y, per);
+  const plazoRegla = (mod, y, per) => {
     if (['180', '190', '193'].includes(mod)) return habilF(y + 1, 1, 31);
     if (mod === '390') return habilF(y + 1, 1, 30);
     if (mod === '200') return habilF(y + 1, 7, 25);
@@ -609,9 +611,116 @@ export function crearModulos(c) {
   const setLiqVer = (v) => { liqVer = v; render(); };
   const setCmgMod = (v) => { cmgMod = v; render(); };
 
+  // ---------- Calendario del contribuyente de la AEAT (PDF): plazos oficiales de domiciliación y de presentación, y comprobación con los de la aplicación ----------
+  // Se lee del apartado «Plazos de presentación de autoliquidaciones con domiciliación bancaria». Se guarda en este navegador (el calendario es de todas las empresas).
+  const CAL_KEY = 'imp-modelos-calendario';
+  const CAL_2026 = { ret_m: { '12M25': { dom: '2026-01-15', fin: '2026-01-20' }, '1M26': { dom: '2026-02-17', fin: '2026-02-20' }, '2M26': { dom: '2026-03-16', fin: '2026-03-20' }, '3M26': { dom: '2026-04-15', fin: '2026-04-20' }, '4M26': { dom: '2026-05-15', fin: '2026-05-20' }, '5M26': { dom: '2026-06-17', fin: '2026-06-22' }, '6M26': { dom: '2026-07-15', fin: '2026-07-20' }, '7M26': { dom: '2026-08-17', fin: '2026-08-20' }, '8M26': { dom: '2026-09-16', fin: '2026-09-21' }, '9M26': { dom: '2026-10-15', fin: '2026-10-20' }, '10M26': { dom: '2026-11-17', fin: '2026-11-20' }, '11M26': { dom: '2026-12-16', fin: '2026-12-21' } },
+    ret_t: { '4T25': { dom: '2026-01-15', fin: '2026-01-20' }, '1T26': { dom: '2026-04-15', fin: '2026-04-20' }, '2T26': { dom: '2026-07-15', fin: '2026-07-20' }, '3T26': { dom: '2026-10-15', fin: '2026-10-20' } },
+    iva_m: { '12M25': { dom: '2026-01-27', fin: '2026-01-30' }, '1M26': { dom: '2026-02-25', fin: '2026-03-02' }, '2M26': { dom: '2026-03-25', fin: '2026-03-30' }, '3M26': { dom: '2026-04-27', fin: '2026-04-30' }, '4M26': { dom: '2026-05-27', fin: '2026-06-01' }, '5M26': { dom: '2026-06-25', fin: '2026-06-30' }, '6M26': { dom: '2026-07-27', fin: '2026-07-30' }, '7M26': { dom: '2026-08-26', fin: '2026-08-31' }, '8M26': { dom: '2026-09-25', fin: '2026-09-30' }, '9M26': { dom: '2026-10-27', fin: '2026-10-30' }, '10M26': { dom: '2026-11-25', fin: '2026-11-30' }, '11M26': { dom: '2026-12-24', fin: '2026-12-30' } },
+    iva_t: { '4T25': { dom: '2026-01-27', fin: '2026-01-30' }, '1T26': { dom: '2026-04-15', fin: '2026-04-20' }, '2T26': { dom: '2026-07-15', fin: '2026-07-20' }, '3T26': { dom: '2026-10-15', fin: '2026-10-20' } },
+    pf: [{ dom: '2026-04-15', fin: '2026-04-20' }, { dom: '2026-10-15', fin: '2026-10-20' }, { dom: '2026-12-16', fin: '2026-12-21' }], is200: { dom: '2026-07-22', fin: '2026-07-27' } }; // Calendario del contribuyente 2026 (AEAT, 09/02/2026)
+  const MES_N = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12 };
+  const fechaCal = (txt, anio) => { const t = sinAc(txt), m = t.match(/al\s*(\d{1,2})\s*de\s*([a-z]+)/) || t.match(/hasta\s*(?:el\s*)?(\d{1,2})\s*de\s*([a-z]+)/); return !m || !MES_N[m[2]] ? null : `${anio}-${String(MES_N[m[2]]).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`; };
+  // líneas del PDF: [{y, items:[{x,s}]}] por página → tabla por modelo
+  function parsearCalendario(paginas, anio) {
+    const res = { ret_m: {}, ret_t: {}, iva_m: {}, iva_t: {}, pf: [], is200: null }, bloques = [];
+    let colDom = null, colFin = null, grupo = null;
+    for (const lines of paginas) {
+      for (const L of lines) {
+        const txt = L.items.map((i) => i.s).join(' ');
+        if (/PLAZO DOMICILIACI/i.test(txt)) { const a = L.items.find((i) => /PLAZO DOMICILIACI/i.test(i.s)), b = L.items.find((i) => /VENCIMIENTO/i.test(i.s)); if (a) colDom = a.x - 16; if (b) colFin = b.x - 10; continue; }
+        if (colDom === null) continue;
+        if (/P[áa]gina\s+\d+/.test(txt) || /BANCARIA AÑO|PRESENTACI[ÓO]N AÑO/i.test(txt)) continue;
+        const c0 = L.items.filter((i) => i.x < colDom).map((i) => i.s).join(' ').trim(), c1 = L.items.filter((i) => i.x >= colDom && i.x < colFin).map((i) => i.s).join(' ').trim(), c2 = L.items.filter((i) => i.x >= colFin).map((i) => i.s).join(' ').trim();
+        if (/^Modelos?\s+\d/.test(c0)) { grupo = { mods: c0, tipo: '', dom: [], fin: [], domt: '', fint: '' }; bloques.push(grupo); }
+        else if (grupo && c0 && /^[\d,\s y-]+/.test(c0) && !grupo.dom.length && !grupo.tipo) grupo.mods += ' ' + c0;
+        if (!grupo) continue;
+        if (/Obligaci[óo]n (mensual|trimestral|anual)/i.test(c1)) { grupo = { mods: grupo.mods, tipo: c1, dom: [], fin: [], domt: '', fint: '' }; bloques.push(grupo); }
+        [[c1, 'dom'], [c2, 'fin']].forEach(([c, k]) => {
+          if (!c) return;
+          const m = c.match(/•\s*(\d{1,2}M|\dT|PF)\s*(\d{2})\s*:\s*(.*)/);
+          if (m) grupo[k].push([m[1] + ' ' + m[2], m[3]]);
+          else if (grupo[k].length && c.length < 30 && !/car[áa]cter|Obligaci|domiciliaci[óo]n del|presentaci[óo]n del|cada mes|meses|para todos/i.test(c)) grupo[k][grupo[k].length - 1][1] += ' ' + c;
+          grupo[k + 't'] += ' ' + c;
+        });
+      }
+    }
+    bloques.forEach((b) => {
+      const mods = b.mods.replace(/\s+/g, ' '), tabla = (lst) => Object.fromEntries(lst.map(([k, v]) => [k.replace(/\s+/g, ''), fechaCal(v, anio)]));
+      const par = (d, f) => { const o = {}; Object.keys(f).forEach((k) => { o[k] = { dom: d[k] || null, fin: f[k] }; }); return o; };
+      const esRet = /\b111\b/.test(mods) && /\b115\b/.test(mods), esIva = /\b303\b/.test(mods) && !/opci[óo]n|prorrata/i.test(mods);
+      if (esRet && /mensual/i.test(b.tipo)) Object.assign(res.ret_m, par(tabla(b.dom), tabla(b.fin)));
+      if (esRet && /trimestral/i.test(b.tipo)) Object.assign(res.ret_t, par(tabla(b.dom), tabla(b.fin)));
+      if (esIva && /mensual/i.test(b.tipo)) Object.assign(res.iva_m, par(tabla(b.dom), tabla(b.fin)));
+      if (esIva && /trimestral/i.test(b.tipo)) Object.assign(res.iva_t, par(tabla(b.dom), tabla(b.fin)));
+      if (/^Modelos 202 y 222/.test(mods) && /trimestral/i.test(b.tipo) && b.dom.length === 3) res.pf = b.dom.map((d, i) => ({ dom: fechaCal(d[1], anio), fin: fechaCal((b.fin[i] || [])[1] || '', anio) }));
+      if (/^Modelos 200\b/.test(mods) && !res.is200) res.is200 = { dom: fechaCal(b.domt, anio), fin: fechaCal(b.fint, anio) };
+    });
+    return res;
+  }
+  let calCache = { raw: null, val: null };
+  const calendarios = () => {
+    let raw = ''; try { raw = localStorage.getItem(CAL_KEY) || ''; } catch { /* sin almacenamiento */ }
+    if (calCache.raw === raw && calCache.val) return calCache.val;
+    let o = {}; try { o = JSON.parse(raw || '{}') || {}; } catch { /* formato antiguo */ }
+    if (!o[2026]) o[2026] = CAL_2026;
+    calCache = { raw, val: o }; return o;
+  };
+  // fechas oficiales de un modelo y periodo según el calendario de la AEAT (null si no hay calendario de ese año): fin = último día de presentación · dom = último día para domiciliar
+  function plazoOficial(mod, ej, per) {
+    const C = calendarios(), d = (s) => (s ? msIso(s) : null);
+    if (mod === '200') { const c = C[ej + 1]; return c?.is200?.fin ? { fin: d(c.is200.fin), dom: d(c.is200.dom) } : null; }
+    if (mod === '202') { const x = C[ej]?.pf?.[{ '1P': 0, '2P': 1, '3P': 2 }[per]]; return x?.fin ? { fin: d(x.fin), dom: d(x.dom) } : null; }
+    const tri = /^[1-4]T$/.test(per), ult = tri ? per === '4T' : per === '12', c = C[ult ? ej + 1 : ej]; if (!c) return null;
+    const etq = tri ? `${per[0]}T${String(ej).slice(2)}` : `${+per}M${String(ej).slice(2)}`;
+    const grupo = mod === '303' ? (tri ? c.iva_t : c.iva_m) : ['111', '115', '123', '592'].includes(mod) ? (tri ? c.ret_t : c.ret_m) : null, x = grupo?.[etq];
+    return x?.fin ? { fin: d(x.fin), dom: d(x.dom) } : null;
+  }
+  async function leerCalendarioPdf(file) {
+    const { pags } = await leerPdf(file);
+    let anio = null; const paginas = []; let enSeccion = false;
+    for (const pg of pags) {
+      const its = pg.filter((i) => i.str.trim()).map((i) => ({ x: i.x, y: Math.round(i.y), s: i.str })), todo = its.map((i) => i.s).join(' ');
+      if (!anio) { const m = todo.match(/Calendario del contribuyente\s*(20\d\d)/i); if (m) anio = +m[1]; }
+      if (/Plazos de presentaci[óo]n de autoliquidaciones con domiciliaci[óo]n bancaria/i.test(todo) && /PLAZO DOMICILIACI/i.test(todo)) enSeccion = true; else if (enSeccion && !/PLAZO DOMICILIACI/i.test(todo)) enSeccion = false;
+      if (!enSeccion) continue;
+      const porY = new Map(); its.forEach((i) => { const k = [...porY.keys()].find((y) => Math.abs(y - i.y) <= 2); (porY.get(k ?? i.y) || porY.set(i.y, []).get(i.y)).push(i); });
+      paginas.push([...porY.entries()].sort((a, b) => b[0] - a[0]).map(([y, items]) => ({ y, items: items.sort((a, b) => a.x - b.x) })));
+    }
+    if (!anio || !paginas.length) throw new Error('no encuentro en el PDF el apartado «Plazos de presentación de autoliquidaciones con domiciliación bancaria» del Calendario del contribuyente');
+    const res = parsearCalendario(paginas, anio), n = Object.keys(res.ret_m).length + Object.keys(res.ret_t).length + Object.keys(res.iva_m).length + Object.keys(res.iva_t).length + res.pf.length + (res.is200 ? 1 : 0);
+    if (!n) throw new Error(`el PDF del calendario ${anio} no tiene los plazos de domiciliación en el formato esperado`);
+    const todos = calendarios(); todos[anio] = res;
+    try { localStorage.setItem(CAL_KEY, JSON.stringify(todos)); } catch { /* sin almacenamiento */ }
+    return { anio, n };
+  }
+  let calMsg = '';
+  async function calCargar(files) {
+    for (const f of files.filter((x) => /\.pdf$/i.test(x.name))) {
+      try { calMsg = `Leyendo ${f.name}…`; render(); const r = await leerCalendarioPdf(f); calMsg = `Calendario de la AEAT ${r.anio} cargado: ${r.n} plazos (303, 111/115/123 mensuales y trimestrales, 202 y 200).`; calAnioSel = r.anio; }
+      catch (err) { calMsg = `${f.name}: ${err.message}`; }
+    }
+    render();
+  }
+  const domDeFin = (f) => { let t = f - 5 * 864e5; while (!esHabil(t)) t -= 864e5; return t; };
+  const msIso = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s ?? '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; };
+  // plazos oficiales del calendario de un año frente a los de la aplicación (regla general: fin de plazo y cinco días antes para domiciliar)
+  function compararCalendario(anio) {
+    const C = calendarios()[anio]; if (!C) return null;
+    const filas = [], eti = (k) => { const m = /^(\d{1,2})M(\d{2})$/.exec(k), q = /^(\d)T(\d{2})$/.exec(k); return m ? { ej: 2000 + +m[2], per: m[1].padStart(2, '0') } : q ? { ej: 2000 + +q[2], per: `${q[1]}T` } : null; };
+    const add = (mods, mod, per, ej, o) => { if (!o || !o.fin) return; const fo = msIso(o.fin), dof = o.dom ? msIso(o.dom) : null, fa = plazoRegla(mod, ej, per), da = domDeFin(fa); filas.push({ mods, per: /^[1-4]T$|^\dP$/.test(per) ? `${per}/${ej}` : `${per}/${ej}`, fo, fa, dof, da, okF: fo === fa, okD: dof === null || dof === da }); };
+    [['ret_m', '111 · 115 · 123', '111'], ['ret_t', '111 · 115 · 123', '111'], ['iva_m', '303', '303'], ['iva_t', '303', '303']].forEach(([g, mods, mod]) => Object.entries(C[g] ?? {}).forEach(([k, o]) => { const e = eti(k); if (e) add(mods, mod, e.per, e.ej, o); }));
+    (C.pf ?? []).forEach((o, i) => add('202', '202', ['1P', '2P', '3P'][i], anio, o));
+    if (C.is200) add('200', '200', 'A', anio - 1, C.is200);
+    return filas.sort((a, b) => a.fo - b.fo || a.mods.localeCompare(b.mods));
+  }
+  let calAnioSel = null;
+  const calSetAnio = (v) => { calAnioSel = +v; render(); };
+
   // ---------- Calendario Fiscal: mes tipo agenda con plazos de presentación y domiciliaciones ----------
   let calMes = null, calEmp = false;
-  const domDe = (o) => { let t = o.fin - 5 * 864e5; while (!esHabil(t)) t -= 864e5; return t; };
+  // último día para domiciliar: el del calendario de la AEAT si está cargado; si no, cinco días naturales antes del fin de plazo (pasando al día hábil anterior)
+  const domDe = (o) => plazoOficial(o.mod, o.yP, o.per)?.dom ?? domDeFin(o.fin);
   const setCalMes = (m) => { calMes = m; render(); };
   const setCalEmp = (v) => { calEmp = !!v; render(); };
   const sigDe = (id) => S.empresas.find((q) => q.id === id)?.siglas ?? '';
@@ -643,6 +752,19 @@ export function crearModulos(c) {
     ilEventos().filter((o) => !soloEmp || o.id === S.sel).forEach((o) => ev.push({ ...o, sig: sigDe(o.id) }));
     return ev;
   }
+  // zona para soltar el PDF del calendario de la AEAT y comprobación de sus plazos con los de la aplicación
+  function calComprobacion(yVista) {
+    const ed = puede(), cs = Object.keys(calendarios()).map(Number).sort(), h = new Date(), sig = h.getFullYear() + 1, falta = h.getMonth() >= 10 && !cs.includes(sig);
+    const anio = calAnioSel && cs.includes(calAnioSel) ? calAnioSel : cs.includes(yVista) ? yVista : cs[cs.length - 1], filas = compararCalendario(anio) ?? [];
+    const f = (t) => (t === null || t === undefined ? '—' : fechaTxt(t)), mal = filas.filter((x) => !x.okF || !x.okD), malF = filas.filter((x) => !x.okF).length;
+    const drop = ed ? `<div class="dropzone" data-kind="calaeat" tabindex="0" role="button" style="margin-top:.8rem"><b>Calendario del contribuyente de la AEAT</b> · cargados: ${esc(cs.join(', '))}${falta ? ` · <b style="color:#a50e0e">falta el de ${sig}</b>` : ''}. Suelta aquí su PDF (o pulsa para elegirlo) cuando salga uno nuevo: se leen los plazos de domiciliación y de presentación y se comprueban con los de la aplicación. <a href="https://sede.agenciatributaria.gob.es/Sede/calendario-contribuyente.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">Descargarlo de la sede de la AEAT</a>
+      <input type="file" data-dzkind="calaeat" accept=".pdf" multiple hidden></div>` : '';
+    const tabla = filas.length ? `<div class="wrap"><table class="tabla cal-cmp"><thead><tr><th>Modelo</th><th>Periodo</th><th>Fin de plazo AEAT</th><th>Fin de plazo aplicación</th><th>Domiciliación AEAT</th><th>Domiciliación aplicación</th><th>Comprobación</th></tr></thead><tbody>${filas.map((x) => `<tr class="${x.okF && x.okD ? '' : 'fila-pend'}"><td class="c">${esc(x.mods)}</td><td class="c">${esc(x.per === 'A' || /^A\//.test(x.per) ? 'Anual ' + x.per.split('/')[1] : x.per)}</td><td class="c">${f(x.fo)}</td><td class="c"${x.okF ? '' : ' style="color:#a50e0e;font-weight:700"'}>${f(x.fa)}</td><td class="c">${f(x.dof)}</td><td class="c"${x.okD ? '' : ' style="color:#8a6d00;font-weight:700"'}>${f(x.da)}</td><td class="c">${x.okF && x.okD ? '<span class="d-ok">✓ coincide</span>' : `<span class="d-ko">✖ ${!x.okF ? 'fin de plazo distinto' : 'domiciliación distinta'}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Sin plazos de domiciliación cargados de ese año.</p>';
+    return `${drop}${calMsg ? `<p class="dash-s">${esc(calMsg)}</p>` : ''}
+      <details class="cal-det" ${mal.length ? 'open' : ''} style="margin-top:.6rem"><summary><b>Comprobación con el calendario de la AEAT ${anio}</b> · ${filas.length} plazos · ${malF ? `<span class="d-ko">✖ ${malF} fin(es) de plazo distinto(s)</span>` : '<span class="d-ok">✓ todos los fines de plazo coinciden</span>'}${mal.length - malF ? ` · <span style="color:#8a6d00">${mal.length - malF} domiciliación(es) distinta(s)</span>` : ''}</summary>
+      <label class="no-print" style="display:block;margin:.4rem 0">Calendario <select data-calanio="1">${cs.map((a) => `<option${a === anio ? ' selected' : ''}>${a}</option>`).join('')}</select></label>${tabla}
+      <p class="hint">«Aplicación» es lo que calcularía la app con su regla general (fin de plazo del modelo y domiciliación cinco días naturales antes). Con el calendario de la AEAT cargado, la app usa las fechas oficiales de la AEAT, no las de la regla.</p></details>`;
+  }
   function vistaCalFiscal() {
     const h = new Date(), def = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0'), ym = calMes || def, y = +ym.slice(0, 4), mo = +ym.slice(5, 7), soloEmp = !!calEmp && !!S.sel;
     const NOMM = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -670,7 +792,8 @@ export function crearModulos(c) {
       <h3 style="margin:0 12px">${NOMM[mo - 1]} ${y}</h3><button class="small no-print" data-act="m-calav">⚠ Avisos de hoy</button> <label class="no-print"><input type="checkbox" data-calfemp="1"${soloEmp ? ' checked' : ''}> Solo ${esc(empresa()?.nombre ?? 'la empresa elegida')}</label>
       <span class="dash-s" style="margin-left:auto">📄 fin de plazo de presentación (${nP}, ${nPend} sin presentar) · 🏦 último día para domiciliar (${nD}) · ✓ presentado</span></div>
       <div class="calf-g">${['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((t) => `<div class="calf-h">${t}</div>`).join('')}${celdas}</div>
-      <p class="hint">Fin de plazo por la regla general de la AEAT de cada modelo (303, 111, 115, 123, 592, 202, 200, 349, Intrastat, 583, resúmenes anuales…). Domiciliación: último día para domiciliar el pago de los impuestos a ingresar (cinco días hábiles antes del fin de plazo). También salen los recibos de Impuestos Locales y los plazos de las Notificaciones y requerimientos pendientes.</p></section></div>`;
+      ${calComprobacion(y)}
+      <p class="hint">📄 Fin de plazo: último día para presentar, el que marca la AEAT (calendario del contribuyente cargado para 303, 111, 115, 123, 592, 202 y 200; para el resto, la regla general de cada modelo). 🏦 Domiciliación: último día para domiciliar el pago de los impuestos a ingresar, el del calendario de la AEAT; sin calendario, cinco días naturales antes del fin de plazo. También salen los recibos de Impuestos Locales y los plazos de las Notificaciones y requerimientos pendientes.</p></section></div>`;
   }
   // aviso emergente: lo que vence hoy (plazo de presentación o último día de domiciliación) y no está presentado
   function calfHoy() {
@@ -1808,7 +1931,12 @@ export function crearModulos(c) {
     await cargar(); render();
   }
   const setPrsVer = (v) => { prsVer = v; render(); };
-
+  // doble clic en un periodo de Impuestos presentados: abre ese modelo con su ejercicio y periodo
+  const TAB_MOD = { INT: 'modintra', A22: 'moda22' };
+  function abrirPrs(spec) {
+    const [m, p, y] = spec.split('|'), per = { '1P': '03', '2P': '09', '3P': '11', A: '', '0A': '' }[p] ?? p;
+    S.tab = TAB_MOD[m] ?? `mod${m}`; S.ejercicio = Number(y) || S.ejercicio; S.periodo = per; S.grp = -1; render();
+  }
   function vistaPrsViejo() {
     if (!S.sel) return sinEmpresa;
     const e = empresa(), ej = Number(S.ejercicio), ed = puede();
@@ -1870,7 +1998,7 @@ export function crearModulos(c) {
     const celda = (y, m, p, c) => { const v = prsVal(y, m, p, c); return ed ? `<td class="in"><input data-prs="${m}|${p}|${c}|${y}" value="${v === undefined ? '' : fnum(v)}" placeholder="—"></td>` : `<td class="num">${v === undefined ? '—' : fnum(v)}</td>`; };
     const tablaM = (m, cols, tipo, y) => {
       const filas = tipo === 'ano' ? anios.map((a) => [m === '200' ? `${a} · IS ${a - 1}` : m === '232' ? `${a} · ej. ${a - 1}` : String(a), a, 'A']) : per(tipo, y).map(([p, l, yy]) => [l, yy ?? y, p]);
-      const cuerpo = filas.map(([l, yy, p]) => `<tr><td class="pp">${esc(l)}</td>${cols.map(([c]) => celda(yy, m, p, c)).join('')}</tr>`).join('');
+      const cuerpo = filas.map(([l, yy, p]) => `<tr data-prsabrir="${m}|${p}|${yy}" title="Doble clic: abrir el modelo de este periodo" style="cursor:pointer"><td class="pp">${esc(l)}</td>${cols.map(([c]) => celda(yy, m, p, c)).join('')}</tr>`).join('');
       const tot = tipo === 'ano' || tipo === 'p583' ? '' : `<tr class="ttot"><td class="pp">Total ${y}</td>${cols.map(([c]) => `<td class="num">${fnum(per(tipo, y).reduce((a, [p]) => a + (Number(prsVal(y, m, p, c)) || 0), 0))}</td>`).join('')}</tr>`;
       return `<table class="tprs" style="flex:${cols.length + 1} 1 0"><thead><tr><th rowspan="2" class="pp">${tipo === 'ano' ? 'Ejercicio' : 'Periodo'}</th><th colspan="${cols.length}" class="mh">${m === 'INT' ? 'INTRASTAT' : m === '200' ? 'MODELO 200 · IS' : `MODELO ${m}`}</th></tr>
         <tr>${cols.map(([, l, c]) => `<th class="ch">${l}<small>${CAS(c)}</small></th>`).join('')}</tr></thead><tbody>${cuerpo}${tot}</tbody></table>`;
@@ -2903,14 +3031,18 @@ export function crearModulos(c) {
     }
     const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
       123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? pv('303', 'res') ?? null, 349: pv('349', 'imp') ?? null };
-    const imps = ['111', '115', '123', '303', '349'].map((m) => {
-      const c = calc[m], pr = pres[m];
-      if (c === undefined && pr === null) return '';
-      if (m === '115' && !alta115(e, ej, p)) return '';
-      if (['115', '123', '349'].includes(m) && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005)) return '';
+    // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
+    const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p))) : [];
+    const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
+    const obl = new Set(obP.map((o) => o.mod));
+    const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
+      const c = calc[m], pr = pres[m], o = obP.find((x) => x.mod === m), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
+      if (!['111', '115', '123', '303', '349'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
+      if (!o && c === undefined && pr === null) return '';
+      if (!o && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005) && m !== '111' && m !== '303') return ''; // fuera de lo obligatorio, solo con datos
       const est = c === undefined ? '' : m === '349' ? 'Informativa' : c > 0.005 ? 'A ingresar' : c < -0.005 ? 'A compensar' : 'Cero';
       const cu = pr === null ? nd('Sin presentar') : Math.abs(pr - (c || 0)) <= 1 ? ok('Presentado') : ko(`Presentado ${g(pr)}`);
-      return tarjeta('mod' + m, 'Modelo ' + m, `<div class="dash-v">${g(c)}</div><div class="dash-s">${est}</div><div class="dash-s">${cu}</div>`);
+      return tarjeta(id, tit, `<div class="dash-v">${g(c)}</div><div class="dash-s">${est}</div><div class="dash-s">${cu}</div>`);
     }).filter(Boolean);
     const tiene = (m) => imps.some((h) => h.includes(`data-ir="mod${m}"`));
     // 2) conciliaciones
@@ -4511,7 +4643,7 @@ export function crearModulos(c) {
   const M7 = crearEstados({ S, esc, render, empresa, dz, db, cargar, puede, filasExcel: (f) => filasExcel(f) });
   Object.assign(tabs, M7.tabs);
   Object.assign(badges, M7.badges);
-  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
+  const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

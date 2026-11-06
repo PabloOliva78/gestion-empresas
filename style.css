@@ -1004,3 +1004,11 @@ table.lt-t th.lt-f, table.lt-t td.lt-f, table.lt-t td.lt-m { width: 1%; white-sp
 .dsec table.dua-t.dua-fix td.mid { white-space: normal; text-overflow: clip; }
 
 .dsec table.dua-t.dua-fix td.mid, .dsec table.dua-t.dua-fix th.mid { text-align: center !important; }
+
+/* Datos registrales: columnas del ancho de su texto */
+table.rg-tabla.rotulos { width: auto; }
+table.rg-tabla.rotulos th, table.rg-tabla.rotulos td { white-space: nowrap; }
+table.rg-tabla.rotulos td.hint { padding-left: 1rem; }
+
+table.rg-acc th, table.rg-acc td { white-space: nowrap; }
+table.rg-acc td.hint { padding-left: 1rem; }
