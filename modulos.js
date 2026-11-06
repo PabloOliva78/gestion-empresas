@@ -6,12 +6,12 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=10';
-import { crearModelos } from './modelos.js?v=9';
+import { crearModelos } from './modelos.js?v=10';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=5';
-import { crearEstados } from './estados.js?v=3';
+import { crearConciliaciones } from './conciliaciones.js?v=6';
+import { crearEstados } from './estados.js?v=4';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
@@ -3987,6 +3987,7 @@ export function crearModulos(c) {
   Object.assign(tabs, R2.tabs);
   const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f), calc303: (...a) => c303(...a), calc349: calcular349 });
   Object.assign(tabs, M4.tabs);
+  Object.assign(badges, M4.badges);
   // 303 de un periodo (con sus ajustes y la compensación disponible) y casilla total de retenciones de cada modelo, para el 390 y los resúmenes anuales
   const c303 = (E, R, ej, p) => calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) });
   const totalRet = (modelo, R, ej, per) => {

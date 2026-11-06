@@ -705,7 +705,6 @@ export function crearConciliaciones(c) {
     rint: [RRES.rint.tit, RRES.rint.ts, () => vistaRetRes('rint')],
     rsop: [RRES.rsop.tit, RRES.rsop.ts, () => vistaRetRes('rsop')],
     adif: ['Análisis Diferencias', 'Causa y origen por modelo', () => vistaAdif()],
-    cis: ['Cálculo Impto. Soc.', 'Desde sumas y saldos', () => pendiente('Cálculo del Impuesto sobre Sociedades')],
   };
   const guard = (f) => () => { try { return f(); } catch { return null; } };
   const badges = {

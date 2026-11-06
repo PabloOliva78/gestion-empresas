@@ -498,6 +498,213 @@ function vistaTef(){ const ej=+ejNum(), y=ST.tefEj? +ST.tefEj : ej-1, n=v=>v===n
 
   // zona para soltar el balance de sumas y saldos (la misma que el botón SYS: se guarda por empresa y ejercicio)
   const zonaSys = () => (dz ? dz('sys', 'Suelta aquí el balance de sumas y saldos', '(Excel de Dynamics: cuenta, nombre, saldo de apertura, débito, crédito y saldo de cierre; el ejercicio se toma del nombre del archivo) o pulsa para elegirlo') : '');
+  // ================= Bloque 8 · Cálculo del Impuesto sobre Sociedades (copiado de la antigua; Conciliaciones fiscales) =================
+  // lo presentado: registros «prs» de la empresa. El 200 del IS del año Y se presenta (y se guarda) en el ejercicio Y+1:
+  // datos['200|A'] = { cuota, res, est200, bin: [{ y, ini, apl, fut }] } (las bases negativas se leen del PDF del 200 en Impuestos Presentados)
+  const presVal = (m, key, col) => { const y = +String(key).slice(0, 4), per = String(key).slice(5) || 'A'; const v = S.registros.find((r) => r.tipo === 'prs' && r.empresa_id === S.sel && r.ejercicio === y)?.datos?.[`${m}|${per}`]?.[col]; return v === undefined || v === '' ? null : +v; };
+  const presDatos = () => new Proxy({}, { get: (_, k) => { const m = /^200\|(\d{4})$/.exec(String(k)); return m ? S.registros.find((r) => r.tipo === 'prs' && r.empresa_id === S.sel && r.ejercicio === +m[1] + 1)?.datos?.['200|A'] : undefined; } });
+function tipoIS(ej,incn,nueva,patrimonial){   // Ley 27/2014 art. 29 y DT 44ª (Ley 7/2024)
+  if(nueva) return {t1:0.15,t2:0.15,txt:'entidad de nueva creación (art. 29.1): 15 %'};
+  if(patrimonial||incn>=10000000) return {t1:0.25,t2:0.25,txt:'tipo general (art. 29.1): 25 %'};
+  if(incn<1000000){ const T= ej<=2022?[0.25,0.25] : ej<=2024?[0.23,0.23] : ej===2025?[0.21,0.22] : ej===2026?[0.19,0.21] : [0.17,0.20]; return {t1:T[0],t2:T[1],txt:'microempresa, cifra de negocios < 1 M: '+(T[0]*100)+' % los primeros 50.000 € y '+(T[1]*100)+' % el resto'}; }
+  const t= ej<=2024?0.25 : ej===2025?0.24 : ej===2026?0.23 : ej===2027?0.22 : ej===2028?0.21 : 0.20; return {t1:t,t2:t,txt:'reducida dimensión, cifra de negocios < 10 M: '+(t*100)+' %'}; }
+function cisAnios(){ return efAnios().slice().sort((a,b)=>b-a); }
+function cisEj(){ const ys=cisAnios(), def=new Date().getFullYear()-1; if(ST.cisEj&&(ys.includes(+ST.cisEj)||!ys.length)) return +ST.cisEj; return ys.includes(def)? def : (ys.find(y=>y<=def)||ys[0]||def); }
+function calcIS(){ const ej=cisEj(), man=lsGet('cis-'+ej)||{}, M=(k,d)=> (man[k]===undefined||man[k]==='')? d : (isNaN(+man[k])? man[k] : +man[k]);
+  const L=efLineas(ej)||[], X=efCtx(L), F=(c,r)=>X.val(c,r), S=p=>X.suma('c',p), Ap=p=>X.suma('a',p), Db=p=>X.suma('d',p), hay=L.length>0;
+  const nom=(rx,g)=>r2(X.ss.filter(l=>String(l.digitos).startsWith(g||'6') && rx.test(String(l.nombre||''))).reduce((s,l)=>s+(+l.cierre||0),0));
+  const R={ej,hay,man,av:[]};
+  /* 0 · datos */
+  let incnAnt=null; try{ const L1=efLineas(ej-1); if(L1&&L1.length){ const v=r2(-efCtx(L1).suma('c','70')); if(v>0) incnAnt=v; } }catch(e){}
+  if(!incnAnt){ try{ const v=rmCAValoresPres(ej); if(v&&v['40100']) incnAnt=+v['40100'][1]; }catch(e){} }
+  R.incn=F('I',14); R.incnAnt=M('incnAnt', incnAnt? incnAnt : R.incn); R.grupo=M('grupo','NO'); R.nueva=M('nueva','NO'); R.patri=M('patri','NO');
+  R.T=tipoIS(ej,R.incnAnt,R.nueva==='SÍ',R.patri==='SÍ'); if(man.tipo!==undefined&&man.tipo!=='') R.T={t1:+man.tipo/100,t2:+man.tipo/100,txt:'tipo indicado a mano: '+man.tipo+' %'};
+  R.erd= R.incnAnt<10000000 && R.patri!=='SÍ';
+  /* 1 · resultado */
+  R.rai=F('I',99); R.gis=r2(-F('I',101)); R.res=F('I',108);
+  /* 2 · correcciones: motor de reglas por cuenta del balance de sumas y saldos (saldo = debe − haber) */
+  const SS=X.ss.filter(l=>Math.abs(+l.cierre||0)>=0.005), cta=pre=>SS.filter(l=>pre.some(p=>String(l.digitos).startsWith(p))), porNom=(rx,g)=>SS.filter(l=>String(l.digitos).startsWith(g||'6') && rx.test(String(l.nombre||'')));
+  const det=(ls,fn)=>ls.map(l=>({c:l.digitos,n:l.nombre,v:r2(+l.cierre||0),aj:r2(fn?fn(l):Math.abs(+l.cierre||0))})).filter(x=>Math.abs(x.aj)>=0.005);
+  const C=[], usadas=new Set(), add=(k,t,art,tp,a,d,src,dA,dD)=>{ const A=M(k+'A',r2(Math.max(0,a||0))), D=M(k+'D',r2(Math.max(0,d||0))); (dA||[]).concat(dD||[]).forEach(x=>usadas.add(x.c)); C.push({k,t,art,tp,A,D,src,dA:dA||[],dD:dD||[],manA:man[k+'A']!==undefined&&man[k+'A']!=='',manD:man[k+'D']!==undefined&&man[k+'D']!==''}); };
+  const sumd=d=>r2(d.reduce((s,x)=>s+x.aj,0));
+  { const ls=cta(['630','633','638']), a=det(ls.filter(l=>+l.cierre>0)), d=det(ls.filter(l=>+l.cierre<0)); add('is','Impuesto sobre Sociedades contable (corriente y diferido, gasto o ingreso)','art. 10.3 y 15.b','P',sumd(a),sumd(d),'630, 633 y 638',a,d); }
+  { const a=det(porNom(/MULTA|SANCI|RECARG|APREMIO/i).filter(l=>+l.cierre>0)); add('mul','Multas, sanciones y recargos (ejecutivo, extemporáneos, Seguridad Social)','art. 15.c','P',sumd(a),0,'cuentas del grupo 6 con «multa», «sanción», «recargo» o «apremio»',a); }
+  const donL=det(porNom(/DONATIV|DONACI|LIBERALIDAD|MECENAZ/i).filter(l=>+l.cierre>0)), don=sumd(donL); add('don','Donativos y liberalidades','art. 15.e','P',don,0,'cuentas con «donativo», «donación» o «liberalidad»',donL);
+  { const ls=det(porNom(/ATENCI|OBSEQUI|REGALO|CESTA|LOTE/i).filter(l=>+l.cierre>0)), at=sumd(ls), lim1=r2(Math.max(0,F('I',14))*0.01); add('ate','Atenciones a clientes y proveedores por encima del 1 % de la cifra de negocios','art. 15.e','P',r2(at-lim1),0,'atenciones '+money(at)+' · límite 1 % '+money(lim1),ls); }
+  { const a=det(porNom(/NO DEDUC/i).filter(l=>+l.cierre>0)); add('nod','Gastos marcados como no deducibles en el nombre de la cuenta','art. 15','P',sumd(a),0,'cuentas con «no deducible»',a); }
+  add('pen','Gastos con paraísos fiscales, retribución de fondos propios, juego y actuaciones ilícitas','art. 15.a, d, f y g','P',0,0,'a mano');
+  add('ind','Indemnizaciones por despido o cese por encima del límite (1 M o la exenta)','art. 15.i','P',0,0,'a mano');
+  add('amo','Amortizaciones: exceso sobre tablas (aumento) / libertad de amortización o acelerada de reducida dimensión (disminución)','arts. 12, 102 y 103','T',0,0,'a mano (tablas del RIS) · ver «Partidas a revisar»');
+  add('lea','Arrendamiento financiero: recuperación del coste superior al contable','art. 106','T',0,0,'a mano');
+  add('fco','Fondo de comercio e intangibles de vida útil indefinida: amortización contable por encima del 5 % anual','art. 12.2','T',0,0,'a mano');
+  let rev30=null, rev30y=ej-1; try{ for(const yy of [ej-1,ej-2,ej-3]){ const P=presDatos()['200|'+yy]; if(P&&P.est200) P.est200.forEach(p=>p.filas.forEach(([l,cs])=>cs.forEach(([c,x])=>{ if(c==='00505'&&x!==null&&rev30===null){ rev30=+x; rev30y=yy; } }))); if(rev30!==null) break; } }catch(e){}
+  { const ls=det(SS.filter(l=>/^281/.test(String(l.digitos)) && /16\/2012|DIFERIDA/i.test(String(l.nombre||''))),l=>Math.abs(+l.ap||0)); add('r30','Reversión del 30 % de la amortización no deducida en 2013 y 2014','art. 7 Ley 16/2012','T',0,rev30||0,rev30!==null?'200 de '+rev30y+' (casilla 00505, importe anual fijo)':'a mano · saldo pendiente en cuentas «amortización diferida Ley 16/2012» en el detalle',[],ls); }
+  { const a=det(cta(['690','691','692']).filter(l=>+l.cierre>0)), d=det(cta(['790','791','792']).filter(l=>+l.cierre<0)); add('dti','Deterioro del inmovilizado material, intangible e inversiones inmobiliarias (dotación / reversión)','art. 13.2.a','T',sumd(a),sumd(d),'690-692 / 790-792',a,d); }
+  { const a=det(cta(['696']).filter(l=>+l.cierre>0)), d=det(cta(['796']).filter(l=>+l.cierre<0)); add('dtp','Deterioro de participaciones en el capital de entidades (dotación / reversión)','art. 13.2.b','T',sumd(a),sumd(d),'696 / 796',a,d); }
+  add('dtc','Deterioro de créditos no deducible (menos de 6 meses vencidos, vinculadas, organismos públicos, garantizados)','art. 13.1','T',0,0,'a mano · ver «Partidas a revisar»');
+  { const a=det(cta(['695']).filter(l=>+l.cierre>0)), d=det(cta(['7954','7955','7956','7957','7958']).filter(l=>+l.cierre<0)); add('pro','Provisiones no deducibles: operaciones comerciales y devoluciones, retribuciones a largo plazo, reestructuraciones (dotación / aplicación)','art. 14','T',sumd(a),sumd(d),'695 / 7954-7958',a,d); }
+  /* gastos financieros (art. 16): sin diferencias de cambio, coberturas ni deterioros */
+  const gfL=det(cta(['661','662','664','665','669']).filter(l=>+l.cierre>0)), ifL=det(cta(['761','762','769']).filter(l=>+l.cierre<0)), gfn=r2(sumd(gfL)-sumd(ifL));
+  const divL=det(cta(['760']).filter(l=>+l.cierre<0)), div=sumd(divL);
+  const bo=r2(F('I',78)-F('I',58)-F('I',62)-F('I',66)+div), limGF=r2(Math.max(1000000,0.3*bo)), excGF=r2(Math.max(0,gfn-limGF)), pendGF=M('gfPend',0), aplGF= excGF>0? 0 : r2(Math.min(pendGF,Math.max(0,limGF-gfn)));
+  add('gfi','Gastos financieros netos por encima del 30 % del beneficio operativo (mín. 1 M) / aplicación de excesos de años anteriores','art. 16','T',excGF,aplGF,'gastos financieros netos '+money(gfn)+' (gastos '+money(sumd(gfL))+' − ingresos '+money(sumd(ifL))+') · beneficio operativo '+money(bo)+' · límite '+money(limGF),[],[]);
+  R.gfn=gfn; R.gfL=gfL; R.ifL=ifL; R.bo=bo; R.limGF=limGF;
+  add('vin','Operaciones vinculadas: ajuste a valor de mercado','art. 18','P',0,0,'a mano (ver Modelo 232)');
+  add('val','Reglas de valoración: operaciones societarias, revalorizaciones, cambios de residencia','art. 17','P',0,0,'a mano');
+  add('imp','Imputación temporal: operaciones a plazos, subvenciones, gastos de otros ejercicios','art. 11','T',0,0,'a mano');
+  { const d=divL.map(x=>Object.assign({},x,{aj:r2(x.aj*0.95)})); add('div','Exención de dividendos de participaciones de al menos el 5 % (95 %: el 5 % se integra por gastos de gestión)','art. 21','P',0,sumd(d),'cuentas 760 × 95 % (comprueba en «Partidas a revisar» que la participación es ≥ 5 % y se tiene desde hace 1 año)',[],d); }
+  { const d=det(SS.filter(l=>/^7(71|73|66)/.test(String(l.digitos)) && /ACCION|PARTICIP|SOCIEDAD|VENTA.*(S\.L|S\.A)/i.test(String(l.nombre||'')) && +l.cierre<0)).map(x=>Object.assign({},x,{aj:r2(x.aj*0.95)})); add('pvp','Exención de plusvalías por transmisión de participaciones de al menos el 5 %','art. 21.3','P',0,sumd(d),'771, 773 o 766 con «acciones» o «participaciones» × 95 %',[],d); }
+  add('pbx','Reducción de rentas de intangibles (patent box)','art. 23','P',0,0,'a mano');
+  add('ot1','Otras correcciones (1)','','P',0,0,'a mano'); add('ot2','Otras correcciones (2)','','T',0,0,'a mano');
+  /* partidas a revisar como lo haría un técnico: cuentas con riesgo de ajuste */
+  const REV=[], rev=(t,art,ls,sug,k,lado)=>{ const d=det(ls); if(d.length) REV.push({t,art,det:d,tot:Math.abs(r2(d.reduce((x,y)=>x+y.v,0))),sug,k,lado}); };
+  rev('Dividendos cobrados en el ejercicio y devengados en ejercicios anteriores (545)','art. 21',X.ss.filter(l=>/^545/.test(String(l.digitos)) && (+l.haber||0)>0 && !X.ss.some(m=>/^760/.test(String(m.digitos)) && Math.abs((+m.haber||0)-(+l.haber||0))<0.01)).map(l=>Object.assign({},l,{cierre:r2(-(+l.haber||0)*0.95)})),'La exención (95 %) se aplica en el ejercicio de devengo (760). Llévala aquí solo si el 200 del año del devengo no la aplicó; si ya se aplicó, sería doble exención.','ot2','D');
+  rev('Gastos extraordinarios / excepcionales','art. 15',SS.filter(l=>/^678/.test(String(l.digitos)) && !usadas.has(l.digitos) && +l.cierre>0),'Revisa el contenido: multas, sanciones, liberalidades o gastos sin justificar no son deducibles.','ot1','A');
+  rev('Publicidad y relaciones públicas','art. 15.e',SS.filter(l=>/^627/.test(String(l.digitos)) && !usadas.has(l.digitos) && +l.cierre>0),'Las atenciones a clientes o proveedores solo son deducibles hasta el 1 % de la cifra de negocios; los regalos al personal son retribución en especie.','ate','A');
+  rev('Amortizaciones del ejercicio','arts. 12, 102, 103 y 106',SS.filter(l=>/^68/.test(String(l.digitos)) && +l.cierre>0),'Compara con los coeficientes máximos de tablas (art. 12.1.a y anexo del RIS); el exceso es aumento temporario. Si hay libertad de amortización o amortización acelerada de reducida dimensión, va como disminución.','amo','A');
+  rev('Amortización acumulada de inmovilizado regularizado en actas de inspección','arts. 11 y 12',SS.filter(l=>/^28/.test(String(l.digitos)) && /ACTA|INSPEC/i.test(String(l.nombre||'')) && Math.abs((+l.cierre||0)-(+l.ap||0))>0.005).map(l=>Object.assign({},l,{cierre:r2((+l.cierre||0)-(+l.ap||0))})),'La amortización de bienes cuyo gasto ya se regularizó en un acta puede necesitar un ajuste para no deducirla dos veces (o para recuperarla).','amo','A');
+  rev('Pérdidas por deterioro y créditos incobrables','art. 13.1',SS.filter(l=>/^(650|694|794|490)/.test(String(l.digitos)) && Math.abs(+l.cierre||0)>0.005 && /^6|^7/.test(String(l.digitos))),'Solo deducible con 6 meses de vencimiento, deudor en concurso, procesado o reclamado judicialmente; no con vinculadas, entidades públicas ni con garantía.','dtc','A');
+  rev('Dividendos cobrados (760)','art. 21',SS.filter(l=>/^760/.test(String(l.digitos)) && +l.cierre<0),'Exención del 95 % si la participación es ≥ 5 % (o coste > 20 M antes de 2021) y se tiene 1 año; si no, ajusta la disminución.','div','D');
+  rev('Subvenciones imputadas a resultados','art. 11',SS.filter(l=>/^7(40|46|47)/.test(String(l.digitos)) && +l.cierre<0),'Tributan al imputarse a resultados con el mismo ritmo que la amortización del bien; sin ajuste salvo que la imputación contable no siga ese criterio.','imp','A');
+  rev('Instrumentos de cobertura y diferencias de cambio','arts. 10 y 16',SS.filter(l=>/^(663|763|668|768)/.test(String(l.digitos)) && Math.abs(+l.cierre||0)>0.005),'Fiscalmente se siguen el criterio contable; no computan en el límite de gastos financieros.','',null);
+  rev('Otros tributos','art. 15',SS.filter(l=>/^631/.test(String(l.digitos)) && +l.cierre>0),'Deducibles salvo recargos, sanciones e intereses de demora no deducibles; el IVA no deducible por prorrata sí es gasto.','ot1','A');
+  R.REV=REV;
+  /* mapa fiscal de todas las cuentas de gastos e ingresos */
+  const enRev=new Map(); REV.forEach(r=>r.det.forEach(x=>enRev.set(x.c,r.t))); const enC=new Map(); C.forEach(c=>c.dA.concat(c.dD).forEach(x=>enC.set(x.c,c.t)));
+  const BASE=[[/^60|^61/,'Compras y variación de existencias: computable sin ajuste (art. 10.3)'],[/^62/,'Servicios exteriores: deducible si está justificado, contabilizado e imputado al ejercicio (arts. 10.3 y 11)'],[/^63/,'Tributos: deducibles salvo el IS y las sanciones o recargos'],[/^64/,'Gastos de personal: deducibles (art. 15.e excluye las retribuciones al personal de las liberalidades)'],[/^65/,'Otros gastos de gestión: deducibles; pérdidas de créditos con los requisitos del art. 13.1'],[/^66/,'Gastos financieros: deducibles con el límite del art. 16 (salvo diferencias de cambio y coberturas)'],[/^67/,'Pérdidas excepcionales y de inmovilizado: computables; revisar su naturaleza'],[/^68/,'Amortizaciones: deducibles hasta los coeficientes de tablas (art. 12)'],[/^69/,'Deterioros: según art. 13 (existencias deducible; inmovilizado y participaciones no)'],[/^70|^71|^73|^74|^75/,'Ingresos de explotación: computables sin ajuste'],[/^76/,'Ingresos financieros: computables (dividendos con la exención del art. 21)'],[/^77/,'Beneficios de inmovilizado y excepcionales: computables (participaciones con art. 21.3)'],[/^79/,'Excesos y reversiones: computables si el dotación fue deducible']];
+  R.MAPA=SS.filter(l=>/^[67]/.test(String(l.digitos))).map(l=>{ const c=String(l.digitos), est= enC.has(c)?'ajuste' : enRev.has(c)?'revisar' : 'sin ajuste', tr= enC.has(c)? 'Corrección: '+enC.get(c) : enRev.has(c)? 'A revisar: '+enRev.get(c) : ((BASE.find(([rx])=>rx.test(c))||[,'Computable sin ajuste'])[1]); return {c,n:l.nombre,v:r2(+l.cierre||0),est,tr}; }).sort((a,b)=>a.c.localeCompare(b.c));
+  R.C=C; R.sA=r2(C.reduce((s,c)=>s+c.A,0)); R.sD=r2(C.reduce((s,c)=>s+c.D,0)); R.biPrev=r2(R.res+R.sA-R.sD);
+  /* 3 · reserva de capitalización (art. 25) */
+  const fpPref=X.ss.map(l=>String(l.digitos)).filter(d=>/^1[12]/.test(d) && !/^(112|118|129)/.test(d)), fp=col=>r2(-X.ss.filter(l=>/^1[12]/.test(String(l.digitos)) && !/^(112|118|129)/.test(String(l.digitos))).reduce((s,l)=>s+(+l[col]||0),0));
+  R.fpIni=fp('ap'); R.fpFin=fp('cierre'); R.fpExcl=M('fpExcl',0); R.fpInc=r2(Math.max(0,R.fpFin-R.fpIni-R.fpExcl));
+  R.plant=M('plantilla',0); R.capPct= R.plant>10?0.30 : R.plant>=5?0.265 : R.plant>=2?0.23 : 0.20; R.capLimPct= R.incnAnt<1000000?0.25:0.20;
+  R.capGen=r2(R.fpInc*R.capPct); R.capPendAnt=M('capPend',0); R.capLim=r2(Math.max(0,R.biPrev)*R.capLimPct); R.cap= R.patri==='SÍ'? 0 : r2(Math.min(R.capGen+R.capPendAnt,R.capLim)); R.capPendFut=r2(R.capGen+R.capPendAnt-R.cap);
+  /* 4 · bases imponibles negativas (art. 26) */
+  const base1=r2(R.biPrev-R.cap); R.binPct= R.incnAnt>=60000000?0.25 : R.incnAnt>=20000000?0.5 : 0.7; R.binLim= base1<=0? 0 : (R.nueva==='SÍ'? base1 : r2(Math.min(base1,Math.max(1000000,R.binPct*base1))));
+  let binMap={}, binSrc='a mano'; try{ const P=presDatos()['200|'+(ej-1)]; if(P&&P.bin&&P.bin.length){ P.bin.forEach(b=>{ if(+b.fut>0) binMap[b.y]=+b.fut; }); binSrc='200 de '+(ej-1)+' (pendiente para periodos futuros)'; } }catch(e){}
+  Object.keys(man).filter(k=>/^bin\d{4}$/.test(k)).forEach(k=>{ if(man[k]!=='') binMap[+k.slice(3)]=+man[k]; });
+  let acum=0; R.bins=Object.keys(binMap).map(Number).sort((a,b)=>a-b).map(y=>{ const ini=binMap[y], apl=r2(Math.min(ini,Math.max(0,R.binLim-acum))); acum=r2(acum+apl); return {y,ini,apl,fin:r2(ini-apl)}; });
+  R.binSrc=binSrc; R.binApl=acum;
+  if(base1<0) R.bins.push({y:ej,ini:0,apl:0,fin:r2(-base1),nueva:true});
+  /* 5 · reserva de nivelación (art. 105) */
+  R.nivOk=R.erd && R.patri!=='SÍ'; const base2=r2(base1-R.binApl); R.nivRev=M('nivRev',0); R.niv= R.nivOk && M('nivel','NO')==='SÍ' && base2>0 ? r2(Math.min(base2*0.10,1000000)) : 0;
+  R.bi=r2(base2-R.niv+R.nivRev);
+  /* 6 · cuota íntegra */
+  const bi=Math.max(0,R.bi); R.ci= r2(Math.min(bi,50000)*R.T.t1+Math.max(0,bi-50000)*R.T.t2);
+  /* 7 · bonificaciones y deducciones */
+  R.bon=M('bon',0); R.ddi=M('ddi',0); const cia=r2(Math.max(0,R.ci-R.bon-R.ddi));
+  R.donGen=r2(Math.min(don*0.40,0.15*bi));
+  /* deducciones de I+D activadas en la 4742: generada = debe de la subcuenta del año; pendiente aplicada = haber de las de años anteriores */
+  const l474=X.ss.filter(l=>/^4742/.test(String(l.digitos)) && /I\s*[&+]\s*D|INNOVA|INVESTIG/i.test(String(l.nombre||''))), yr=l=>{ const m=String(l.nombre||'').match(/(20\d{2})(?!.*20\d{2})/); if(m) return +m[1]; const d=String(l.digitos).slice(-4); return /^20\d\d$/.test(d)? +d : 0; };
+  R.idiGen=r2(l474.filter(l=>yr(l)===ej).reduce((s,l)=>s+(+l.debe||0),0)); R.idiPendApl=r2(l474.filter(l=>yr(l)&&yr(l)<ej).reduce((s,l)=>s+(+l.haber||0),0)); R.idiCtas=l474.map(l=>({c:l.digitos,n:l.nombre,ap:+l.ap||0,d:+l.debe||0,h:+l.haber||0}));
+  R.ded={don:M('dDon',R.donGen),emp:M('dEmp',0),idi:M('dIdi',R.idiGen),otr:M('dOtr',0),pend:M('dPend',R.idiPendApl)};
+  const idiAlto=R.ded.idi>0.10*cia; R.dedLim=r2(cia*(idiAlto?0.5:0.25)); const dedLimitadas=r2(R.ded.emp+R.ded.idi+R.ded.otr+R.ded.pend);
+  R.dedApl=r2(R.ded.don+Math.min(dedLimitadas,R.dedLim)); R.dedPendFut=r2(Math.max(0,dedLimitadas-R.dedLim));
+  R.cl0=r2(Math.max(0,cia-R.dedApl));
+  /* 8 · tributación mínima (art. 30 bis) */
+  R.minAplica= R.grupo==='SÍ' || R.incn>=20000000; R.minPct= R.nueva==='SÍ'?0.10:0.15; R.min= R.minAplica? r2(bi*R.minPct - R.bon) : 0; R.cl= R.minAplica? r2(Math.max(R.cl0,R.min)) : R.cl0; if(R.cl>R.cl0){ const nap=r2(R.cl-R.cl0); R.dedApl=r2(R.dedApl-nap); R.dedPendFut=r2(R.dedPendFut+nap); }
+  if(R.minAplica && R.min>R.cl0) R.av.push('Se aplica la tributación mínima del '+(R.minPct*100)+' %: la cuota líquida sube de '+money(R.cl0)+' a '+money(R.cl)+' y las deducciones no aplicadas pasan a años siguientes.');
+  /* 9 · retenciones y pagos fraccionados */
+  const s473=X.ss.filter(l=>String(l.digitos).startsWith('473'));
+  R.retCtas=s473.map(l=>({c:l.digitos,n:l.nombre,d:r2(+l.debe||0),pf:/FRACCION|202|PAGO A CUENTA DEL IMPUESTO/i.test(String(l.nombre||''))}));
+  const pfCta=r2(R.retCtas.filter(x=>x.pf).reduce((s,x)=>s+x.d,0)), pf202=r2(['1P','2P','3P'].reduce((s,p)=>s+(presVal('202',ej+'-'+p,'res')||0),0));
+  R.ret=M('ret',r2(R.retCtas.filter(x=>!x.pf).reduce((s,x)=>s+x.d,0))); R.pf=M('pf', pfCta||pf202); R.pfSrc= man.pf!==undefined&&man.pf!==''?'a mano': pfCta? 'subcuentas 473 de pagos fraccionados (debe)' : 'modelos 202 presentados';
+  R.incr=M('incr',0); R.dif=r2(R.cl-R.ret-R.pf+R.incr);
+  /* 10 · impuesto contable */
+  const tmed=R.T.t2, sumT=c=>r2(C.filter(x=>x.tp==='T').reduce((s,x)=>s+x[c],0));
+  R.difTempA=sumT('A'); R.difTempD=sumT('D'); R.ad=r2(R.difTempA*tmed); R.pd=r2(R.difTempD*tmed); R.binCred=r2(R.binApl*tmed);
+  R.gasto=r2(R.cl+R.pd-R.ad);   // gasto por impuesto corriente + diferido (aproximado)
+  R.difGasto=r2(R.gasto-R.gis);
+  if(Math.abs(R.difGasto)>1) R.av.push('El gasto por IS calculado ('+money(R.gasto)+') no coincide con el contabilizado ('+money(R.gis)+'): diferencia '+money(R.difGasto)+'.');
+  if(R.cap>0) R.av.push('Reserva de capitalización: hay que dotar una reserva indisponible de '+money(R.cap)+' y mantener el incremento de fondos propios 3 años (art. 25.1).');
+  if(gfn>limGF) R.av.push('Gastos financieros: '+money(excGF)+' no deducibles este año se pueden deducir en los siguientes (art. 16.1).');
+  if(!hay) R.av.push('No hay balance de sumas y saldos de '+ej+': cárgalo en Balance de sumas y saldos.');
+  return R; }
+function vistaCis(){ const R=calcIS(), n=v=>v===null||v===undefined||isNaN(v)?'—':money(r2(v)), pc=v=>(v*100).toLocaleString('es-ES',{maximumFractionDigits:2})+' %', man=R.man;
+  const inp=(k,v,w)=>`<input class="facin n${man[k]!==undefined&&man[k]!==''?' editado':''}" data-cis="${k}" value="${man[k]!==undefined&&man[k]!==''?esc(man[k]):''}" placeholder="${v===null||v===undefined?'':fmtIn(v)}" size="${w||11}">`;
+  const sel=(k,v)=>`<select data-cis="${k}">${['NO','SÍ'].map(o=>`<option${o===v?' selected':''}>${o}</option>`).join('')}</select>`;
+  const fila=(t,v,b,src)=>`<tr${b?' class="total"':''}><td>${t}</td><td class="n">${n(v)}</td><td class="leyenda">${src||''}</td></tr>`;
+  return bloqueAvisos(['Cálculo del Impuesto sobre Sociedades de '+R.ej+' a partir del balance de sumas y saldos (saldo de cierre = debe − haber), con la Ley 27/2014 y las novedades de la Ley 7/2024. Solo el calculado: la comparación con el presentado está en 4.- Modelos tributarios › Modelo 200. Lo pendiente de otros años sale del 200 de '+(R.ej-1)+'. Las casillas en blanco usan el valor calculado (en gris); escribe un importe para corregirlo.'].concat(R.av))+
+  `<section class="block"><h3 class="bt">0 · Datos del periodo · ${esc(EMP().nombre)} · Ejercicio <select data-cisej="1">${(cisAnios().length?cisAnios():[R.ej]).map(y=>`<option value="${y}" ${y===R.ej?'selected':''}>${y}</option>`).join('')}</select> <span class="leyenda">(sumas y saldos cargados; se presenta en ${R.ej+1})</span></h3><table class="aud mov" style="width:auto"><tbody>
+    <tr><td>Cifra de negocios del ejercicio</td><td class="n">${n(R.incn)}</td><td></td></tr>
+    <tr><td>Cifra de negocios del ejercicio anterior (determina tipo y límites)</td><td>${inp('incnAnt',R.incnAnt,14)}</td><td class="leyenda">sumas y saldos de ${R.ej-1} o cuentas anuales</td></tr>
+    <tr><td>¿Forma parte de un grupo mercantil (art. 42 CCom)?</td><td>${sel('grupo',R.grupo)}</td><td class="leyenda">tributación mínima y límites del grupo</td></tr>
+    <tr><td>¿Entidad de nueva creación (primer periodo con base positiva y el siguiente)?</td><td>${sel('nueva',R.nueva)}</td><td></td></tr>
+    <tr><td>¿Entidad patrimonial (art. 5.2)?</td><td>${sel('patri',R.patri)}</td><td class="leyenda">sin reducida dimensión ni reserva de capitalización</td></tr>
+    <tr class="total"><td>Tipo de gravamen</td><td>${inp('tipo',R.T.t2*100,5)} %</td><td class="leyenda">${esc(R.T.txt)}</td></tr></tbody></table></section>
+  <section class="block"><h3 class="bt">1 · Resultado contable</h3><table class="aud mov" style="width:auto"><tbody>${fila('Resultado antes de impuestos',R.rai,1,'PyG C) desde sumas y saldos')}${fila('Gasto (+) / ingreso (−) por Impuesto sobre Sociedades',R.gis,0,'630, 633 y 638')}${fila('Resultado del ejercicio',R.res,0,'PyG D)')}</tbody></table></section>
+  <section class="block"><h3 class="bt">2 · Correcciones al resultado contable</h3><div style="overflow-x:auto"><table class="aud mov" style="width:auto"><thead><tr><th>Concepto</th><th>Artículo LIS</th><th>Diferencia</th><th>Aumento</th><th>Disminución</th><th>Origen</th></tr></thead><tbody>
+    ${R.C.map(c=>{ const dd=c.dA.map(x=>({...x,l:'+'})).concat(c.dD.map(x=>({...x,l:'−'}))); const ab=ST.cisAb&&ST.cisAb[c.k]; return `<tr><td>${dd.length?`<button class="mini no-print" data-cisab="${c.k}" title="Ver las cuentas">${ab?'▾':'▸'} ${dd.length}</button> `:''}${esc(c.t)}</td><td>${esc(c.art)}</td><td class="c">${c.tp==='P'?'Permanente':'Temporaria'}</td><td>${inp(c.k+'A',c.A)}</td><td>${inp(c.k+'D',c.D)}</td><td class="leyenda" style="white-space:normal!important;max-width:380px">${esc(c.src)}</td></tr>`+(ab?dd.map(x=>`<tr style="background:#f6f8fb"><td class="leyenda" style="padding-left:28px">${esc(x.c)} · ${esc(x.n||'')}</td><td class="leyenda">saldo ${n(x.v)}</td><td></td><td class="n leyenda">${x.l==='+'?n(x.aj):''}</td><td class="n leyenda">${x.l==='−'?n(x.aj):''}</td><td></td></tr>`).join(''):''); }).join('')}
+    <tr class="total"><td colspan="3">Total correcciones</td><td class="n">${n(R.sA)}</td><td class="n">${n(R.sD)}</td><td></td></tr>
+    <tr class="total"><td colspan="3">Base imponible previa (resultado + aumentos − disminuciones)</td><td class="n" colspan="2">${n(R.biPrev)}</td><td></td></tr></tbody></table></div>
+    <p class="leyenda">Gastos financieros: excesos de años anteriores pendientes ${inp('gfPend',0)} (art. 16: sin límite temporal). <button class="mini no-print" data-cisab="gfdet">${ST.cisAb&&ST.cisAb.gfdet?'▾':'▸'} cuentas del cálculo</button></p>
+    ${ST.cisAb&&ST.cisAb.gfdet?`<table class="aud mov" style="width:auto"><thead><tr><th>Cuenta</th><th>Gasto financiero</th><th>Ingreso financiero</th></tr></thead><tbody>${R.gfL.map(x=>`<tr><td class="leyenda">${esc(x.c)} · ${esc(x.n||'')}</td><td class="n">${n(x.aj)}</td><td></td></tr>`).join('')}${R.ifL.map(x=>`<tr><td class="leyenda">${esc(x.c)} · ${esc(x.n||'')}</td><td></td><td class="n">${n(x.aj)}</td></tr>`).join('')}<tr class="total"><td>Gastos financieros netos · beneficio operativo ${n(R.bo)} · límite ${n(R.limGF)}</td><td class="n" colspan="2">${n(R.gfn)}</td></tr></tbody></table>`:''}</section>
+  <section class="block"><h3 class="bt">2 ter · Mapa fiscal de las cuentas de gastos e ingresos (${R.MAPA.length}) · <select data-cismapa="1">${[['','Todas'],['ajuste','Con ajuste ('+R.MAPA.filter(x=>x.est==='ajuste').length+')'],['revisar','A revisar ('+R.MAPA.filter(x=>x.est==='revisar').length+')'],['sin ajuste','Sin ajuste ('+R.MAPA.filter(x=>x.est==='sin ajuste').length+')']].map(([v,t])=>`<option value="${v}"${(ST.cisMapa||'')===v?' selected':''}>${t}</option>`).join('')}</select></h3>
+   <div style="overflow-x:auto;max-height:520px"><table class="aud mov exen-t" style="width:auto"><thead><tr><th>Cuenta</th><th>Nombre</th><th>Saldo</th><th>Tratamiento fiscal</th></tr></thead><tbody>${R.MAPA.filter(x=>!ST.cisMapa||x.est===ST.cisMapa).map(x=>`<tr><td>${esc(x.c)}</td><td>${esc(x.n||'')}</td><td class="n">${n(x.v)}</td><td style="white-space:normal!important;max-width:560px;color:${x.est==='ajuste'?'#1f3864':x.est==='revisar'?'#b06000':'#555'}">${x.est==='ajuste'?'● ':x.est==='revisar'?'⚠ ':'✓ '}${esc(x.tr)}</td></tr>`).join('')}</tbody></table></div></section>
+  <section class="block"><h3 class="bt">2 bis · Partidas a revisar (posibles ajustes)</h3><p class="leyenda">Cuentas del balance con riesgo fiscal que la app no puede ajustar sola. Con «Llevar» el importe pasa a la corrección indicada como valor a mano (después puedes corregirlo).</p>
+   ${R.REV.map(r=>`<h4 style="margin:10px 0 4px">${esc(r.t)} <span class="leyenda">(${esc(r.art)} · ${n(r.tot)})</span></h4><p class="leyenda" style="margin:0 0 4px">${esc(r.sug)}</p><table class="aud mov" style="width:auto"><tbody>${r.det.map(x=>`<tr><td class="leyenda">${esc(x.c)} · ${esc(x.n||'')}</td><td class="n">${n(x.v)}</td><td>${r.k&&r.lado?`<button class="mini no-print" data-cisllevar="${r.k}${r.lado}|${x.aj}">Llevar a ${r.lado==='A'?'aumento':'disminución'}</button>`:''}</td></tr>`).join('')}</tbody></table>`).join('')||'<p>✓ Sin partidas de riesgo</p>'}</section>
+  <section class="block"><h3 class="bt">3 · Reserva de capitalización (art. 25)</h3><table class="aud mov" style="width:auto"><tbody>
+    ${fila('Fondos propios al inicio (11 y 12 sin 112, 118 ni 129)',R.fpIni,0,'saldo de apertura')}${fila('Fondos propios al cierre (sin el resultado del ejercicio)',R.fpFin,0,'saldo de cierre')}
+    <tr><td>Partidas que no computan (aportaciones de socios, ampliaciones con aportación, reservas legales, acciones propias…)</td><td>${inp('fpExcl',0)}</td><td></td></tr>
+    ${fila('Incremento de fondos propios',R.fpInc,1)}
+    <tr><td>Incremento de la plantilla media (%)</td><td>${inp('plantilla',0,5)}</td><td class="leyenda">≥ 2 %: 23 % · ≥ 5 %: 26,5 % · > 10 %: 30 % (mantener 3 años)</td></tr>
+    ${fila('Reducción del ejercicio: '+pc(R.capPct)+' del incremento',R.capGen)}
+    <tr><td>Reducción pendiente de años anteriores</td><td>${inp('capPend',0)}</td><td></td></tr>
+    ${fila('Límite: '+pc(R.capLimPct)+' de la base imponible previa',R.capLim)}${fila('Reducción aplicada',R.cap,1)}${fila('Pendiente para los años siguientes',R.capPendFut)}</tbody></table></section>
+  <section class="block"><h3 class="bt">4 · Compensación de bases imponibles negativas (art. 26)</h3>
+    <p class="leyenda">Límite: ${R.nueva==='SÍ'?'sin límite (primeros periodos de nueva creación)':pc(R.binPct)+' de la base previa (cifra de negocios '+n(R.incnAnt)+'), mínimo 1.000.000 €'} = <b>${n(R.binLim)}</b> · Origen: ${esc(R.binSrc)}</p>
+    <table class="aud mov" style="width:auto"><thead><tr><th>Año de origen</th><th>Pendiente al inicio</th><th>Aplicada</th><th>Pendiente al final</th></tr></thead><tbody>
+    ${R.bins.map(b=>`<tr><td>${b.y}${b.nueva?' (se genera este año)':''}</td><td>${b.nueva?'':inp('bin'+b.y,b.ini)}</td><td class="n">${n(b.apl)}</td><td class="n">${n(b.fin)}</td></tr>`).join('')||'<tr><td colspan="4" class="c">Sin bases negativas pendientes</td></tr>'}
+    <tr><td><input class="facin" data-cisnuevabin="1" placeholder="año" size="5"></td><td colspan="3" class="leyenda">añadir año de origen a mano</td></tr>
+    <tr class="total"><td>Total</td><td></td><td class="n">${n(R.binApl)}</td><td></td></tr></tbody></table></section>
+  <section class="block"><h3 class="bt">5 · Reserva de nivelación (art. 105) y base imponible</h3><table class="aud mov" style="width:auto"><tbody>
+    <tr><td>¿Aplicar la reserva de nivelación? ${R.nivOk?'':'(solo reducida dimensión)'}</td><td>${sel('nivel',man.nivel||'NO')}</td><td class="leyenda">10 % de la base, máx. 1 M; se suma en 5 años o al tener base negativa</td></tr>
+    ${fila('Minoración por reserva de nivelación',R.niv)}<tr><td>Adición por reversión de nivelaciones anteriores</td><td>${inp('nivRev',0)}</td><td></td></tr>
+    ${fila('BASE IMPONIBLE',R.bi,1)}</tbody></table></section>
+  <section class="block"><h3 class="bt">6 · Cuota íntegra, deducciones y cuota líquida</h3><table class="aud mov" style="width:auto"><tbody>
+    ${fila('Cuota íntegra ('+esc(R.T.txt)+')',R.ci,1)}
+    <tr><td>Bonificaciones (Ceuta y Melilla, servicios públicos locales: arts. 33 y 34)</td><td>${inp('bon',0)}</td><td></td></tr>
+    <tr><td>Deducción por doble imposición internacional (arts. 31 y 32)</td><td>${inp('ddi',0)}</td><td></td></tr>
+    <tr><td>Donativos (Ley 49/2002: 40 %, 50 % los recurrentes; límite 15 % de la base)</td><td>${inp('dDon',R.donGen)}</td><td class="leyenda">sin límite conjunto</td></tr>
+    <tr><td>Empleo de personas con discapacidad (art. 38)</td><td>${inp('dEmp',0)}</td><td class="leyenda" rowspan="4">límite conjunto: ${pc(R.ded.idi>0.10*(R.ci-R.bon-R.ddi)?0.5:0.25)} de la cuota íntegra ajustada = ${n(R.dedLim)}</td></tr>
+    <tr><td>I+D e innovación tecnológica (art. 35)${R.idiGen?' <span class="leyenda">(debe de la 4742 del año)</span>':''}</td><td>${inp('dIdi',R.idiGen)}</td></tr>
+    <tr><td>Otras deducciones del ejercicio (art. 36, DT 37ª…)</td><td>${inp('dOtr',0)}</td></tr>
+    <tr><td>Deducciones pendientes de años anteriores${R.idiPendApl?' <span class="leyenda">(haber de la 4742 de años anteriores)</span>':''}</td><td>${inp('dPend',R.idiPendApl)}</td></tr>
+    ${R.idiCtas.length?`<tr><td colspan="3" class="leyenda">${R.idiCtas.map(x=>esc(x.c+' · '+x.n+': apertura '+money(x.ap)+' · debe '+money(x.d)+' · haber '+money(x.h))).join('<br>')}</td></tr>`:''}
+    ${fila('Deducciones aplicadas',R.dedApl)}${fila('Deducciones pendientes para años siguientes',R.dedPendFut)}
+    ${R.minAplica?fila('Tributación mínima ('+pc(R.minPct)+' de la base, art. 30 bis)',R.min):''}
+    ${fila('CUOTA LÍQUIDA',R.cl,1)}</tbody></table></section>
+  <section class="block"><h3 class="bt">7 · Retenciones, pagos fraccionados y resultado</h3><table class="aud mov" style="width:auto"><tbody>
+    ${R.retCtas.map(x=>`<tr><td class="leyenda">${esc(x.c)} · ${esc(x.n||'')}${x.pf?' (pago fraccionado)':''}</td><td class="n">${n(x.d)}</td><td class="leyenda">debe</td></tr>`).join('')}
+    <tr><td>Retenciones e ingresos a cuenta</td><td>${inp('ret',R.ret)}</td><td class="leyenda">debe de las cuentas 473 del balance de sumas y saldos</td></tr>
+    <tr><td>Pagos fraccionados (202)</td><td>${inp('pf',R.pf)}</td><td class="leyenda">${esc(R.pfSrc)}</td></tr>
+    <tr><td>Incremento por pérdida de beneficios fiscales e intereses de demora</td><td>${inp('incr',0)}</td><td></td></tr>
+    ${fila(R.dif>=0?'CUOTA DIFERENCIAL · A INGRESAR':'CUOTA DIFERENCIAL · A DEVOLVER',Math.abs(R.dif),1)}</tbody></table></section>
+  <section class="block"><h3 class="bt">8 · Impuesto contable y asiento propuesto</h3><table class="aud mov" style="width:auto"><tbody>
+    ${fila('Diferencias temporarias que aumentan (activo por impuesto diferido, 4740)',R.ad)}${fila('Diferencias temporarias que disminuyen (pasivo por impuesto diferido, 479)',R.pd)}${fila('Bases negativas aplicadas (si estaban activadas, baja de la 4745)',R.binCred)}
+    ${fila('Gasto por impuesto calculado (corriente + diferido)',R.gasto,1)}${fila('Gasto por impuesto contabilizado',R.gis)}${fila('Diferencia',R.difGasto)}</tbody></table>
+    <table class="aud mov" style="width:auto;margin-top:8px"><thead><tr><th>Cuenta</th><th>Debe</th><th>Haber</th></tr></thead><tbody>
+     <tr><td>6300 Impuesto corriente</td><td class="n">${n(R.cl)}</td><td></td></tr>
+     ${R.ad?`<tr><td>4740 Activos por diferencias temporarias</td><td class="n">${n(R.ad)}</td><td></td></tr><tr><td>6301 Impuesto diferido</td><td></td><td class="n">${n(R.ad)}</td></tr>`:''}
+     ${R.pd?`<tr><td>6301 Impuesto diferido</td><td class="n">${n(R.pd)}</td><td></td></tr><tr><td>479 Pasivos por diferencias temporarias</td><td></td><td class="n">${n(R.pd)}</td></tr>`:''}
+     <tr><td>473 Retenciones y pagos a cuenta</td><td></td><td class="n">${n(r2(R.ret+R.pf))}</td></tr>
+     <tr><td>${R.dif>=0?'4752 H.P. acreedora por IS':'4709 H.P. deudora por devolución'}</td><td class="n">${R.dif<0?n(-R.dif):''}</td><td class="n">${R.dif>=0?n(R.dif):''}</td></tr></tbody></table></section>
+  <section class="block"><h3 class="bt">9 · Créditos fiscales pendientes para ${R.ej+1}</h3><table class="aud mov" style="width:auto"><tbody>
+    ${fila('Bases imponibles negativas pendientes',r2(R.bins.reduce((s,b)=>s+b.fin,0)))}${fila('Reserva de capitalización pendiente',R.capPendFut)}${fila('Deducciones pendientes',R.dedPendFut)}${fila('Gastos financieros no deducidos pendientes',r2(R.C.find(c=>c.k==='gfi').A+(+man.gfPend||0)-R.C.find(c=>c.k==='gfi').D))}</tbody></table></section>`; }
+
+  document.addEventListener('click', (ev) => {
+    const t = ev.target; if (!t?.closest) return;
+    const ab = t.closest('[data-cisab]'); if (ab) { ST.cisAb = ST.cisAb || {}; ST.cisAb[ab.dataset.cisab] = !ST.cisAb[ab.dataset.cisab]; render(); return; }
+    const ll = t.closest('[data-cisllevar]'); if (ll) { const ej = cisEj(), [k, v] = ll.dataset.cisllevar.split('|'), o = lsGet('cis-' + ej) || {}; o[k] = r2((+o[k] || 0) + (+v)); lsSet('cis-' + ej, o); render(); }
+  });
+  document.addEventListener('change', (ev) => {
+    const el = ev.target, ej = cisEj(); if (!el?.dataset) return;
+    if (el.dataset.cisej !== undefined) { ST.cisEj = +el.value; render(); return; }
+    if (el.dataset.cis !== undefined) { const o = lsGet('cis-' + ej) || {}; const v = el.value.trim(); if (v === '') delete o[el.dataset.cis]; else o[el.dataset.cis] = el.tagName === 'SELECT' ? v : (parseNum(v) !== null && !isNaN(parseNum(v)) ? parseNum(v) : v); lsSet('cis-' + ej, o); render(); return; }
+    if (el.dataset.cismapa !== undefined) { ST.cisMapa = el.value; render(); return; }
+    if (el.dataset.cisnuevabin !== undefined) { const y = +el.value; if (y > 1990 && y < ej) { const o = lsGet('cis-' + ej) || {}; o['bin' + y] = o['bin' + y] || 0; lsSet('cis-' + ej, o); render(); } }
+  });
+
   const conEmp = (f) => () => (S.sel ? zonaSys() + f() : sinEmpresa);
   const tabs = {
     ca: ['Cuentas anuales', 'Registro Mercantil', conEmp(() => vistaCuentasAnuales())],
@@ -505,6 +712,7 @@ function vistaTef(){ const ej=+ejNum(), y=ST.tefEj? +ST.tefEj : ej-1, n=v=>v===n
     bsit: ['Balance de situación', 'BSit', conEmp(() => vistaBSit('bs'))],
     pyg: ['Pérdidas y ganancias', 'PyG', conEmp(() => vistaBSit('pyg'))],
     tef: ['Tipo efectivo y carga fiscal', 'Grupo', conEmp(() => vistaTef())],
+    cis: ['Cálculo Impto. Soc.', 'Desde sumas y saldos', conEmp(() => vistaCis())],
   };
   const guard = (f) => () => { try { return f(); } catch { return null; } };
   const badges = {
