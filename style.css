@@ -983,3 +983,16 @@ table.pagos-t td.pend { color: #b00; }
 table.pagos-t tr.pg-sum td { background: #d9d9d9; font-weight: 700; border-top: 1px solid #8a9bb8; }
 .pg-in { text-align: right; border: 0; background: transparent; width: 7em; }
 .pg-auto { color: #667085; }
+
+/* Liquidaciones Tributarias: modelos × periodos con casillas */
+table.lt-t { width: 100%; border-collapse: collapse; font-size: .78rem; }
+table.lt-t th { background: #e6ecf7; color: #1d2a4d; border: 1px solid #c9d3e6; padding: .35rem .5rem; }
+table.lt-t td { border: 1px solid #d3dbea; padding: .25rem .4rem; }
+table.lt-t td.lt-m { white-space: nowrap; }
+table.lt-t td.lt-c label { display: flex; align-items: center; justify-content: center; gap: .3rem; cursor: pointer; white-space: nowrap; }
+table.lt-t td.lt-c.on { background: #e6f4ea; font-weight: 600; }
+
+/* DUA-H1: mismas columnas, en el mismo sitio y con el mismo ancho en todas las tablas de mes */
+.dsec table.dua-t.dua-fix { table-layout: fixed; width: auto; }
+.dsec table.dua-t.dua-fix td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsec table.dua-t.dua-fix th { white-space: normal; }

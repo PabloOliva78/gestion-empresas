@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=155';
+import { crearModulos } from './modulos.js?v=156';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -146,7 +146,7 @@ function renderPendiente() {
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
   // [título, pestañas, logo, subtítulo del panel]
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'otros'],
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'otros'],
     'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
@@ -777,6 +777,8 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.duacampo) return void M.duaCampo(t.dataset.duacampo, t.value);
   if (t.dataset.ilver !== undefined) return void M.setIlVer(t.value);
   if (t.dataset.il) return void M.guardarIl(t.dataset.il, t.value);
+  if (t.dataset.lt) return void M.setLt(t.dataset.lt, t.checked);
+  if (t.dataset.ltfreq) return void M.setLtFreq(t.dataset.ltfreq, t.value);
   if (t.dataset.pgmes !== undefined) return void M.setPgMes(t.value);
   if (t.dataset.pgman) return void M.setPgMan(t.dataset.pgman, t.value);
   if (t.dataset.pgest) return void M.setPgEst(t.dataset.pgest, t.value);

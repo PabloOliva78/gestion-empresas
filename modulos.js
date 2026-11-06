@@ -356,8 +356,40 @@ export function crearModulos(c) {
     if (!m.has(k)) { let v = false; try { v = Math.abs(calcularRet(mod, R, ej, p).ret) > 0.005; } catch { /* sin datos */ } m.set(k, v); }
     return m.get(k);
   }
-  function obligaciones(e, ej, ix) {
-    const sig = String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, out = [];
+  // ---- Liquidaciones Tributarias: modelos y periodos marcados a mano por empresa y ejercicio (registro «liqtrib»: datos[ej] = { f: {modelo: 'M'|'T'}, m: ['303|01', …] }) ----
+  const LT_MODELOS = [['111', 'M'], ['115', 'M'], ['123', 'M'], ['180', 'A'], ['190', 'A'], ['193', 'A'], ['200', 'A'], ['202', 'P'], ['232', 'A'], ['303', 'M'], ['349', 'M'], ['390', 'A'], ['583', 'N'], ['592', 'M'], ['A22', 'T'], ['Intrastat', 'I']];
+  // M = mensual o trimestral a elegir · A = anual · P = pagos fraccionados · N = 3T y anual del anterior · I = mensual · T = trimestral
+  const ltReg = (id) => S.registros.find((r) => r.tipo === 'liqtrib' && r.empresa_id === id);
+  const ltCfg = (id, ej) => { const d = ltReg(id)?.datos?.[ej]; return d ? { f: d.f ?? {}, m: new Set(d.m ?? []) } : null; };
+  const ltClave = (o) => `${o.mod}|${o.per}`;
+  function ltDeAuto(e, ej, ix) {
+    const f = {}, m = new Set(), dflt = e.tipo === 'PYME' ? 'T' : 'M';
+    obligaciones(e, ej, ix, true).forEach((o) => { m.add(ltClave(o)); if (LT_MODELOS.find((x) => x[0] === o.mod)?.[1] === 'M') f[o.mod] = /T$/.test(o.per) ? 'T' : 'M'; });
+    LT_MODELOS.forEach(([mod, t]) => { if (t === 'M' && !f[mod]) f[mod] = dflt; });
+    return { f, m };
+  }
+  function ltObligaciones(e, ej, ix, cfg) {
+    const out = [], ANUAL = /^(200|232|180|190|193|390)$/;
+    const add = (mod, per, yP, yPres, clave) => {
+      const pk = ANUAL.test(mod) ? 'A' : per;
+      out.push({ e, mod, per, yP, yPres, clave, pk, fin: plazoMod(mod, yP, per), pres: ix.hecho.has(`${e.id}|${yPres}|${clave}|${pk}`), imp: valPres(e.id, yPres, clave, pk) });
+    };
+    [...cfg.m].forEach((k) => {
+      const [mod, per] = k.split('|');
+      if (mod === 'Intrastat') add(mod, per, ej, ej, 'INT');
+      else if (mod === 'A22') add(mod, per, ej, ej, 'A22');
+      else if (mod === '583') add(mod, per, per === '0A' ? ej - 1 : ej, per === '0A' ? ej - 1 : ej, '583');
+      else if (mod === '232') { add(mod, 'A', ej - 1, ej, '232'); const o = out[out.length - 1]; o.pres = o.pres || !!m232Datos(e.id, ej - 1)?.pres; }
+      else if (mod === '200') add(mod, 'A', ej, ej + 1, '200');
+      else if (ANUAL.test(mod)) add(mod, 'A', ej, ej, mod);
+      else add(mod, per, ej, ej, mod);
+    });
+    return out;
+  }
+  function obligaciones(e, ej, ix, auto = false) {
+    const cfg = auto ? null : ltCfg(e.id, ej);
+    if (cfg) return ltObligaciones(e, ej, ix, cfg);
+    const sig =String(e.siglas ?? '').toUpperCase(), trim = e.tipo === 'PYME', pers = trim ? ['1T', '2T', '3T', '4T'] : MM12, out = [];
     const uso = (m) => [ej - 1, ej, ej + 1].some((y) => ix.usado.has(`${e.id}|${y}|${m}`));
     const ANUAL = /^(200|232|180|190|193|390)$/;
     const add = (mod, per, yP, yPres, clave) => {
@@ -439,6 +471,58 @@ export function crearModulos(c) {
       <p class="hint">${pago ? 'Fecha de cargo: el último día del plazo de presentación. ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
   }
   const vistaLiq = () => tablaOb('Liquidaciones a presentar', false);
+  // ---------- Liquidaciones Tributarias: se marcan a mano los modelos y periodos de la empresa; de ahí salen Liquidaciones a presentar y Pagos domiciliados ----------
+  const MM_C = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  function ltSlots(mod, tipo, f, ej) {
+    const mensual = Array.from({ length: 12 }, (_, i) => ({ per: String(i + 1).padStart(2, '0'), txt: MM_C[i], span: 1 }));
+    if (tipo === 'M') return f === 'T' ? [1, 2, 3, 4].map((q) => ({ per: `${q}T`, txt: `${q}T`, span: 3 })) : mensual;
+    if (tipo === 'I') return mensual;
+    if (tipo === 'T') return [1, 2, 3, 4].map((q) => ({ per: `${q}T`, txt: `${q}T`, span: 3 }));
+    if (tipo === 'P') return [['1P', '1P · abril'], ['2P', '2P · octubre'], ['3P', '3P · diciembre']].map(([per, txt]) => ({ per, txt, span: 4 }));
+    if (tipo === 'N') return [{ per: '3T', txt: `3T ${ej} · noviembre`, span: 6 }, { per: '0A', txt: `Anual ${ej - 1} · noviembre`, span: 6 }];
+    return [{ per: 'A', txt: mod === '232' ? `Anual ${ej - 1} · noviembre` : mod === '200' ? `Anual ${ej} · julio ${ej + 1}` : `Anual ${ej}`, span: 12 }];
+  }
+  function ltEfectivo(e, ej) { return ltCfg(e.id, ej) ?? ltDeAuto(e, ej, presIndex()); }
+  async function guardarLt(id, ej, cambia) {
+    const e = S.empresas.find((x) => x.id === id), reg = ltReg(id), base = ltEfectivo(e, ej), datos = { ...(reg?.datos ?? {}) };
+    const cfg = { f: { ...base.f }, m: new Set(base.m) };
+    cambia(cfg);
+    datos[ej] = { f: cfg.f, m: [...cfg.m] };
+    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: id, tipo: 'liqtrib', ejercicio: null, datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  const setLt = (clave, on) => guardarLt(S.sel, Number(S.ejercicio), (c) => { if (on) c.m.add(clave); else c.m.delete(clave); });
+  const setLtFreq = (mod, v) => guardarLt(S.sel, Number(S.ejercicio), (c) => { c.f[mod] = v; [...c.m].filter((k) => k.startsWith(mod + '|')).forEach((k) => c.m.delete(k)); });
+  const ltFila = (mod, tipo, marcar) => guardarLt(S.sel, Number(S.ejercicio), (c) => {
+    [...c.m].filter((k) => k.startsWith(mod + '|')).forEach((k) => c.m.delete(k));
+    if (marcar) ltSlots(mod, tipo, c.f[mod], Number(S.ejercicio)).forEach((s) => c.m.add(`${mod}|${s.per}`));
+  });
+  async function ltAuto() {
+    if (!confirm('¿Volver a marcar lo que sale con las reglas automáticas? Se pierden los cambios hechos a mano de este ejercicio.')) return;
+    const ej = Number(S.ejercicio), reg = ltReg(S.sel); if (!reg) return;
+    const datos = { ...reg.datos }; delete datos[ej];
+    const err = await guardarRegistro(reg, { datos });
+    if (err) return void alert(err);
+    await cargar(); render();
+  }
+  function vistaLt() {
+    if (!S.sel) return sinEmpresa;
+    const e = empresa(), ej = Number(S.ejercicio), ed = puede(), cfg = ltCfg(S.sel, ej), ef = ltEfectivo(e, ej);
+    const filas = LT_MODELOS.map(([mod, tipo]) => {
+      const f = ef.f[mod] ?? (e.tipo === 'PYME' ? 'T' : 'M'), slots = ltSlots(mod, tipo, f, ej);
+      const n = slots.filter((s) => ef.m.has(`${mod}|${s.per}`)).length;
+      const celdas = slots.map((s) => `<td class="c lt-c${ef.m.has(`${mod}|${s.per}`) ? ' on' : ''}" colspan="${s.span}"><label><input type="checkbox" data-lt="${esc(mod)}|${s.per}"${ef.m.has(`${mod}|${s.per}`) ? ' checked' : ''}${ed ? '' : ' disabled'}> ${esc(s.txt)}</label></td>`).join('');
+      const frecuencia = tipo === 'M' ? (ed ? `<select data-ltfreq="${mod}"><option value="M"${f === 'M' ? ' selected' : ''}>Mensual</option><option value="T"${f === 'T' ? ' selected' : ''}>Trimestral</option></select>` : f === 'T' ? 'Trimestral' : 'Mensual') : '';
+      return `<tr><td class="lt-m"><b>${mod === 'Intrastat' ? 'Intrastat' : 'Modelo ' + mod}</b></td><td class="c">${frecuencia}</td>${celdas}
+        <td class="c">${ed ? `<button class="small" data-act="m-ltfila" data-mod="${mod}" data-t="${tipo}" data-on="${n === slots.length ? '0' : '1'}">${n === slots.length ? 'Quitar todos' : 'Marcar todos'}</button>` : ''}</td></tr>`;
+    }).join('');
+    return `<div class="inicio"><section class="dsec"><h3>Liquidaciones Tributarias · ${esc(e.nombre)} · ${ej}</h3>
+      <p class="hint">Marca los modelos y los periodos (meses o trimestres) que tiene que presentar esta empresa en ${ej}. De aquí salen Liquidaciones Presentar, Pagos Domiciliados, el Calendario Fiscal y el Cuadro de mando. ${cfg ? 'Esta empresa tiene su propia selección.' : 'Todavía no has tocado nada: lo marcado es lo que sale con las reglas automáticas, y se guarda en cuanto cambies una casilla.'}</p>
+      <div class="wrap"><table class="tabla lt-t"><thead><tr><th>Modelo</th><th>Periodicidad</th><th colspan="12">Periodos</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>
+      ${ed && cfg ? '<button class="small" data-act="m-ltauto" style="margin-top:.5rem">Volver a lo automático</button>' : ''}</section></div>`;
+  }
+
   // ---------- Pagos domiciliados: empresas × banco × fecha de cargo (como el cuadro de la antigua) ----------
   // Un registro «estpago» por empresa: est = {clave de la liquidación: 'pag' | 'pend'} (sin clave = domiciliado) y man = {AAAA-MM: {pagado, pend}} a mano
   const MES_L = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -2913,6 +2997,7 @@ export function crearModulos(c) {
   tabs.venc = ['Pagos Domiciliados Impuestos', 'Todas las empresas', vistaVenc];
   tabs.iloc = ['Impuestos Locales', 'IBI · IAE · IVTM', vistaIloc];
   tabs.dua = ['DUA-H1', 'Importaciones · IVA diferido', vistaDua];
+  tabs.lt = ['Liquidaciones Tributarias', 'Modelos y periodos de cada empresa', vistaLt];
   tabs.calf = ['Calendario Fiscal', 'Plazos y domiciliaciones', vistaCalFiscal];
   tabs.notif = ['Notificaciones y requerimientos', 'Plazos de respuesta', vistaNotif];
 
@@ -3400,6 +3485,7 @@ export function crearModulos(c) {
     return undefined;
   }
   const setDuaMes = (v) => { duaMes = v; render(); };
+  const DUA_ANCHOS = [14, 15, 21, 11, 9, 8, 11, 13]; // anchos fijos (em) de las ocho primeras columnas: iguales en todas las tablas de mes
   function vistaDua() {
     if (!S.sel) return sinEmpresa;
     const regs = duaRegs().map((r) => duaFixTrib({ ...r.datos })), ed = puede(), e = empresa();
@@ -3410,11 +3496,11 @@ export function crearModulos(c) {
     const tr = (R, c) => (R.declarados || {})[c] || (R.calculados || {})[c] || null;
     const celdas = (R, c) => { const t = tr(R, c); return t ? `<td class="num g1">${t.base === null ? '—' : t.ud === 'kg' ? `${t.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(t.base)}</td><td class="c mid">${esc(duaTipo(t.tipo))}</td><td class="num g3">${fnum(t.imp)}</td>` : '<td class="num g1">—</td><td class="c mid">—</td><td class="num g3">—</td>'; };
     const tabla = (lista, tit) => {
-      const ORD = ['B00', 'A00', '1PL', 'A30'], cods = [...new Set(['B00', 'A00', '1PL'].concat(...lista.map((R) => Object.keys(R.declarados || {}).concat(Object.keys(R.calculados || {})))))].sort((a, b) => { const x = ORD.indexOf(a), y = ORD.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || a.localeCompare(b); });
+      const ORD = ['B00', 'A00', '1PL', 'A30'], cods = [...new Set(['B00', 'A00', '1PL'].concat(...regs.map((R) => Object.keys(R.declarados || {}).concat(Object.keys(R.calculados || {})))))].sort((a, b) => { const x = ORD.indexOf(a), y = ORD.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || a.localeCompare(b); });
       const tot = {}; cods.forEach((c) => { tot[c] = [0, 0, false]; });
       lista.forEach((R) => cods.forEach((c) => { const t = tr(R, c); if (t) { if (t.ud !== 'kg') tot[c][0] += t.base || 0; else tot[c][2] = true; tot[c][1] += t.imp || 0; } }));
       const neta = (R) => { const v = duaVal(R, 'neta'); return v && !Number.isNaN(duaNum(v)) ? duaNum(v).toLocaleString('es-ES', { maximumFractionDigits: 3 }) : esc(v); };
-      return `<h4 class="it-sec">${esc(tit)} · ${lista.length} DUA</h4><div class="wrap"><table class="tprs tnom il-t dua-t"><thead><tr><th rowspan="2">Nº DUA</th><th rowspan="2">Importador</th><th rowspan="2">Exportador</th><th rowspan="2">País</th><th rowspan="2">TARIC</th><th rowspan="2">Masa neta (kg)</th><th rowspan="2">Lugar precisado</th><th rowspan="2">Medio transporte llegada</th>${cods.map((c) => `<th colspan="3">${esc(c)}${DUA_TRIB[c] ? ' · ' + DUA_TRIB[c] : ''}</th>`).join('')}</tr>
+      return `<h4 class="it-sec">${esc(tit)} · ${lista.length} DUA</h4><div class="wrap"><table class="tprs tnom il-t dua-t dua-fix" style="width:${DUA_ANCHOS.reduce((s, x) => s + x, 0) + cods.length * 21.5}em"><colgroup>${DUA_ANCHOS.map((x) => `<col style="width:${x}em">`).join('')}${cods.map(() => '<col style="width:9em"><col style="width:4.5em"><col style="width:8em">').join('')}</colgroup><thead><tr><th rowspan="2">Nº DUA</th><th rowspan="2">Importador</th><th rowspan="2">Exportador</th><th rowspan="2">País</th><th rowspan="2">TARIC</th><th rowspan="2">Masa neta (kg)</th><th rowspan="2">Lugar precisado</th><th rowspan="2">Medio transporte llegada</th>${cods.map((c) => `<th colspan="3">${esc(c)}${DUA_TRIB[c] ? ' · ' + DUA_TRIB[c] : ''}</th>`).join('')}</tr>
         <tr>${'<th class="g1">Base imponible</th><th class="mid">Tipo</th><th class="g3">Importe</th>'.repeat(cods.length)}</tr></thead><tbody>
         ${lista.map((R) => `<tr data-duasel="${esc(R.num)}" style="cursor:pointer${R.num === duaSel ? ';background:#fff6d6' : ''}"><td${R.arch?.path ? '' : ' title="Sin PDF guardado: suéltalo de nuevo"'}>${esc(R.num)}</td><td>${esc(duaVal(R, 'importador').replace(/^ES[A-Z0-9]+\s*-\s*/, ''))}</td><td>${esc(duaVal(R, 'expedidor'))}</td><td>${esc(duaVal(R, 'paisExp'))}</td>
           <td>${esc((String(duaVal(R, 'taric')).replace(/\s/g, '').match(/\d{8,10}/g) || []).join(' · '))}</td><td class="num">${neta(R)}</td><td>${esc(duaVal(R, 'lugar'))}</td><td>${esc(duaVal(R, 'transporte'))}</td>${cods.map((c) => celdas(R, c)).join('')}</tr>`).join('')}
@@ -3707,6 +3793,8 @@ export function crearModulos(c) {
       'm-iladd': () => ilAnadir(),
       'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
+      'm-ltfila': () => ltFila(d.mod, d.t, d.on === '1'),
+      'm-ltauto': () => ltAuto(),
       'm-calmes': () => setCalMes(d.m),
       'm-calav': () => calfAvisoHoy(true),
       'm-ntadd': () => ntAnadir(),
@@ -4389,5 +4477,5 @@ export function crearModulos(c) {
   Object.assign(badges, M7.badges);
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { setLt, setLtFreq, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
