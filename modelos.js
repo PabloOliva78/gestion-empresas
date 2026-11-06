@@ -836,5 +836,43 @@ export function crearModelos(c) {
       return (mes, fl) => r2(O.filter((o) => o.mes === mes && o.flujoConc === fl).reduce((s, o) => s + o.impConc, 0));
     },
   };
-  return { tabs, kinds, acciones, adif };
+  // ---------- Chips del menú: a ingresar / a devolver / sin importe, con lo que ya está cargado (sin pedir datos pesados) ----------
+  const chipImp = (v, pre) => {
+    const p = pre ? pre + ' · ' : '';
+    if (v === null || v === undefined || Number.isNaN(+v) || Math.abs(+v) < 0.005) return { t: p + 'Sin importe' };
+    return { t: p + (v > 0 ? 'A ingresar ' : 'A devolver ') + eur(Math.abs(v)), c: v > 0 ? 'amar' : 'verde' };
+  };
+  const badges = {
+    mod583: () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const R = calc583(ejercicio(), null);
+      return R.inst.some((x) => x.q.some((v) => v)) ? chipImp(R.tot(R.per), R.per) : { t: 'Sin datos' };
+    },
+    mod592: () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const cur = BIG.get(`m592-mov|${S.sel}`);
+      if (!cur?.datos) return { t: 'Sin datos' };
+      const mov = { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] };
+      return chipImp(calc592De(datos592(), mov, String(S.ejercicio), S.periodo ?? '').res);
+    },
+    moda22: () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const L = a22Datos().filas.filter((r) => !r.per || String(r.per).includes(String(S.ejercicio)));
+      const imp = r2(L.reduce((a, r) => a + (parseNum(r.imp) || 0), 0));
+      return L.length ? { t: `A devolver ${eur(imp)}`, c: 'verde' } : { t: 'Sin datos' };
+    },
+    mod232: () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const ej = m232EjDef(), D = m232Reg(ej), tot = r2((D.filas ?? []).reduce((a, f) => a + Math.abs(parseNum(f.imp) || 0), 0));
+      return D.filas?.length ? { t: `${ej} · ${D.filas.length} reg. · ${eur(tot)}`, c: 'amar' } : { t: 'Sin datos' };
+    },
+    modintra: () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const cur = BIG.get(`intra|${S.sel}`);
+      if (!cur?.datos) return { t: 'Sin datos' };
+      const ej = ejercicio(), n = (cur.datos.rows ?? []).filter((r) => fechaUtc(r[0])?.getUTCFullYear() === ej).length;
+      return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
+    },
+  };
+  return { tabs, kinds, acciones, adif, badges };
 }
