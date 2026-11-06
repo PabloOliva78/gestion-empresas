@@ -298,6 +298,7 @@ export function crearConciliaciones(c) {
     au115: ['Conciliación 115', 'Mod. 115 vs contabilidad', () => vistaAudi('115')],
     au123: ['Conciliación 123', 'Mod. 123 vs contabilidad', () => vistaAudi('123')],
     au303: ['Conciliación 303', 'SII vs contabilidad', () => vistaAudi303()],
+    c349i: ['Conciliación 349 · Intrastat', 'Intrastat vs contabilidad', () => pendiente('Conciliación 349 / Intrastat')],
     conc: ['Conciliación Cuentas - Impuestos', 'Saldo frente a impuesto', () => vistaConc()],
     rprof: [RRES.rprof.tit, RRES.rprof.ts, () => vistaRetRes('rprof')],
     ralq: [RRES.ralq.tit, RRES.ralq.ts, () => vistaRetRes('ralq')],

@@ -8,7 +8,7 @@ import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=8';
 import { crearModelos } from './modelos.js?v=4';
 import { crearModelos2 } from './modelos2.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=2';
+import { crearConciliaciones } from './conciliaciones.js?v=3';
 import { crearEstados } from './estados.js?v=2';
 
 export function crearModulos(c) {
