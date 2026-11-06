@@ -474,6 +474,12 @@ export function crearRegistral(c) {
   function accUnir(rel) {
     const tok = (s) => accNorm(s).split(' ').filter(Boolean);
     const dentro = (a, b) => a.length >= 2 && a.length < b.length && a.every((t) => b.includes(t));
+    // cada sociedad se toma de la última hoja en que aparece como participada (la consolidada); las demás hojas la repiten con otros esquemas
+    const ultima = {};
+    rel.forEach((r) => { const k = accNorm(r.participada); ultima[k] = Math.max(ultima[k] ?? -1, r.hoja ?? 0); });
+    rel = rel.filter((r) => (r.hoja ?? 0) === ultima[accNorm(r.participada)]);
+    // «RESTO» no es un socio: es el conjunto de los demás y repite el % de otro socio de la misma sociedad
+    rel = rel.filter((r) => accNorm(r.socio) !== 'RESTO' || !rel.some((q) => q !== r && accNorm(q.socio) !== 'RESTO' && accNorm(q.participada) === accNorm(r.participada) && Math.abs((+q.pct || 0) - (+r.pct || 0)) < 1e-6));
     return rel.filter((r, i) => {
       const a = tok(r.socio), p = accNorm(r.participada);
       return !rel.some((q, j) => j !== i && accNorm(q.participada) === p && Math.abs((+q.pct || 0) - (+r.pct || 0)) < 1e-6 && dentro(a, tok(q.socio)));
@@ -481,7 +487,7 @@ export function crearRegistral(c) {
   }
   function accRelaciones(H) {
     const out = [], avisos = [];
-    H.forEach(({ celdas, segs }) => {
+    H.forEach(({ hoja, celdas, segs }, nh) => {
       const ents = celdas.filter((q) => typeof q.val === 'string' && !/^\s*[\d.,]+\s*%?\s*$/.test(q.val));
       const pcs = celdas.filter((q) => (typeof q.val === 'number' && q.val > 0 && q.val <= 1.0000001) || (typeof q.val === 'string' && /^\s*[\d.,]+\s*%\s*$/.test(q.val)));
       const pv = (q) => (typeof q.val === 'number' ? q.val * 100 : parseFloat(q.val.replace(',', '.')));
@@ -524,7 +530,7 @@ export function crearRegistral(c) {
         if (conFlecha.length === 1) { dest = conFlecha[0].e; socio = (sinFlecha.find((l) => !mismo(l.e, dest)) || vale.find((l) => !mismo(l.e, dest) && l.haciaP) || {}).e || null; }
         if (!socio) socio = ents.filter((q) => q.y2 <= P.y1 + 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => b.y2 - a.y2)[0];
         if (!dest) dest = ents.filter((q) => q.y1 >= P.y2 - 2 && q.x1 <= cx && q.x2 >= cx).sort((a, b) => a.y1 - b.y1)[0];
-        if (socio && dest && socio !== dest) out.push({ socio: String(socio.val).trim(), participada: String(dest.val).trim(), pct: Math.round(pv(P) * 1e6) / 1e6, celda: P.ref });
+        if (socio && dest && socio !== dest) out.push({ socio: String(socio.val).trim(), participada: String(dest.val).trim(), pct: Math.round(pv(P) * 1e6) / 1e6, celda: P.ref, hoja: nh });
         else avisos.push(`Porcentaje ${P.ref} (${pv(P).toFixed(4)} %): no se encuentra ${socio ? 'la sociedad participada' : 'el socio'}`);
       });
     });
