@@ -245,7 +245,7 @@ function render() {
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>` : ''}
-      <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span>
+      <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
     <main class="princ">
