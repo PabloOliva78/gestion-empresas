@@ -2803,6 +2803,21 @@ export function crearModulos(c) {
   }
   let nomMsg = '', nomAsMes = null;
   const setNomAsMes = (v) => { nomAsMes = v; render(); };
+  // quitar la nómina de un mes (cuadro completo) o solo el reparto por centros de coste que vino del Excel; lo de la conciliación de la SS (c_*) se conserva
+  async function nomQuitar(mm, solo) {
+    const y = Number(S.ejercicio), reg = nomReg(y);
+    if (!reg?.datos?.[mm]) return;
+    const nombre = NOM_MESES[+mm - 1].toLowerCase();
+    if (!confirm(solo === 'excel' ? `¿Quitar el Excel (reparto por centros de coste) de ${nombre} ${y}? El cuadro de la nómina se queda como está.` : `¿Quitar la nómina de ${nombre} ${y} de esta empresa (cuadro y centros de coste)?`)) return;
+    const datos = JSON.parse(JSON.stringify(reg.datos)), mes = datos[mm];
+    if (solo === 'excel') mes._c = undefined; else Object.keys(mes).forEach((k) => { if (!k.startsWith('c_')) mes[k] = undefined; });
+    Object.keys(mes).forEach((k) => { if (mes[k] === undefined) delete mes[k]; });
+    if (!Object.keys(mes).length) delete datos[mm];
+    const err = await guardarRegistro(reg, { datos });
+    if (err) return void alert(err);
+    nomMsg = `${solo === 'excel' ? 'Excel quitado' : 'Nómina quitada'}: ${nombre} ${y}`;
+    await cargar(); render();
+  }
   // asiento del mes: debe 640.01 / 640.02 / 640.03 / 642.01 por centro de coste; haber 4760.01, 4751.01, 460.01, 462.01 y 4650.01
   function nomAsiento(e, y, mm) {
     const x = nomMes(y, mm); if (!x) return null;
@@ -2855,10 +2870,12 @@ export function crearModulos(c) {
       const cel = MM12.map((mm, i) => (der ? (dat[i] ? `<td class="num${k === 'dif' && Math.abs(dat[i][k]) > 0.01 ? ' dif-ko' : ''}">${fnum(dat[i][k])}</td>` : '<td class="num vacio">—</td>') : celdaNom(mm, k, y, ed))).join('');
       return `<tr class="${k === 'liquido' ? 'sub' : k === 'dif' ? 'verde' : der ? 'cmp' : ''}"><td class="pp" ${k === 'dif' ? `title="${esc(NOM_DIF)}"` : ''}>${esc(t)}</td>${cel}<td class="num ejer">${fnum(tot)}</td></tr>`;
     }).join('');
+    // fila para quitar la nómina de un mes o solo su Excel (centros de coste)
+    const quitar = ed && dat.some(Boolean) ? `<tr class="no-print"><td class="pp">Quitar</td>${MM12.map((mm, i) => `<td class="c">${dat[i] ? `<button class="small danger" data-act="m-nomquitar" data-mm="${mm}" data-solo="todo" title="Quitar la nómina de este mes">Nómina</button>${dat[i]._c ? ` <button class="small" data-act="m-nomquitar" data-mm="${mm}" data-solo="excel" title="Quitar solo el Excel (reparto por centros de coste)">Excel</button>` : ''}` : ''}</td>`).join('')}<td></td></tr>` : '';
     return `${ed ? dz('nomexcel', 'Suelta aquí el Excel de costes salariales del grupo', '(una hoja por empresa, con el mes y los importes por centro de coste): cada hoja se reparte en el cuadro de su empresa y de su mes. Al total devengado se le restan kilometraje, dietas e indemnizaciones. El asiento y la hoja del mes están en «Nóminas mes en curso».', '.xlsx,.xls') : ''}
       ${nomMsg ? `<p class="dash-s">${esc(nomMsg)}</p>` : ''}${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
       <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda) o suelta el Excel del grupo. «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
-      <section class="prs-card"><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}</tbody></table></div></section>`;
+      <section class="prs-card"><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}${quitar}</tbody></table></div></section>`;
   }
 
   // ---- Nóminas mes en curso: la hoja del Excel del periodo (todas las columnas, con su centro de coste debajo) y el asiento contable por centro de coste ----
@@ -4148,6 +4165,7 @@ export function crearModulos(c) {
       'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
       'm-nomxls': () => nomAsientoXls(),
+      'm-nomquitar': () => nomQuitar(d.mm, d.solo),
       'm-nomhoja': () => nomHojaXls(),
       'm-ltfila': () => ltFila(d.mod, d.t, d.on === '1'),
       'm-ltauto': () => ltAuto(),
