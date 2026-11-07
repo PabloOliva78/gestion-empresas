@@ -1066,3 +1066,15 @@ td.in.num input, td.num input { text-align: right; font-variant-numeric: tabular
 .sii-cab .fc-cab input[type=checkbox] { width: auto !important; flex: none; }
 
 .dsec.over { outline: 2px dashed #2f5fd0; outline-offset: 2px; background: #f3f7ff; }
+
+/* Notificaciones y requerimientos con el diseño de la antigua: sin marco blanco, a todo el ancho y con letra de 14 px */
+.dsec.nt-s { background: transparent; box-shadow: none; border-radius: 0; padding: 0; margin: 0 0 10px; overflow: visible; font-size: 14px; }
+.dsec.nt-s input, .dsec.nt-s select, .dsec.nt-s textarea, .dsec.nt-s button, .dsec.nt-s .leyenda, .dsec.nt-s .dash-s, .dsec.nt-s label { font-size: 14px; }
+.dsec.nt-s > h3 { font-size: 14px; margin: 4px 0 10px; padding-left: .6rem; color: var(--ink, #1f3864); }
+.dsec.nt-s > h3 select { font-size: 14px; width: auto; padding: 1px 4px; margin-left: .4rem; }
+.dsec.nt-s .dropzone { border: 2px dashed #7f93bd; border-radius: 6px; padding: 12px 16px; margin: 0 0 12px; background: #f4f7fc; color: var(--ink, #1f3864); font-size: 14px; position: static; box-shadow: none; }
+.dsec.nt-s .dropzone:hover, .dsec.nt-s .dropzone.over { background: #e3ebf8; border-color: var(--ink, #1f3864); }
+.dsec.nt-s .nt-card { background: var(--card); }
+.dsec.nt-s .nt-card input.facin { border: 1px solid transparent; background: transparent; padding: 1px 3px; width: auto; border-radius: 0; }
+.dsec.nt-s .nt-card input.facin:hover, .dsec.nt-s .nt-card input.facin:focus { border-color: #b9c7e4; background: #fff; }
+.dsec.nt-s.over { outline: 2px dashed #2f5fd0; outline-offset: 2px; }
