@@ -4921,6 +4921,35 @@ export function crearModulos(c) {
   const M10 = crearLeyIva({ S, esc, render, empresa, db, puede, grande });
   Object.assign(tabs, M10.tabs);
   Object.assign(badges, M10.badges);
+  // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
+  const memoSaldoCta = new Map();
+  function saldoCtaPeriodo(k) {
+    const M = peek('may-mov'); if (!M) return null;
+    const reg = ctaCfgReg(), ej = Number(S.ejercicio), pref = ctaPref(k), id = `${k}|${S.sel}|${ej}|${S.periodo}|${M.length}|${reg?.id ?? ''}|${JSON.stringify(reg?.datos ?? {}).length}`;
+    if (memoSaldoCta.has(id)) return memoSaldoCta.get(id);
+    const cfg = ctaCfg(), quit = cfg.quit ?? {}, ovs = cfg.ov ?? {}, fin = Date.parse(rangoPeriodo(ej, S.periodo).hasta) + 864e5;
+    let s = 0, n = 0;
+    const suma = (l) => { const ms = Date.parse(l.fecha); if (ms < fin) { s += (+l.debe || 0) - (+l.haber || 0); n++; } };
+    for (const l of M) {
+      if (!casaCta(pref, l.digitos)) continue;
+      const firma = [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
+      if (quit[firma]) continue;
+      suma(ovs[firma] ? { ...l, ...ovs[firma] } : l);
+    }
+    (cfg.lineas ?? []).filter((l) => casaCta(pref, String(l.cuenta).replace(/\D/g, ''))).forEach(suma);
+    const r = { saldo: rr(s), n };
+    if (memoSaldoCta.size > 400) memoSaldoCta.clear();
+    memoSaldoCta.set(id, r);
+    return r;
+  }
+  Object.keys(TODAS_CTAS).forEach((k) => {
+    badges[k] = () => {
+      if (!S.sel) return { t: 'Por empresa' };
+      const r = saldoCtaPeriodo(k);
+      if (!r) return { t: 'Cargando…' };
+      return r.n ? { t: `Saldo ${fnum(r.saldo)} €` } : { t: 'Sin movimientos' };
+    };
+  });
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'nomexcel' ? nomCargarExcel(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
   return { guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
