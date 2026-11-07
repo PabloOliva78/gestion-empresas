@@ -1111,3 +1111,11 @@ tr.rev-anio td { background: #fffbdd; font-weight: 700; color: var(--ink, #1f386
 tr.rev-anio td button { width: 100%; text-align: left; border: 0; border-radius: 0; background: transparent; font-weight: 700; font-size: 1em; padding: .4rem .7rem; color: inherit; }
 tr.rev-anio td button:hover { background: #fff3b8; }
 tr.rev-tipo td { background: #e8eef9; font-weight: 600; color: var(--ink, #1f3864); padding: .25rem .7rem 0.25rem 1.6rem; border-top: 1px solid var(--line); }
+
+/* Nóminas: todas las columnas del mismo ancho y los importes (escritos o calculados) alineados a la derecha con el mismo margen */
+table.tprs.tnom.nom-fit td:not(.pp), table.tprs.tnom.nom-fit th:not(.pp) { min-width: 7.6rem !important; width: 7.6rem !important; }
+table.tprs.tnom.nom-fit th:not(.pp) { text-align: right; padding-right: calc(1rem + 1px); }
+table.tprs.tnom.nom-fit td.num { text-align: right; padding: .2rem calc(1rem + 1px) .2rem .2rem; font-variant-numeric: tabular-nums; }
+table.tprs.tnom.nom-fit td.in { padding: .15rem 0 .15rem .2rem; }
+table.tprs.tnom.nom-fit td.in input { width: 100% !important; box-sizing: border-box; text-align: right; padding: .22rem 1rem .22rem .2rem; font-variant-numeric: tabular-nums; }
+table.tprs.tnom.nom-fit td.c { text-align: center; padding-right: .2rem; }
