@@ -3393,7 +3393,7 @@ export function crearModulos(c) {
     if (M.length) {
       try {
         const F = Object.entries(ctasEmpresa(e)).filter(([k]) => MOD[k]).map(([k, C]) => {
-          const D = calcCuenta(k, M), mv = D.movs.filter((x) => x.l.ms < corte), saldo = mv.length ? mv[mv.length - 1].saldo : D.ctl.saldoIni, imp = p ? impK(k) : null;
+          const D = calcCuenta(k, M), mv = D.movs.filter((x) => x.l.ms < corte), saldo = mv.length ? mv[mv.length - 1].saldo : D.ctl.saldoIni, imp = p ? (impK(k) ?? 0) : null; // sin declaración presentada, el impuesto cuenta como 0 hasta que se presente
           const std = C.cta.split('.')[0] + String(C.cta.split('.')[1] || '').padStart(5, '0');
           return { k, cuenta: D.subcuentas[0] || std, nombre: C.desc, modelo: MOD[k], saldo, imp, dif: rr(saldo - (imp || 0)) };
         }).sort((a, b) => String(a.cuenta).replace(/\D/g, '').localeCompare(String(b.cuenta).replace(/\D/g, '')));
