@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=178';
+import { crearModulos } from './modulos.js?v=179';
 import { activarRedimension } from './tablas.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -262,7 +262,7 @@ function render() {
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
         <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
-      <section class="vista"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   alinearPanel();
   ajustarInicio();

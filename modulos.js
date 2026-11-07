@@ -1416,8 +1416,8 @@ export function crearModulos(c) {
       <td class="c">${ok(x) ? 'VERDADERO' : 'FALSO'}</td><td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('');
     const quitados = Q.length ? `<div class="aviso"><b>Facturas quitadas del SII (${Q.length})</b> ${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${Q.length - 1}">↩ Deshacer la última (${esc(Q[Q.length - 1].factura)})</button> <button class="small" data-act="m-siirec" data-s="${s}" data-i="todas">Recuperar todas</button>` : ''}
       <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
-    return `${dropz}${aviso}
-      <section class="prs-card"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
+    return `<div class="sii-vista"><div class="sii-fijo">${dropz}${aviso}
+      <section class="prs-card sii-cab"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
       <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas de la descarga (desliza la tabla hacia los lados para verlas todas)</p>
       <div class="css-flex" style="gap:2em;flex-wrap:wrap;padding-bottom:.2em"><table class="tprs tnom" style="width:auto"><tbody>
         <tr><td>NIF Titular</td><td class="amar"><b>${esc(e.cif)}</b></td></tr><tr><td>Nombre / Razón social</td><td class="amar"><b>${esc(e.nombre)}</b></td></tr>
@@ -1427,11 +1427,11 @@ export function crearModulos(c) {
         <tr><td>Total base declarada (filtrada)</td><td class="amar num"><b>${fnum(sumB)}</b></td></tr><tr><td>Total cuota ${emit ? 'repercutida' : 'soportada'} (filtrada)</td><td class="amar num"><b>${fnum(sumC)}</b></td></tr></tbody></table></div>
       <div class="fc-cab" style="margin:.4em 1em"><b>Filtros adicionales:</b>${fil('nif', emit ? 'NIF Destinatario' : 'NIF Emisor')}${fil('nom', 'Nombre')}${fil('fac', 'Nº Serie + Nº Factura')}${fil('tipo', 'Tipo de factura', 'F1, F2, R1…')}
         ${fil('desde', 'Fecha expedición desde', 'dd/mm/aaaa')}${fil('hasta', 'hasta', 'dd/mm/aaaa')}${fil('clave', 'Clave régimen')}${fil('estado', 'Estado', 'Correcta…')}${fil('csv', 'CSV')}${fil('imin', 'Importe total desde')}${fil('imax', 'hasta')}
-        <label><input type="checkbox" data-siitodos="${s}"${siiTodos[s] ? ' checked' : ''}> Ver también los que no cumplen</label></div>
-      <div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th>${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
+        <label><input type="checkbox" data-siitodos="${s}"${siiTodos[s] ? ' checked' : ''}> Ver también los que no cumplen</label></div></section></div>
+      <section class="prs-card sii-cuerpo"><div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th>${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
         <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(sumC)}</td><td></td><td></td></tr></tbody></table></div>
       ${quitados}
-      ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section>${plazoSii(s, todos, raw, cab)}`;
+      ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section></div>${plazoSii(s, todos, raw, cab)}`;
   }
   async function quitarSii2(s, i) {
     const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];

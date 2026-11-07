@@ -1045,3 +1045,9 @@ table.tprs.tnom.nom-hoja td.pp, table.tprs.tnom.nom-hoja th.pp { white-space: no
 .col-rs:hover, body.rs-arrastrando .col-rs { background: rgba(59, 130, 246, .35); }
 body.rs-arrastrando { cursor: col-resize; user-select: none; }
 @media print { .col-rs { display: none; } }
+
+/* SII emitidas / recibidas: título, zona de soltar, archivos y cabecera con filtros fijos; solo se desplaza la tabla */
+.vista.fijo-sii > .tab-tit { position: sticky; top: var(--tabsH, 64px); z-index: 25; margin: 0; height: 2.2rem; line-height: 2.2rem; background: var(--bg, #f4f6fb); }
+.sii-fijo { position: sticky; top: calc(var(--tabsH, 64px) + 2.2rem); z-index: 24; background: var(--bg, #f4f6fb); box-shadow: 0 4px 8px rgba(31,56,100,.15); padding-bottom: .3rem; }
+.sii-fijo .dropzone { position: static !important; box-shadow: none !important; margin-bottom: .3rem; }
+.sii-fijo .sii-cab { margin-bottom: 0; }
