@@ -3852,7 +3852,42 @@ export function crearModulos(c) {
   const duaCod = (k) => { const c = String(k).toUpperCase().replace(/[OQ]/g, '0'); return /^[AÁIL1|]PL$/.test(c) ? '1PL' : /^B0+$/.test(c) ? 'B00' : /^A0+$/.test(c) ? 'A00' : c; };
   const duaTipo = (t) => String(t || '').replace(/,000(?=\s*(%|\/))/, '');
   const duaFecha = (s) => { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(String(s || '')); return m ? { d: +m[1], m: +m[2], y: +m[3] } : null; };
+  // Formato antiguo («Consulta del D.U.A. de importación», años atrás): casillas numeradas 02., 08., 14., 15., 17., 31., 33., 35., 38. y tabla de tributos «Declarado / Calculado»
+  function duaAntiguo(T) {
+    const g = (re, i = 1) => { const m = T.match(re); return m ? m[i].replace(/[ \t]+/g, ' ').trim() : ''; }, R = {};
+    R.num = g(/^D\.U\.A\.:\s*([0-9A-Z ]+?)\s*$/m).replace(/\s/g, '');
+    R.grab = g(/^Grabado el:\s*(\d\d-\d\d-\d{4}(?:\s+\d\d:\d\d:\d\d)?)/m) || g(/Fecha de Predeclaraci[oó]n Incompleta:\s*(\d\d-\d\d-\d{4})/); R.levante = g(/^Fecha de Levante:\s*(\d\d-\d\d-\d{4}(?:\s+\d\d:\d\d:\d\d)?)/mi);
+    R.aduana = g(/^A\.\s*Aduana de Destino:\s*(.+)/m);
+    const eori = (n) => g(new RegExp(`^${n}\\.EORI:\\s*(\\S+)`, 'm')), nom = (n) => g(new RegExp(`^${n}\\.\\s*Nombre:\\s*(.*)`, 'm'));
+    R.importador = [eori('08'), nom('08')].filter(Boolean).join(' - ') || g(/^Importador:\s*(.+?)(?:\s+Sujeto IVA Diferido)?$/m);
+    R.declarante = [eori('14'), nom('14')].filter(Boolean).join(' - ') || g(/^Declarante:\s*(.+?)(?:\s+Operador Econ.*)?$/m);
+    R.expedidor = g(/^02\.\s*Nombre:\s*(.*)/m); R.paisExp = g(/^15\.\s*Pa[ií]s de expedici[oó]n\s*:\s*(.*)/m);
+    R.paisDest = g(/^17\.a\s*Pa[ií]s:\s*(.+)/m); const prov = g(/^17\.b\s*Provincia:\s*(.+)/m); if (prov && prov !== '-') R.paisDest += ` (${prov})`;
+    R.transporte = g(/^18\.\s*Ident\.?\s*Medio Transporte Llegada\s*:\s*(.+)/m);
+    const cont = [...T.matchAll(/\b[A-Z]{4}\d{7}\b/g)].map((m) => m[0]);
+    R.contenedores = cont.length ? [...new Set(cont)].join(', ') : g(/^19\.\s*Contenedores\s*:\s*(.+)/m);
+    R.codEntrega = g(/^20\.1\s*C[oó]digo incoterms:\s*(.+)/m); R.lugar = g(/^20\.2\s*Lugar precisado:\s*(.+)/m); R.divisa = g(/^22\.1\s*Divisa:\s*(.+)/m);
+    R.totalFac = g(/^Total Factura en €:\s*([\d.,]+)/m) || g(/^22\.2\s*Total Divisas:\s*([\d.,]+)/m);
+    R.modoTr = g(/^25\.\s*Modo de Transporte en Frontera:\s*(.+)/m);
+    const desc = []; [...T.matchAll(/^31\.\s*Descripci[oó]n de las mercanc[ií]as:\s*\n(?:Descripci[oó]n de las mercanc[ií]as\s*\n)?([^\n]+)/gm)].forEach((m) => desc.push(m[1].trim()));
+    R.desc = desc.join(' · '); R.taric = [...T.matchAll(/^33\.1-2\s*C[oó]digo TARIC:\s*(.+)/gm)].map((m) => m[1].trim()).join(' · ');
+    const sum = (re) => { const v = [...T.matchAll(re)].map((m) => duaNum(m[1])).filter((x) => !Number.isNaN(x)); return v.length ? String(rr(v.reduce((a, b) => a + b, 0))) : ''; };
+    R.bruta = sum(/^35\.\s*Masa Bruta\s*\(Kg\):\s*([\d.,]+)/gmi); R.neta = sum(/^38\.\s*Masa Neta\s*\(kg\):\s*([\d.,]+)/gmi);
+    // tributos: «A00 Derechos … Declarado 5.000,00 € 0,000000 % 0,00 € 0,00 €», «1PL … Calculado 73,000 0,450000 KN 32,85 € 32,85 €»
+    R.declarados = {}; R.calculados = {};
+    const num2 = (s) => { const v = duaEur(s); return Number.isFinite(v) ? v : 0; }, fmtTipo = (n, u) => `${String(rr(duaEur(n)) || 0).replace('.', ',')} ${u || '%'}`.trim();
+    for (const l of T.split('\n').map((x) => x.trim())) {
+      const m = /^([A-Z0-9]{3})\s+.*?\b(Declarado|Calculado)\s+([\d.,]+)(?:\s*€)?\s+([\d.,]+)\s*(%|KN|KGM|[A-Z]{2,3})?\s+(?:[\d.,]+\s+)?([\d.,]+)\s*€/.exec(l);
+      if (!m) continue;
+      const k = duaCod(m[1]), esKg = m[5] && m[5] !== '%', o = m[2] === 'Declarado' ? R.declarados : R.calculados, prev = o[k];
+      const base = num2(m[3]), imp = num2(m[6]);
+      o[k] = { cod: k, base: prev ? rr((prev.base || 0) + base) : base, ud: esKg ? 'kg' : '', tipo: fmtTipo(m[4], m[5]), imp: rr((prev ? prev.imp : 0) + imp) };
+    }
+    R.ivaDif = g(/^Total de IVA diferido:\s*([\d.,]+)/m) || g(/^Importe IVA Diferido:\s*([\d.,]+)/m);
+    return R;
+  }
   function duaDeTexto(T) {
+    if (/CONSULTA DEL D\.U\.A\./i.test(T) || (/^D\.U\.A\.:\s*\d\d\s*ES/m.test(T) && !/Importaci[oó]n\.\s*Detallada/.test(T))) return duaAntiguo(T);
     const L = T.split('\n').map((x) => x.trim()), g = (re, i = 1) => { const m = T.match(re); return m ? m[i].replace(/\s+/g, ' ').trim() : ''; },
       all = (re) => [...T.matchAll(re)].map((m) => m[1].replace(/\s+/g, ' ').trim()).filter((x) => x && x !== '-');
     const R = {}, limpia = (s) => String(s || '').replace(/\s/g, '').replace(/[|l]/g, 'I'), valido = (s) => /^\d\d[A-Z]{2}\d{6}[A-Z0-9]{8}$/.test(s);
@@ -3923,7 +3958,7 @@ export function crearModulos(c) {
         // el número del nombre del archivo manda si el PDF no lo trae o el OCR lo ha leído con un par de errores (5 por 6…)
         const fm = /\d\dES\d{6}[A-Z0-9]{8}/i.exec(String(f.name).replace(/\s/g, '')), fn = fm ? fm[0].toUpperCase() : '';
         if (fn && (!R.num || [...fn].filter((ch, i) => ch !== R.num[i]).length <= 2)) R.num = fn;
-        if (!R.num) { mal.push(`${f.name} (no parece un DUA de importación: no encuentro «Importación. Detallada»)`); continue; }
+        if (!R.num) { mal.push(`${f.name} (no parece un DUA de importación: no encuentro «Importación. Detallada» ni «Consulta del D.U.A.»)`); continue; }
         const prev = duaRegs().find((r) => r.datos.num === R.num), regId = prev?.id ?? crypto.randomUUID(), sub = await subir(S.sel, 'dua', regId, 'pdf', f);
         if (sub.error) mal.push(`${f.name} (PDF no guardado: ${sub.error})`);
         const fe = duaFecha(R.levante || R.grab), datos = { ...R, archivo: f.name, man: prev?.datos?.man ?? {}, arch: sub.val ?? prev?.datos?.arch }, ej = fe ? fe.y : Number(S.ejercicio);
