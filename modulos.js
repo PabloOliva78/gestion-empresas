@@ -3845,7 +3845,7 @@ export function crearModulos(c) {
     ['paisExp', 'País de expedición'], ['paisDest', 'País de destino'], ['transporte', 'Medio de transporte de llegada'], ['contenedores', 'Contenedores'], ['codEntrega', 'Código de entrega'], ['lugar', 'Lugar precisado'], ['divisa', 'Divisa'],
     ['totalFac', 'Total factura'], ['modoTr', 'Modo de transporte en frontera'], ['desc', 'Descripción de las mercancías'], ['taric', 'Código TARIC'], ['bruta', 'Masa bruta (kg)'], ['neta', 'Masa neta (kg)']];
   const DUA_TRIB = { A00: 'Derechos Aduana', A30: 'Derechos Antidumping', '1PL': 'Impuesto Plástico', B00: 'IVA Importación' };
-  let duaSel = null, duaMes = 'todos', duaMsg = '';
+  let duaSel = null, duaMes = 'todos', duaAnio = null, duaMsg = '';
   const duaNum = (s) => { const v = String(s || '').replace(/,/g, '.'), p = v.split('.'); return p.length > 2 ? +(`${p.slice(0, -1).join('')}.${p[p.length - 1]}`) : +v; };
   const duaEur = (s) => +String(s || '0').replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
   // códigos mal leídos por el OCR (APL, IPL, A0O, BOO…) → código correcto
@@ -3964,7 +3964,7 @@ export function crearModulos(c) {
         const fe = duaFecha(R.levante || R.grab), datos = { ...R, archivo: f.name, man: prev?.datos?.man ?? {}, arch: sub.val ?? prev?.datos?.arch }, ej = fe ? fe.y : Number(S.ejercicio);
         const err = await guardarRegistro(prev, prev ? { datos, ejercicio: ej } : { id: regId, empresa_id: S.sel, tipo: 'dua', ejercicio: ej, datos });
         if (err) { mal.push(`${f.name} (${err})`); continue; }
-        n++; duaSel = R.num; if (fe) duaMes = `${fe.y}-${String(fe.m).padStart(2, '0')}`;
+        n++; duaSel = R.num; if (fe) { duaMes = `${fe.y}-${String(fe.m).padStart(2, '0')}`; duaAnio = String(fe.y); }
         const nifImp = (/^ES([A-Z0-9]+)/.exec(R.importador) || [])[1];
         if (nifImp && nifImp !== empresa()?.cif) otras.push(`${R.num}: el importador (${nifImp}) no es la empresa seleccionada`);
       } catch (err) { mal.push(`${f.name} (${err.message})`); }
@@ -4008,12 +4008,16 @@ export function crearModulos(c) {
     return undefined;
   }
   const setDuaMes = (v) => { duaMes = v; render(); };
+  const setDuaAnio = (v) => { duaAnio = v; duaMes = 'todos'; render(); };
   const DUA_ANCHOS = [14, 15, 21, 11, 9, 8, 11, 13]; // anchos fijos (em) de las ocho primeras columnas: iguales en todas las tablas de mes
   function vistaDua() {
     if (!S.sel) return sinEmpresa;
     const regs = duaRegs().map((r) => duaFixTrib({ ...r.datos })), ed = puede(), e = empresa();
     const mesDe = (R) => { const f = duaFecha(R.levante || R.grab); return f ? `${f.y}-${String(f.m).padStart(2, '0')}` : 'sin fecha'; };
-    const meses = [...new Set(regs.map(mesDe))].sort(), defM = /^\d\d$/.test(S.periodo ?? '') ? `${S.ejercicio}-${S.periodo}` : null;
+    const mesesTodos = [...new Set(regs.map(mesDe))].sort(), anios = [...new Set(mesesTodos.map((k) => k.slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort().reverse();
+    // primero el ejercicio y luego el mes: «Todos» en cada uno recoge todo lo que haya
+    const anioSel = duaAnio && (anios.includes(duaAnio) || duaAnio === 'todos') ? duaAnio : (anios.includes(String(S.ejercicio)) ? String(S.ejercicio) : 'todos');
+    const meses = anioSel === 'todos' ? mesesTodos : mesesTodos.filter((k) => k.startsWith(anioSel)), defM = /^\d\d$/.test(S.periodo ?? '') ? `${anioSel === 'todos' ? S.ejercicio : anioSel}-${S.periodo}` : null;
     const mesSel = duaMes && (meses.includes(duaMes) || duaMes === 'todos') ? duaMes : (defM && meses.includes(defM) ? defM : 'todos');
     const nomM = (k) => { const m = /^(\d{4})-(\d\d)$/.exec(k); return m ? `${MESES[+m[2] - 1][0].toUpperCase()}${MESES[+m[2] - 1].slice(1)} ${m[1]}` : k; };
     const tr = (R, c) => (R.declarados || {})[c] || (R.calculados || {})[c] || null;
@@ -4031,15 +4035,22 @@ export function crearModulos(c) {
     };
     const porMes = mesSel === 'todos' ? meses : [mesSel];
     const tablas = regs.length ? porMes.map((k) => tabla(regs.filter((R) => mesDe(R) === k).sort((a, b) => (a.levante || '').localeCompare(b.levante || '')), nomM(k))).join('') : '<p class="hint">Todavía no hay DUA cargados para esta empresa.</p>';
+    // resumen de todo lo que se está viendo (varios meses o todos los ejercicios)
+    const lstSel = regs.filter((R) => porMes.includes(mesDe(R)));
+    const codsR = [...new Set(lstSel.flatMap((R) => Object.keys(R.declarados || {}).concat(Object.keys(R.calculados || {}))))].sort((a, b) => { const o = ['B00', 'A00', '1PL', 'A30'], x = o.indexOf(a), y = o.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y) || a.localeCompare(b); });
+    const resumen = porMes.length > 1 && lstSel.length ? `<h4 class="it-sec">Total ${anioSel === 'todos' ? 'de todos los ejercicios' : `del ejercicio ${anioSel}`} · ${lstSel.length} DUA</h4><div class="wrap"><table class="tprs tnom il-t dua-t" style="width:auto"><thead><tr><th>Tributo</th><th>Base imponible</th><th>Importe</th></tr></thead><tbody>${codsR.map((c) => {
+      let b = 0, i = 0, kg = false; lstSel.forEach((R) => { const t = tr(R, c); if (t) { if (t.ud === 'kg') kg = true; else b += t.base || 0; i += t.imp || 0; } });
+      return `<tr><td><b>${esc(c)}</b>${DUA_TRIB[c] ? ` · ${DUA_TRIB[c]}` : ''}</td><td class="num">${kg && !b ? '' : fnum(rr(b))}</td><td class="num">${fnum(rr(i))}</td></tr>`;
+    }).join('')}</tbody></table></div>` : '';
     const Sel = regs.find((R) => R.num === duaSel) ?? null;
-    const tribT = (o, t) => { const xs = Object.values(o || {}); return xs.length ? `<h4 class="it-sec">${t}</h4><table class="tprs tnom il-t dua-t" style="width:auto"><thead><tr><th>Tributo</th><th>Base</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${xs.map((x) => `<tr><td><b>${esc(x.cod)}</b>${DUA_TRIB[x.cod] ? `<br><small>${DUA_TRIB[x.cod]}</small>` : ''}</td><td class="num">${x.base === null ? '—' : x.ud === 'kg' ? `${x.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(x.base)}</td><td class="c">${esc(duaTipo(x.tipo))}</td><td class="num">${fnum(x.imp)}</td></tr>`).join('')}</tbody></table>` : ''; };
+    const tribT =(o, t) => { const xs = Object.values(o || {}); return xs.length ? `<h4 class="it-sec">${t}</h4><table class="tprs tnom il-t dua-t" style="width:auto"><thead><tr><th>Tributo</th><th>Base</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${xs.map((x) => `<tr><td><b>${esc(x.cod)}</b>${DUA_TRIB[x.cod] ? `<br><small>${DUA_TRIB[x.cod]}</small>` : ''}</td><td class="num">${x.base === null ? '—' : x.ud === 'kg' ? `${x.base.toLocaleString('es-ES', { maximumFractionDigits: 3 })} kg` : fnum(x.base)}</td><td class="c">${esc(duaTipo(x.tipo))}</td><td class="num">${fnum(x.imp)}</td></tr>`).join('')}</tbody></table>` : ''; };
     const ficha = Sel ? `<section class="dsec dua-s"><h3>DUA ${esc(Sel.num)} ${ed ? `<button class="small" data-act="m-duadel" data-n="${esc(Sel.num)}">Eliminar</button>` : ''}</h3><p class="dash-s">Leído de ${esc(Sel.archivo || '')}. Los campos se pueden corregir.</p>
       <div class="css-flex" style="align-items:flex-start;gap:1.5rem"><table class="tprs tnom il-t dua-t" style="width:auto"><tbody>${DUA_CAMPOS.map(([k, t]) => `<tr><td>${esc(t)}</td><td class="in"><input data-duacampo="${esc(Sel.num)}|${k}" value="${esc(duaVal(Sel, k))}" size="${Math.max(8, String(duaVal(Sel, k)).length + 1)}"${ed ? '' : ' readonly'}></td></tr>`).join('')}</tbody></table>
       <div>${tribT(Sel.calculados, 'Tributos calculados')}${tribT(Sel.declarados, 'Tributos declarados')}${Sel.ivaDif ? `<p><b>Importe IVA diferido: ${fnum(duaNum(Sel.ivaDif))}</b></p>` : ''}</div></div></section>` : '';
     return `${ed ? dz('dua', 'Suelta aquí los PDF de los DUA (H1)', 'o pulsa para elegirlos. Puedes soltar varios a la vez; se ordenan por el mes de la fecha de levante.', '.pdf') : ''}<section class="dsec dua-s"><h3>DUA-H1 · ${esc(e.nombre)}</h3>
       ${duaMsg ? `<p class="dash-s">${esc(duaMsg)}</p>` : ''}
-      <div class="dua-bar"><b>Mes</b> <select data-duames="1"><option value="todos">Todos</option>${meses.map((k) => `<option value="${k}"${k === mesSel ? ' selected' : ''}>${esc(nomM(k))}</option>`).join('')}</select>
-        <span class="dash-s">Pulsa una fila para ver su detalle; doble clic para abrir el PDF en otra pestaña.</span></div>${tablas}</section>${ficha}`;
+      <div class="dua-bar"><b>Ejercicio</b> <select data-duaanio="1"><option value="todos"${anioSel === 'todos' ? ' selected' : ''}>Todos los ejercicios</option>${anios.map((y) => `<option value="${y}"${y === anioSel ? ' selected' : ''}>${y}</option>`).join('')}</select> <b>Mes</b> <select data-duames="1"><option value="todos">Todos los meses</option>${meses.map((k) => `<option value="${k}"${k === mesSel ? ' selected' : ''}>${esc(nomM(k))}</option>`).join('')}</select>
+        <span class="dash-s">Pulsa una fila para ver su detalle; doble clic para abrir el PDF en otra pestaña.</span></div>${tablas}${resumen}</section>${ficha}`;
   }
 
   function vistaCnom() {
@@ -5076,5 +5087,5 @@ export function crearModulos(c) {
   });
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'nomexcel' ? nomCargarExcel(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, setDuaAnio, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

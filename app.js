@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=206';
+import { crearModulos } from './modulos.js?v=207';
 import { activarRedimension } from './tablas.js?v=2';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -791,6 +791,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.sie) return void M.editarSii(t.dataset.sie, t.value);
   if (t.dataset.csscta !== undefined) return void M.setCssCta(t.value);
   if (t.dataset.duames !== undefined) return void M.setDuaMes(t.value);
+  if (t.dataset.duaanio !== undefined) return void M.setDuaAnio(t.value);
   if (t.dataset.duacampo) return void M.duaCampo(t.dataset.duacampo, t.value);
   if (t.dataset.ilver !== undefined) return void M.setIlVer(t.value);
   if (t.dataset.il) return void M.guardarIl(t.dataset.il, t.value);
