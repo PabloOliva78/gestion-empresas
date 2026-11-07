@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=200';
+import { crearModulos } from './modulos.js?v=201';
 import { activarRedimension } from './tablas.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -27,6 +27,7 @@ const S = {
   sel: '', menu: false, grp: -1, cargando: false, // empresa elegida ('' = todas) y grupo de pestañas abierto
 };
 let uidActual = null;
+S.zoom = (() => { try { return Math.min(2, Math.max(0.5, parseFloat(localStorage.getItem('zoom-vista')) || 1)); } catch { return 1; } })(); // tamaño de pestañas y tablas
 activarRedimension(root, () => S.tab); // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -251,6 +252,7 @@ function render() {
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>` : ''}
+      <div class="zoom-c no-print" title="Tamaño de las pestañas y de las tablas"><span>Tamaño</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(S.zoom * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -263,7 +265,7 @@ function render() {
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
         <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
-      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${S.zoom};--z:${S.zoom}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   alinearPanel();
@@ -741,6 +743,11 @@ root.addEventListener('click', (ev) => {
   if (ir && !ev.target.closest('button')) { S.tab = ir.dataset.ir; S.grp = -1; return render(); }
   const t = ev.target.closest('button');
   if (!t) return;
+  if (t.dataset.zoom !== undefined) {
+    const z = t.dataset.zoom === '0' ? 1 : S.zoom + (t.dataset.zoom === '+' ? 0.1 : -0.1);
+    S.zoom = Math.min(2, Math.max(0.5, Math.round(z * 10) / 10)); try { localStorage.setItem('zoom-vista', String(S.zoom)); } catch { /* sin almacenamiento */ }
+    return render();
+  }
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
   if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
   if (t.dataset.grp !== undefined) { S.grp = Number(t.dataset.grp); return refrescarTabs(); }

@@ -346,7 +346,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 /* bloques fijos arriba y zona de soltar fija debajo */
 .tabs-wrap { position: sticky; top: 0; z-index: 40; background: var(--bg, #f4f6fb); padding-bottom: .3rem; max-height: 85vh; overflow-y: auto; }
-.vista > .dropzone, .vista .dropzone:first-of-type { position: sticky; top: var(--tabsH, 64px); z-index: 20; box-shadow: 0 3px 8px rgba(31,56,100,.12); }
+.vista > .dropzone, .vista .dropzone:first-of-type { position: sticky; top: calc(var(--tabsH, 64px) / var(--z, 1)); z-index: 20; box-shadow: 0 3px 8px rgba(31,56,100,.12); }
 
 /* bloques del menú más grandes */
 .tabs { gap: .55rem; padding-top: .9rem; }
@@ -784,7 +784,7 @@ img.logo-aside, span.logo-aside { cursor: pointer; }
 .rg-pre { white-space: pre-wrap; font-size: 11px; max-height: 300px; overflow: auto; background: rgba(127,127,127,.12); padding: 8px; }
 .rg-msg.mal { color: #b42318; }
 .rg-split { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.1fr); gap: 1rem; align-items: start; }
-.rg-izq { position: sticky; top: var(--tabsH, 64px); }
+.rg-izq { position: sticky; top: calc(var(--tabsH, 64px) / var(--z, 1)); }
 .rg-visor { max-height: calc(100vh - 150px); overflow: auto; }
 .rg-indice { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; margin-bottom: 8px; }
 .subtabs button.hecho { font-weight: 600; }
@@ -1047,8 +1047,8 @@ body.rs-arrastrando { cursor: col-resize; user-select: none; }
 @media print { .col-rs { display: none; } }
 
 /* SII emitidas / recibidas: título, zona de soltar, archivos y cabecera con filtros fijos; solo se desplaza la tabla */
-.vista.fijo-sii > .tab-tit { position: sticky; top: var(--tabsH, 64px); z-index: 25; margin: 0; height: 2.2rem; line-height: 2.2rem; background: var(--bg, #f4f6fb); }
-.sii-fijo { position: sticky; top: calc(var(--tabsH, 64px) + 2.2rem); z-index: 24; background: var(--bg, #f4f6fb); box-shadow: 0 4px 8px rgba(31,56,100,.15); padding-bottom: .3rem; }
+.vista.fijo-sii > .tab-tit { position: sticky; top: calc(var(--tabsH, 64px) / var(--z, 1)); z-index: 25; margin: 0; height: 2.2rem; line-height: 2.2rem; background: var(--bg, #f4f6fb); }
+.sii-fijo { position: sticky; top: calc(var(--tabsH, 64px) / var(--z, 1) + 2.2rem); z-index: 24; background: var(--bg, #f4f6fb); box-shadow: 0 4px 8px rgba(31,56,100,.15); padding-bottom: .3rem; }
 .sii-fijo .dropzone { position: static !important; box-shadow: none !important; margin-bottom: .3rem; }
 .sii-fijo .sii-cab { margin-bottom: 0; }
 
@@ -1119,3 +1119,8 @@ table.tprs.tnom.nom-fit td.num { text-align: right; padding: .2rem calc(1rem + 1
 table.tprs.tnom.nom-fit td.in { padding: .15rem 0 .15rem .2rem; }
 table.tprs.tnom.nom-fit td.in input { width: 100% !important; box-sizing: border-box; text-align: right; padding: .22rem 1rem .22rem .2rem; font-variant-numeric: tabular-nums; }
 table.tprs.tnom.nom-fit td.c { text-align: center; padding-right: .2rem; }
+
+/* Control de tamaño de pestañas y tablas (barra lateral) */
+.zoom-c { display: flex; align-items: center; gap: .3rem; margin: .7rem 0 .2rem; color: #cfdcff; font-size: .8rem; }
+.zoom-c span { margin-right: auto; }
+.zoom-c button { padding: .15rem .55rem; font-size: .9rem; min-width: 2rem; line-height: 1.2; }

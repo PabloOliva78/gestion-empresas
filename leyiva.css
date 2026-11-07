@@ -35,7 +35,7 @@ td.num { text-align: right; white-space: nowrap; }
   .ley-tag.error { background: #4a2020; color: #ffc9c9; }
   .ley-tag.aviso { background: #4a3a14; color: #ffdf9e; }
 }
-.ley-fijo { position: sticky; top: var(--tabsH, 64px); z-index: 20; background: var(--bg); padding-bottom: .4rem; box-shadow: 0 4px 8px rgba(31,56,100,.12); }
+.ley-fijo { position: sticky; top: calc(var(--tabsH, 64px) / var(--z, 1)); z-index: 20; background: var(--bg); padding-bottom: .4rem; box-shadow: 0 4px 8px rgba(31,56,100,.12); }
 .ley-fijo .dropzone { position: static !important; box-shadow: none !important; margin-bottom: .4rem; }
 button.ley-art { display: flex; justify-content: space-between; align-items: center; gap: .8rem; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: .5rem .3rem; font-size: .92rem; }
 button.ley-art:hover { background: var(--bg); }
