@@ -2842,10 +2842,19 @@ export function crearModulos(c) {
     filas.slice(1).forEach((r) => Object.entries(r.datos ?? {}).forEach(([mm, v]) => { if (!(mm in datos)) datos[mm] = v; }));
     return { id: filas[0].id, datos };
   }
+  async function guardarArchNom(f, empId, anio) {
+    const ref = `${f.name}|${f.size}`;
+    if (S.registros.some((r) => r.tipo === 'arch-nominas' && r.empresa_id === empId && r.datos.ref === ref)) return;
+    const id = crypto.randomUUID(), sub = await subir(empId, 'arch-nominas', id, 'archivo', f);
+    if (sub.error) throw new Error(sub.error);
+    const err = await guardarRegistro(null, { id, empresa_id: empId, tipo: 'arch-nominas', ejercicio: anio, datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
+    if (err) throw new Error(err);
+  }
   async function nomCargarExcel(files) {
     const informe = [], mal = []; let destino = null;
     files.filter((x) => !/\.(xlsx|xlsm|xls)$/i.test(x.name)).forEach((x) => mal.push(`${x.name}: no es un Excel (.xlsx o .xls)`));
     for (const f of files.filter((x) => /\.(xlsx|xlsm|xls)$/i.test(x.name))) {
+      const usados = new Map(); // empresa → ejercicio de las hojas leídas de este archivo
       try {
         const wb = window.XLSX.read(await f.arrayBuffer());
         for (const nombreHoja of wb.SheetNames) {
@@ -2871,7 +2880,10 @@ export function crearModulos(c) {
           const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: e.id, tipo: 'nominas', ejercicio: L.anio, datos });
           if (err) mal.push(`${nombreHoja}: ${err}`); else informe.push(`${e.nombre} · ${NOM_MESES[L.mes - 1].toLowerCase()} ${L.anio} · ${centros.length} centro(s)`);
           nomAsMes = mm; if (!destino || e.id === S.sel) destino = { sel: e.id, ej: L.anio }; // se queda en la empresa elegida si el Excel la trae
+          usados.set(e.id, L.anio);
         }
+        // el archivo queda guardado en «Archivos» de cada empresa cuyas hojas se han leído (también sale en Enviar documentación)
+        for (const [empId, anio] of usados) { try { await guardarArchNom(f, empId, anio); } catch (err) { mal.push(`${f.name}: el Excel no se pudo guardar como archivo (${err.message})`); } }
       } catch (err) { mal.push(`${f.name}: ${err.message}`); }
     }
     nomMsg = `${informe.length} hoja(s) repartidas: ${informe.join(' · ')}${mal.length ? ` · sin cargar: ${mal.join(' · ')}` : ''}`;
@@ -2950,7 +2962,7 @@ export function crearModulos(c) {
     }).join('');
     // fila para quitar la nómina de un mes o solo su Excel (centros de coste)
     const quitar = ed && dat.some(Boolean) ? `<tr class="no-print"><td class="pp">Quitar</td>${MM12.map((mm, i) => `<td class="c">${dat[i] ? `<button class="small danger" data-act="m-nomquitar" data-mm="${mm}" data-solo="todo" title="Quitar la nómina de este mes">Nómina</button>${dat[i]._c ? ` <button class="small" data-act="m-nomquitar" data-mm="${mm}" data-solo="excel" title="Quitar solo el Excel (reparto por centros de coste)">Excel</button>` : ''}` : ''}</td>`).join('')}<td></td></tr>` : '';
-    return `${ed ? dz('nomexcel', 'Suelta aquí el Excel de costes salariales del grupo', '(una hoja por empresa, con el mes y los importes por centro de coste): cada hoja se reparte en el cuadro de su empresa y de su mes. Al total devengado se le restan kilometraje, dietas e indemnizaciones. El asiento y la hoja del mes están en «Nóminas mes en curso».', '.xlsx,.xls') : ''}
+    return `${ed ? dz('nomexcel', 'Suelta aquí el Excel de costes salariales del grupo', '(una hoja por empresa, con el mes y los importes por centro de coste): cada hoja se reparte en el cuadro de su empresa y de su mes. Al total devengado se le restan kilometraje, dietas e indemnizaciones. El asiento y la hoja del mes están en «Nóminas mes en curso».', '.xlsx,.xls') : ''}${listaArch('nominas')}
       ${nomMsg ? `<p class="dash-s">${esc(nomMsg)}</p>` : ''}${cabNom(e, y, ` · ${dat.filter(Boolean).length} de 12 meses con nóminas`)}
       <p class="hint">Escribe los importes del cuadrante de la gestoría en cada mes (se guardan al salir de la celda) o suelta el Excel del grupo. «Diferencias» = ${esc(NOM_DIF)}; debe dar cero.${mal.length ? ` <b style="color:#b42318">No cuadra en: ${mal.join(', ')}.</b>` : ''}</p>
       <section class="prs-card"><div class="wrap"><table class="tprs tnom nom-fit"><thead><tr><th class="pp">Concepto</th>${MESES.map((m) => `<th>${m[0].toUpperCase() + m.slice(1, 3)} ${y}</th>`).join('')}<th class="ejer">EJERCICIO ${y}</th></tr></thead><tbody>${filas}${quitar}</tbody></table></div></section>`;
