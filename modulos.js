@@ -5,7 +5,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=47';
 
 import { CAB_SII } from './siicab.js?v=1';
-import { crearRegistral } from './registral.js?v=11';
+import { crearRegistral } from './registral.js?v=12';
 import { crearModelos } from './modelos.js?v=10';
 import { crearModelos2 } from './modelos2.js?v=1';
 import { crearModelos3 } from './modelos3.js?v=2';
@@ -5013,6 +5013,14 @@ export function crearModulos(c) {
 
   // Bloque 2 (Datos Registrales, Titularidad Real…): ver registral.js
   const ocrPdf = async (file, aviso) => {
+    if (/^image\//.test(file.type) || /\.(png|jpe?g|webp|bmp)$/i.test(file.name)) { // imagen (captura de pantalla): se amplía y se lee con OCR
+      await cargarTesseract(); aviso?.('leyendo la imagen (OCR)…');
+      const img = await createImageBitmap(file), k = Math.min(3, Math.max(1, 2200 / Math.max(img.width, 1))), cv = document.createElement('canvas');
+      cv.width = img.width * k; cv.height = img.height * k;
+      const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.imageSmoothingQuality = 'high'; cx.drawImage(img, 0, 0, cv.width, cv.height);
+      const w = await window.Tesseract.createWorker('spa');
+      try { await w.setParameters({ preserve_interword_spaces: '1' }); return [(await w.recognize(cv)).data.text]; } finally { await w.terminate(); }
+    }
     const lib = window.pdfjsLib;
     lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;

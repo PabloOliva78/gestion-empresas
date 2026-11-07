@@ -33,10 +33,41 @@ export function crearRegistral(c) {
   const textoLineas = (lineas) => lineas.map((l) => l.map((i) => i.s).join('  ')).join('\n');
 
   // ================= Datos Registrales =================
-  const DREG_CAMPOS = [['denominacion', 'Denominación social'], ['nif', 'NIF'], ['irus', 'IRUS'], ['cnae', 'CNAE'], ['cnaeDesc', 'Actividad (CNAE)'],
-    ['registro', 'Registro Mercantil'], ['tomo', 'Tomo'], ['libro', 'Libro'], ['folio', 'Folio'], ['seccion', 'Sección'], ['hoja', 'Hoja registral'],
-    ['inscripcion', 'Inscripción'], ['lei', 'LEI'], ['domicilio', 'Domicilio social'], ['fconst', 'Fecha de constitución'], ['notario', 'Notario (constitución)'],
+  const DREG_CAMPOS = [['denominacion', 'Denominación social'], ['formaSocial', 'Forma social'], ['nif', 'NIF'], ['irus', 'IRUS'], ['euid', 'EUID'], ['cnae', 'CNAE'], ['cnaeDesc', 'Actividad (CNAE)'],
+    ['nace', 'NACE'], ['naceDesc', 'Actividad (NACE)'],
+    ['registro', 'Registro Mercantil'], ['tomo', 'Tomo'], ['libro', 'Libro'], ['folio', 'Folio'], ['seccion', 'Sección'], ['hoja', 'Hoja registral (hoja social)'],
+    ['inscripcion', 'Inscripción'], ['lei', 'LEI'], ['web', 'Página web'], ['estado', 'Estado'], ['domicilio', 'Domicilio social'], ['fconst', 'Fecha de constitución'], ['notario', 'Notario (constitución)'],
     ['protocolo', 'Nº de protocolo']];
+  // Ficha del Registro Mercantil (información mercantil) ya consultada: rellena lo que esté vacío de la empresa con ese NIF
+  const FICHA_REG = {
+    A18341404: { fecha: '07/11/2026', datos: { denominacion: 'HEROGRA FERTILIZANTES SOCIEDAD ANONIMA', formaSocial: 'No disponible', nif: 'A18341404', irus: '1000203781256', euid: 'ES18020.000008382', cnae: '2015', cnaeDesc: 'Fabricación de fertilizantes y compuestos nitrogenados',
+      nace: '2015', naceDesc: 'Manufacture of fertilisers and nitrogen compounds', hoja: '5970', registro: 'Registro Mercantil de Granada', web: 'No disponible', estado: 'Vigente',
+      domicilio: "Polígono Juncaril, calle A' (A prima) parcelas 204-205-206 y 111B.-, GRANADA, ALBOLOTE" },
+    admins: [['ROMERO MARTINEZ ANA', 'Consejero Delegado Solidario'], ['ROMERO RUIZ JOAQUIN', 'Consejero Delegado Solidario'], ['ROMERO GOMEZ IGNACIO', 'Consejero'],
+      ['ROMERO MARTINEZ JUAN JOSE', 'Consejero'], ['ABAD PERALTA JAIME', 'Consejero'], ['ROMERO RUIZ JUAN', 'Consejero']] },
+  };
+  const dregFichaGuardada = new Set();
+  function dregDesdeFicha(e, d) {
+    const F = FICHA_REG[String(e?.cif ?? '').toUpperCase()]; if (!F) return false;
+    let cambio = false;
+    Object.entries(F.datos).forEach(([k, v]) => { if (!d[k]) { d[k] = v; d._o[k] = `Ficha del Registro Mercantil (${F.fecha})`; cambio = true; } });
+    if (!Array.isArray(d.admins) || !d.admins.length) { d.admins = F.admins.map(([nombre, cargo]) => ({ nombre, cargo, origen: `Ficha del Registro Mercantil (${F.fecha})` })); cambio = true; }
+    return cambio;
+  }
+  // «NOMBRE APELLIDOS Cargo» → nombre y cargo (el cargo empieza en la primera palabra de cargo)
+  const CARGO_RX = /\b(Presidente|Vicepresidente|Secretario|Vicesecretario|Consejero|Administrador|Apoderado|Liquidador|Director|Gerente|Auditor|Representante)\b.*$/;
+  function adminsDeTexto(T) {
+    const L = String(T).split('\n').map((l) => l.replace(/\s+/g, ' ').trim()), i = L.findIndex((l) => /^Administradores y cargos de la sociedad/i.test(l));
+    if (i < 0) return [];
+    const out = [];
+    for (const l of L.slice(i + 1)) {
+      if (!l) continue;
+      if (/^(Domicilio|Nota informativa|Certificaci|Volver)/i.test(l)) break;
+      const m = CARGO_RX.exec(l); if (!m || m.index < 3) continue;
+      out.push({ nombre: l.slice(0, m.index).replace(/^[•·\-\s]+/, '').trim(), cargo: m[0].trim() });
+    }
+    return out;
+  }
 
   const dregDe = (e) => {
     const d = { ...(e.datos?.dreg ?? {}) };
@@ -74,7 +105,15 @@ export function crearRegistral(c) {
     R.libro = prim(/\bLibro\s*[:.]?\s*(\d{1,6})\b/i);
     R.folio = prim(/\bFolio\s*[:.]?\s*(\d{1,6})\b/i);
     R.seccion = prim(/\bSecci[oó]n\s*[:.]?\s*(\d{1,2}[ªa]?|[A-Z]{1,3})\b/i);
-    R.hoja = prim(/\b(?:N[ºo°.]*\s*(?:de\s+)?)?Hoja(?:\s+Registral)?(?:\s+n[ºo°.]*)?\s*[:.]?\s*([A-Z]{0,3}[-\s]?\d{1,7})\b/i, (m) => m[1].replace(/\s/g, ''));
+    R.hoja = prim(/\b(?:N[ºo°.]*\s*(?:de\s+)?)?Hoja(?:\s+(?:Registral|Social))?(?:\s+n[ºo°.]*)?\s*[:.]?\s*([A-Z]{0,3}[-\s]?\d{1,7})\b/i, (m) => m[1].replace(/\s/g, ''));
+    // ficha de «Información mercantil» del Registro (Registradores)
+    R.formaSocial = prim(/\bForma\s+social\s*:?\s*([^\n]+)/i, undefined, true); R.euid = prim(/\bEUID\s*:?\s*(ES[0-9A-Z.]+)/i);
+    R.nace = prim(/\bNACE\s*:?\s*(\d{2}\.?\d{0,2}\.?\d?)\b/i); R.naceDesc = prim(/\bNACE\s*:?\s*\d{2}\.?\d{0,2}\.?\d?\s*[-–:]?\s*([A-Za-z][^\n]{3,120})/i);
+    R.estado = prim(/^\s*Estado\s*:?\s*(Vigente|Cancelad[oa]|Extinguid[oa]|En liquidaci[oó]n|Disuelt[oa])\b/i, undefined, true);
+    R.web = prim(/\bP[aá]gina\s+Web\s*:?\s*(\S+)/i, undefined, true);
+    if (!R.registro) { const m = /Registro\s+Mercantil\s*:\s*([A-ZÁÉÍÓÚÑa-záéíóúñ ]{3,30})/.exec(T); if (m) R.registro = `Registro Mercantil de ${m[1].trim().toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase())}`; }
+    ['formaSocial', 'web'].forEach((k) => { if (/^no disponible$/i.test(R[k] || '')) R[k] = ''; });
+    const adm = adminsDeTexto(T); if (adm.length) R.admins = adm;
     R.inscripcion = prim(/\bInscripci[oó]n\s*[:.]?\s*(\d{1,4}[ªa]?)\b/i);
     R.lei = prim(/\bLEI\s*[:.]?\s*([A-Z0-9]{20})\b/);
     R.denominacion = prim(/\bDenominaci[oó]n(?:\s+de\s+la\s+Entidad|\s+social)?\s*:\s*([A-ZÁÉÍÓÚÑ0-9][^\n]*?)(?=\s{2,}|\s+N\.?I\.?F|\s+C\.?I\.?F|$)/i, undefined, true);
@@ -87,6 +126,7 @@ export function crearRegistral(c) {
   }
 
   async function textoArchivo(f) {
+    if (/^image\//.test(f.type) || /\.(png|jpe?g|webp|bmp)$/i.test(f.name)) return (await ocrPdf(f, (m) => aviso(`${f.name}: ${m}`))).join('\n'); // captura de pantalla: se lee con OCR
     if (/\.pdf$/i.test(f.name)) {
       const { lineas } = await lineasDe(f);
       const t = textoLineas(lineas);
@@ -123,22 +163,47 @@ export function crearRegistral(c) {
     if (!e) return sinEmpresa;
     const d = dregDe(e); dregDesdeCenso(e, d); dregDesdeCA(e, d); dregDesdeEsc(e, d);
     const ed = puede();
+    // datos de la ficha del Registro Mercantil: se rellenan los vacíos y se guardan una vez por empresa y sesión
+    if (dregDesdeFicha(e, d) && ed && !dregFichaGuardada.has(e.id)) { dregFichaGuardada.add(e.id); setTimeout(() => dregGuardar(e, d, false), 0); }
+    const admins = Array.isArray(d.admins) ? d.admins : [];
     // al abrir la pestaña, si faltan tomo, folio y hoja y hay cuentas anuales cargadas, se toman de ellas (una vez por empresa y sesión)
     if (ed && !(d.tomo && d.folio && d.hoja) && !dregCAProbado.has(e.id)) { dregCAProbado.add(e.id); setTimeout(() => dregDeCuentas(true), 0); }
     const av = d.nif && nifEmp() && d.nif !== nifEmp() ? `<p class="aviso">El NIF leído (${esc(d.nif)}) no coincide con el de la empresa seleccionada (${esc(nifEmp())})</p>` : '';
     const arch = d._arch;
-    return `${ed ? `<div class="dropzone" data-kind="dreg" tabindex="0" role="button"><b>Suelta aquí el PDF o Excel con los datos registrales</b> (nota simple, certificado IRUS, declaración de titularidad real, ficha de la sociedad…) o pulsa para elegirlo. Se extraen NIF, IRUS, CNAE, Registro Mercantil, tomo, libro, folio, sección, hoja, inscripción, LEI, domicilio y fecha de constitución.
-      <input type="file" data-dzkind="dreg" accept=".pdf,.xlsx,.xls,.csv" multiple hidden></div>` : ''}${avisoHtml()}${av}
+    return `${ed ? `<div class="dropzone" data-kind="dreg" tabindex="0" role="button"><b>Suelta aquí el PDF, Excel o imagen (captura de pantalla) con los datos registrales</b> (nota simple, certificado IRUS, declaración de titularidad real, ficha de la sociedad del Registro Mercantil…) o pulsa para elegirlo. Se extraen NIF, IRUS, CNAE, Registro Mercantil, tomo, libro, folio, sección, hoja, inscripción, LEI, domicilio y fecha de constitución.
+      <input type="file" data-dzkind="dreg" accept=".pdf,.xlsx,.xls,.csv,image/*" multiple hidden></div>` : ''}${avisoHtml()}${av}
       <section class="block"><h4 class="it-tit">Datos registrales · ${esc(e.nombre)}</h4>
       <table class="tabla rg-tabla rotulos"><thead><tr><th>Dato</th><th>Valor</th><th>Tomado de</th></tr></thead><tbody>
       ${DREG_CAMPOS.map(([k, t]) => `<tr><td><b>${t}</b></td><td><input class="facin" data-rgdreg="${k}" value="${esc(d[k] ?? '')}" size="${Math.max(12, String(d[k] ?? '').length + 2)}"${ed ? '' : ' disabled'}></td><td class="hint">${esc(d._o[k] ?? '')}</td></tr>`).join('')}
       </tbody></table>
+      <h4 class="it-tit" style="margin-top:1rem">Administradores y cargos de la sociedad</h4>
+      <table class="tabla rg-tabla rotulos"><thead><tr><th>Nombre</th><th>Cargo</th><th>Tomado de</th><th></th></tr></thead><tbody>
+      ${admins.map((a, i) => `<tr><td><input class="facin" data-rgadm="${i}|nombre" value="${esc(a.nombre ?? '')}" size="${Math.max(24, String(a.nombre ?? '').length + 2)}"${ed ? '' : ' disabled'}></td><td><input class="facin" data-rgadm="${i}|cargo" value="${esc(a.cargo ?? '')}" size="${Math.max(24, String(a.cargo ?? '').length + 2)}"${ed ? '' : ' disabled'}></td><td class="hint">${esc(a.origen ?? '')}</td><td>${ed ? `<button class="small danger" data-act="m-rg-admdel" data-i="${i}" title="Quitar">✖</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="vacio">Sin administradores: añádelos o suelta la ficha del Registro Mercantil.</td></tr>'}
+      </tbody></table>
+      ${ed ? '<p><button class="small" data-act="m-rg-admadd">+ Añadir administrador</button></p>' : ''}
       ${ed ? '<p><button class="small" data-act="m-rg-dregca">Tomar Registro Mercantil, tomo, folio y hoja de las cuentas anuales presentadas</button> <button class="small" data-act="m-rg-dregtr">Tomar Registro Mercantil, tomo, folio y hoja de Titularidad real</button></p>' : ''}
       ${arch.length ? `<p class="hint">Archivos leídos: ${arch.map((a) => `${esc(a.name)} (${esc(a.fecha)})${ed ? ` <button class="small" data-act="m-rg-dregquitar" data-n="${esc(a.name)}">Quitar</button>` : ''}`).join(' · ')}</p>
       <details><summary>Ver el texto extraído</summary>${arch.map((a) => `<h4>${esc(a.name)}</h4><pre class="rg-pre">${esc(a.texto ?? '')}</pre>`).join('')}</details>` : ''}
       </section>`;
   }
 
+  async function admEditar(clave, v) {
+    const e = empresa(); if (!e || !puede()) return;
+    const [i, k] = clave.split('|'), d = dregDe(e); d.admins = (Array.isArray(d.admins) ? d.admins : []).map((a) => ({ ...a }));
+    if (!d.admins[+i]) return;
+    d.admins[+i][k] = String(v).trim(); d.admins[+i].origen = 'a mano';
+    await dregGuardar(e, d, false);
+  }
+  async function admAnadir() {
+    const e = empresa(); if (!e || !puede()) return;
+    const d = dregDe(e); d.admins = [...(Array.isArray(d.admins) ? d.admins : []), { nombre: '', cargo: '', origen: 'a mano' }];
+    await dregGuardar(e, d);
+  }
+  async function admQuitar(i) {
+    const e = empresa(); if (!e || !puede()) return;
+    const d = dregDe(e); d.admins = (Array.isArray(d.admins) ? d.admins : []).filter((_, j) => j !== +i);
+    await dregGuardar(e, d);
+  }
   async function dregEditar(k, v) {
     const e = empresa(); if (!e || !puede()) return;
     const d = dregDe(e); v = String(v).trim();
@@ -1339,6 +1404,8 @@ export function crearRegistral(c) {
     'm-rg-dregtr': () => dregDeTitReal(),
     'm-rg-dregca': () => dregDeCuentas(false),
     'm-rg-dregquitar': (d) => dregQuitar(d.n),
+    'm-rg-admadd': () => admAnadir(),
+    'm-rg-admdel': (d) => admQuitar(d.i),
     'm-rg-tradd': async (d) => { const D = trlDe(); D[d.c].push({}); await trlGuardar(D); },
     'm-rg-trdel': async (d) => { const D = trlDe(); D[d.c].splice(+d.i, 1); await trlGuardar(D); },
     'm-rg-trquitar': async (d) => {
@@ -1352,6 +1419,7 @@ export function crearRegistral(c) {
   document.addEventListener('change', (ev) => {
     const t = ev.target; if (!t.dataset) return;
     if (t.dataset.rgdreg) dregEditar(t.dataset.rgdreg, t.value);
+    else if (t.dataset.rgadm) admEditar(t.dataset.rgadm, t.value);
     else if (t.dataset.rgtr) trlCampo(t.dataset.rgtr, t.value);
     else if (t.dataset.rgtrcab) trlCab(t.dataset.rgtrcab, t.value);
     else if (t.dataset.rgdej) { rgDocEj = +t.value; render(); }
