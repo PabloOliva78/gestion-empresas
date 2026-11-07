@@ -4302,6 +4302,7 @@ export function crearModulos(c) {
       'm-doc-edit': () => formDoc(d.m, d.slot),
       'm-doc-del': () => quitarDoc(d.m, d.slot),
       'm-sub': () => { subIT = d.sub; render(); },
+      'm-revanio': () => { if (revCerr.has(d.y)) revCerr.delete(d.y); else revCerr.add(d.y); render(); },
       'm-bss': () => { bssFiltro = d.f; render(); },
       'm-man303': () => formMan303(),
       'm-fc': () => opFc(d.s, d.op, d.k),
@@ -4627,6 +4628,7 @@ export function crearModulos(c) {
       }));
     return { st, filas, cargando, nRev: filas.filter((f) => f.n === 0 && !f.sinOrigen).length };
   }
+  const revCerr = new Set(); // ejercicios plegados en «Archivos de la empresa»
   function vistaRev() {
     if (!S.sel) return sinEmpresa;
     const D = revDatos(), ed = puede();
@@ -4638,9 +4640,16 @@ export function crearModulos(c) {
     const estado = (f) => (f.n === null ? '<span class="hint">se guarda tal cual</span>'
       : f.n > 0 ? `<span class="verde">✔ ${f.n} líneas</span>` : f.sinOrigen ? '<span class="hint">cargado antes de guardar el origen: no se puede contar</span>'
         : D.cargando ? '…' : '<b class="rojo">✖ Sin líneas leídas · revisa el formato del archivo</b>');
-    const filas = D.filas.map((f) => `<tr class="${f.n === 0 && !f.sinOrigen ? 'cf-ko' : f.n > 0 ? 'cf-ok' : ''}"><td>${ARCH[f.k]}</td><td>${esc(f.r.datos.nombre)}</td><td class="c">${esc(f.r.datos.subido ?? '')}</td><td class="c">${f.r.ejercicio ?? ''}</td>
+    const filaRev = (f) => `<tr class="${f.n === 0 && !f.sinOrigen ? 'cf-ko' : f.n > 0 ? 'cf-ok' : ''}"><td>${ARCH[f.k]}</td><td>${esc(f.r.datos.nombre)}</td><td class="c">${esc(f.r.datos.subido ?? '')}</td><td class="c">${f.r.ejercicio ?? ''}</td>
       <td>${estado(f)}</td><td class="c">${f.desde ? `${fd(f.desde)} → ${fd(f.hasta)}` : ''}</td><td>${verArchivo(f.r.datos.archivo)}</td>
-      <td>${ed ? `<button class="small danger" data-act="m-archdel" data-id="${f.r.id}" title="Quitar el archivo y los datos que aportó">✖ Quitar</button>` : ''}</td></tr>`).join('');
+      <td>${ed ? `<button class="small danger" data-act="m-archdel" data-id="${f.r.id}" title="Quitar el archivo y los datos que aportó">✖ Quitar</button>` : ''}</td></tr>`;
+    // por años: cada ejercicio con su cabecera (se pliega y se despliega), el más reciente primero
+    const porAnio = new Map();
+    D.filas.forEach((f) => { const y = String(f.r.ejercicio ?? 'Sin ejercicio'); (porAnio.get(y) ?? porAnio.set(y, []).get(y)).push(f); });
+    const filas = [...porAnio.keys()].sort((a, b) => b.localeCompare(a)).map((y) => {
+      const L = porAnio.get(y), cerr = revCerr.has(y), rev = L.some((f) => f.n === 0 && !f.sinOrigen);
+      return `<tr class="rev-anio"><td colspan="8"><button class="small" data-act="m-revanio" data-y="${esc(y)}">${cerr ? '▸' : '▾'} ${/^\d{4}$/.test(y) ? 'Ejercicio ' : ''}${esc(y)} · ${L.length} archivo(s)${rev ? ' · por revisar' : ''}</button></td></tr>${cerr ? '' : L.map(filaRev).join('')}`;
+    }).join('');
     return `<div class="fc-cab"><span><b>${esc(empresa().nombre)}</b> · ${D.filas.length} archivos guardados${D.nRev ? ` · <b class="rojo">${D.nRev} por revisar</b>` : D.filas.length ? ' · <span class="verde">Revisado ✓</span>' : ''}</span></div>
       <div class="xc-kg" style="margin:.4rem 0 .8rem">${resumen}</div>
       <section class="prs-card"><div class="prs-h">Archivos de la empresa</div>${D.filas.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Tipo</th><th>Archivo</th><th>Subido</th><th>Ejercicio</th><th>Lectura</th><th>Fechas leídas</th><th></th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`
