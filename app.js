@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=177';
+import { crearModulos } from './modulos.js?v=178';
 import { activarRedimension } from './tablas.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -104,6 +104,7 @@ async function boot() {
   if (!perfil.activo) return renderPendiente();
   S.cargando = true; render(); // se enseña ya la pantalla y los datos llegan después
   await cargar();
+  if (!S.sel) S.sel = S.empresas.find((e) => /herogra\s+fertiliz/i.test(e.nombre ?? ''))?.id ?? ''; // al arrancar, siempre Herogra Fertilizantes
   S.cargando = false; render();
   M.d365Recoger(false); // si la carpeta de D365 ya tiene permiso, se cargan los libros nuevos solos
 }
