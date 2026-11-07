@@ -143,7 +143,7 @@ export function revisar(lineas, sentido, desde, hasta) {
       if (exenta && Math.abs(cuota) > 0.005) add('exCuota', `${c}: cuota ${nf.format(cuota)}`);
       if (c === 'R.UE' && (!nif || esNifEs(nif))) add('ueNif', nif ? `NIF ${nif}` : 'sin NIF');
       if (c === 'R.UE.S' && (!nif || esNifEs(nif))) add('uesNif', nif ? `NIF ${nif}` : 'sin NIF');
-      if (/^R\.EX/.test(c) && esNifEs(nif)) add('exNif', `NIF ${nif}`);
+      if (/^R\.EX/.test(c) && esNifEs(nif) && !/canarias|ceuta|melilla/i.test(`${l.tipoPais ?? ''} ${l.pais ?? ''}`)) add('exNif', `NIF ${nif}`);
       if (/^R\.ISP\./.test(c) && Math.abs(cuota) > 0.005) add('ispCuota');
       if (/^R\.(NC|RC)\.(NR|RD|SR|RDN)/.test(c) && esUE(nif) && !esNifEs(nif)) add('locEmit', `NIF ${nif}`);
       if (!nif && !/^R\.NAC\.NS/.test(c) && Math.abs(base) > 3000) add('nif', 'base superior a 3.000 €');

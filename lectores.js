@@ -1,4 +1,4 @@
-﻿// Lectores de PDF: reciben el texto ya extraído y devuelven datos estructurados.
+// Lectores de PDF: reciben el texto ya extraído y devuelven datos estructurados.
 // Funciones puras (sin DOM), se prueban igual en el navegador y en Node.
 
 const MODELOS_RET = { 700: '110/111', 701: '110/111', 702: '115', 703: '117', 704: '124', 705: '126', 706: '128', 707: '123' };
@@ -271,7 +271,7 @@ export function leerLibroIVA(filas) {
   const cab = Array.from(filas[h], sinTildes);
   const ix = (re) => cab.findIndex((c) => re.test(c));
   const c = { as: ix(/^asiento/), fa: ix(/^(factura|documento)$/), fe: ix(/^fecha$/), ff: ix(/^fecha (de la )?factura/), nif: ix(/^nif/), nom: ix(/^nombre/),
-    ba: ix(/^(base|origen)/), pc: ix(/^(%|valor)$/), cu: ix(/^(cuota|importe de impuestos)/), co: ix(/^codigo (de )?impuestos?$/), tl: ix(/^tipo (de )?libro/) };
+    ba: ix(/^(base|origen)/), pc: ix(/^(%|valor)$/), cu: ix(/^(cuota|importe de impuestos)/), co: ix(/^codigo (de )?impuestos?$/), tl: ix(/^tipo (de )?libro/), tp: ix(/^tipo (de )?pa[ií]s/) };
   const out = [], tipos = [];
   for (const f of filas.slice(h + 1)) {
     const factura = String(f?.[c.fa] ?? '').trim();
@@ -281,6 +281,7 @@ export function leerLibroIVA(filas) {
     const fecha = fechaIso(f[c.fe]);
     out.push({ asiento: String(f[c.as] ?? ''), factura, fecha, ff: fechaIso(f[c.ff]) || fecha, nif: String(f[c.nif] ?? '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), base: numero(f[c.ba]), pct: numero(f[c.pc]), cuota: numero(f[c.cu]), codigo,
+      ...(c.tp >= 0 && String(f[c.tp] ?? '').trim() ? { tipoPais: String(f[c.tp]).trim() } : {}),
       sentido: /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) || /^S\.NC\.ISP\.A/.test(codigo) ? 'E' : 'R' }); // S.NC.ISP.A (ISP autorrepercutida) siempre va en el libro repercutido
   }
   // Si casi todo el archivo es del libro repercutido, TODO él es repercutido: sus líneas autorrepercutidas (S.NC.ISP.A, adquisiciones intracomunitarias…) vienen con tipo de libro «Impuestos soportados»
