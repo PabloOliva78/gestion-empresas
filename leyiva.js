@@ -123,7 +123,7 @@ const CAUSA_EXENTA = [[/^R\.EX/, 'Art. 21 · exportación'], [/^R\.UE$/, 'Art. 2
 const masAnios = (iso, n) => `${+iso.slice(0, 4) + n}${iso.slice(4)}`;
 export function revisar(lineas, sentido, desde, hasta) {
   const emit = sentido === 'E';
-  const sel = lineas.filter((l) => l.sentido === sentido && !/^I\./i.test(l.codigo) && l.codigo !== 'SIN.DATOS'
+  const sel = lineas.filter((l) => l.sentido === sentido && !/^(R\.)?I\./i.test(l.codigo) && l.codigo !== 'SIN.DATOS'
     && (emit ? (l.ff || l.fecha) : (l.fecha || l.ff)) >= desde && (emit ? (l.ff || l.fecha) : (l.fecha || l.ff)) <= hasta);
   const dups = new Map();
   if (!emit) for (const l of sel) { const k = [l.factura, l.nif, l.codigo, l.base, l.cuota].join('|'); (dups.get(k) ?? dups.set(k, new Set()).get(k)).add(l.asiento); }
@@ -141,8 +141,8 @@ export function revisar(lineas, sentido, desde, hasta) {
     if (pct === 0 && Math.abs(cuota) > 0.005 && !exenta) add('cero');
     if (emit) {
       if (exenta && Math.abs(cuota) > 0.005) add('exCuota', `${c}: cuota ${nf.format(cuota)}`);
-      if (c === 'R.UE' && !esUE(nif)) add('ueNif', nif ? `NIF ${nif}` : 'sin NIF');
-      if (c === 'R.UE.S' && !esUE(nif)) add('uesNif', nif ? `NIF ${nif}` : 'sin NIF');
+      if (c === 'R.UE' && (!nif || esNifEs(nif))) add('ueNif', nif ? `NIF ${nif}` : 'sin NIF');
+      if (c === 'R.UE.S' && (!nif || esNifEs(nif))) add('uesNif', nif ? `NIF ${nif}` : 'sin NIF');
       if (/^R\.EX/.test(c) && esNifEs(nif)) add('exNif', `NIF ${nif}`);
       if (/^R\.ISP\./.test(c) && Math.abs(cuota) > 0.005) add('ispCuota');
       if (/^R\.(NC|RC)\.(NR|RD|SR|RDN)/.test(c) && esUE(nif) && !esNifEs(nif)) add('locEmit', `NIF ${nif}`);
