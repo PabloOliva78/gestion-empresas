@@ -1987,7 +1987,17 @@ export function crearModulos(c) {
   const setPrsVer = (v) => { prsVer = v; render(); };
   // doble clic en un periodo de Impuestos presentados: abre ese modelo con su ejercicio y periodo
   const TAB_MOD = { INT: 'modintra', A22: 'moda22' };
-  function abrirPrs(spec) {
+  // doble clic en el mes o en una cifra: abre el PDF presentado de ese modelo y periodo (si no hay, avisa); con Ctrl abre la pestaña del modelo
+  function abrirPrs(spec, ctrl = false) {
+    if (ctrl) return abrirModeloPrs(spec);
+    const [m, p, y] = spec.split('|'), yy = Number(y), pn = (x) => (String(x || 'A') === '0A' ? 'A' : String(x || 'A'));
+    const r = S.registros.filter((q) => q.tipo === 'prspdf' && q.empresa_id === S.sel && q.datos.modelo === m && pn(q.datos.periodo) === pn(p) && Math.abs(q.ejercicio - yy) <= 1)
+      .sort((a, b) => Math.abs(a.ejercicio - yy) - Math.abs(b.ejercicio - yy))[0];
+    if (r?.datos?.archivo?.path) return abrirNuevaPestana(r.datos.archivo.path);
+    alert(`No hay PDF guardado del modelo ${m} de este periodo. Suéltalo en la franja «Suelta aquí los PDF de los impuestos presentados» y quedará guardado aquí. (Ctrl + doble clic abre la pestaña del modelo.)`);
+    return undefined;
+  }
+  function abrirModeloPrs(spec) {
     const [m, p, y] = spec.split('|'), per = { '1P': '03', '2P': '09', '3P': '11', A: '', '0A': '' }[p] ?? p;
     S.tab = TAB_MOD[m] ?? `mod${m}`; S.ejercicio = Number(y) || S.ejercicio; S.periodo = per; S.grp = -1; render();
   }
