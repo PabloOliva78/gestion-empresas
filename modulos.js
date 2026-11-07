@@ -2793,12 +2793,16 @@ export function crearModulos(c) {
     const txt = (v) => (typeof v === 'string' ? v.trim() : ''), num = (v) => (typeof v === 'number' ? v : null);
     let titulo = '';
     for (let r = 0; r < 3 && !titulo; r++) for (const v of rows[r] ?? []) { const t = txt(v); if (t && !/resumen/i.test(t)) { titulo = t; break; } }
-    let mes = 0, anio = 0;
+    let mes = 0, anio = 0, dif = false;
     for (const fila of rows.slice(0, 8)) {
       const f = fila ?? [];
       for (let c = 0; c < f.length && !mes; c++) {
-        const i = NOM_MESES.indexOf(txt(f[c]).replace(/\s/g, '').toUpperCase());
+        const u = txt(f[c]).replace(/\s/g, '').toUpperCase(), i = NOM_MESES.indexOf(u);
         if (i >= 0) { mes = i + 1; for (let k = c + 1; k < f.length; k++) { const n = num(f[k]) ?? parseInt(txt(f[k]), 10); if (n > 2000 && n < 2100) { anio = n; break; } } }
+        else { // «DIFERENCIAS ATRASOS CONVENIO ENERO 2024»: mes y año en la misma celda; son diferencias que se suman a la nómina de ese mes
+          const m = new RegExp(`(${NOM_MESES.join('|')})(20\\d\\d)$`).exec(u);
+          if (m) { mes = NOM_MESES.indexOf(m[1]) + 1; anio = +m[2]; dif = /DIFERENCIA/.test(u); }
+        }
       }
       if (mes) break;
     }
@@ -2806,7 +2810,7 @@ export function crearModulos(c) {
     // el concepto va en la columna A en unas hojas y en la B o la C en otras (Ferticronos, Produfer, Tecnoplus…): se toma el primer texto de la fila
     rows.forEach((f, i) => { const lab = (f ?? []).slice(0, 3).find((v) => typeof v === 'string' && v.trim()); const k = lab ? NOM_ROW.find(([rx]) => rx.test(nomNorm(lab)))?.[1] : null; if (k && !(k in fil)) fil[k] = i; });
     const h1 = rows.findIndex((f) => (f ?? []).some((v, c) => c >= 1 && /^centro\b/i.test(txt(v))));
-    if (h1 < 0 || !('dev' in fil)) return { titulo, mes, anio, centros: [] };
+    if (h1 < 0 || !('dev' in fil)) return { titulo, mes, anio, dif, centros: [] };
     let tot = -1;
     for (let r = h1; r <= h1 + 3 && tot < 0; r++) (rows[r] ?? []).forEach((v, c) => { if (tot < 0 && c >= 1 && nomNorm(v) === 'totales') tot = c; });
     const val = (k, c) => num(rows[fil[k]]?.[c]) ?? 0, ancho = Math.max(...rows.map((f) => (f ?? []).length));
@@ -2821,7 +2825,7 @@ export function crearModulos(c) {
       NOM_KEYS.forEach((k) => { d[k] = val(k, c); }); // 0 en lo que la hoja no trae
       return { nombre, codigo: /^[A-Z]{2}\d{2,}/i.test(cod) ? cod.toUpperCase() : '', ...d };
     });
-    return { titulo, mes, anio, centros };
+    return { titulo, mes, anio, dif, centros };
   }
   // empresa de la aplicación a la que corresponde una hoja: todas las palabras del título (o del nombre de la hoja) están en su nombre
   const nomEmpresaDe = (...nombres) => {
@@ -2857,8 +2861,12 @@ export function crearModulos(c) {
       const usados = new Map(); // empresa → ejercicio de las hojas leídas de este archivo
       try {
         const wb = window.XLSX.read(await f.arrayBuffer());
-        for (const nombreHoja of wb.SheetNames) {
-          const L = nomLeerHoja(window.XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, defval: null, raw: true }));
+        const hojas0 = wb.SheetNames.map((nombreHoja) => ({ nombreHoja, L: nomLeerHoja(window.XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, defval: null, raw: true })) }));
+        // un año mal escrito en una hoja (2023 en un archivo de 2024) se corrige con el que traen las demás hojas del mismo archivo y mes
+        const votos = new Map(); hojas0.forEach(({ L }) => { if (L.centros.length && L.mes && L.anio) { const k = `${L.mes}|${L.anio}|${L.dif ? 1 : 0}`; votos.set(k, (votos.get(k) ?? 0) + 1); } });
+        const gana = [...votos.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]?.split('|').map(Number);
+        for (const { nombreHoja, L } of hojas0) {
+          if (gana && L.centros.length && L.mes === gana[0] && !!L.dif === !!gana[2] && L.anio !== gana[1]) { informe.push(`${nombreHoja}: la hoja decía ${L.anio}; se usa ${gana[1]}, como el resto del archivo`); L.anio = gana[1]; }
           if (!L.centros.length) { if (L.mes) informe.push(`${nombreHoja}: sin importes`); continue; }
           const e = nomEmpresaDe(L.titulo, nombreHoja);
           if (!e) { mal.push(`${nombreHoja}: no reconozco la empresa «${L.titulo}»`); continue; }
@@ -2875,10 +2883,17 @@ export function crearModulos(c) {
           const nuevo = { salarios: rr(s('dev') - s('km') - s('dietas') - s('indem')), km: s('km'), dietas: s('dietas'), indem: s('indem'), ssEmp: s('ssEmp'), ssTrab: s('ssTrab'), ret: s('ret'), anticipos: s('anticipos'), embargos: s('embargos'), seguro: s('seguro'), liquido: s('liquido') };
           const reg = await nomRegFresco(e.id, L.anio), datos = JSON.parse(JSON.stringify(reg?.datos ?? {})); // se lee de nuevo de la base: varios meses seguidos no se pisan entre sí
           const previo = datos[mm] ?? {}, mes = {}; Object.keys(previo).forEach((k) => { if (k.startsWith('c_')) mes[k] = previo[k]; }); // se conserva lo de la conciliación de la SS
-          Object.entries(nuevo).forEach(([k, v]) => { if (Math.abs(v) > 0.004) mes[k] = v; });
-          mes._c = centros; datos[mm] = mes;
+          // un archivo de «DIFERENCIAS» (atrasos de convenio…) se suma a la nómina del mismo mes: en el programa queda un solo mes
+          const KN = ['salarios', 'km', 'dietas', 'indem', 'ssEmp', 'ssTrab', 'ret', 'anticipos', 'embargos', 'seguro', 'liquido'], KC = [...KN, 'base'];
+          const tieneBase = Object.keys(previo).some((k) => !k.startsWith('c_') && !k.startsWith('_'));
+          const baseAnt = previo._comp ? previo._comp.base : tieneBase ? { nuevo: Object.fromEntries(KN.map((k) => [k, previo[k] || 0])), centros: previo._c ?? [] } : null;
+          const comp = { base: L.dif ? baseAnt : { nuevo, centros }, dif: L.dif ? { nuevo, centros } : (previo._comp?.dif ?? null) };
+          KN.forEach((k) => { const v = rr((comp.base?.nuevo?.[k] || 0) + (comp.dif?.nuevo?.[k] || 0)); if (Math.abs(v) > 0.004) mes[k] = v; });
+          const mapaC = new Map();
+          [comp.base, comp.dif].forEach((p) => (p?.centros ?? []).forEach((c) => { const key = String(c.codigo || c.nombre).trim().toUpperCase(), o = mapaC.get(key) ?? { codigo: c.codigo, nombre: c.nombre }; KC.forEach((k) => { o[k] = rr((o[k] || 0) + (Number(c[k]) || 0)); }); mapaC.set(key, o); }));
+          mes._c = [...mapaC.values()]; if (comp.dif) mes._comp = comp; datos[mm] = mes;
           const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: e.id, tipo: 'nominas', ejercicio: L.anio, datos });
-          if (err) mal.push(`${nombreHoja}: ${err}`); else informe.push(`${e.nombre} · ${NOM_MESES[L.mes - 1].toLowerCase()} ${L.anio} · ${centros.length} centro(s)`);
+          if (err) mal.push(`${nombreHoja}: ${err}`); else informe.push(`${e.nombre} · ${NOM_MESES[L.mes - 1].toLowerCase()} ${L.anio} · ${centros.length} centro(s)${L.dif ? ' · diferencias sumadas al mes' : ''}`);
           nomAsMes = mm; if (!destino || e.id === S.sel) destino = { sel: e.id, ej: L.anio }; // se queda en la empresa elegida si el Excel la trae
           usados.set(e.id, L.anio);
         }
@@ -2900,7 +2915,7 @@ export function crearModulos(c) {
     const nombre = NOM_MESES[+mm - 1].toLowerCase();
     if (!confirm(solo === 'excel' ? `¿Quitar el Excel (reparto por centros de coste) de ${nombre} ${y}? El cuadro de la nómina se queda como está.` : `¿Quitar la nómina de ${nombre} ${y} de esta empresa (cuadro y centros de coste)?`)) return;
     const datos = JSON.parse(JSON.stringify(reg.datos)), mes = datos[mm];
-    if (solo === 'excel') mes._c = undefined; else Object.keys(mes).forEach((k) => { if (!k.startsWith('c_')) mes[k] = undefined; });
+    if (solo === 'excel') { mes._c = undefined; mes._comp = undefined; } else Object.keys(mes).forEach((k) => { if (!k.startsWith('c_')) mes[k] = undefined; });
     Object.keys(mes).forEach((k) => { if (mes[k] === undefined) delete mes[k]; });
     if (!Object.keys(mes).length) delete datos[mm];
     const err = await guardarRegistro(reg, { datos });
