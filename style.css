@@ -356,11 +356,11 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 /* todos los bloques en una sola fila y del mismo tamaño */
 .tabs { display: grid; grid-template-columns: repeat(var(--ng, 11), minmax(0, 1fr)); gap: .4rem; padding-left: 1rem; padding-right: 1rem; }
-.gpill { height: 62px; min-width: 0; width: 100%; padding: .3rem .5rem; gap: .45rem; font-size: .72rem; line-height: 1.15; overflow: hidden; }
-.gpill > span:not(.gico) { min-width: 0; flex: 1; }
-.gpill b { font-size: .72rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.gpill small { font-size: .66rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gpill .gico { height: 30px; width: 44px; flex: none; }
+.gpill { height: 118px; min-width: 0; width: 100%; padding: .45rem .4rem; gap: .35rem; flex-direction: column; justify-content: flex-start; text-align: center; font-size: .86rem; line-height: 1.15; overflow: hidden; }
+.gpill > span:not(.gico) { min-width: 0; width: 100%; }
+.gpill b { font-size: .86rem; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.gpill small { font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gpill .gico { height: 46px; width: 76px; flex: none; }
 @media (max-width: 1100px) { .tabs { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
 
 /* panel superpuesto al pasar el ratón: no desplaza el contenido */
