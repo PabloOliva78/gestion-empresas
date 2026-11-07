@@ -1064,3 +1064,5 @@ td.in.num input, td.num input { text-align: right; font-variant-numeric: tabular
 .sii-cab .fc-cab label:has(input[type=checkbox]) { flex: none; }
 .sii-cab .fc-cab input.emp-in { min-width: 0 !important; width: 100% !important; flex: 1 1 0; padding: .22rem .5rem; font-size: .76rem; }
 .sii-cab .fc-cab input[type=checkbox] { width: auto !important; flex: none; }
+
+.dsec.over { outline: 2px dashed #2f5fd0; outline-offset: 2px; background: #f3f7ff; }

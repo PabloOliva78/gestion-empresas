@@ -3704,6 +3704,14 @@ export function crearModulos(c) {
     ntMsg = `${n} notificación(es) nueva(s)${act ? ` · ${act} actualizada(s)` : ''}${otras.size ? ` · guardadas en ${[...otras].join(', ')}` : ''}${mal.length ? ` · sin leer: ${mal.join(', ')}` : ''}`;
     await cargar(); render();
   }
+  // todo el cuadro de notificaciones sirve para soltar los PDF, como en la antigua
+  document.addEventListener('dragover', (ev) => { const z = ev.target.closest?.('[data-dropnt]'); if (z) { ev.preventDefault(); z.classList.add('over'); } });
+  document.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget?.closest?.('[data-dropnt]')) ev.target.closest?.('[data-dropnt]')?.classList.remove('over'); });
+  document.addEventListener('drop', (ev) => {
+    const z = ev.target.closest?.('[data-dropnt]'); if (!z || !puede()) return;
+    ev.preventDefault(); ev.stopPropagation(); z.classList.remove('over');
+    const fs = [...ev.dataTransfer.files].filter((f) => /\.pdf$/i.test(f.name)); if (fs.length) ntCargar(fs);
+  }, true);
   function vistaNotif() {
     if (!S.sel) return sinEmpresa;
     const e = empresa(), ed = puede(), D = ntRegs(), hoy = ilFecha(ntHoyIso());
@@ -3728,8 +3736,9 @@ export function crearModulos(c) {
         <div style="margin-top:4px">Observaciones ${inp(r, 'obs', 90)}</div></div>`;
     };
     return `${bloqueAvisosNt(['Suelta los PDF de notificaciones (AEAT, TGSS, Agencia Tributaria de Andalucía, Diputación, ayuntamientos, Catastro…): se leen organismo, tipo de acto, referencia, concepto, fecha, plazo e importe, lo que reclaman y la documentación a aportar. El vencimiento se calcula desde la fecha de notificación (cámbiala si la aceptaste otro día): días hábiles sin sábados, domingos ni festivos nacionales; apremio, hasta el 20 o el 5 según el art. 62.5 LGT. Revisa siempre el plazo en el propio documento. Los pendientes salen en el Calendario Fiscal y en el aviso del día.'])}
-      ${ed ? dz('notif', 'Suelta aquí los PDF de notificaciones y requerimientos', 'sin límite, o pulsa para elegirlos. Doble clic en una notificación para abrir su PDF.', '.pdf') : ''}
-      <section class="dsec"><h3>Notificaciones y requerimientos · ${esc(e.nombre)} · <select data-ntver="1"><option value="pend"${ntVer === 'pend' ? ' selected' : ''}>Pendientes (${pend.length})</option><option value="todas"${ntVer === 'todas' ? ' selected' : ''}>Todas (${D.length})</option></select></h3>
+      <section class="dsec" data-dropnt="1"><h3>Notificaciones y requerimientos · ${esc(e.nombre)} · <select data-ntver="1"><option value="pend"${ntVer === 'pend' ? ' selected' : ''}>Pendientes (${pend.length})</option><option value="todas"${ntVer === 'todas' ? ' selected' : ''}>Todas (${D.length})</option></select></h3>
+      ${ed ? `<div class="dropzone" data-kind="notif" tabindex="0" role="button"><b>Suelta aquí (o en cualquier parte de este cuadro) los PDF de notificaciones y requerimientos</b>, sin límite, o pulsa para elegirlos. Doble clic en una notificación para abrir su PDF.
+        <input type="file" data-dzkind="notif" accept=".pdf" multiple hidden></div>${listaArch('notif')}` : ''}
       ${ntMsg ? `<p class="dash-s">${esc(ntMsg)}</p>` : ''}
       ${L.map(tarjeta).join('') || `<p class="leyenda">${ntVer === 'pend' ? 'Sin notificaciones pendientes de contestar.' : 'Sin notificaciones.'}</p>`}
       ${ed ? '<button class="small no-print" data-act="m-ntadd">+ Añadir a mano</button>' : ''}</section>`;
