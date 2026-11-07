@@ -354,6 +354,15 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .gpill small { font-size: .8rem; }
 .gpill .gico { height: 36px; width: 62px; }
 
+/* todos los bloques en una sola fila y del mismo tamaño */
+.tabs { display: grid; grid-template-columns: repeat(var(--ng, 11), minmax(0, 1fr)); gap: .4rem; padding-left: 1rem; padding-right: 1rem; }
+.gpill { height: 62px; min-width: 0; width: 100%; padding: .3rem .5rem; gap: .45rem; font-size: .72rem; line-height: 1.15; overflow: hidden; }
+.gpill > span:not(.gico) { min-width: 0; flex: 1; }
+.gpill b { font-size: .72rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.gpill small { font-size: .66rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gpill .gico { height: 30px; width: 44px; flex: none; }
+@media (max-width: 1100px) { .tabs { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+
 /* panel superpuesto al pasar el ratón: no desplaza el contenido */
 .tabs-wrap { overflow: visible; max-height: none; }
 .gpanel { position: absolute; top: 100%; left: 0; z-index: 60; margin-top: 0; max-height: 75vh; overflow-y: auto; box-shadow: 0 14px 34px rgba(20,40,106,.35); }

@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=170';
+import { crearModulos } from './modulos.js?v=171';
 import { activarRedimension } from './tablas.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -157,11 +157,11 @@ const GRUPOS = [
     'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
   ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
-  ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], '', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
-  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], '', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
+  ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
+  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
-  ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], '', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
-  ['11.- ADMINISTRACIÓN', ['usuarios', 'envio'], '', 'Usuarios, roles y acceso a las empresas.'],
+  ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
+  ['11.- ADMINISTRACIÓN', ['usuarios', 'envio'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
 ];
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
@@ -208,8 +208,8 @@ const insignia = (id) => {
   const b = (BADGES_APP[id] ?? M.badges[id])?.();
   return b ? `<span class="badge ${b.c ?? ''}">${esc(b.t)}</span>` : '';
 };
-const ICONOS = { aeat: 'png', rm: 'png', pgc: 'jpg', sii: 'png', tgss: 'png' };
-const iconoGrupo = (k) => (k === 'emp' ? logoHtml(S.empresas.find((x) => x.id === S.sel), 'gico') // «Información empresa»: el logo de la empresa elegida
+const ICONOS = { aeat: 'png', rm: 'png', pgc: 'jpg', sii: 'png', tgss: 'png', emp: 'svg', ef: 'svg', conc: 'svg', ley: 'svg', adm: 'svg' };
+const iconoGrupo = (k) => (k === 'emp' && S.sel ? logoHtml(S.empresas.find((x) => x.id === S.sel), 'gico') // «Información empresa»: el logo de la empresa elegida
   : k ?`<img class="gico" src="logos/grupo-${k}.${ICONOS[k]}?v=11" alt="" onerror="this.remove()">` : '');
 
 function tabsNav() {
@@ -217,7 +217,7 @@ function tabsNav() {
     .filter((g) => g.ids.length);
   const abierto = grupos.find((g) => g.i === S.grp);
   const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
-  return `<div class="tabs-wrap"><nav class="tabs">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
+  return `<div class="tabs-wrap"><nav class="tabs" style="--ng:${grupos.length}">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
       ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)} ▾</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</nav>
     ${abierto ? `<div class="gpanel" style="--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}"><div class="gpanel-h"><span class="gpanel-ico">${iconoGrupo(abierto.ico)}</span>
       <div><b>${esc(nombre(abierto.tit))}</b><small>${esc(abierto.sub)}</small></div></div>
