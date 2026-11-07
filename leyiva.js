@@ -114,7 +114,7 @@ export const REGLAS = {
   ispSin: ['aviso', ['84'], 'Inversión del sujeto pasivo sin cuota autorrepercutida'],
   nif: ['aviso', ['97', '164'], 'Factura sin NIF'],
   caduca: ['error', ['98', '99', '100'], 'Deducción fuera del plazo de cuatro años'],
-  fpost: ['aviso', ['97', '98'], 'Factura fechada después de su anotación en el libro'],
+  fpost: ['aviso', ['97', '98'], 'Factura de un mes posterior al de su anotación en el libro'],
   dup: ['aviso', ['97', '164'], 'Posible factura duplicada'],
 };
 const CAUSA_EXENTA = [[/^R\.EX/, 'Art. 21 · exportación'], [/^R\.UE$/, 'Art. 25 · entrega intracomunitaria'], [/^R\.(NC|RC)\.EX/, 'Art. 20 · exención en operaciones interiores'],
@@ -153,7 +153,7 @@ export function revisar(lineas, sentido, desde, hasta) {
       if (/^S\.ISP\./.test(c) && pct > 0 && Math.abs(cuota) < 0.005) add('ispSin');
       if (!nif && Math.abs(cuota) > 0.005 && Math.abs(base) > 400) add('nif', 'sin NIF del proveedor y base superior a 400 €');
       if (l.ff && l.fecha && masAnios(l.ff, 4) < l.fecha) add('caduca', `factura ${l.ff.split('-').reverse().join('/')}, anotada ${l.fecha.split('-').reverse().join('/')}`);
-      if (l.ff && l.fecha && l.ff > l.fecha) add('fpost');
+      if (l.ff && l.fecha && l.ff.slice(0, 7) > l.fecha.slice(0, 7)) add('fpost', `factura ${l.ff.split('-').reverse().join('/')}, anotada ${l.fecha.split('-').reverse().join('/')}`);
       if (dups.get([l.factura, l.nif, l.codigo, l.base, l.cuota].join('|'))?.size > 1) add('dup', 'misma factura en asientos distintos');
     }
     res.push({ l, a });

@@ -12,7 +12,7 @@ import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=6';
 import { crearEstados } from './estados.js?v=4';
-import { crearLeyIva } from './leyiva.js?v=5';
+import { crearLeyIva } from './leyiva.js?v=6';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
