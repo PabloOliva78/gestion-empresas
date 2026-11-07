@@ -2731,7 +2731,7 @@ export function crearModulos(c) {
   const NOM_DIF = 'Salarios + kilometraje + dietas + indemnizaciones + SS empresa − SS empresa y trabajador − retenciones − anticipos − embargos − seguro − líquido';
   const MM12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
   const rr = (x) => Math.round(x * 100) / 100 + 0;
-  const nomReg = (y) => S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === S.sel && r.ejercicio === y);
+  const nomReg = (y) => S.registros.filter((r) => r.tipo === 'nominas' && r.empresa_id === S.sel && r.ejercicio === y).sort((a, b) => Object.keys(b.datos ?? {}).length - Object.keys(a.datos ?? {}).length)[0]; // si hay filas repetidas, la más completa
   const nomCalc = (x) => {
     if (!x || !Object.keys(x).some((k) => !k.startsWith('c_'))) return null;
     const n = (k) => Number(x[k]) || 0, ssTot = n('ssEmp') + n('ssTrab');
@@ -2832,6 +2832,16 @@ export function crearModulos(c) {
     }
     return null;
   };
+  // registro de nóminas de una empresa y año, leído en el momento de la base; si hubiera filas repetidas, se juntan sus meses en la más completa
+  async function nomRegFresco(empId, anio) {
+    const { data, error } = await db.from('registros').select('id,datos').eq('empresa_id', empId).eq('tipo', 'nominas').eq('ejercicio', anio);
+    if (error) throw new Error(`no se pudo leer lo ya guardado (${error.message})`); // sin leerlo no se escribe: así nunca se pisa lo anterior
+    const filas = [...(data ?? [])].sort((a, b) => Object.keys(b.datos ?? {}).length - Object.keys(a.datos ?? {}).length);
+    if (!filas.length) return null;
+    const datos = JSON.parse(JSON.stringify(filas[0].datos ?? {}));
+    filas.slice(1).forEach((r) => Object.entries(r.datos ?? {}).forEach(([mm, v]) => { if (!(mm in datos)) datos[mm] = v; }));
+    return { id: filas[0].id, datos };
+  }
   async function nomCargarExcel(files) {
     const informe = [], mal = []; let destino = null;
     files.filter((x) => !/\.(xlsx|xlsm|xls)$/i.test(x.name)).forEach((x) => mal.push(`${x.name}: no es un Excel (.xlsx o .xls)`));
@@ -2854,7 +2864,7 @@ export function crearModulos(c) {
             return { codigo, nombre, salarios: rr(c.dev - c.km - c.dietas - c.indem), km: rr(c.km), dietas: rr(c.dietas), indem: rr(c.indem), ssEmp: rr(c.ssEmp), ssTrab: rr(c.ssTrab), ret: rr(c.ret), anticipos: rr(c.anticipos), embargos: rr(c.embargos), seguro: rr(c.seguro), liquido: rr(c.liquido), base: rr(c.base) };
           });
           const nuevo = { salarios: rr(s('dev') - s('km') - s('dietas') - s('indem')), km: s('km'), dietas: s('dietas'), indem: s('indem'), ssEmp: s('ssEmp'), ssTrab: s('ssTrab'), ret: s('ret'), anticipos: s('anticipos'), embargos: s('embargos'), seguro: s('seguro'), liquido: s('liquido') };
-          const reg = S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === e.id && r.ejercicio === L.anio), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
+          const reg = await nomRegFresco(e.id, L.anio), datos = JSON.parse(JSON.stringify(reg?.datos ?? {})); // se lee de nuevo de la base: varios meses seguidos no se pisan entre sí
           const previo = datos[mm] ?? {}, mes = {}; Object.keys(previo).forEach((k) => { if (k.startsWith('c_')) mes[k] = previo[k]; }); // se conserva lo de la conciliación de la SS
           Object.entries(nuevo).forEach(([k, v]) => { if (Math.abs(v) > 0.004) mes[k] = v; });
           mes._c = centros; datos[mm] = mes;
