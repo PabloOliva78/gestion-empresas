@@ -1078,3 +1078,22 @@ td.in.num input, td.num input { text-align: right; font-variant-numeric: tabular
 .dsec.nt-s .nt-card input.facin { border: 1px solid transparent; background: transparent; padding: 1px 3px; width: auto; border-radius: 0; }
 .dsec.nt-s .nt-card input.facin:hover, .dsec.nt-s .nt-card input.facin:focus { border-color: #b9c7e4; background: #fff; }
 .dsec.nt-s.over { outline: 2px dashed #2f5fd0; outline-offset: 2px; }
+
+/* Balance de sumas y saldos: diseño de la aplicación antigua (marco, título, filtros, tabla azul con filas punteadas) */
+section.block:has(table.bss-t) { background: var(--card); border: 1px solid var(--line); border-radius: 5px; box-shadow: none; padding: 16px 18px 6px; margin-bottom: 22px; font-size: 14px; }
+section.block:has(table.bss-t) h3.bt { font-size: 14px; margin: 4px 0 10px; color: var(--ink, #1f3864); border: 0; padding: 0; font-weight: 700; }
+section.block:has(table.bss-t) .filtros { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; font-size: 14px; }
+section.block:has(table.bss-t) .filtros label { display: flex; gap: 6px; align-items: center; }
+section.block:has(table.bss-t) .filtros input[type=checkbox] { width: auto; }
+section.block:has(table.bss-t) input.movin { border: 1px solid transparent; background: transparent; font: inherit; font-size: 14px; padding: 1px 3px; color: inherit; box-sizing: content-box; border-radius: 0; width: auto; }
+section.block:has(table.bss-t) input.movin:hover, section.block:has(table.bss-t) input.movin:focus { border-color: #b9c7e4; background: #fff; }
+section.block:has(table.bss-t) .leyenda { font-size: 14px; color: var(--muted); margin: 8px 0 12px; }
+table.bss-t { border-collapse: collapse; font-size: 14px; color: #002060; background: var(--card); border: 0; border-radius: 0; }
+table.bss-t th { background: #002060; color: #fff; font-weight: 400; padding: 10px 6px; border: 1px solid #3a5a9a; font-size: 14px; text-align: center; text-transform: none; letter-spacing: 0; }
+table.bss-t td { padding: 2px 6px; border-left: 1px dotted #8ea9db; border-right: 1px dotted #8ea9db; border-bottom: 0; border-top: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+table.bss-t td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.bss-t tr.totano td { background: #ddebf7; font-weight: 700; border-top: 1px solid #002060; }
+.filtros { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+.filtros label { display: flex; gap: 6px; align-items: center; }
+.filtros select { width: auto; border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; font-size: 14px; background: #fff; color: var(--text); }
+.filtros .leyenda { margin: 0; }
