@@ -774,7 +774,7 @@ export function valoresPresentado(modelo, cas, texto = '') {
     for (const l of lineas) { const m = re.exec(l); if (m) { nr++; if (m[1] === 'I') ing += num(m[2]); else pag += num(m[2]); } }
     if (nr) { pon('ing', r2n(ing)); pon('pag', r2n(pag)); pon('nreg', nr); }
   } else if (modelo === '200') { pon('cuota', g(562)); pon('res', g(621)); }
-  else if (modelo === '202') { pon('res', g(34) ?? g(3)); }
+  else if (modelo === '202') { pon('res', g(34) ?? g(3) ?? 0); } // sin importe en la casilla 34 (declaración negativa / resultado cero) = 0
   else if (modelo === 'INT') {
     const fl = (/Flujo:\s*([EI])\s*-/.exec(texto) || [])[1];
     let imp = 0, kg = 0, nP = 0;
@@ -802,6 +802,12 @@ export function valoresPresentado(modelo, cas, texto = '') {
     const i = lineas.findIndex((l) => /Total a ingresar/i.test(l));
     const m = i >= 0 && new RegExp(`${MON}\\s*$`).exec(lineas[i]);
     if (m) pon('res', num(m[1]));
+  }
+  // «NEGATIVA / SIN ACTIVIDAD / RESULTADO CERO» (justificante de la Sede) sin ninguna casilla con importe: todo a 0 y la declaración cuenta como presentada
+  if (!Object.keys(out).length && /NEGATIVA\s*\/\s*SIN ACTIVIDAD\s*\/\s*RESULTADO CERO|declaraci[oó]n negativa/i.test(String(texto))) {
+    const CEROS = { 111: ['base', 'retN', 'baseP', 'retP'], 123: ['based', 'baser', 'base', 'retd', 'retr', 'ret'], 303: ['res', 'adu', 'comp', 'apl', 'c87', 'liq'], 349: ['imp', 'rect'],
+      583: ['base', 'cuota', 'pagos', 'res'], 592: ['kg', 'base', 'cuota', 'ded', 'res'], 115: ['base', 'ret'], 180: ['base', 'ret'], 190: ['base', 'retN'], 193: ['base', 'ret'] };
+    (CEROS[modelo] ?? []).forEach((c) => { out[c] = 0; });
   }
   return out;
 }
