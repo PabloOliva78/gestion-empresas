@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=43';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=45';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=11';
@@ -1016,6 +1016,8 @@ export function crearModulos(c) {
         const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name }));
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
       }
+      const nIsp = await moverIspA(empresaId); // las S.NC.ISP.A que hubieran quedado en el soportado pasan al repercutido
+      if (nIsp) partes.push(`${nIsp} S.NC.ISP.A pasadas del soportado al repercutido`);
       return `✔ ${f.name}: libro de IVA${bc ? ' (Business Central)' : ''} · ${partes.join(' y ')}`;
     }
     return `❔ ${f.name}: guardado, pero no reconozco el formato (libro de IVA del ERP o consulta del SII)`;
@@ -1235,6 +1237,17 @@ export function crearModulos(c) {
   }
   function setFc(campo, valor) { if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
 
+  // S.NC.ISP.A (ISP autorrepercutida) va siempre en el libro repercutido: lo que haya en el soportado se pasa (sin repetir lo que ya está)
+  async function moverIspA(empresaId) {
+    const { data: r } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').maybeSingle();
+    const filasR = r?.datos?.filas ?? [], isp = filasR.filter((l) => /^S\.NC\.ISP\.A/.test(l.codigo));
+    if (!isp.length) return 0;
+    const { data: e } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-E').maybeSingle();
+    const filasE = e?.datos?.filas ?? [], k = (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|'), claves = new Set(filasE.map(k));
+    if (!(await reemplazarGrande('fact-E', empresaId, [...filasE, ...isp.filter((l) => !claves.has(k(l))).map((l) => ({ ...l, sentido: 'E' }))], e))) return 0;
+    if (!(await reemplazarGrande('fact-R', empresaId, filasR.filter((l) => !/^S\.NC\.ISP\.A/.test(l.codigo)), r))) return 0;
+    return isp.length;
+  }
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
     const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
     const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });

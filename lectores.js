@@ -272,16 +272,21 @@ export function leerLibroIVA(filas) {
   const ix = (re) => cab.findIndex((c) => re.test(c));
   const c = { as: ix(/^asiento/), fa: ix(/^(factura|documento)$/), fe: ix(/^fecha$/), ff: ix(/^fecha (de la )?factura/), nif: ix(/^nif/), nom: ix(/^nombre/),
     ba: ix(/^(base|origen)/), pc: ix(/^(%|valor)$/), cu: ix(/^(cuota|importe de impuestos)/), co: ix(/^codigo (de )?impuestos?$/), tl: ix(/^tipo (de )?libro/) };
-  const out = [];
+  const out = [], tipos = [];
   for (const f of filas.slice(h + 1)) {
     const factura = String(f?.[c.fa] ?? '').trim();
     if (!factura) continue;
     const codigo = String(f[c.co] ?? '').trim();
+    tipos.push(String(f[c.tl] ?? ''));
     const fecha = fechaIso(f[c.fe]);
     out.push({ asiento: String(f[c.as] ?? ''), factura, fecha, ff: fechaIso(f[c.ff]) || fecha, nif: String(f[c.nif] ?? '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), base: numero(f[c.ba]), pct: numero(f[c.pc]), cuota: numero(f[c.cu]), codigo,
       sentido: /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) || /^S\.NC\.ISP\.A/.test(codigo) ? 'E' : 'R' }); // S.NC.ISP.A (ISP autorrepercutida) siempre va en el libro repercutido
   }
+  // Si casi todo el archivo es del libro repercutido, TODO él es repercutido: sus líneas autorrepercutidas (S.NC.ISP.A, adquisiciones intracomunitarias…) vienen con tipo de libro «Impuestos soportados»
+  // y se aceptan igualmente en este libro (no se descartan ni se pasan al soportado).
+  const nRep = tipos.filter((t) => /repercut/i.test(t)).length, nSop = tipos.filter((t) => /soportad/i.test(t)).length;
+  if (nRep + nSop > 0 && nRep / (nRep + nSop) >= 0.9) out.forEach((l) => { l.sentido = 'E'; });
   return out.length ? out : null;
 }
 
@@ -637,7 +642,10 @@ export function calcular303Viejo(libroE, libroR, ej, periodo, man = {}) {
 
 // Modelo 303 como el borrador de la Sede: las líneas con base negativa (rectificativas) van a modificación (14-15, 25-26 y 40-41)
 // man: celdas amarillas (c42, c43, c44, pct65, c78, c68, c70, y ajustes extra b14/c14, b25/c25, b35/c35, b39/c39, b41/c41) · opc: {rectif, c110}
-export function calcular303(libroE, libroR, ej, periodo, man = {}, opc = {}) {
+export function calcular303(libroE0, libroR, ej, periodo, man = {}, opc = {}) {
+  // S.NC.ISP.A (ISP autorrepercutida) es siempre del repercutido: si alguna línea quedó guardada en el soportado, se cuenta aquí (sin duplicar las que ya están en el repercutido)
+  const kIsp = (l) => [l.asiento, l.factura, l.nif, l.ff, l.base, l.cuota].join('|'), enE = new Set(libroE0.filter((l) => /^S\.NC\.ISP\.A/.test(l.codigo)).map(kIsp));
+  const libroE = libroE0.concat(libroR.filter((l) => /^S\.NC\.ISP\.A/.test(l.codigo) && !enE.has(kIsp(l))));
   const rectif = opc.rectif !== false;
   const r = rangoPeriodo(ej, periodo);
   const m = (k) => Number(man[k]) || 0;
