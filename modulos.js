@@ -1092,6 +1092,22 @@ export function crearModulos(c) {
   const claveL = (l) => [l.asiento, l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo].join('|');
   const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const sentidoTab = () => (S.tab === 'fr' ? 'R' : 'E');
+  // Causas de exención (arts. 20 a 25 de la Ley 37/1992) y operaciones no sujetas que se enseñan en la columna «Exención» de las emitidas
+  const EXENCIONES = [['E1', 'Exenta por el art. 20 (operaciones interiores exentas: sanitarias, educativas, sociales…)'], ['E2', 'Exenta por el art. 21 (exportaciones de bienes fuera de la UE)'],
+    ['E3', 'Exenta por el art. 22 (operaciones asimiladas a la exportación: buques, aeronaves, tráfico internacional)'], ['E4', 'Exenta por los arts. 23 y 24 (zonas francas, depósitos temporales y regímenes aduaneros)'],
+    ['E5', 'Exenta por el art. 25 (entregas intracomunitarias de bienes)'], ['E6', 'Exenta por otras causas / exenciones diversas'],
+    ['N.S.R.L.', 'No sujeta por reglas de localización'], ['Art. 7-14', 'No sujeta (arts. 7 y 14 de la Ley del IVA): no se declara en el 303']];
+  // por defecto, según el código del ERP: R.NC.EX = E1 · R.EX = E2 · R.UE = E5 · R.UE.S = N.S.R.L. · R.NAC.NS = Art. 7-14
+  const exencDe = (l) => {
+    if (l.exenc !== undefined) return l.exenc;
+    const c = String(l.codigo || '').toUpperCase();
+    if (/^R\.(NC|RC)\.EX/.test(c)) return 'E1';
+    if (c === 'R.EX' || c.startsWith('R.EX.')) return 'E2';
+    if (c === 'R.UE') return 'E5';
+    if (c === 'R.UE.S') return 'N.S.R.L.';
+    if (/^R\.NAC\.NS/.test(c)) return 'Art. 7-14';
+    return '';
+  };
   const paisL = (l) => l.pais || paisDe(l.nif); // el país escrito a mano en la línea manda sobre el del NIF
 
   function lineasFc(s, datos) {
@@ -1149,22 +1165,30 @@ export function crearModulos(c) {
     // cada campo del libro es editable (se guarda en el propio libro de la empresa)
     const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
     const ci = (l, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-fce="${s}|${idx.get(l)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
+    // Emitidas: las facturas sin cuota de IVA llevan su exención (E1 a E6) o el motivo por el que no están sujetas (N.S.R.L., arts. 7 y 14); se puede cambiar a mano
+    const exCell = (l) => {
+      if (s !== 'E') return '';
+      if (Math.abs(Number(l.cuota) || 0) > 0.004 && l.exenc === undefined) return '<td></td>';
+      const v = exencDe(l);
+      if (!ed) return `<td class="c">${esc(v)}</td>`;
+      return `<td class="in c"><select data-fce="${s}|${idx.get(l)}|exenc" title="${esc(EXENCIONES.find(([k]) => k === v)?.[1] ?? '')}"><option value=""></option>${EXENCIONES.map(([k, t]) => `<option value="${esc(k)}"${k === v ? ' selected' : ''} title="${esc(t)}">${esc(k)}</option>`).join('')}</select></td>`;
+    };
     const filas = f.map((l) => { // todas las líneas del periodo, sin límite
       const p = paisL(l);
       return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(s === 'E' ? l.fecha : l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
         ${ci(l, 'pais', p)}${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
-        ${ci(l, 'rec', l.rec !== undefined ? fnum(l.rec) : (/^R\.RC\./.test(l.codigo) ? fnum(l.cuota) : ''), 'num')}${ci(l, 'clasif', l.clasif ?? clasif(l.codigo))}<td class="acc">${l.manual ? '<span class="hint">a mano</span> ' : ''}${acc(l)}</td></tr>`;
+        ${ci(l, 'rec', l.rec !== undefined ? fnum(l.rec) : (/^R\.RC\./.test(l.codigo) ? fnum(l.cuota) : ''), 'num')}${exCell(l)}${ci(l, 'clasif', l.clasif ?? clasif(l.codigo))}<td class="acc">${l.manual ? '<span class="hint">a mano</span> ' : ''}${acc(l)}</td></tr>`;
     }).join('');
     const nv = fcNueva?.s === s && puede() ? (() => {
       const ni = (c, ph, cls = '') => `<td class="in ${cls}"><input data-fcnv="${c}" value="${esc(fcNueva[c] ?? '')}" placeholder="${ph}"${c === 'codigo' ? ' list="fcCods"' : ''}></td>`;
-      return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}<td></td><td></td>${ni('factura', 'nº factura', 'tl')}${ni('nif', 'NIF', 'tl')}${ni('nombre', 'nombre', 'tl')}<td></td>${ni('codigo', 'código')}${ni('base', 'base', 'num')}${ni('pct', '% IVA', 'num')}${ni('cuota', 'cuota (auto)', 'num')}<td></td><td></td>
+      return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}<td></td><td></td>${ni('factura', 'nº factura', 'tl')}${ni('nif', 'NIF', 'tl')}${ni('nombre', 'nombre', 'tl')}<td></td>${ni('codigo', 'código')}${ni('base', 'base', 'num')}${ni('pct', '% IVA', 'num')}${ni('cuota', 'cuota (auto)', 'num')}<td></td>${s === 'E' ? '<td></td>' : ''}<td></td>
         <td class="acc"><button class="pill" data-act="m-fcnvok">✔ Añadir</button><button class="pill" data-act="m-fcnvx">✕</button></td></tr>`;
     })() : '';
     const codsDl = `<datalist id="fcCods">${[...new Set(datos.map((l) => l.codigo))].sort().map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`;
     const sinRet = f.filter((l) => !/^(R\.)?I\./.test(l.codigo)); // el total no incluye las retenciones (misma base que la factura)
-    const tot = `<tr><td colspan="8"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="3"></td></tr>`;
+    const tot = `<tr><td colspan="8"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="${s === 'E' ? 4 : 3}"></td></tr>`;
     return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Asiento</th><th>${s === 'R' ? 'Fecha factura' : 'Fecha contable'}</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
-      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th><th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
+      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th>${s === 'E' ? '<th title="Facturas sin cuota de IVA: E1 a E6 (exenciones), N.S.R.L. (no sujeta por reglas de localización) o Art. 7-14 (no sujeta)">Exención</th>' : ''}<th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
   }
 
   function vistaFacturas(s) {
@@ -1201,6 +1225,7 @@ export function crearModulos(c) {
     if (!l) return;
     const nl = { ...l };
     if (campo === 'fecha' || campo === 'fecha2') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); if ((s === 'E') === (campo === 'fecha')) nl.ff = f; else nl.fecha = f; }
+    else if (campo === 'exenc') nl.exenc = valor.trim(); // vacío = sin exención (se guarda para que no vuelva el valor por defecto)
     else if (['pais', 'clasif', 'rec'].includes(campo)) { const v = valor.trim(); if (v === '') delete nl[campo]; else nl[campo] = campo === 'rec' ? parseES(v) : campo === 'pais' ? v.toUpperCase() : v; }
     else if (['base', 'cuota', 'pct'].includes(campo)) nl[campo] = parseES(valor);
     else if (campo === 'nif' || campo === 'codigo') nl[campo] = valor.trim().toUpperCase();
@@ -1698,7 +1723,6 @@ export function crearModulos(c) {
         ${fila('Entregas intracomunitarias de bienes y servicios', '', '', bx('59', g.entregas.base))}
         ${fila('Exportaciones y operaciones asimiladas', '', '', bx('60', g.export.base))}
         ${fila(`Operaciones sujetas con inversión del sujeto pasivo que originan el derecho a deducción${nota('casilla 122 según mi conocimiento: compruébala')}`, '', '', bx('122', g.nosuj.base, 'warn'))}
-        ${fila(`Operaciones no sujetas por reglas de localización${nota('casilla por verificar')}`, '', '', bx('¿?', g.locNS.base, 'warn'))}
         ${fila(`Operaciones exentas o no sujetas interiores${nota('casilla por verificar')}`, '', '', bx('¿?', g.exVentas.base + g.exCompras.base, 'warn'))}
         ${sec('Resultado')}
         ${fila('Suma de resultados ( [46] )', '', '', bx('64', c.c46))}
