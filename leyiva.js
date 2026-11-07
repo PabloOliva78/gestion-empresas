@@ -1,7 +1,7 @@
 // Bloque 10 · Exenciones y Leyes.
 // Se carga el texto de la Ley 37/1992 del IVA (PDF, TXT o HTML del BOE), se parte en artículos, se sacan las exenciones (arts. 20 a 26)
 // y las facturas emitidas y recibidas del libro de IVA se revisan frente a sus reglas. La consulta busca en el texto cargado (no inventa nada).
-import { lineasPagina, rangoPeriodo } from './lectores.js?v=41';
+import { lineasPagina, rangoPeriodo } from './lectores.js?v=46';
 
 const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const r2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;

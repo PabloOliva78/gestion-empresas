@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=45';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=46';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=11';
@@ -12,7 +12,7 @@ import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=6';
 import { crearEstados } from './estados.js?v=4';
-import { crearLeyIva } from './leyiva.js?v=4';
+import { crearLeyIva } from './leyiva.js?v=5';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
