@@ -1140,3 +1140,10 @@ table.tprs.tnom.nom-fit td.c { text-align: center; padding-right: .2rem; }
 /* Tablas con columnas ajustadas a mano: lo que no cabe se recorta, no se monta sobre la columna de al lado */
 table[style*="table-layout: fixed"] td { overflow: hidden; text-overflow: ellipsis; }
 table[style*="table-layout: fixed"] td input, table[style*="table-layout: fixed"] td select { max-width: 100%; box-sizing: border-box; min-width: 0; }
+
+/* Libro registro de socios (Excel) */
+tr.libro-baja td { color: #8a93a6; }
+table.libro-t td.neg { color: #b42318; }
+table.libro-t td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+details.libro-hoja { border: 1px solid var(--line); border-radius: 6px; margin: .5rem 0; padding: .3rem .8rem; background: var(--card); }
+details.libro-hoja > summary { cursor: pointer; padding: .3rem 0; }

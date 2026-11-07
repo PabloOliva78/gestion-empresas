@@ -1314,6 +1314,66 @@ export function crearRegistral(c) {
     const hit = pistas.find(([k, rx]) => slots.includes(k) && rx.test(n));
     return hit ? hit[0] : (slots.find((k) => !D[k]?.archivo) ?? slots[0]);
   }
+  // ---- Libro registro de socios en Excel: hoja «Resumen» (socios y saldo de acciones) y una hoja de identificación por socio con sus movimientos de acciones ----
+  const sinAcL = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const fechaUS = (v) => { // m/d/aa de Excel → dd/mm/aaaa
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(v ?? '').trim()); if (!m) return String(v ?? '').trim();
+    let y = +m[3]; if (y < 100) y += y > 50 ? 1900 : 2000;
+    return `${String(+m[2]).padStart(2, '0')}/${String(+m[1]).padStart(2, '0')}/${y}`;
+  };
+  function leerLibroSocios(buf) {
+    const X = window.XLSX; if (!X) return null;
+    const wb = X.read(buf, { type: 'array' }), F = (n) => X.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null, raw: false });
+    const txt = (v) => (v == null ? '' : String(v).trim()), num = (v) => { const t = String(v ?? '').replace(/[^\d.-]/g, ''); return t === '' || t === '-' ? null : Number(t); };
+    const nRes = wb.SheetNames.find((n) => /resumen/i.test(n)); if (!nRes) return null;
+    const R = F(nRes), L = { sociedad: '', cif: '', ejercicio: '', domicilio: '', resumen: [], total: null, hojas: [] };
+    R.slice(0, 9).forEach((fila) => (fila ?? []).forEach((v) => {
+      const t = txt(v);
+      if (/^Sociedad:/i.test(t) && !L.sociedad) L.sociedad = t.replace(/^Sociedad:\s*/i, ''); else if (/^CIF:/i.test(t)) L.cif = t.replace(/^CIF:\s*/i, '');
+      else if (/^Ejercicio:/i.test(t)) L.ejercicio = t.replace(/^Ejercicio:\s*/i, ''); else if (/^Domicilio:/i.test(t)) L.domicilio = t.replace(/^Domicilio:\s*/i, '');
+    }));
+    const h = R.findIndex((f) => sinAcL(f?.[0]).startsWith('nombre'));
+    if (h < 0) return null;
+    for (const f of R.slice(h + 1)) {
+      const a = txt(f?.[0]); if (!a) continue;
+      if (/^total/i.test(a)) { L.total = { etiqueta: a, saldo: num(f[4]) }; break; }
+      L.resumen.push({ nombre: a, nif: txt(f[1]), nacionalidad: txt(f[2]), domicilio: txt(f[3]), saldo: num(f[4]) ?? 0, fecha: fechaUS(f[5]), tipo: txt(f[6]), obs: txt(f[7]) === '0' ? '' : txt(f[7]) });
+    }
+    for (const n of wb.SheetNames.filter((x) => x !== nRes)) {
+      const H = F(n), campo = (rx) => { const f = H.find((r) => rx.test(sinAcL(r?.[0]))); return txt(f?.[1]); };
+      const hc = H.findIndex((r) => sinAcL(r?.[0]) === 'fecha'); if (hc < 0) continue;
+      const cab = (H[hc] ?? []).map((v) => sinAcL(v)), iTipo = cab.indexOf('tipo'), iObs = cab.findIndex((v) => v.startsWith('observ')), iNum = cab.findIndex((v) => v.startsWith('numeraci'));
+      const hoja = { hoja: n, titulo: txt(H[0]?.[0]), nombre: campo(/^nombre/), nif: campo(/^nif/), nacionalidad: campo(/^nacionalidad/), domicilio: campo(/^domicilio/), mov: [] };
+      for (const f of H.slice(hc + 1)) {
+        const a = txt(f?.[0]);
+        if (/^total/i.test(a)) { hoja.mov.push({ total: a, cantidad: num(f[2]) }); continue; }
+        if (!a && !txt(f?.[1])) continue;
+        const nums = iNum >= 0 ? f.slice(iNum, iTipo >= 0 ? iTipo : iNum + 1).map(txt).filter(Boolean) : [];
+        hoja.mov.push({ fecha: fechaUS(a), concepto: txt(f[1]), cantidad: num(f[2]), saldo: num(f[3]), numeracion: nums.join(' – '), tipo: iTipo >= 0 ? txt(f[iTipo]) : '', obs: iObs >= 0 && txt(f[iObs]) !== '0' ? txt(f[iObs]) : '' });
+      }
+      if (hoja.nombre) L.hojas.push(hoja);
+    }
+    return L.resumen.length ? L : null;
+  }
+  const nEs = (v) => (v === null || v === undefined ? '' : Number(v).toLocaleString('es-ES', { maximumFractionDigits: 0 }));
+  function libroSociosHtml(L) {
+    const total = L.total?.saldo ?? L.resumen.reduce((s, x) => s + (x.saldo || 0), 0), pc = (v) => (total ? `${((v / total) * 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %` : '');
+    const filas = L.resumen.map((s) => `<tr class="${s.saldo ? '' : 'libro-baja'}"><td>${esc(s.nombre)}</td><td>${esc(s.nif)}</td><td>${esc(s.nacionalidad)}</td><td>${esc(s.domicilio)}</td><td class="num">${nEs(s.saldo)}</td><td class="num">${s.saldo ? pc(s.saldo) : ''}</td><td class="c">${esc(s.fecha)}</td><td>${esc(s.tipo)}</td><td>${esc(s.obs)}</td></tr>`).join('');
+    const hoja = (h, i) => {
+      const s = L.resumen.find((x) => x.nif && x.nif === h.nif) ?? L.resumen.find((x) => sinAcL(x.nombre) === sinAcL(h.nombre));
+      return `<details class="libro-hoja"${i === 0 ? ' open' : ''}><summary><b>Hoja de identificación del socio ${i + 1}</b> · ${esc(h.nombre)} · ${esc(h.nif)}${s ? ` · saldo ${nEs(s.saldo)} acciones` : ''}</summary>
+        <table class="tabla rg-tabla rotulos" style="width:auto;margin:.4rem 0"><tbody><tr><td>Nombre o razón social</td><td><b>${esc(h.nombre)}</b></td></tr><tr><td>NIF o CIF</td><td>${esc(h.nif)}</td></tr><tr><td>Nacionalidad</td><td>${esc(h.nacionalidad)}</td></tr><tr><td>Domicilio</td><td>${esc(h.domicilio)}</td></tr></tbody></table>
+        <div class="wrap"><table class="tprs tnom libro-t"><thead><tr><th>Fecha</th><th>Concepto</th><th>Cantidad acciones</th><th>Saldo total acciones</th><th>Numeración de acciones</th><th>Tipo</th><th>Observaciones</th></tr></thead><tbody>${h.mov.map((m) => (m.total
+        ? `<tr class="ttot"><td colspan="2">${esc(m.total)}</td><td class="num">${nEs(m.cantidad)}</td><td colspan="4"></td></tr>`
+        : `<tr><td class="c">${esc(m.fecha)}</td><td>${esc(m.concepto)}</td><td class="num${(m.cantidad ?? 0) < 0 ? ' neg' : ''}">${nEs(m.cantidad)}</td><td class="num">${nEs(m.saldo)}</td><td>${esc(m.numeracion)}</td><td>${esc(m.tipo)}</td><td>${esc(m.obs)}</td></tr>`)).join('')}</tbody></table></div></details>`;
+    };
+    return `<section class="block"><h4 class="it-tit">LIBRO REGISTRO DE SOCIOS${L.ejercicio ? ` · ejercicio ${esc(L.ejercicio)}` : ''}</h4>
+      <table class="tabla rg-tabla rotulos" style="width:auto"><tbody><tr><td>Sociedad</td><td><b>${esc(L.sociedad)}</b></td></tr>${L.cif ? `<tr><td>CIF</td><td>${esc(L.cif)}</td></tr>` : ''}${L.domicilio ? `<tr><td>Domicilio</td><td>${esc(L.domicilio)}</td></tr>` : ''}</tbody></table>
+      <div class="wrap"><table class="tprs tnom libro-t" style="margin-top:.6rem"><thead><tr><th>Nombre o razón social</th><th>NIF o CIF</th><th>Nacionalidad</th><th>Domicilio</th><th>Saldo acciones</th><th>% capital</th><th>Fecha última anotación</th><th>Tipo</th><th>Observaciones</th></tr></thead><tbody>${filas}
+      <tr class="ttot"><td colspan="4">${esc(L.total?.etiqueta ?? 'Total acciones')}</td><td class="num">${nEs(total)}</td><td class="num">${total ? '100,00 %' : ''}</td><td colspan="3"></td></tr></tbody></table></div>
+      <p class="hint">Los socios con saldo 0 ya no tienen acciones (aparecen atenuados). Despliega la hoja de cada socio para ver todos sus movimientos: constitución, ampliaciones y transmisiones.</p></section>
+      <section class="block"><h4 class="it-tit">Hojas de identificación de los socios · ${L.hojas.length}</h4>${L.hojas.map(hoja).join('') || '<p class="hint">El Excel no trae hojas de socios.</p>'}</section>`;
+  }
   let rgDocEj = null; const rgDocSec = {};
   const docEj = () => rgDocEj ?? Number(S.ejercicio);
   const docReg = (tab, y) => S.registros.find((x) => x.tipo === `doc-${tab}` && x.empresa_id === S.sel && x.ejercicio === y);
@@ -1341,7 +1401,10 @@ export function crearRegistral(c) {
     return `<div class="bar"><label><b>Ejercicio</b> <select data-rgdej="1">${anios.map((a) => `<option value="${a}"${a === y ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
       <nav class="subtabs">${slots.map(([k, l]) => `<button class="${k === sec ? 'on' : ''}${D[k]?.archivo ? ' hecho' : ''}" data-act="m-rg-dsec" data-t="${tab}" data-s="${k}">${esc(l)}${D[k]?.archivo ? ' ✓' : ''}</button>`).join('')}</nav></div>
       ${avisoHtml()}
-      <div class="rg-split"><div class="rg-izq">${ed ? `<div class="dropzone" data-kind="doc-${tab}" tabindex="0" role="button"><b>Suelta aquí el archivo</b> (se coloca en su apartado por el nombre; si no se reconoce, en «${esc(nomSec)}») o haz clic para elegirlo.
+      ${cur.libro ? `${ed ? `<div class="dropzone" data-kind="doc-${tab}" tabindex="0" role="button"><b>Suelta aquí otro archivo</b> (Excel del libro de socios, escritura…) o haz clic para elegirlo; el Excel se lee y se enseña como libro registro de socios.
+        <input type="file" data-dzkind="doc-${tab}" multiple hidden></div>` : ''}
+        <p>${cur.archivo?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(cur.archivo.path)}">📎 ${esc(cur.archivo.nombre)}</button>` : ''} ${cur.archivo && ed ? `<button class="small danger" data-act="m-rg-docdel" data-t="${tab}" data-s="${sec}">Quitar este documento de ${y}</button>` : ''}</p>
+        ${libroSociosHtml(cur.libro)}` : `<div class="rg-split"><div class="rg-izq">${ed ? `<div class="dropzone" data-kind="doc-${tab}" tabindex="0" role="button"><b>Suelta aquí el archivo</b> (se coloca en su apartado por el nombre; si no se reconoce, en «${esc(nomSec)}») o haz clic para elegirlo.
         <input type="file" data-dzkind="doc-${tab}" multiple hidden></div>` : ''}
         <div class="rg-visor"${esPdf ? ` data-rgvisor="doc:${tab}:${sec}|${y}"` : ''}>${cur.archivo ? (esPdf ? '<p class="hint">Cargando el PDF…</p>' : '<p class="hint">Este archivo no es un PDF: ábrelo con el botón.</p>') : '<p class="hint">Sin archivo en este apartado.</p>'}</div></div>
       <div class="rg-der"><section class="block"><h4 class="it-tit">${esc(nomSec)} · ejercicio ${y}</h4>
@@ -1350,7 +1413,7 @@ export function crearRegistral(c) {
           <tr><td>Referencia (nº de asiento, justificante, observaciones)</td><td><input class="facin" data-rgdoc="${tab}|${sec}|ref" value="${esc(cur.ref ?? '')}" size="44"${ed ? '' : ' disabled'}></td></tr>
           <tr><td>Archivo</td><td>${cur.archivo?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(cur.archivo.path)}">📎 ${esc(cur.archivo.nombre)}</button>` : '—'}</td></tr>
         </tbody></table>
-        ${cur.archivo && ed ? `<p><button class="small danger" data-act="m-rg-docdel" data-t="${tab}" data-s="${sec}">Quitar este documento de ${y}</button></p>` : ''}</section></div></div>`;
+        ${cur.archivo && ed ? `<p><button class="small danger" data-act="m-rg-docdel" data-t="${tab}" data-s="${sec}">Quitar este documento de ${y}</button></p>` : ''}</section></div></div>`}`;
   }
   async function cargarDocs(tab, files) {
     if (!S.sel) return aviso('Elige primero la empresa.', true);
@@ -1362,6 +1425,8 @@ export function crearRegistral(c) {
         const sub = await c.subir(S.sel, `${tipo}-${ej}`, 'doc', slot, f);
         if (sub.error) throw new Error(sub.error);
         D[slot] = { fecha: D[slot]?.fecha ?? '', ref: D[slot]?.ref ?? '', archivo: sub.val };
+        // un Excel en «Socios» se lee y se presenta como libro registro de socios
+        if (tab === 'rmsocios' && /\.xlsx?$/i.test(f.name)) { try { const L = leerLibroSocios(await f.arrayBuffer()); if (L) D[slot].libro = L; } catch { /* sin libro: queda solo el archivo */ } }
         await docGuardar(tab, ej, D); rgDocSec[tab] = slot;
         msg = `${f.name}: guardado en «${(c.docs[tab].find(([k]) => k === slot) ?? [])[1] ?? slot}» (${ej})`; msgMal = false;
       } catch (err) { aviso(`${f.name}: ${err.message}`, true); }
