@@ -1,0 +1,37 @@
+/* Bloque 10 · Exenciones y Leyes */
+.ley-cab { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem; padding: .6rem .9rem; margin-bottom: .6rem; border: 1px solid var(--line); border-left: 4px solid var(--ink, #1f3864); border-radius: 8px; background: var(--card); }
+.ley-cab span { color: var(--muted); font-size: .85rem; flex: 1; }
+.ley-msg { padding: .5rem .8rem; border-radius: 6px; background: var(--ok-bg, #e8f5ec); border: 1px solid var(--line); }
+.ley-aviso { padding: .6rem .9rem; border-radius: 6px; background: var(--warn-bg, #fff4e0); border: 1px solid var(--line); }
+.ley-ok { padding: .6rem .9rem; border-radius: 6px; background: var(--ok-bg, #e8f5ec); }
+.ley-buscar { max-width: 560px; margin: .2rem 0 .8rem; }
+.ley-temas { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: .8rem; }
+.ley-tema { border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: .6rem .9rem; margin-bottom: .8rem; }
+.ley-temas .ley-tema { margin-bottom: 0; }
+.ley-tema h4 { margin: 0 0 .2rem; color: var(--ink, #1f3864); }
+.ley-art { border-top: 1px solid var(--line); padding: .25rem 0; }
+.ley-art summary { cursor: pointer; font-size: .9rem; }
+.ley-txt { white-space: pre-wrap; font-size: .85rem; line-height: 1.45; padding: .4rem .2rem .6rem; max-height: 420px; overflow: auto; }
+.ley-ref { white-space: nowrap; font-weight: 600; width: 1%; }
+.ley-reglas { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 .8rem; }
+.ley-regla { text-align: left; display: grid; gap: .1rem; padding: .45rem .7rem; border-left: 4px solid var(--muted); max-width: 330px; }
+.ley-regla small { color: var(--muted); }
+.ley-regla.error { border-left-color: var(--danger, #c62828); }
+.ley-regla.aviso { border-left-color: #e08a00; }
+.ley-regla.on { outline: 2px solid var(--ink, #1f3864); }
+.ley-tag { display: inline-block; margin: 0 .3rem .2rem 0; padding: .05rem .5rem; border-radius: 99px; font-size: .78rem; border: 1px solid var(--line); }
+.ley-tag.error { background: #fde3e3; color: #8a1c1c; }
+.ley-tag.aviso { background: #fff0d4; color: #7a4a00; }
+.ley-preg { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.ley-preg .ley-buscar { flex: 1; margin: 0; min-width: 260px; }
+.ley-resp { border: 1px solid var(--line); border-left: 4px solid var(--ink, #1f3864); border-radius: 8px; background: var(--card); padding: .6rem 1rem; margin: .8rem 0; }
+.ley-hit { border-top: 1px solid var(--line); padding: .4rem 0; }
+.ley-hit h5 { margin: .2rem 0; }
+.ley-hit p { margin: .25rem 0; font-size: .9rem; }
+.ley-hit mark { background: #ffe58a; color: inherit; border-radius: 2px; }
+.ley-sug { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
+td.num { text-align: right; white-space: nowrap; }
+@media (prefers-color-scheme: dark) {
+  .ley-tag.error { background: #4a2020; color: #ffc9c9; }
+  .ley-tag.aviso { background: #4a3a14; color: #ffdf9e; }
+}
