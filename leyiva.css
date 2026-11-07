@@ -35,3 +35,14 @@ td.num { text-align: right; white-space: nowrap; }
   .ley-tag.error { background: #4a2020; color: #ffc9c9; }
   .ley-tag.aviso { background: #4a3a14; color: #ffdf9e; }
 }
+.ley-fijo { position: sticky; top: var(--tabsH, 64px); z-index: 20; background: var(--bg); padding-bottom: .4rem; box-shadow: 0 4px 8px rgba(31,56,100,.12); }
+.ley-fijo .dropzone { position: static !important; box-shadow: none !important; margin-bottom: .4rem; }
+button.ley-art { display: flex; justify-content: space-between; align-items: center; gap: .8rem; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: .5rem .3rem; font-size: .92rem; }
+button.ley-art:hover { background: var(--bg); }
+button.ley-art i { font-style: normal; color: var(--ink, #1f3864); font-weight: 600; white-space: nowrap; }
+.ley-ov { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; flex-direction: column; }
+.ley-ov-barra { display: flex; align-items: center; gap: .6rem; padding: .7rem 1.2rem; background: var(--card); border-bottom: 3px solid var(--ink, #1f3864); }
+.ley-ov-barra .space { flex: 1; }
+.ley-ov-cuerpo { flex: 1; overflow: auto; width: min(900px, 100%); margin: 0 auto; padding: 1.5rem 1.5rem 3rem; font-size: 1.05rem; line-height: 1.6; }
+.ley-ov-cuerpo h2 { color: var(--ink, #1f3864); margin-top: 0; }
+.ley-ov-cuerpo mark { background: #ffe58a; color: inherit; }

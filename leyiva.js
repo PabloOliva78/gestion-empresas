@@ -181,7 +181,7 @@ export function crearLeyIva(c) {
   const art = (n) => secs().find((s) => s.tipo === 'art' && s.id === String(n));
   const tituloArt = (n) => { const s = art(n); return s ? `Art. ${s.id}. ${s.titulo}` : `Art. ${n}`; };
   const textoArt = (n, max = 1400) => { const s = art(n); return s ? (s.texto.length > max ? s.texto.slice(0, max) + '…' : s.texto) : ''; };
-  const detalleArt = (n) => (art(n) ? `<details class="ley-art"><summary>${esc(tituloArt(n))}</summary><div class="ley-txt">${esc(art(n).texto)}</div></details>` : `<span class="chip">Art. ${esc(n)}</span>`);
+  const detalleArt = (n) => (art(n) ? `<button class="ley-art" data-leyart="${esc(art(n).id)}"><span>${esc(tituloArt(n))}</span><i>Abrir ›</i></button>` : `<span class="chip">Art. ${esc(n)}</span>`);
   const sinLey = () => `<p class="ley-aviso">Todavía no hay ninguna ley cargada: vaya a <b>Ley IVA 37/1992</b> y suelte el PDF (o el TXT/HTML) del BOE. Sin ella, las revisiones y las consultas usan solo el resumen orientativo.</p>`;
 
   // --- lectura del archivo ---
@@ -238,14 +238,14 @@ export function crearLeyIva(c) {
       const hay = ns.filter((n) => art(n));
       return `<div class="ley-tema"><h4>${esc(t)}</h4><p class="hint">${esc(para)}</p>${hay.length ? hay.map(detalleArt).join('') : '<p class="hint">Artículos no encontrados en el texto cargado.</p>'}</div>`;
     }).join('');
-    return `${zona}${msg()}<div class="ley-cab"><b>${esc(LEY.nombre)}</b><span>Archivo ${esc(LEY.fuente)} · cargado el ${esc((LEY.cargada || '').split('-').reverse().join('/'))} · ${arts.length} artículos${disp ? ` · ${disp} disposiciones` : ''} · ${(LEY.exenciones || []).length} exenciones</span>${puede() ? '<button class="small danger" data-leyquitar="1">Quitar la ley</button>' : ''}</div>
-      ${subnav([['resumen', 'Lo más importante'], ['indice', 'Índice completo']])}
+    return `<div class="ley-fijo">${zona}${msg()}<div class="ley-cab"><b>${esc(LEY.nombre)}</b><span>Archivo ${esc(LEY.fuente)} · cargado el ${esc((LEY.cargada || '').split('-').reverse().join('/'))} · ${arts.length} artículos${disp ? ` · ${disp} disposiciones` : ''} · ${(LEY.exenciones || []).length} exenciones</span>${puede() ? '<button class="small danger" data-leyquitar="1">Quitar la ley</button>' : ''}</div>
+      ${subnav([['resumen', 'Lo más importante'], ['indice', 'Índice completo']])}</div>
       ${ST.sub === 'indice' ? `<input class="ley-buscar" data-leyidx="1" placeholder="Filtrar artículos (p. ej. 20, exentas, deducción…)" value="${esc(ST.idx)}"><div id="leyIdxLista">${indiceHtml()}</div>` : `<div class="ley-temas">${temas}</div>`}`;
   }
   function indiceHtml() {
     const f = sinAc(ST.idx).trim();
     const l = secs().filter((s) => !f || sinAc(`${s.id} ${s.titulo}`).includes(f) || (f.length > 3 && sinAc(s.texto).includes(f))).slice(0, 80);
-    return l.map((s) => `<details class="ley-art"><summary>${s.tipo === 'art' ? `Art. ${esc(s.id)}. ` : ''}${esc(s.titulo)}</summary><div class="ley-txt">${esc(s.texto)}</div></details>`).join('') || '<p class="vacio">Sin resultados.</p>';
+    return l.map((s) => `<button class="ley-art" data-leyart="${esc(s.id)}"><span>${s.tipo === 'art' ? `Art. ${esc(s.id)}. ` : ''}${esc(s.titulo)}</span><i>Abrir ›</i></button>`).join('') || '<p class="vacio">Sin resultados.</p>';
   }
   function faqHtml() {
     return `<section class="ley-tema"><h4>Resumen orientativo (sin ley cargada)</h4>${FAQ.map(([, t, r, ns]) => `<p><b>${esc(t)}.</b> ${esc(r)} <span class="hint">(Arts. ${ns.join(', ')})</span></p>`).join('')}</section>`;
@@ -349,7 +349,7 @@ export function crearLeyIva(c) {
       if (R.faq.length) out += R.faq.map(([, t, r, ns]) => `<p><b>${esc(t)}.</b> ${esc(r)} <span class="hint">(Arts. ${ns.join(', ')} — resumen orientativo; el texto literal está debajo si la ley está cargada)</span></p>`).join('');
       if (!LEY) out += sinLey();
       else if (!R.hits.length) out += '<p class="vacio">No encuentro nada en la ley cargada con esas palabras: pruebe con otros términos o con el número del artículo («art. 84»).</p>';
-      else out += `<p class="hint">Pasajes de la ley cargada más relacionados con la pregunta (extracto literal, ordenado por relevancia):</p>${R.hits.map(({ s, pars }) => `<div class="ley-hit"><h5>${s.tipo === 'art' ? `Art. ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h5>${pars.map((p) => `<p>${resalta(p, R.ts)}</p>`).join('')}<details class="ley-art"><summary>Ver el artículo completo</summary><div class="ley-txt">${esc(s.texto)}</div></details></div>`).join('')}`;
+      else out += `<p class="hint">Pasajes de la ley cargada más relacionados con la pregunta (extracto literal, ordenado por relevancia):</p>${R.hits.map(({ s, pars }) => `<div class="ley-hit"><h5>${s.tipo === 'art' ? `Art. ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h5>${pars.map((p) => `<p>${resalta(p, R.ts)}</p>`).join('')}<button class="ley-art" data-leyart="${esc(s.id)}" data-leyq2="1"><span>Abrir el artículo completo</span><i>Abrir ›</i></button></div>`).join('')}`;
       out += '</section>';
     }
     return `${msg()}<div class="ley-preg"><input class="ley-buscar" data-leyq="1" placeholder="Pregunte: ¿qué operaciones están exentas?, ¿plazo para deducir?, art. 84…" value="${esc(ST.q)}"><button class="primary" data-leyask="1">Buscar y responder</button></div>
@@ -357,11 +357,29 @@ export function crearLeyIva(c) {
       <div class="ley-sug">${['¿Qué operaciones están exentas?', '¿Cuál es el plazo para deducir el IVA soportado?', '¿Cuándo se aplica la inversión del sujeto pasivo?', 'Requisitos de la entrega intracomunitaria exenta', 'Tipos de IVA reducido y superreducido', 'Limitaciones a la deducción de cuotas'].map((s) => `<button class="small" data-leyask="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
   }
 
+  // --- artículo a pantalla completa: se abre encima sin tocar la pantalla de debajo, y «Volver» regresa justo donde estaba ---
+  function cerrarArt() { document.getElementById('leyOv')?.remove(); document.documentElement.style.overflow = ''; }
+  function abrirArt(id, ts = []) {
+    const L = secs(), i = L.findIndex((s) => s.id === id), s = L[i]; if (!s) return;
+    const prev = L[i - 1], next = L[i + 1], nom = (x) => (x.tipo === 'art' ? `Art. ${x.id}` : x.titulo.slice(0, 28));
+    document.getElementById('leyOv')?.remove();
+    const ov = document.createElement('div'); ov.id = 'leyOv'; ov.className = 'ley-ov';
+    ov.innerHTML = `<div class="ley-ov-barra"><button class="primary" data-leyvolver="1">‹ Volver</button><b>${s.tipo === 'art' ? `Artículo ${esc(s.id)}` : 'Disposición'}</b>
+      <span class="space"></span><button data-leyart2="${prev ? esc(prev.id) : ''}"${prev ? '' : ' disabled'}>‹ ${prev ? esc(nom(prev)) : ''}</button><button data-leyart2="${next ? esc(next.id) : ''}"${next ? '' : ' disabled'}>${next ? esc(nom(next)) : ''} ›</button></div>
+      <article class="ley-ov-cuerpo"><h2>${s.tipo === 'art' ? `Artículo ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h2><p class="hint">${esc(LEY?.nombre ?? '')}</p>${s.texto.split('\n').map((p) => `<p>${resalta(p, ts)}</p>`).join('')}</article>`;
+    document.body.appendChild(ov); document.documentElement.style.overflow = 'hidden';
+    ov.querySelector('.ley-ov-cuerpo').scrollTop = 0; ov._ts = ts;
+  }
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && document.getElementById('leyOv')) { ev.preventDefault(); cerrarArt(); } });
+
   // --- eventos ---
   let tIdx;
   document.addEventListener('click', (ev) => {
     const t = ev.target; if (!t?.closest) return;
     let b;
+    if (t.closest('[data-leyvolver]')) { cerrarArt(); return; }
+    if ((b = t.closest('[data-leyart2]'))) { if (b.dataset.leyart2) abrirArt(b.dataset.leyart2, document.getElementById('leyOv')?._ts ?? []); return; }
+    if ((b = t.closest('[data-leyart]'))) { abrirArt(b.dataset.leyart, b.dataset.leyq2 ? ST.res?.ts ?? [] : []); return; }
     if (t.closest('[data-leyquitar]')) { quitarLey(); return; }
     if ((b = t.closest('[data-leysub]'))) { ST.sub = b.dataset.leysub; render(); return; }
     if ((b = t.closest('[data-leyregla]'))) { ST.regla = ST.regla === b.dataset.leyregla ? '' : b.dataset.leyregla; ST.pag = 100; render(); return; }
