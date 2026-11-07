@@ -1056,3 +1056,11 @@ body.rs-arrastrando { cursor: col-resize; user-select: none; }
 td.in.num input, td.num input { text-align: right; font-variant-numeric: tabular-nums; }
 .sii-t th.num { text-align: right; }
 .sii-t td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* SII: todos los filtros adicionales en una sola línea */
+.sii-cab .fc-cab { flex-wrap: nowrap; gap: .3rem .5rem; font-size: .76rem; align-items: center; }
+.sii-cab .fc-cab > b { flex: none; white-space: nowrap; }
+.sii-cab .fc-cab label { flex: 1 1 0; min-width: 0; white-space: nowrap; gap: .25rem; }
+.sii-cab .fc-cab label:has(input[type=checkbox]) { flex: none; }
+.sii-cab .fc-cab input.emp-in { min-width: 0 !important; width: 100% !important; flex: 1 1 0; padding: .22rem .5rem; font-size: .76rem; }
+.sii-cab .fc-cab input[type=checkbox] { width: auto !important; flex: none; }
