@@ -2803,7 +2803,8 @@ export function crearModulos(c) {
       if (mes) break;
     }
     const fil = {};
-    rows.forEach((f, i) => { const k = NOM_ROW.find(([rx]) => rx.test(nomNorm(f?.[0])))?.[1]; if (k && !(k in fil)) fil[k] = i; });
+    // el concepto va en la columna A en unas hojas y en la B o la C en otras (Ferticronos, Produfer, Tecnoplus…): se toma el primer texto de la fila
+    rows.forEach((f, i) => { const lab = (f ?? []).slice(0, 3).find((v) => typeof v === 'string' && v.trim()); const k = lab ? NOM_ROW.find(([rx]) => rx.test(nomNorm(lab)))?.[1] : null; if (k && !(k in fil)) fil[k] = i; });
     const h1 = rows.findIndex((f) => (f ?? []).some((v, c) => c >= 1 && /^centro\b/i.test(txt(v))));
     if (h1 < 0 || !('dev' in fil)) return { titulo, mes, anio, centros: [] };
     let tot = -1;
@@ -2859,7 +2860,7 @@ export function crearModulos(c) {
           mes._c = centros; datos[mm] = mes;
           const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: e.id, tipo: 'nominas', ejercicio: L.anio, datos });
           if (err) mal.push(`${nombreHoja}: ${err}`); else informe.push(`${e.nombre} · ${NOM_MESES[L.mes - 1].toLowerCase()} ${L.anio} · ${centros.length} centro(s)`);
-          nomAsMes = mm; destino = { sel: e.id, ej: L.anio };
+          nomAsMes = mm; if (!destino || e.id === S.sel) destino = { sel: e.id, ej: L.anio }; // se queda en la empresa elegida si el Excel la trae
         }
       } catch (err) { mal.push(`${f.name}: ${err.message}`); }
     }
