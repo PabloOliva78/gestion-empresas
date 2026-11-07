@@ -4648,7 +4648,7 @@ export function crearModulos(c) {
     D.filas.forEach((f) => { const y = String(f.r.ejercicio ?? 'Sin ejercicio'); (porAnio.get(y) ?? porAnio.set(y, []).get(y)).push(f); });
     const filas = [...porAnio.keys()].sort((a, b) => b.localeCompare(a)).map((y) => {
       const L = porAnio.get(y), cerr = revCerr.has(y), rev = L.some((f) => f.n === 0 && !f.sinOrigen);
-      return `<tr class="rev-anio"><td colspan="8"><button class="small" data-act="m-revanio" data-y="${esc(y)}">${cerr ? '▸' : '▾'} ${/^\d{4}$/.test(y) ? 'Ejercicio ' : ''}${esc(y)} · ${L.length} archivo(s)${rev ? ' · por revisar' : ''}</button></td></tr>${cerr ? '' : L.map(filaRev).join('')}`;
+      return `<tr class="rev-anio"><td colspan="8"><button class="small" data-act="m-revanio" data-y="${esc(y)}">${cerr ? '▸' : '▾'} ${/^\d{4}$/.test(y) ? 'Ejercicio ' : ''}${esc(y)} · ${L.length} archivo(s)${rev ? ' · por revisar' : ''}</button></td></tr>${cerr ? '' : Object.keys(ARCH).map((k) => { const T = L.filter((f) => f.k === k); return T.length ? `<tr class="rev-tipo"><td colspan="8">${esc(ARCH[k])} · ${T.length}</td></tr>${T.map(filaRev).join('')}` : ''; }).join('')}`;
     }).join('');
     return `<div class="fc-cab"><span><b>${esc(empresa().nombre)}</b> · ${D.filas.length} archivos guardados${D.nRev ? ` · <b class="rojo">${D.nRev} por revisar</b>` : D.filas.length ? ' · <span class="verde">Revisado ✓</span>' : ''}</span></div>
       <div class="xc-kg" style="margin:.4rem 0 .8rem">${resumen}</div>
