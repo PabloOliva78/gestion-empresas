@@ -4050,6 +4050,15 @@ export function crearModulos(c) {
       ${al.length ? `<section class="prs-card"><div class="prs-h">Alertas</div><ul class="hint" style="margin:.6rem 1.2rem">${al.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></section>` : ''}`;
   }
 
+  // Empresa de un PDF presentado: la del «NIF Presentador» y, si no, la cuyo NIF más veces aparece. El 200 trae también los NIF de las participadas (otras empresas del grupo): no vale el primero que salga.
+  function empresaDePdf(t) {
+    const porNif = (nif) => S.empresas.find((x) => x.cif && x.cif.toUpperCase() === String(nif || '').toUpperCase());
+    const pres = porNif((/NIF Presentador:\s*([A-Z0-9]{9})/i.exec(t) || [])[1]);
+    if (pres) return pres;
+    let mejor = null, max = 0;
+    for (const x of S.empresas) { if (!x.cif) continue; const n = t.split(x.cif).length - 1; if (n > max) { max = n; mejor = x; } }
+    return mejor ?? porNif(nifDe(t));
+  }
   // Modelo 202: periodo 1P (abril), 2P (octubre) o 3P (diciembre). Orden: lo escrito en el nombre del archivo, el mes de presentación y, por último, la etiqueta «Periodo» del PDF
   function periodo202(t, nombre) {
     const n = String(nombre || '').toUpperCase().replace(/[_.]/g, ' '), tt = String(t || '').replace(/\s+/g, ' ');
@@ -4072,7 +4081,7 @@ export function crearModulos(c) {
       try {
         if (!/\.pdf$/i.test(f.name)) { informe.push(`↷ ${f.name}: no es PDF`); continue; }
         const { texto: t, pags } = await leerPdf(f);
-        const e = S.empresas.find((x) => x.cif && t.includes(x.cif)) ?? S.empresas.find((x) => x.cif === nifDe(t)) ?? empresa();
+        const e = empresaDePdf(t) ?? empresa();
         if (!e) { informe.push(`⚠ ${f.name}: elige la empresa`); continue; }
         const h = cabeceraPresentado(t);
         // si el PDF no trae el modelo, se clasifica por el nombre: «EXPORTACIONES UE / IMPORTACIONES UE …» son Intrastat
