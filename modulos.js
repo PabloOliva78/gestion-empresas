@@ -4009,6 +4009,19 @@ export function crearModulos(c) {
       ${al.length ? `<section class="prs-card"><div class="prs-h">Alertas</div><ul class="hint" style="margin:.6rem 1.2rem">${al.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></section>` : ''}`;
   }
 
+  // Modelo 202: periodo 1P (abril), 2P (octubre) o 3P (diciembre). Orden: lo escrito en el nombre del archivo, el mes de presentación y, por último, la etiqueta «Periodo» del PDF
+  function periodo202(t, nombre) {
+    const n = String(nombre || '').toUpperCase().replace(/[_.]/g, ' '), tt = String(t || '').replace(/\s+/g, ' ');
+    const f = /(?:^|[^0-9A-Z])([1-3])\s?P(?:[^0-9A-Z]|$)/.exec(n) || (/\b(1|2|3)\s?(?:ER|O|º)?\s*(?:PAGO|PERIODO)\b/.exec(n));
+    if (f) return `${f[1]}P`;
+    if (/\bABRIL\b/.test(n)) return '1P';
+    if (/\bOCTUBRE\b/.test(n)) return '2P';
+    if (/\bDICIEMBRE\b/.test(n)) return '3P';
+    const d = /(?:realizada el|presentada el d[ií]a|fecha de presentaci[oó]n)\D{0,6}(\d\d)[-/](\d\d)[-/](20\d\d)/i.exec(tt);
+    if (d) { const mes = +d[2]; return mes <= 7 ? '1P' : mes <= 11 ? '2P' : '3P'; }
+    const e = /Per[ií]odo\W{0,12}([1-3])\s?P\b/i.exec(tt);
+    return e ? `${e[1]}P` : '';
+  }
   // PDF de declaraciones presentadas: se guardan en la empresa (por el NIF del PDF, o la elegida) con modelo, ejercicio y periodo detectados
   async function cargarPresentados(files) {
     const informe = [], regs = new Map(); // regs: «prs» por empresa y ejercicio, acumulado mientras dura la carga
@@ -4027,6 +4040,7 @@ export function crearModulos(c) {
         // el 200 (Impuesto sobre Sociedades) se presenta al año siguiente: se guarda en el año de presentación
         const ej = ['200', '232'].includes(modelo) ? (Number((/(?:realizada el|presentada el d[ií]a):?\s*\d\d-\d\d-(20\d\d)/i.exec(t) || [])[1]) || ejDecl + 1) : ejDecl;
         let per = h.per;
+        if (modelo === '202') per = periodo202(t, f.name); // 1P, 2P o 3P: por el nombre del archivo, la fecha de presentación o la etiqueta Periodo (antes se quedaba en 1P)
         if (modelo === 'INT' && !per) { const i = NOM_MESES.findIndex((m) => f.name.toUpperCase().includes(m)); if (i >= 0) per = String(i + 1).padStart(2, '0'); } // mes que figura en el nombre
         if (ANUALES.includes(modelo)) per = 'A';
         else if (!['583', '202', 'A22'].includes(modelo) && per) per = perEf(e, per);
@@ -4052,7 +4066,10 @@ export function crearModulos(c) {
           destino = { sel: e.id, ej: modelo === '583' && per === '0A' ? ej + 1 : ej };
           aviso = ` · ${Object.entries(val).map(([c, v]) => `${c} ${fnum(v)}`).join(', ')}`;
         } else aviso = ' · sin casillas reconocidas (rellénalas a mano)';
-        if (S.registros.some((r) => r.tipo === 'prspdf' && r.empresa_id === e.id && r.datos.ref === ref)) { informe.push(`↻ ${e.siglas || e.nombre}: ${f.name} → ${modelo || '?'} · ${ej} · ${per || '—'} (PDF ya guardado, importes actualizados)${aviso}`); continue; }
+        if (modelo === '202' && !per) aviso += ' · ⚠ periodo no reconocido (1P/2P/3P): añade 1P, 2P o 3P al nombre del archivo y suéltalo de nuevo';
+        const yaPdf = S.registros.find((r) => r.tipo === 'prspdf' && r.empresa_id === e.id && r.datos.ref === ref);
+        if (yaPdf && (yaPdf.datos.periodo !== per || yaPdf.datos.modelo !== modelo || yaPdf.ejercicio !== ej)) await guardarRegistro(yaPdf, { ejercicio: ej, datos: { ...yaPdf.datos, modelo, periodo: per } }); // corrige el periodo con que se guardó
+        if (yaPdf) { informe.push(`↻ ${e.siglas || e.nombre}: ${f.name} → ${modelo || '?'} · ${ej} · ${per || '—'} (PDF ya guardado, importes actualizados)${aviso}`); continue; }
         const id = crypto.randomUUID();
         const sub = await subir(e.id, 'prspdf', id, 'archivo', f);
         if (sub.error) throw new Error(sub.error);
