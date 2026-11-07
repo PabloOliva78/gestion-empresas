@@ -1051,3 +1051,8 @@ body.rs-arrastrando { cursor: col-resize; user-select: none; }
 .sii-fijo { position: sticky; top: calc(var(--tabsH, 64px) + 2.2rem); z-index: 24; background: var(--bg, #f4f6fb); box-shadow: 0 4px 8px rgba(31,56,100,.15); padding-bottom: .3rem; }
 .sii-fijo .dropzone { position: static !important; box-shadow: none !important; margin-bottom: .3rem; }
 .sii-fijo .sii-cab { margin-bottom: 0; }
+
+/* Cifras siempre a la derecha, también las que se editan; en el SII las columnas numéricas con su cabecera */
+td.in.num input, td.num input { text-align: right; font-variant-numeric: tabular-nums; }
+.sii-t th.num { text-align: right; }
+.sii-t td.num { text-align: right; font-variant-numeric: tabular-nums; }
