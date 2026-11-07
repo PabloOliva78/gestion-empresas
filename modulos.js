@@ -3755,6 +3755,8 @@ export function crearModulos(c) {
     ntMsg = `${n} notificación(es) nueva(s)${act ? ` · ${act} actualizada(s)` : ''}${otras.size ? ` · guardadas en ${[...otras].join(', ')}` : ''}${mal.length ? ` · sin leer: ${mal.join(', ')}` : ''}`;
     await cargar(); render();
   }
+  // al cambiar el tamaño de un cajón de la notificación (arrastrando su esquina) se guarda su altura
+  document.addEventListener('mouseup', (ev) => { const x = ev.target; if (!x?.matches?.('.nt-card textarea[data-nt]')) return; try { const m = JSON.parse(localStorage.getItem('nt-alto') || '{}'), h = Math.round(x.offsetHeight); if (m[x.dataset.nt] !== h) { m[x.dataset.nt] = h; localStorage.setItem('nt-alto', JSON.stringify(m)); } } catch { /* sin almacenamiento */ } });
   // todo el cuadro de notificaciones sirve para soltar los PDF, como en la antigua
   document.addEventListener('dragover', (ev) => { const z = ev.target.closest?.('[data-dropnt]'); if (z) { ev.preventDefault(); z.classList.add('over'); } });
   document.addEventListener('dragleave', (ev) => { if (!ev.relatedTarget?.closest?.('[data-dropnt]')) ev.target.closest?.('[data-dropnt]')?.classList.remove('over'); });
@@ -3775,7 +3777,8 @@ export function crearModulos(c) {
     };
     const inp = (r, k, w, tp) => `<input${tp ? ` type="${tp}"` : ''} class="facin" data-nt="${r.id}|${k}" value="${esc(ntDe(r, k))}"${w ? ` size="${w}"` : ''}${ed ? '' : ' readonly'}>`;
     const sel = (r, k, ops) => (ed ? `<select data-nt="${r.id}|${k}">${ops.map((o) => `<option${o === ntDe(r, k) ? ' selected' : ''}>${o}</option>`).join('')}</select>` : esc(ntDe(r, k)));
-    const ta = (r, k, filas, extra = '') => `<textarea data-nt="${r.id}|${k}" rows="${filas}" style="width:100%${extra}"${ed ? '' : ' readonly'}>${esc(k === 'solucion' ? ntDe(r, k) || ntSolucion({ ...(r.datos ?? {}), tipo: ntDe(r, 'tipo'), fin: ntDe(r, 'fin') }) : ntDe(r, k))}</textarea>`;
+    const altoNt = (id, k) => { try { return (JSON.parse(localStorage.getItem('nt-alto') || '{}'))[`${id}|${k}`] || 0; } catch { return 0; } }; // altura de cada cajón, guardada en el navegador
+    const ta = (r, k, filas, extra = '') => `<textarea data-nt="${r.id}|${k}" rows="${filas}" style="width:100%${extra}${altoNt(r.id, k) ? ';height:' + altoNt(r.id, k) + 'px' : ''}"${ed ? '' : ' readonly'}>${esc(k === 'solucion' ? ntDe(r, k) || ntSolucion({ ...(r.datos ?? {}), tipo: ntDe(r, 'tipo'), fin: ntDe(r, 'fin') }) : ntDe(r, k))}</textarea>`;
     const pend = D.filter((r) => ntDe(r, 'estado') === 'Pendiente');
     const tarjeta = (r) => {
       const a = ntDe(r, 'arch'), est = ntDe(r, 'estado'), f = ilFecha(ntDe(r, 'fin'));
