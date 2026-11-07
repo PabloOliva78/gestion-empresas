@@ -3468,7 +3468,7 @@ export function crearModulos(c) {
     };
     const imp = (r) => Number(ilDe(r, 'imp')) || 0;
     const tot = (t) => rr(L.filter((r) => ilDe(r, 'tipo') === t).reduce((a, r) => a + imp(r), 0));
-    const fila = (r) => `<tr${ilArch(r)?.path ? ` data-ilpdf="${esc(ilArch(r).path)}" title="Doble clic: abrir ${esc(ilArch(r).nombre)}" style="cursor:pointer"` : ''}>${IL_CAMPOS.map(([k, , w]) => celda(r, k, w)).join('')}<td>${est(r)}</td>
+    const fila = (r) => `<tr class="${ilDe(r, 'pag') === 'Sí' ? 'il-ok' : 'il-ko'}"${ilArch(r)?.path ? ` data-ilpdf="${esc(ilArch(r).path)}" title="Doble clic: abrir ${esc(ilArch(r).nombre)}" style="cursor:pointer"` : ''}>${IL_CAMPOS.map(([k, , w]) => celda(r, k, w)).join('')}<td>${est(r)}</td>
       <td>${ilArch(r)?.path ? `<button class="small" data-act="m-abrir" data-path="${esc(ilArch(r).path)}">📄 ${esc(ilDe(r, 'tipo'))} ${esc(ilDe(r, 'ej'))}</button>` : ''}</td>
       <td>${ed ? `<button class="small" data-act="m-ildel" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`;
     return `${ed ? dz('iloc', 'Suelta aquí (o pulsa para elegir) todos los PDF que quieras, sin límite, de recibos o justificantes de pago', '(IBI, IAE, IVTM, vados… del Servicio Provincial Tributario u otros): se leen el impuesto, objeto, municipio, ejercicio, importe, último día de pago y si constan pagados. Doble clic en una fila con PDF para abrirlo.', '.pdf') : ''}<section class="dsec il-s"><h3>Impuestos locales · ${esc(e.nombre)} · <select data-ilver="1"><option value="todos">Todos los ejercicios</option>${anios.map((a) => `<option${a === ilVer ? ' selected' : ''}>${a}</option>`).join('')}</select> <span class="dash-s">(${L.length} recibo(s))</span></h3>

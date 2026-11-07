@@ -1097,3 +1097,11 @@ table.bss-t tr.totano td { background: #ddebf7; font-weight: 700; border-top: 1p
 .filtros label { display: flex; gap: 6px; align-items: center; }
 .filtros select { width: auto; border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; font-size: 14px; background: #fff; color: var(--text); }
 .filtros .leyenda { margin: 0; }
+
+/* Impuestos locales: toda la fila en verde si está pagado y en rojo si está pendiente */
+table.il-t tr.il-ok td { background: #e3f4e3 !important; }
+table.il-t tr.il-ko td { background: #fde4e4 !important; }
+table.il-t tr.il-ok td:first-child { box-shadow: inset 4px 0 0 #1e8e3e; }
+table.il-t tr.il-ko td:first-child { box-shadow: inset 4px 0 0 #c62828; }
+table.il-t tr.il-ok td.in input, table.il-t tr.il-ok td.in select, table.il-t tr.il-ko td.in input, table.il-t tr.il-ko td.in select { background: transparent !important; }
+table.il-t tr.il-ok td, table.il-t tr.il-ko td { color: #1d2330; }
