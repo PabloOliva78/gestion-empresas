@@ -2832,7 +2832,8 @@ export function crearModulos(c) {
     return null;
   };
   async function nomCargarExcel(files) {
-    const informe = [], mal = [];
+    const informe = [], mal = []; let destino = null;
+    files.filter((x) => !/\.(xlsx|xlsm|xls)$/i.test(x.name)).forEach((x) => mal.push(`${x.name}: no es un Excel (.xlsx o .xls)`));
     for (const f of files.filter((x) => /\.(xlsx|xlsm|xls)$/i.test(x.name))) {
       try {
         const wb = window.XLSX.read(await f.arrayBuffer());
@@ -2858,12 +2859,14 @@ export function crearModulos(c) {
           mes._c = centros; datos[mm] = mes;
           const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: e.id, tipo: 'nominas', ejercicio: L.anio, datos });
           if (err) mal.push(`${nombreHoja}: ${err}`); else informe.push(`${e.nombre} · ${NOM_MESES[L.mes - 1].toLowerCase()} ${L.anio} · ${centros.length} centro(s)`);
-          nomAsMes = mm;
+          nomAsMes = mm; destino = { sel: e.id, ej: L.anio };
         }
       } catch (err) { mal.push(`${f.name}: ${err.message}`); }
     }
     nomMsg = `${informe.length} hoja(s) repartidas: ${informe.join(' · ')}${mal.length ? ` · sin cargar: ${mal.join(' · ')}` : ''}`;
-    await cargar(); render();
+    await cargar();
+    if (destino) { S.sel = destino.sel; S.ejercicio = destino.ej; } // se muestra la empresa y el ejercicio donde han quedado las nóminas
+    render();
   }
   let nomMsg = '', nomAsMes = null;
   const setNomAsMes = (v) => { nomAsMes = v; render(); };
