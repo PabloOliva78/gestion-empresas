@@ -1,6 +1,6 @@
 // Columnas redimensionables en todas las tablas de la aplicación: se arrastra el borde derecho de la cabecera de una columna
 // y el ancho queda guardado en este navegador (por pestaña y tabla) hasta que se cambie; doble clic en el borde = ancho original.
-const CLAVE = 'colw-v1';
+const CLAVE = 'colw-v2'; // v2: anchos en píxeles CSS (sin el aumento de pestaña); los guardados antes se descartan
 const leer = () => { try { return JSON.parse(localStorage.getItem(CLAVE) || '{}') || {}; } catch { return {}; } };
 const guardar = (o) => { try { localStorage.setItem(CLAVE, JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
 
@@ -22,12 +22,21 @@ function mapa(tabla) {
   return { hojas, ncols };
 }
 
+// aumento (zoom) de la pestaña donde está la tabla: los anchos se miden y se aplican en píxeles CSS, sin ese aumento
+const zoomDe = (tabla) => { // píxeles de pantalla por píxel CSS dentro de la tabla: se mide con una sonda de 100 px (vale para cualquier forma de aumento)
+  const padre = tabla.parentElement ?? document.body, sonda = document.createElement('div');
+  sonda.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:1px;padding:0;border:0';
+  padre.appendChild(sonda); const z = sonda.getBoundingClientRect().width / 100; sonda.remove();
+  return Number.isFinite(z) && z > 0 ? z : 1;
+};
+
 // ancho actual de cada columna (de su cabecera o, si no, de la primera fila del cuerpo)
 function medir(tabla, m) {
+  const z = zoomDe(tabla);
   const w = new Array(m.ncols).fill(null);
-  m.hojas.forEach(({ celda, col }) => { w[col] = celda.getBoundingClientRect().width; });
+  m.hojas.forEach(({ celda, col }) => { w[col] = celda.getBoundingClientRect().width / z; });
   const f = tabla.tBodies[0]?.rows[0];
-  if (f) { let c = 0; [...f.cells].forEach((celda) => { if ((celda.colSpan || 1) === 1 && w[c] === null) w[c] = celda.getBoundingClientRect().width; c += celda.colSpan || 1; }); }
+  if (f) { let c = 0; [...f.cells].forEach((celda) => { if ((celda.colSpan || 1) === 1 && w[c] === null) w[c] = celda.getBoundingClientRect().width / z; c += celda.colSpan || 1; }); }
   const conocidos = w.filter((x) => x !== null), media = conocidos.length ? conocidos.reduce((a, b) => a + b, 0) / conocidos.length : 80;
   return w.map((x) => Math.max(28, x ?? media));
 }
@@ -81,7 +90,7 @@ export function activarRedimension(raiz, pestana) {
     if (!h) return;
     const w = medir(tabla, m), w0 = w[h.col], x0 = ev.clientX, clave = tabla.dataset.rs;
     document.body.classList.add('rs-arrastrando');
-    const mover = (e) => { w[h.col] = Math.max(28, w0 + e.clientX - x0); aplicar(tabla, w); };
+    const z = zoomDe(tabla), mover = (e) => { w[h.col] = Math.max(28, w0 + (e.clientX - x0) / z); aplicar(tabla, w); };
     const soltar = () => {
       document.removeEventListener('mousemove', mover); document.removeEventListener('mouseup', soltar);
       document.body.classList.remove('rs-arrastrando');

@@ -1136,3 +1136,7 @@ table.tprs.tnom.nom-fit td.c { text-align: center; padding-right: .2rem; }
 .dsec.nt-s .nt-card textarea[data-nt$="|reclaman"], .dsec.nt-s .nt-card textarea[data-nt$="|aportar"] { background: #eceef2; }
 .dsec.nt-s .nt-card textarea[data-nt$="|solucion"] { background: #cfd3db !important; }
 .dsec.nt-s .nt-card textarea { resize: both; max-width: none; min-height: 3.2rem; }
+
+/* Tablas con columnas ajustadas a mano: lo que no cabe se recorta, no se monta sobre la columna de al lado */
+table[style*="table-layout: fixed"] td { overflow: hidden; text-overflow: ellipsis; }
+table[style*="table-layout: fixed"] td input, table[style*="table-layout: fixed"] td select { max-width: 100%; box-sizing: border-box; min-width: 0; }
