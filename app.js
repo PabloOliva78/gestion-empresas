@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=179';
+import { crearModulos } from './modulos.js?v=180';
 import { activarRedimension } from './tablas.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -238,6 +238,7 @@ function render() {
   if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'ini';
   const e = S.empresas.find((x) => x.id === S.sel);
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
+  const scrollTablas = [...root.querySelectorAll('.wrap')].map((w) => [w.scrollLeft, w.scrollTop]); // al redibujar, las tablas anchas no vuelven al principio
   root.innerHTML = `<div class="layout">
     <aside class="lat">
       <div>${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1></div>
@@ -264,6 +265,7 @@ function render() {
       ${tabsNav()}
       <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
+  root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   alinearPanel();
   ajustarInicio();
   restaurarFoco();
@@ -311,6 +313,7 @@ function celdaVecina(inp, dr, dc) {
     if (x) return x;
   }
 }
+const todoSel = (i) => i.selectionStart === 0 && i.selectionEnd === i.value.length; // al entrar en una celda se selecciona todo: así las flechas laterales también pasan a la vecina
 root.addEventListener('keydown', (ev) => {
   const i = ev.target;
   if (!i?.matches?.('td.in input') || ev.ctrlKey || ev.altKey || ev.metaKey) return;
@@ -318,8 +321,8 @@ root.addEventListener('keydown', (ev) => {
   let dest = null;
   if (k === 'ArrowDown' || (k === 'Enter' && !ev.shiftKey)) dest = celdaVecina(i, 1, 0);
   else if (k === 'ArrowUp' || (k === 'Enter' && ev.shiftKey)) dest = celdaVecina(i, -1, 0);
-  else if (k === 'ArrowRight' && i.selectionStart === i.value.length) dest = celdaVecina(i, 0, 1);
-  else if (k === 'ArrowLeft' && i.selectionEnd === 0) dest = celdaVecina(i, 0, -1);
+  else if (k === 'ArrowRight' && (i.selectionStart === i.value.length || todoSel(i))) dest = celdaVecina(i, 0, 1);
+  else if (k === 'ArrowLeft' && (i.selectionEnd === 0 || todoSel(i))) dest = celdaVecina(i, 0, -1);
   else return;
   ev.preventDefault();
   if (dest) { dest.focus(); dest.select?.(); }
