@@ -179,6 +179,7 @@ body { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 .fc-cab label { display: flex; align-items: center; gap: .4rem; }
 .fc-cab select, .fc-cab input { width: auto; border-radius: 999px; padding: .3rem .8rem; font-size: .82rem; }
 .fc-cab input { min-width: 220px; }
+.fc-cab input:not([type=checkbox]):not([type=radio]), .fc-cab select, .sii-cab input:not([type=checkbox]):not([type=radio]), .sii-cab select { background: #fff !important; color: #1f2937; }
 tr.fc td { background: #fffbe3; }
 td.nif-ext { color: #b25e00; font-weight: 700; }
 td.acc { white-space: nowrap; }
