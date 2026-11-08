@@ -155,3 +155,31 @@ export function activarCajas(raiz, pestana) {
     ['width', 'max-width', 'box-sizing'].forEach((p) => c.style.removeProperty(p));
   }, true);
 }
+
+// ---------- Cifras siempre a la derecha, en cualquier tabla ----------
+// Una columna cuyas celdas son sobre todo números (con miles y decimales, € o %) se alinea a la derecha entera, guiones incluidos.
+// Respeta las celdas centradas a propósito (clase «c») y las que llevan campos de escritura.
+const NUM_RE = /^[-−+]?\s*(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+[.,]\d+)\s*(?:€|%)?$/, INT_RE = /^[-−+]?\d+$/;
+function alinearTabla(t) {
+  const cols = [];
+  for (const tr of t.rows) {
+    if (tr.parentElement?.tagName === 'THEAD') continue;
+    for (const td of tr.cells) {
+      if (td.tagName !== 'TD' || td.colSpan > 1 || td.querySelector('input,select,textarea,button')) continue;
+      const tx = td.textContent.trim(); if (!tx) continue;
+      const i = td.cellIndex, c = (cols[i] ??= { n: 0, t: 0, cel: [] });
+      c.t++; if (tx === '-' || tx === '–' || INT_RE.test(tx)) c.cel.push(td); else if (NUM_RE.test(tx)) { c.n++; c.cel.push(td); }
+    }
+  }
+  for (const c of cols) {
+    if (!c || !c.n || c.n < c.t * 0.5) continue;
+    for (const td of c.cel) if (!td.classList.contains('c') && !td.style.textAlign) td.style.textAlign = 'right';
+  }
+}
+export function activarAlineacion(raiz) {
+  const pend = new Set(); let prog = false;
+  const lanzar = () => { prog = false; for (const t of pend) { try { alinearTabla(t); } catch { /* tabla rara */ } } pend.clear(); };
+  const ver = (n) => { if (n.nodeType !== 1) return; const t = n.closest?.('table'); if (t) pend.add(t); n.querySelectorAll?.('table').forEach((x) => pend.add(x)); };
+  new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach(ver); if (pend.size && !prog) { prog = true; requestAnimationFrame(lanzar); } }).observe(raiz, { childList: true, subtree: true });
+  raiz.querySelectorAll('table').forEach((x) => pend.add(x)); if (pend.size) requestAnimationFrame(lanzar);
+}
