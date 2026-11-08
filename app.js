@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=211';
+import { crearModulos } from './modulos.js?v=212';
 import { activarRedimension } from './tablas.js?v=2';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -29,6 +29,9 @@ const S = {
 let uidActual = null;
 S.zooms = (() => { try { return JSON.parse(localStorage.getItem('zoom-pestanas') || '{}') || {}; } catch { return {}; } })(); // tamaño de cada pestaña y de sus tablas
 const zoomDe = () => Math.min(2, Math.max(0.5, Number(S.zooms[S.tab]) || 1));
+// ancho y tamaño del texto de los formularios de los modelos (111, 115, 303, 349, 583…), de cada pestaña
+S.formas = (() => { try { return JSON.parse(localStorage.getItem('forma-modelos') || '{}') || {}; } catch { return {}; } })();
+const formaDe = () => { const f = S.formas[S.tab] ?? {}; return { w: Math.min(2600, Math.max(500, Number(f.w) || 1200)), t: Math.min(2, Math.max(0.6, Number(f.t) || 1)) }; };
 activarRedimension(root, () => S.tab); // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -254,6 +257,8 @@ function render() {
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>` : ''}
       <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
+      ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
+      <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -266,7 +271,7 @@ function render() {
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
         <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
-      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};--f-w:${formaDe().w}px;--f-t:${formaDe().t}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   alinearPanel();
@@ -748,6 +753,13 @@ root.addEventListener('click', (ev) => {
     const z = t.dataset.zoom === '0' ? 1 : zoomDe() + (t.dataset.zoom === '+' ? 0.1 : -0.1), v = Math.min(2, Math.max(0.5, Math.round(z * 10) / 10));
     if (v === 1) delete S.zooms[S.tab]; else S.zooms[S.tab] = v;
     try { localStorage.setItem('zoom-pestanas', JSON.stringify(S.zooms)); } catch { /* sin almacenamiento */ }
+    return render();
+  }
+  if (t.dataset.forma !== undefined) {
+    const [k, op] = [t.dataset.forma[0], t.dataset.forma.slice(1)], f = { ...formaDe() };
+    if (k === 'w') f.w = op === '0' ? 1200 : f.w + (op === '+' ? 100 : -100); else f.t = op === '0' ? 1 : Math.round((f.t + (op === '+' ? 0.1 : -0.1)) * 10) / 10;
+    if (f.w === 1200 && f.t === 1) delete S.formas[S.tab]; else S.formas[S.tab] = f;
+    try { localStorage.setItem('forma-modelos', JSON.stringify(S.formas)); } catch { /* sin almacenamiento */ }
     return render();
   }
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }

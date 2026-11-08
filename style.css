@@ -134,7 +134,7 @@ body { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 /* Modelo 303: borrador con el aspecto de la Sede */
 .f303-top-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.4rem; margin-bottom: .8rem; font-size: .85rem; color: var(--ink-2); }
 .iban { border: 1px solid #aeb8d0; padding: .3rem .6rem; min-width: 280px; font: inherit; background: #fff; color: var(--ink); }
-.f303 { border: 1px solid #1f3a7a; background: #fff; color: #1f3864; max-width: 1200px; font-size: .86rem; }
+.f303 { border: 1px solid #1f3a7a; background: #fff; color: #1f3864; max-width: var(--f-w, 1200px); zoom: var(--f-t, 1); font-size: .86rem; } /* ancho y texto ajustables con los botones «Ancho modelo» y «Texto modelo» */
 .f303-top { display: flex; border-bottom: 3px solid #1f3a7a; }
 .f303-top .ag { padding: 1rem 1.2rem; border-right: 1px solid #d6dbe8; min-width: 250px; }
 .f303-top .ag b { display: block; font-size: 1rem; }
