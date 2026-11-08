@@ -3133,6 +3133,18 @@ export function crearModulos(c) {
       <tr class="ttot"><td>TOTAL ${ej}</td>${cols.map((c) => `<td class="num">${fnum(rr(T[c]))}</td>`).join('')}<td class="num">${fnum(rr(tsp))}</td><td class="num">${fnum(sal)}</td></tr></tbody></table></div>`;
   }
 
+  // líneas de una cuenta del bloque 5 tal como las enseña su pestaña: extracto contable con lo quitado y corregido, más las líneas metidas a mano
+  function lineasCuenta(k, M) {
+    const cfg = ctaCfg(), pref = ctaPref(k), quit = cfg.quit ?? {}, ovs = cfg.ov ?? {}, out = [];
+    for (const l of M ?? []) {
+      if (!casaCta(pref, l.digitos)) continue;
+      const firma = [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
+      if (quit[firma]) continue;
+      out.push(ovs[firma] ? { ...l, ...ovs[firma], digitos: l.digitos } : l);
+    }
+    (cfg.lineas ?? []).forEach((l) => { const dg = String(l.cuenta).replace(/\D/g, ''); if (casaCta(pref, dg)) out.push({ fecha: l.fecha, asiento: l.asiento || '', debe: +l.debe || 0, haber: +l.haber || 0, digitos: dg, desc: l.desc || '', cuenta: l.cuenta }); });
+    return out;
+  }
   function vistaCssoc() {
     if (!S.sel) return sinEmpresa;
     const M = grande('may-mov');
@@ -3168,14 +3180,14 @@ export function crearModulos(c) {
     if (F.sin.length) av.push(`Cursos de FUNDAE con coste pero sin grupo formativo (sin fecha), no se asignan a ningún mes: ${F.sin.map((c) => `${c.k} ${fnum(c.coste)}`).join(', ')}. En el PDF de costes solo vienen los registros visibles: exporta a Excel o pon «Mostrar 100».`);
     const cursos = Object.entries(F.M).sort().flatMap(([ym, L]) => L.map((c) => `<tr><td>${MESES[+ym.slice(5) - 1].toUpperCase()}</td><td class="c">${esc(c.k)}</td><td>${esc(c.den)}</td><td class="c">${esc(c.fin)}</td><td class="num">${fnum(c.coste)}</td></tr>`)).join('');
     const E4760 = { PS: 'Pago Seguridad Social (del mes siguiente)', OD: 'Otros mov. debe', OH: 'Otros mov. haber', IT: 'Rectificaciones IT', CB: 'Rectificaciones cursos bonificados', N: 'Seguridad Social devengada' };
-    const r4760 = resumenCtaCss('4760', '4760.01', ['PS', 'OD', 'OH', 'IT', 'CB', 'N'],
-      (a, d) => (a.startsWith('PS') ? 'PS' : a.startsWith('IT') ? 'IT' : a.startsWith('CB') ? 'CB' : a.startsWith('N') ? 'N' : d ? 'OD' : 'OH'), (v) => (v.PS + v.OD) - (v.OH + v.IT + v.CB + v.N), y, M, true, 'Diferencia ejercicio anterior', E4760);
-    const r6400 = resumenCtaCss('6400', '6400.01', ['N', 'IT', 'OD', 'OH', 'C'],
+    const r4760 = resumenCtaCss('4760', ctaPref('c4760'), ['PS', 'OD', 'OH', 'IT', 'CB', 'N'],
+      (a, d) => (a.startsWith('PS') ? 'PS' : a.startsWith('IT') ? 'IT' : a.startsWith('CB') ? 'CB' : a.startsWith('N') ? 'N' : d ? 'OD' : 'OH'), (v) => (v.PS + v.OD) - (v.OH + v.IT + v.CB + v.N), y, lineasCuenta('c4760', M), true, 'Diferencia ejercicio anterior', E4760);
+    const r6400 = resumenCtaCss('6400', ctaPref('c6400'), ['N', 'IT', 'OD', 'OH', 'C'],
       (a, d) => { const p = a.split('-')[0]; return p === 'N' || p === 'RTB' ? 'N' : p === 'IT' ? 'IT' : p === 'OD' ? 'OD' : p === 'OH' ? 'OH' : p === 'C' || p[0] === 'I' ? 'C' : d ? 'OD' : 'OH'; },
-      (v) => v.N + v.IT + v.OD - v.OH - v.C, y, M, false, 'Saldo ejercicio anterior', { N: 'Salarios nóminas', IT: 'Bajas', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
-    const r6420 = resumenCtaCss('6420', '6420.01', ['SS', 'R', 'OD', 'OH', 'C'],
+      (v) => v.N + v.IT + v.OD - v.OH - v.C, y, lineasCuenta('c6400', M), false, 'Saldo ejercicio anterior', { N: 'Salarios nóminas', IT: 'Bajas', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
+    const r6420 = resumenCtaCss('6420', ctaPref('c6420'), ['SS', 'R', 'OD', 'OH', 'C'],
       (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; },
-      (v) => v.SS + v.R + v.OD - v.OH - v.C, y, M, false, 'Saldo ejercicio anterior', { SS: 'Seguridad Social empresa nóminas', R: 'Regularizaciones', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
+      (v) => v.SS + v.R + v.OD - v.OH - v.C, y, lineasCuenta('c6420', M), false, 'Saldo ejercicio anterior', { SS: 'Seguridad Social empresa nóminas', R: 'Regularizaciones', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
     return `${dz('fundae', 'Suelta aquí los listados de FUNDAE', '(Costes y Grupos formativos, PDF o Excel) o pulsa para elegirlos', '.pdf,.xlsx,.xls,.csv')}
       ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01, 6400.01 y 6420.01 (Excel) o pulsa para elegirlo')}
       <div class="css-pils">${[['c4760', '4760.01', 'Organismos de la Seguridad Social, acreedores'], ['c6400', '6400.01', 'Sueldos y salarios'], ['c6420', '6420.01', 'Seguridad Social a cargo de la empresa']].map(([k, n, t]) => { const r = saldoCtaPeriodo(k); return `<div class="css-pil"><b>Cuenta ${n}</b><small>${esc(t)}</small><span>Saldo ${r ? fnum(r.saldo) : '…'} €${r?.origen === 'balance' ? ' (balance)' : ''}</span></div>`; }).join('')}</div>
