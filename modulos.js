@@ -3178,6 +3178,7 @@ export function crearModulos(c) {
       (v) => v.SS + v.R + v.OD - v.OH - v.C, y, M, false, 'Saldo ejercicio anterior', { SS: 'Seguridad Social empresa nóminas', R: 'Regularizaciones', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
     return `${dz('fundae', 'Suelta aquí los listados de FUNDAE', '(Costes y Grupos formativos, PDF o Excel) o pulsa para elegirlos', '.pdf,.xlsx,.xls,.csv')}
       ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01, 6400.01 y 6420.01 (Excel) o pulsa para elegirlo')}
+      <div class="css-pils">${[['c4760', '4760.01', 'Organismos de la Seguridad Social, acreedores'], ['c6400', '6400.01', 'Sueldos y salarios'], ['c6420', '6420.01', 'Seguridad Social a cargo de la empresa']].map(([k, n, t]) => { const r = saldoCtaPeriodo(k); return `<div class="css-pil"><b>Cuenta ${n}</b><small>${esc(t)}</small><span>Saldo ${r ? fnum(r.saldo) : '…'} €${r?.origen === 'balance' ? ' (balance)' : ''}</span></div>`; }).join('')}</div>
       ${av.length ? `<div class="aviso">${av.map((a) => `<p>⚠ ${esc(a)}</p>`).join('')}</div>` : ''}
       <p class="hint">Seguros Sociales (pagos: asientos PS en la ${esc(cta)} del mes siguiente) − Seguridad Social de las nóminas = Diferencias; menos IT (asientos IT de la ${esc(cta)} del mes) y menos Bonificaciones (cursos FUNDAE), ambas en negativo = Dif. mes Seg. Social. Cero = verde; si no, rojo.</p>
       <section class="prs-card"><div class="prs-h">Conciliación Seguridad Social · ${y}</div>
@@ -5071,8 +5072,15 @@ export function crearModulos(c) {
     const reg = ctaCfgReg(), ej = Number(S.ejercicio), pref = ctaPref(k), id = `${k}|${S.sel}|${ej}|${S.periodo}|${M.length}|${reg?.id ?? ''}|${JSON.stringify(reg?.datos ?? {}).length}`;
     if (memoSaldoCta.has(id)) return memoSaldoCta.get(id);
     const cfg = ctaCfg(), quit = cfg.quit ?? {}, ovs = cfg.ov ?? {}, fin = Date.parse(rangoPeriodo(ej, S.periodo).hasta) + 864e5;
-    let s = 0, n = 0;
-    const suma = (l) => { const ms = Date.parse(l.fecha); if (ms < fin) { s += (+l.debe || 0) - (+l.haber || 0); n++; } };
+    // cuentas de gastos e ingresos (6 y 7): saldo del ejercicio, desde el 1 de enero y sin el asiento de cierre; el resto, acumulado
+    const pyg = /^[67]/.test(String(pref)), ini = pyg ? Date.UTC(ej, 0, 1) : -Infinity;
+    let s = 0, n = 0, origen = 'extracto';
+    const suma = (l) => {
+      const ms = Date.parse(l.fecha);
+      if (ms >= fin || ms < ini) return;
+      if (pyg && String(l.asiento || '').split('-')[0].trim().toUpperCase() === 'C') return;
+      s += (+l.debe || 0) - (+l.haber || 0); n++;
+    };
     for (const l of M) {
       if (!casaCta(pref, l.digitos)) continue;
       const firma = [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
@@ -5080,7 +5088,13 @@ export function crearModulos(c) {
       suma(ovs[firma] ? { ...l, ...ovs[firma] } : l);
     }
     (cfg.lineas ?? []).filter((l) => casaCta(pref, String(l.cuenta).replace(/\D/g, ''))).forEach(suma);
-    const r = { saldo: rr(s), n };
+    // sin movimientos en el extracto: el saldo del balance de sumas y saldos del ejercicio (antes del cierre), si hay balance y no se ha elegido un periodo
+    if (!n && !S.periodo) {
+      const sys = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === ej);
+      const cs = (sys?.datos?.cuentas ?? []).filter((x) => casaCta(pref, String(x.cuenta).replace(/\D/g, '')));
+      if (cs.length) { s = cs.reduce((a, x) => a + (Number(x.previo ?? (Number(x.apertura) || 0) + (Number(x.debe) || 0) - (Number(x.haber) || 0)) || 0), 0); n = cs.length; origen = 'balance'; }
+    }
+    const r = { saldo: rr(s), n, origen };
     if (memoSaldoCta.size > 400) memoSaldoCta.clear();
     memoSaldoCta.set(id, r);
     return r;
@@ -5090,7 +5104,7 @@ export function crearModulos(c) {
       if (!S.sel) return { t: 'Por empresa' };
       const r = saldoCtaPeriodo(k);
       if (!r) return { t: 'Cargando…' };
-      return r.n ? { t: `Saldo ${fnum(r.saldo)} €` } : { t: 'Sin movimientos' };
+      return { t: `Saldo ${fnum(r.saldo)} €${r.origen === 'balance' ? ' (balance)' : ''}` }; // siempre con su saldo, también 0,00 si no hay movimientos
     };
   });
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'nomexcel' ? nomCargarExcel(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));

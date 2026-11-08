@@ -1147,3 +1147,9 @@ table.libro-t td.neg { color: #b42318; }
 table.libro-t td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 details.libro-hoja { border: 1px solid var(--line); border-radius: 6px; margin: .5rem 0; padding: .3rem .8rem; background: var(--card); }
 details.libro-hoja > summary { cursor: pointer; padding: .3rem 0; }
+
+/* Pastillas con el saldo de las cuentas en Conciliación Seguridad Social */
+.css-pils { display: flex; flex-wrap: wrap; gap: .6rem; margin: .6rem 0 .8rem; }
+.css-pil { display: grid; gap: .15rem; min-width: 15rem; padding: .55rem .8rem; background: var(--card); border: 1px solid var(--line); border-left: 4px solid #2563eb; border-radius: 8px; }
+.css-pil small { color: var(--muted); }
+.css-pil span { font-weight: 600; font-variant-numeric: tabular-nums; background: #eef1f6; border-radius: 6px; padding: .1rem .5rem; justify-self: start; }
