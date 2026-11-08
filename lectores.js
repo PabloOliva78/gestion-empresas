@@ -509,9 +509,10 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const r = rangoPeriodo(ej, periodo), emit = sentido === 'E';
   const clave = (fac, nif) => (emit ? normFac(fac) : `${normFac(fac)}|${normNif(nif)}`);
   // las retenciones (I.ALQ, R.I.ALQ, I.PR…) llevan la misma base que la factura y no son IVA: no se cuentan en emitidas (en recibidas ya están en EXC_RECIBIDAS)
-  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && l.codigo !== 'R.NAC.NS'
-    : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const ls = sii.filter((s) => s.sentido === sentido && (emit ? s.fecha >= r.desde && s.fecha <= r.hasta : s.ej === ej && (!periodo || s.per === periodo)));
+  const claveSii = new Set(ls.map((s) => clave(s.factura, s.nif)));   // las no sujetas (R.NAC.NS) solo cuentan si la factura está declarada en el SII
+  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || claveSii.has(clave(l.factura, l.nif)))
+    : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const cont = new Map();
   for (const l of lc) {
     const k = clave(l.factura, l.nif);
@@ -534,7 +535,7 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const idxLibro = new Map();
   libro.filter((l) => l.sentido === sentido).forEach((l) => { const k = clave(l.factura, l.nif); (idxLibro.get(k) ?? idxLibro.set(k, []).get(k)).push(l); });
   const fdmyL = (d) => String(d || '').split('-').reverse().join('/');
-  const excluidaL = (l) => (emit ? EXC_EMITIDAS.includes(l.codigo) || /^(R\.)?I\./.test(l.codigo) || l.codigo === 'R.NAC.NS' : EXC_RECIBIDAS.includes(l.codigo));
+  const excluidaL = (l) => (emit ? EXC_EMITIDAS.includes(l.codigo) || /^(R\.)?I\./.test(l.codigo) : EXC_RECIBIDAS.includes(l.codigo));
   const motivoSii = (k) => {
     const ls = idxLibro.get(k); if (!ls || !ls.length) return `No está en el libro de ${emit ? 'emitidas' : 'recibidas'} cargado: revisa el nº de factura (y el NIF) o carga el libro completo`;
     const campo = emit ? 'ff' : 'fecha', dentro = ls.filter((l) => l[campo] >= r.desde && l[campo] <= r.hasta), cods = [...new Set(ls.map((l) => l.codigo || '(sin código)'))].join(' + ');
