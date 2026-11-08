@@ -106,3 +106,49 @@ export function activarRedimension(raiz, pestana) {
     const tabla = t.closest('table'), g = leer(); delete g[tabla.dataset.rs]; guardar(g); quitar(tabla);
   }, true);
 }
+
+// ---------- Ancho de los cuadros blancos que engloban cada apartado (tarjetas de todas las pestañas) ----------
+// Se arrastra el borde derecho del cuadro; el ancho queda guardado en este navegador (por pestaña y apartado); doble clic en el borde = ancho original.
+const CLAVE_CAJAS = 'cajaw-v1';
+const leerC = () => { try { return JSON.parse(localStorage.getItem(CLAVE_CAJAS) || '{}') || {}; } catch { return {}; } };
+const guardarC = (o) => { try { localStorage.setItem(CLAVE_CAJAS, JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
+const escalaCaja = (el) => { const s = document.createElement('div'); s.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:1px;padding:0;border:0'; (el.parentElement ?? document.body).appendChild(s); const z = s.getBoundingClientRect().width / 100; s.remove(); return Number.isFinite(z) && z > 0 ? z : 1; };
+export function activarCajas(raiz, pestana) {
+  const SEL = '.vista section.dsec, .vista section.prs-card, .vista section.block';
+  const preparar = () => {
+    const g = leerC(); let n = 0;
+    raiz.querySelectorAll(SEL).forEach((c) => {
+      n++;
+      if (c.dataset.cw) return;
+      const clave = `${pestana()}|${n}|${(c.querySelector('h3,h4,.prs-h')?.textContent ?? '').trim().slice(0, 30)}`;
+      c.dataset.cw = clave;
+      if (getComputedStyle(c).position === 'static') c.style.position = 'relative';
+      const t = document.createElement('span'); t.className = 'caja-rs'; t.title = 'Arrastra para cambiar el ancho del cuadro · doble clic: ancho original';
+      c.appendChild(t);
+      if (g[clave] > 0) { c.style.boxSizing = 'border-box'; c.style.width = `${g[clave]}px`; c.style.maxWidth = 'none'; }
+    });
+  };
+  let reloj = null;
+  new MutationObserver(() => { clearTimeout(reloj); reloj = setTimeout(preparar, 40); }).observe(raiz, { childList: true, subtree: true });
+  preparar();
+  raiz.addEventListener('mousedown', (ev) => {
+    const t = ev.target.closest?.('.caja-rs'); if (!t || ev.button !== 0) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const c = t.parentElement, z = escalaCaja(c), w0 = c.getBoundingClientRect().width / z, x0 = ev.clientX, clave = c.dataset.cw;
+    let w = Math.round(w0);
+    document.body.classList.add('rs-arrastrando');
+    const mover = (e) => { w = Math.max(260, Math.round(w0 + (e.clientX - x0) / z)); c.style.boxSizing = 'border-box'; c.style.width = `${w}px`; c.style.maxWidth = 'none'; };
+    const soltar = () => {
+      document.removeEventListener('mousemove', mover); document.removeEventListener('mouseup', soltar);
+      document.body.classList.remove('rs-arrastrando');
+      const g = leerC(); g[clave] = w; guardarC(g);
+    };
+    document.addEventListener('mousemove', mover); document.addEventListener('mouseup', soltar);
+  });
+  raiz.addEventListener('dblclick', (ev) => {
+    const t = ev.target.closest?.('.caja-rs'); if (!t) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const c = t.parentElement, g = leerC(); delete g[c.dataset.cw]; guardarC(g);
+    ['width', 'max-width', 'box-sizing'].forEach((p) => c.style.removeProperty(p));
+  }, true);
+}

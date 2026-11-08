@@ -1157,3 +1157,8 @@ details.libro-hoja > summary { cursor: pointer; padding: .3rem 0; }
 /* Columnas de casillas de los modelos: el cursor avisa en el borde donde se puede arrastrar */
 body.fr-borde, body.fr-borde .f-row, body.fr-arrastrando, body.fr-arrastrando * { cursor: col-resize !important; }
 body.fr-arrastrando { user-select: none; }
+
+/* Cuadros blancos de cada apartado: borde derecho para cambiar su ancho */
+.caja-rs { position: absolute; top: 0; right: 0; bottom: 0; width: 9px; cursor: col-resize; z-index: 6; border-radius: 0 12px 12px 0; }
+.caja-rs:hover, body.rs-arrastrando .caja-rs { background: rgba(59, 130, 246, .28); }
+@media print { .caja-rs { display: none; } }

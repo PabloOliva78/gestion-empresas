@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=215';
-import { activarRedimension } from './tablas.js?v=2';
+import { crearModulos } from './modulos.js?v=216';
+import { activarRedimension, activarCajas } from './tablas.js?v=3';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -36,7 +36,8 @@ const formaDe = () => {
   return { w: Math.min(2600, Math.max(500, Number(f.w) || 1200)), t: Math.min(2, Math.max(0.6, Number(f.t) || 1)), c1: c('c1'), c2: c('c2'), c3: c('c3') };
 };
 const formaVars = () => { const f = formaDe(); return `--f-w:${f.w}px;--f-t:${f.t}${[1, 2, 3].map((n) => (f[`c${n}`] ? `;--fc${n}:${f[`c${n}`]}px` : '')).join('')}`; };
-activarRedimension(root, () => S.tab); // columnas de todas las tablas redimensionables con el ratón
+activarRedimension(root, () => S.tab);
+activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
