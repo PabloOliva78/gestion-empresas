@@ -659,7 +659,11 @@ b.logo-txt { flex: none; font-size: .72rem; line-height: 1.15; letter-spacing: .
 
 /* Acceso: logo como marca de agua dentro del cuadro */
 form#f.card { position: relative; overflow: hidden; isolation: isolate; }
-form#f.card::before { content: ""; position: absolute; z-index: -1; inset: 0; background: url("logos/asesoria.svg?v=3") center / cover no-repeat; opacity: .13; pointer-events: none; }
+form#f.card::before { content: none; }
+main.login { background: #1f3a7a; }
+main.login .card { box-shadow: 0 10px 30px rgba(0, 0, 0, .25); border-radius: 12px; padding: 1.6rem; }
+main.login .login-logo { width: 96px; height: 96px; justify-self: center; display: block; }
+main.login .card h1 { text-align: center; font-size: 1.05rem; }
 
 /* Botonera izquierda: mismo degradado azul que la cabecera y píldora de empresa con el nombre completo */
 .layout { grid-template-columns: 300px 1fr; }

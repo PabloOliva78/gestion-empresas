@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=249';
+import { crearModulos } from './modulos.js?v=250';
 import { activarRedimension, activarCajas, activarAlineacion } from './tablas.js?v=6';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -128,6 +128,7 @@ db.auth.onAuthStateChange((ev, session) => {
 // ---------- Pantallas ----------
 function renderLogin(msg = '') {
   root.innerHTML = `<main class="login"><form id="f" class="card">
+    <img class="login-logo" src="logos/po-asesoria.svg?v=1" alt="Asesoría PO">
     <h1>Gestión fiscal, contable y laboral</h1>
     <label>Correo<input name="email" type="email" required autocomplete="username"></label>
     <label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="current-password"></label>
