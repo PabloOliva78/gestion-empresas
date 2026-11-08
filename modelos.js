@@ -186,17 +186,29 @@ export function crearModelos(c) {
     Object.entries(OPS).forEach(([k, v]) => { const [nif, op, ip] = k.split('|'); if (Math.abs(v) < 0.005) return; const g = gk(nif, op, ip); g.calc = r2(g.calc + v); });
     const FC = [...CMP.values()].sort((a, b) => a.nom.localeCompare(b.nom) || a.op.localeCompare(b.op) || a.ip.localeCompare(b.ip)).map((x) => ({ ...x, d: r2(x.pres - x.calc) }));
     const tolC = 1, sumTipo = (op, ip, k) => r2(FC.filter((x) => x.op === op && x.ip === ip).reduce((s, x) => s + x[k], 0));
-    const resTipo = Object.keys(TIPO_OP).flatMap((op) => ['I', 'P'].map((ip) => [op, ip])).filter(([op, ip]) => FC.some((x) => x.op === op && x.ip === ip))
-      .map(([op, ip]) => { const a = sumTipo(op, ip, 'pres'), b = sumTipo(op, ip, 'calc'), d = r2(a - b); return `<tr class="${Math.abs(d) <= tolC ? 'cf-ok' : 'cf-ko'}"><td>${op} · ${esc(TIPO_OP[op])}</td><td>${ip === 'I' ? 'Ingresos (ventas / emitidas)' : 'Pagos (compras / recibidas)'}</td><td class="n">${n(a)}</td><td class="n">${n(b)}</td><td class="n">${d ? n(d) : '-'}</td></tr>`; }).join('');
-    const estado232 = (x) => (!x.hayP ? 'Calculado y no está en el presentado: añádelo al 232' : Math.abs(x.calc) < 0.005 ? 'Está en el presentado y no sale en los libros: revisa el NIF, el ejercicio o el libro' : Math.abs(x.d) <= tolC ? '✓ Cuadra' : 'Importe distinto: revisa las facturas de esta entidad');
-    const comparacion = FC.length ? `<section class="block"><h3 class="bt">Presentado frente a calculado con Emitidas y Recibidas · ejercicio ${ej}</h3>
-      <p class="hint">Izquierda: lo que figura en el 232 (presentado o en preparación). Derecha: lo que sale de los libros de IVA de ${ej} con las sociedades del grupo, separado por tipo de operación (01 bienes, 06 servicios, 08 arrendamientos, 09 intereses) e ingresos (emitidas) / pagos (recibidas).</p>
-      <h4 style="margin:6px 0 4px">Resumen por tipo de operación</h4>
-      <div class="wrap"><table class="tabla it-conc" style="width:auto"><thead><tr><th>Tipo de operación</th><th>Ingreso / Pago</th><th>Presentado (232)</th><th>Calculado (libros)</th><th>Diferencia</th></tr></thead><tbody>${resTipo}</tbody></table></div>
-      <h4 style="margin:10px 0 4px">Por entidad vinculada</h4>
-      <div class="wrap"><table class="tabla it-conc" style="width:auto"><thead><tr><th>Entidad</th><th>NIF</th><th>Tipo de operación</th><th>Ingreso / Pago</th><th>Presentado (232)</th><th>Calculado (libros)</th><th>Diferencia</th><th>Estado / qué hacer</th></tr></thead><tbody>
-      ${FC.map((x) => `<tr class="${Math.abs(x.d) <= tolC && x.hayP ? 'cf-ok' : 'cf-ko'}"><td>${esc(x.nom)}</td><td>${esc(x.nif)}</td><td>${x.op} · ${esc(TIPO_OP[x.op] || '')}</td><td>${x.ip === 'I' ? 'Ingreso' : 'Pago'}</td><td class="n">${x.hayP ? n(x.pres) : '-'}</td><td class="n">${Math.abs(x.calc) < 0.005 ? '-' : n(x.calc)}</td><td class="n">${Math.abs(x.d) < 0.005 ? '-' : n(x.d)}</td><td>${esc(estado232(x))}</td></tr>`).join('')}
-      </tbody></table></div></section>` : '';
+    const lado = (titulo, nota, k) => {
+      const porTipo = Object.keys(TIPO_OP).flatMap((op) => ['I', 'P'].map((ip) => [op, ip])).filter(([op, ip]) => FC.some((x) => x.op === op && x.ip === ip && Math.abs(x[k]) > 0.004));
+      const totI = r2(FC.filter((x) => x.ip === 'I').reduce((s, x) => s + x[k], 0)), totP = r2(FC.filter((x) => x.ip === 'P').reduce((s, x) => s + x[k], 0));
+      const filasT = porTipo.map(([op, ip]) => `<tr><td>${op} · ${esc(TIPO_OP[op])}</td><td>${ip === 'I' ? 'Ingresos' : 'Pagos'}</td><td class="n">${n(sumTipo(op, ip, k))}</td></tr>`).join('');
+      const filasE = FC.filter((x) => Math.abs(x[k]) > 0.004).map((x) => `<tr><td>${esc(x.nom)}</td><td>${esc(x.nif)}</td><td>${x.op} · ${esc(TIPO_OP[x.op] || '')}</td><td>${x.ip === 'I' ? 'Ingreso' : 'Pago'}</td><td class="n">${n(x[k])}</td></tr>`).join('');
+      return `<div class="c232"><h4 style="margin:0 0 2px">${titulo}</h4><p class="hint" style="margin:0 0 6px">${nota}</p>
+        <h5 style="margin:6px 0 4px">Resumen por tipo de operación</h5>
+        <div class="wrap"><table class="tabla it-conc" style="width:100%"><thead><tr><th>Tipo de operación</th><th>Ingreso / Pago</th><th>Importe</th></tr></thead><tbody>${filasT || '<tr><td colspan="3" class="c">Sin operaciones</td></tr>'}
+          <tr class="tot"><td colspan="2">Total ingresos (I) · pagos (P)</td><td class="n">I ${n(totI)}<br>P ${n(totP)}</td></tr></tbody></table></div>
+        <h5 style="margin:10px 0 4px">Por entidad vinculada</h5>
+        <div class="wrap"><table class="tabla it-conc" style="width:100%"><thead><tr><th>Entidad</th><th>NIF</th><th>Tipo de operación</th><th>Ingreso / Pago</th><th>Importe</th></tr></thead><tbody>${filasE || '<tr><td colspan="5" class="c">Sin operaciones</td></tr>'}</tbody></table></div></div>`;
+    };
+    const estado232 = (x) => (!x.hayP ? 'Calculado y no está en el presentado: añádelo al 232' : Math.abs(x.calc) < 0.005 ? 'Está en el presentado y no sale en los libros: revisa el NIF, el ejercicio o el libro' : 'Importe distinto: revisa las facturas de esta entidad');
+    const DIF = FC.filter((x) => !(x.hayP && Math.abs(x.d) <= tolC));
+    const comparacion = FC.length ? `<section class="block"><h3 class="bt">Modelo 232 de ${ej} · presentado y calculado con Emitidas y Recibidas</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px;align-items:start">
+        ${lado('PRESENTADO (232)', 'Lo que figura en los registros del 232 de este ejercicio (presentado o en preparación).', 'pres')}
+        ${lado('CALCULADO (libros de IVA)', `Lo que sale de Emitidas (ingresos) y Recibidas (pagos) de ${ej} con las sociedades del grupo; 08 arrendamientos (R.I.ALQ), 09 intereses (R.I.INT), el resto 01 bienes / 06 servicios.`, 'calc')}
+      </div>
+      <h4 style="margin:14px 0 4px">Diferencias entre lo presentado y lo calculado · ${DIF.length ? `<span class="dif-ko">${DIF.length} a revisar</span>` : '<b style="color:#0a6">sin diferencias</b>'}</h4>
+      ${DIF.length ? `<div class="wrap"><table class="tabla it-conc" style="width:auto"><thead><tr><th>Entidad</th><th>NIF</th><th>Tipo de operación</th><th>Ingreso / Pago</th><th>Presentado</th><th>Calculado</th><th>Diferencia</th><th>Qué hacer</th></tr></thead><tbody>
+      ${DIF.map((x) => `<tr class="cf-ko"><td>${esc(x.nom)}</td><td>${esc(x.nif)}</td><td>${x.op} · ${esc(TIPO_OP[x.op] || '')}</td><td>${x.ip === 'I' ? 'Ingreso' : 'Pago'}</td><td class="n">${x.hayP ? n(x.pres) : '-'}</td><td class="n">${Math.abs(x.calc) < 0.005 ? '-' : n(x.calc)}</td><td class="n">${Math.abs(x.d) < 0.005 ? '-' : n(x.d)}</td><td>${esc(estado232(x))}</td></tr>`).join('')}
+      <tr class="tot"><td colspan="4">TOTAL</td><td class="n">${n(r2(DIF.reduce((s, x) => s + x.pres, 0)))}</td><td class="n">${n(r2(DIF.reduce((s, x) => s + x.calc, 0)))}</td><td class="n">${n(r2(DIF.reduce((s, x) => s + x.d, 0)))}</td><td></td></tr></tbody></table></div>` : '<p class="hint">Todo lo presentado coincide con lo calculado desde los libros.</p>'}</section>` : '';
     return `${avisos([`Modelo 232 (declaración informativa de operaciones vinculadas): obligatorio por cada entidad vinculada con la que el conjunto de operaciones del mismo tipo supere 250.000 € en el periodo impositivo (valor de mercado). Plazo: del 1 al 30 de noviembre de ${ej + 1} para el ejercicio ${ej} (si se presenta, sale en Liquidaciones a presentar de octubre y en el Calendario Fiscal de noviembre).`,
       'Ventas y compras salen de los libros de IVA cargados (bases imponibles con NIF de una sociedad del grupo). Préstamos, garantías, servicios sin IVA, dividendos y operaciones específicas (> 100.000 €, sin umbral en paraísos fiscales) añádelos en «Otras operaciones».'])}${avisoHtml()}
       ${estructura}${comparacion}<section class="block"><h3 class="bt">Detalle desde los libros de IVA · operaciones con sociedades del grupo ${ej} · ${esc(empresa().nombre)}</h3>
