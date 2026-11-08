@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=250';
+import { crearModulos } from './modulos.js?v=251';
 import { activarRedimension, activarCajas, activarAlineacion } from './tablas.js?v=6';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -126,12 +126,14 @@ db.auth.onAuthStateChange((ev, session) => {
 });
 
 // ---------- Pantallas ----------
+// el correo se recuerda en este equipo; la contraseña nunca (y la sesión vive solo en la pestaña: cada pestaña nueva la pide)
+const correoGuardado = () => { try { return localStorage.getItem('login-correo') || ''; } catch { return ''; } };
 function renderLogin(msg = '') {
   root.innerHTML = `<main class="login"><form id="f" class="card">
     <img class="login-logo" src="logos/po-asesoria.svg?v=1" alt="Asesoría PO">
     <h1>Gestión fiscal, contable y laboral</h1>
-    <label>Correo<input name="email" type="email" required autocomplete="username"></label>
-    <label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="current-password"></label>
+    <label>Correo<input name="email" type="email" required autocomplete="username" value="${esc(correoGuardado())}"></label>
+    <label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true"></label>
     <p class="err" id="msg">${esc(msg)}</p>
     <button class="primary">Entrar</button>
     <button type="button" id="reg" class="link">Solicitar acceso (crear cuenta)</button>
@@ -142,7 +144,9 @@ function renderLogin(msg = '') {
     ev.preventDefault();
     const { error } = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value });
     if (error) m.textContent = 'Correo o contraseña incorrectos.';
+    else { try { localStorage.setItem('login-correo', f.email.value.trim()); } catch { /* sin almacenamiento */ } }
   };
+  if (f.email.value) f.password.focus(); else f.email.focus();
   root.querySelector('#reg').onclick = async () => {
     if (!f.reportValidity()) return;
     const { error } = await db.auth.signUp({ email: f.email.value, password: f.password.value });
