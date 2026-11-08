@@ -485,7 +485,7 @@ export function crearModulos(c) {
   }
   function tablaOb(titulo, pago) {
     const ej = Number(S.ejercicio), hoy = hoyUtc(), ix = presIndex(), ed = puede();
-    let L = empOrden().filter((e) => pago || !S.sel || e.id === S.sel).flatMap((e) => obligaciones(e, ej, ix)); // liquidaciones: solo la empresa elegida
+    let L = empOrden().filter((e) => pago || !S.sel || e.id === S.sel).flatMap((e) => obligaciones(e, ej, ix).map(pago ? delModelo : (o) => o)); // liquidaciones: solo la empresa elegida; en pagos, el 111 del modelo
     if (pago) L = L.filter((o) => MODS_PAGO.includes(o.mod));
     L = filtroLista(L, hoy).sort((a, b) => a.fin - b.fin || String(a.e.nombre).localeCompare(String(b.e.nombre)) || a.mod.localeCompare(b.mod));
     const fila = (o) => { const k = `${o.yPres}|${o.clave}|${o.pk}`, manual = ix.marcas.has(`${o.e.id}|${k}`);
@@ -496,7 +496,7 @@ export function crearModulos(c) {
         <label>Ver <select data-liqver="1"><option value="pend"${liqVer === 'pend' ? ' selected' : ''}>Pendientes</option><option value="todas"${liqVer === 'todas' ? ' selected' : ''}>Todas</option></select></label><span class="space"></span></div>
       ${L.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Modelo</th><th>Periodo</th><th>${pago ? 'Fecha de cargo' : 'Vencimiento'}</th>${pago ? '<th>Banco</th>' : ''}<th class="num">Importe</th>${pago ? '<th>Estado de pago</th>' : ''}<th>Estado</th><th></th></tr></thead><tbody>${L.map(fila).join('')}</tbody></table></div>`
         : `<p class="vacio">${esc(titulo)}: nada pendiente en este periodo.</p>`}
-      <p class="hint">${pago ? 'Fecha de cargo: el último día del plazo de presentación. ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado. Elige un periodo en la barra lateral para ver solo ese.</p>`;
+      <p class="hint">${pago ? 'Fecha de cargo: el último día del plazo de presentación. ' : ''}Solo salen los modelos que le tocan a cada empresa: 111, 303, 200 y 390 siempre (y el 202 en las grandes); el 115 si está de alta en el censo; el 123, 349, Intrastat, 232 y A22 si hay datos (y el 202 en las pymes); el 592 en HER, ESP y LYS; el 583 en HER, LYS, GRU e HIS; el 180, 190 y 193 con datos del ejercicio. El importe es el presentado (en Pagos domiciliados, el del 111 sale del modelo 111). Elige un periodo en la barra lateral para ver solo ese.</p>`;
   }
   const vistaLiq = () => tablaOb('Liquidaciones a presentar', false);
   // ---------- Liquidaciones Tributarias: se marcan a mano los modelos y periodos de la empresa; de ahí salen Liquidaciones a presentar y Pagos domiciliados ----------
@@ -577,21 +577,21 @@ export function crearModulos(c) {
   const setPgEst = (clave, v) => { const [id, k] = [clave.slice(0, clave.indexOf('|')), clave.slice(clave.indexOf('|') + 1)]; return guardarPg(id, (d) => { if (v === 'dom') delete d.est[k]; else d.est[k] = v; }); };
   const setPgMan = (clave, v) => { const [per, id, campo] = clave.split('|'); return guardarPg(id, (d) => { d.man[per] = { ...(d.man[per] ?? {}), [campo]: parseES(v) || 0 }; }); };
   const setPgMes = (v) => { pgMes = +v; render(); };
+  // el 111 de Pagos domiciliados se toma del modelo 111 (nóminas con sus diferencias + ajustes a mano + libro de soportado), no de Presentados; si no hay nóminas, queda lo presentado
+  function imp111Modelo(e, y, per) {
+    const meses = /^[1-4]T$/.test(per) ? [0, 1, 2].map((i) => String((+per[0] - 1) * 3 + i + 1).padStart(2, '0')) : /^\d\d$/.test(per ?? '') ? [per] : [];
+    const dN = S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === e.id && r.ejercicio === y)?.datos, nm = meses.map((mm) => nomCalc(dN?.[mm])).filter(Boolean);
+    if (!nm.length) return null;
+    const man = S.registros.find((r) => r.tipo === 'm111' && r.empresa_id === e.id && r.ejercicio === y)?.datos?.[per] ?? {}, mv = (k) => Number(man[k]) || 0;
+    const R = GR.get(`fact-R|${e.id}`), prs = S.registros.find((r) => r.tipo === 'prs' && r.empresa_id === e.id && r.ejercicio === y)?.datos?.[`111|${per}`];
+    const cret = Array.isArray(R) ? (e.id === S.sel ? calcularRetOv : calcularRet)('111', R, y, per).ret : Number(prs?.retP) || 0; // libro de soportado cargado; si no, lo presentado en profesionales
+    return rr(nm.reduce((a, x) => a + (Number(x.ret) || 0), 0) + mv('t3') + mv('k06') + cret + ['k12', 'k15', 'k18', 'k21', 'k24', 'k27'].reduce((a, k) => a + mv(k), 0) - mv('c29'));
+  }
+  const delModelo = (o) => (o.mod === '111' ? { ...o, imp: imp111Modelo(o.e, o.yPres ?? Number(S.ejercicio), o.pk ?? o.per) ?? o.imp } : o);
   function calcPagos() {
     const ej = Number(S.ejercicio), m = mesPagos(), y2 = m === 12 ? ej + 1 : ej, m2 = m === 12 ? 1 : m + 1, ix = presIndex(), clavePer = `${ej}-${String(m).padStart(2, '0')}`;
     const cargo = (o) => o.fin; // fecha de cargo = último día de presentación
     const delMes = (o) => { const d = new Date(cargo(o)); return d.getUTCFullYear() === y2 && d.getUTCMonth() + 1 === m2; };
-    // el 111 se toma del modelo 111 (nóminas con sus diferencias + ajustes a mano + libro de soportado), no de Presentados; si no hay nóminas, queda lo presentado
-    const imp111 = (e, y, per) => {
-      const meses = /^[1-4]T$/.test(per) ? [0, 1, 2].map((i) => String((+per[0] - 1) * 3 + i + 1).padStart(2, '0')) : /^\d\d$/.test(per ?? '') ? [per] : [];
-      const dN = S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === e.id && r.ejercicio === y)?.datos, nm = meses.map((mm) => nomCalc(dN?.[mm])).filter(Boolean);
-      if (!nm.length) return null;
-      const man = S.registros.find((r) => r.tipo === 'm111' && r.empresa_id === e.id && r.ejercicio === y)?.datos?.[per] ?? {}, mv = (k) => Number(man[k]) || 0;
-      const R = GR.get(`fact-R|${e.id}`), prs = S.registros.find((r) => r.tipo === 'prs' && r.empresa_id === e.id && r.ejercicio === y)?.datos?.[`111|${per}`];
-      const cret = Array.isArray(R) ? (e.id === S.sel ? calcularRetOv : calcularRet)('111', R, y, per).ret : Number(prs?.retP) || 0; // libro de soportado cargado; si no, lo presentado en profesionales
-      return rr(nm.reduce((a, x) => a + (Number(x.ret) || 0), 0) + mv('t3') + mv('k06') + cret + ['k12', 'k15', 'k18', 'k21', 'k24', 'k27'].reduce((a, k) => a + mv(k), 0) - mv('c29'));
-    };
-    const delModelo = (o) => (o.mod === '111' ? { ...o, imp: imp111(o.e, o.yPres ?? ej, o.pk ?? o.per) ?? o.imp } : o);
     const todas = empOrden().map((e) => ({ e, os: obligaciones(e, ej, ix).filter((o) => MODS_PAGO.includes(o.mod) && delMes(o)).map(delModelo) }));
     const items = todas.flatMap((x) => x.os.filter((o) => o.imp > 0).map((o) => ({ ...o, banco: bancoEmp(o.e, o.mod), fc: cargo(o) })));
     const bancos = [...new Set(items.map((f) => f.banco))].sort((a, b) => (a === 'Sin banco') - (b === 'Sin banco') || a.localeCompare(b));
