@@ -124,7 +124,7 @@ const masAnios = (iso, n) => `${+iso.slice(0, 4) + n}${iso.slice(4)}`;
 export function revisar(lineas, sentido, desde, hasta) {
   const emit = sentido === 'E';
   const sel = lineas.filter((l) => l.sentido === sentido && !/^(R\.)?I\./i.test(l.codigo) && l.codigo !== 'SIN.DATOS'
-    && (emit ? (l.ff || l.fecha) : (l.fecha || l.ff)) >= desde && (emit ? (l.ff || l.fecha) : (l.fecha || l.ff)) <= hasta);
+    && (l.fecha || l.ff) >= desde && (l.fecha || l.ff) <= hasta);
   const dups = new Map();
   if (!emit) for (const l of sel) { const k = [l.factura, l.nif, l.codigo, l.base, l.cuota].join('|'); (dups.get(k) ?? dups.set(k, new Set()).get(k)).add(l.asiento); }
   const res = [];
@@ -287,7 +287,7 @@ export function crearLeyIva(c) {
     }
     const resumen = Object.keys(cnt).length ? `<div class="ley-reglas">${Object.entries(cnt).sort((p, q) => (gr(q[0]) === 'error') - (gr(p[0]) === 'error') || q[1] - p[1]).map(([id, n]) => `<button class="ley-regla ${gr(id)}${ST.regla === id ? ' on' : ''}" data-leyregla="${id}"><b>${n}</b> ${esc(REGLAS[id][2])}<small>Art. ${REGLAS[id][1].join(', ')}</small></button>`).join('')}</div>` : '<p class="ley-ok">✔ Ninguna línea incumple las reglas revisadas en este periodo.</p>';
     const reglaTxt = ST.regla ? `<section class="ley-tema"><h4>${esc(REGLAS[ST.regla][2])}</h4>${LEY ? REGLAS[ST.regla][1].map(detalleArt).join('') : '<p class="hint">Cargue la ley para ver aquí el texto de los artículos.</p>'}</section>` : '';
-    const filas = shown.slice(0, ST.pag).map(({ l, a }) => `<tr><td>${esc(((ST.sent === 'E' ? l.ff : l.fecha) || '').split('-').reverse().join('/'))}</td><td>${esc(l.factura)}</td><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td><td>${esc(l.codigo)}</td>
+    const filas = shown.slice(0, ST.pag).map(({ l, a }) => `<tr><td>${esc((l.fecha || '').split('-').reverse().join('/'))}</td><td>${esc(l.factura)}</td><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td><td>${esc(l.codigo)}</td>
       <td class="num">${nf.format(l.base)}</td><td class="num">${esc(l.pct)}</td><td class="num">${nf.format(l.cuota)}</td>
       <td>${a.map((x) => `<span class="ley-tag ${REGLAS[x.id][0]}" title="Art. ${REGLAS[x.id][1].join(', ')}">${esc(REGLAS[x.id][2])}${x.det ? ` <i>(${esc(x.det)})</i>` : ''}</span>`).join('')}</td></tr>`).join('');
     return `${msg()}${LEY ? '' : sinLey()}<div class="bar"><label>Libro<select data-leysent="1"><option value="E"${ST.sent === 'E' ? ' selected' : ''}>Facturas emitidas (repercutido)</option><option value="R"${ST.sent === 'R' ? ' selected' : ''}>Facturas recibidas (soportado)</option></select></label>
@@ -303,7 +303,7 @@ export function crearLeyIva(c) {
     const { desde, hasta } = rangoPeriodo(Number(S.ejercicio), S.periodo);
     const todas = [...(grande('fact-E') ?? []), ...(grande('fact-R') ?? []).filter((l) => !/^S\.NC\.ISP\.A/.test(l.codigo))];
     const rows = [['Libro', 'Fecha', 'Factura', 'NIF', 'Nombre', 'Código', 'Base', '%', 'Cuota', 'Aviso', 'Gravedad', 'Artículos', 'Detalle']];
-    for (const s of ['E', 'R']) for (const { l, a } of revisar(todas, s, desde, hasta)) for (const x of a) rows.push([s === 'E' ? 'Emitidas' : 'Recibidas', (s === 'E' ? l.ff : l.fecha) || '', l.factura, l.nif, l.nombre, l.codigo, l.base, l.pct, l.cuota, REGLAS[x.id][2], REGLAS[x.id][0], REGLAS[x.id][1].join(', '), x.det]);
+    for (const s of ['E', 'R']) for (const { l, a } of revisar(todas, s, desde, hasta)) for (const x of a) rows.push([s === 'E' ? 'Emitidas' : 'Recibidas', l.fecha || '', l.factura, l.nif, l.nombre, l.codigo, l.base, l.pct, l.cuota, REGLAS[x.id][2], REGLAS[x.id][0], REGLAS[x.id][1].join(', '), x.det]);
     const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(rows), 'Revisión Ley IVA');
     window.XLSX.writeFile(wb, `RevisionLeyIVA_${empresa()?.cif ?? ''}_${S.ejercicio}${S.periodo ? '_' + S.periodo : ''}.xlsx`);
   }

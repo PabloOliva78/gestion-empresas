@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=51';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=52';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
@@ -12,7 +12,7 @@ import { crearModelos3 } from './modelos3.js?v=3';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=6';
 import { crearEstados } from './estados.js?v=4';
-import { crearLeyIva } from './leyiva.js?v=6';
+import { crearLeyIva } from './leyiva.js?v=7';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, nombreEmp } = c;
@@ -1124,7 +1124,7 @@ export function crearModulos(c) {
 
   function lineasFc(s, datos) {
     const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
-    let f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
+    let f = datos.filter((l) => { const d = l.fecha; return d >= r.desde && d <= r.hasta; });
     if (fcCod) f = f.filter((l) => l.codigo === fcCod);
     if (fcPais) f = f.filter((l) => paisL(l) === fcPais);
     if (fcQ) { const q = sinAc(fcQ), num = /^[-+]?[\d.,\s€]+$/.test(fcQ.trim()); f = f.filter((l) => { let t = fcTxt.get(l); if (t === undefined) { t = sinAc(`${l.nif} ${l.nombre} ${l.factura}`); fcTxt.set(l, t); } return t.includes(q) || (num && buscaImporte(l, fcQ)); }); }
@@ -1187,7 +1187,7 @@ export function crearModulos(c) {
     };
     const filas = f.slice(0, fcLim).map((l) => { // por tandas para que no se bloquee (el total y la búsqueda cuentan todas)
       const p = paisL(l);
-      return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(s === 'E' ? l.fecha : l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
+      return `<tr class="fc">${ci(l, 'fecha', fmt(l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
         ${ci(l, 'pais', p)}${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
         ${ci(l, 'rec', l.rec !== undefined ? fnum(l.rec) : (/^R\.RC\./.test(l.codigo) ? fnum(l.cuota) : ''), 'num')}${exCell(l)}${ci(l, 'clasif', l.clasif ?? clasif(l.codigo))}<td class="acc">${l.manual ? '<span class="hint">a mano</span> ' : ''}${acc(l)}</td></tr>`;
     }).join('') + (f.length > fcLim ? `<tr><td colspan="15" class="c"><b>Se muestran ${fcLim} de ${f.length} líneas.</b> <button class="pill" data-act="m-fcmas">Mostrar 500 más</button> <button class="pill" data-act="m-fcmas" data-t="1">Mostrar todas</button> <span class="hint">Escribe en el buscador para filtrar entre todas.</span></td></tr>` : '');
@@ -1199,7 +1199,7 @@ export function crearModulos(c) {
     const codsDl = `<datalist id="fcCods">${[...new Set(datos.map((l) => l.codigo))].sort().map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`;
     const sinRet = f.filter((l) => !/^(R\.)?I\./.test(l.codigo)); // el total no incluye las retenciones (misma base que la factura)
     const tot = `<tr><td colspan="8"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="${s === 'E' ? 4 : 3}"></td></tr>`;
-    return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Asiento</th><th>${s === 'R' ? 'Fecha factura' : 'Fecha contable'}</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
+    return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Asiento</th><th>Fecha factura</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
       <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th>${s === 'E' ? '<th title="Facturas sin cuota de IVA: E1 a E6 (exenciones), N.S.R.L. (no sujeta por reglas de localización) o Art. 7-14 (no sujeta)">Exención</th>' : ''}<th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
   }
 
@@ -1237,7 +1237,7 @@ export function crearModulos(c) {
     const [s, i, campo] = clave.split('|'), tipo = `fact-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
     if (!l) return;
     const nl = { ...l };
-    if (campo === 'fecha' || campo === 'fecha2') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); if ((s === 'E') === (campo === 'fecha')) nl.ff = f; else nl.fecha = f; }
+    if (campo === 'fecha' || campo === 'fecha2') { const f = fIsoCta(valor); if (!f) return void alert('Fecha no válida: escríbela como dd/mm/aaaa.'); if (campo === 'fecha') nl.fecha = f; else nl.ff = f; }
     else if (campo === 'exenc') nl.exenc = valor.trim(); // vacío = sin exención (se guarda para que no vuelva el valor por defecto)
     else if (['pais', 'clasif', 'rec'].includes(campo)) { const v = valor.trim(); if (v === '') delete nl[campo]; else nl[campo] = campo === 'rec' ? parseES(v) : campo === 'pais' ? v.toUpperCase() : v; }
     else if (['base', 'cuota', 'pct'].includes(campo)) nl[campo] = parseES(valor);
@@ -1329,11 +1329,11 @@ export function crearModulos(c) {
     if (!datos) return cargandoTxt;
     if (!datos.length) return `<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>`;
     const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
-    const f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
+    const f = datos.filter((l) => { const d = l.fecha; return d >= r.desde && d <= r.hasta; });
     return `<div class="bar"><span class="space"></span><span class="chip">${f.length} líneas · ${r.desde.split('-').reverse().join('/')} – ${r.hasta.split('-').reverse().join('/')}</span></div>
       <div class="wrap"><table class="tabla"><thead><tr><th>Asiento</th><th>Factura</th><th>Fecha factura</th><th>NIF-CIF</th><th>Nombre</th>
       <th class="num">Base imponible</th><th class="num">%</th><th class="num">Cuota</th><th>Código impuesto</th></tr></thead><tbody>
-      ${f.slice(0, TOPE).map((l) => `<tr><td>${esc(l.asiento)}</td><td>${esc(l.factura)}</td><td>${fmt(s === 'E' ? l.ff : l.fecha)}</td><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td>
+      ${f.slice(0, TOPE).map((l) => `<tr><td>${esc(l.asiento)}</td><td>${esc(l.factura)}</td><td>${fmt(l.fecha)}</td><td>${esc(l.nif)}</td><td>${esc(l.nombre)}</td>
         ${celdasNum(l.base)}<td class="num">${esc(l.pct)}</td>${celdasNum(l.cuota)}<td>${esc(l.codigo)}</td></tr>`).join('')}
       <tr><td colspan="5"><b>Total</b></td>${celdasNum(suma(f, 'base'))}<td></td>${celdasNum(suma(f, 'cuota'))}<td></td></tr></tbody></table></div>${tope(f.length)}`;
   }
@@ -4938,7 +4938,7 @@ export function crearModulos(c) {
       const d = peek('fact-' + s);
       if (!d) return { t: '…' };
       const r = rg();
-      return { t: `Cuota ${fnum(suma(d.filter((l) => { const f = s === 'E' ? l.ff : l.fecha; return f >= r.desde && f <= r.hasta && !/^(R\.)?I\./.test(l.codigo); }), 'cuota'))}` }; // sin retenciones
+      return { t: `Cuota ${fnum(suma(d.filter((l) => { const f = l.fecha; return f >= r.desde && f <= r.hasta && !/^(R\.)?I\./.test(l.codigo); }), 'cuota'))}` }; // sin retenciones
     };
     badges[s === 'E' ? 'concsiie' : 'concsiir'] = () => {
       if (!S.sel) return { t: 'Por empresa' };

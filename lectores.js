@@ -511,7 +511,7 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   // las retenciones (I.ALQ, R.I.ALQ, I.PR…) llevan la misma base que la factura y no son IVA: no se cuentan en emitidas (en recibidas ya están en EXC_RECIBIDAS)
   const ls = sii.filter((s) => s.sentido === sentido && (emit ? s.fecha >= r.desde && s.fecha <= r.hasta : s.ej === ej && (!periodo || s.per === periodo)));
   const claveSii = new Set(ls.map((s) => clave(s.factura, s.nif)));   // las no sujetas (R.NAC.NS) solo cuentan si la factura está declarada en el SII
-  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || claveSii.has(clave(l.factura, l.nif)))
+  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || claveSii.has(clave(l.factura, l.nif)))
     : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const cont = new Map();
   for (const l of lc) {
@@ -538,8 +538,8 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const excluidaL = (l) => (emit ? EXC_EMITIDAS.includes(l.codigo) || /^(R\.)?I\./.test(l.codigo) : EXC_RECIBIDAS.includes(l.codigo));
   const motivoSii = (k) => {
     const ls = idxLibro.get(k); if (!ls || !ls.length) return `No está en el libro de ${emit ? 'emitidas' : 'recibidas'} cargado: revisa el nº de factura (y el NIF) o carga el libro completo`;
-    const campo = emit ? 'ff' : 'fecha', dentro = ls.filter((l) => l[campo] >= r.desde && l[campo] <= r.hasta), cods = [...new Set(ls.map((l) => l.codigo || '(sin código)'))].join(' + ');
-    if (!dentro.length) return `Está en el libro (${cods}) con ${emit ? 'fecha contable' : 'fecha'} ${fdmyL(ls[0][campo])}, fuera del periodo: pásala al periodo del SII o concilia el periodo en que está contabilizada`;
+    const campo = 'fecha', dentro = ls.filter((l) => l[campo] >= r.desde && l[campo] <= r.hasta), cods = [...new Set(ls.map((l) => l.codigo || '(sin código)'))].join(' + ');
+    if (!dentro.length) return `Está en el libro (${cods}) con fecha ${fdmyL(ls[0][campo])}, fuera del periodo: pásala al periodo del SII o concilia el periodo en que está contabilizada`;
     if (dentro.every(excluidaL)) return `Está en el libro pero con código ${cods}, que no cuenta en esta conciliación: si debe ir al SII, corrige el código en el libro`;
     return `Está en el libro (${cods}) y no se empareja: revisa el nº de factura${emit ? '' : ' y el NIF'}`;
   };
@@ -587,7 +587,7 @@ export function conciliarSII(sentido, libro, sii, ej, periodo, tol = 0.005) {
   // Facturas «fuera»: cuentan en el nº de facturas, pero sus importes no entran en las sumas (igual que el Excel)
   const fuera = emit ? new Set(libro.filter((l) => FACT_FUERA_E.includes(l.codigo)).map((l) => l.factura)) : new Set();
   const lc = libro.filter((l) => l.sentido === sentido && (emit
-    ? l.ff >= r.desde && l.ff <= r.hasta && !EXC_EMITIDAS.includes(l.codigo)
+    ? l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_EMITIDAS.includes(l.codigo)
     : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const ls = sii.filter((s) => s.sentido === sentido && (emit
     ? s.fecha >= r.desde && s.fecha <= r.hasta
