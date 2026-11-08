@@ -563,7 +563,8 @@ export function crearModelos(c) {
     });
   }
   function lineaIntra(o, C) {
-    const nf = (x, d) => { const n = intraNum(x); return n === null ? '' : n.toFixed(d).replace('.', ','); };
+    const inv = o.flujoF !== o.flujo; // al pasar al flujo contrario se quita el signo negativo
+    const nf = (x, d) => { let n = intraNum(x); if (n !== null && inv) n = Math.abs(n); return n === null ? '' : n.toFixed(d).replace('.', ','); };
     const pr = String(o.r[3] ?? '').trim(), prov = pr === '' ? '' : (/^\d+$/.test(pr) ? pr.padStart(2, '0') : intraTx(pr));
     const cn = String(o.r[4] ?? '').trim(), nat = /^\d+$/.test(cn) ? cn.padStart(2, '0') : intraTx(cn);
     const nif = (o.flujoF === 'Introducción' && C.nifIntro !== 'Sí') ? '' : o.nifExp;
