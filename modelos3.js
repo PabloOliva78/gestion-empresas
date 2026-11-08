@@ -552,10 +552,11 @@ export function crearModelos3(c) {
       C['34'] = C['03'];
       return { ej, per, cl, modal, incn, grande: grande10, C, A, P, ejIS, cuotaIS, pagosAnt, pres };
     }
-    let resPyG = null, gastoIS = null; const pp = pyg202(cl);
+    let resPyG = null, gastoIS = null, isCalc = false, tipoISc = 25; const pp = pyg202(cl);
     try {
-      if (pp && pp.norm) { if (pp.norm.is) { resPyG = pp.norm.res; gastoIS = r2(-pp.norm.is); } else { gastoIS = pp.norm.res > 0 ? r2(pp.norm.res * 0.25) : 0; resPyG = r2(pp.norm.res - gastoIS); } }   /* PyG sin gasto por IS: 05 = 25 % del resultado y 04 = resultado − 05 (así la 13 = resultado de la PyG) */
-      else if (pp) { const X = efCtx(pp.lines); resPyG = X.val('I', 108); gastoIS = r2(-X.val('I', 101)); }
+      const tipoIS = Number.isFinite(+A.tipo) && A.tipo !== '' && A.tipo !== undefined ? +A.tipo : 25;
+      if (pp && pp.norm) { if (pp.norm.is) { resPyG = pp.norm.res; gastoIS = r2(-pp.norm.is); } else { gastoIS = pp.norm.res > 0 ? r2(pp.norm.res * tipoIS / 100) : 0; resPyG = r2(pp.norm.res - gastoIS); isCalc = true; tipoISc = tipoIS; } }   /* PyG sin gasto por IS: 05 = 25 % del resultado y 04 = resultado − 05 (así la 13 = resultado de la PyG) */
+      else if (pp) { const X = efCtx(pp.lines), res = X.val('I', 108), is = r2(-X.val('I', 101)); if (Math.abs(is) > 0.005) { resPyG = res; gastoIS = is; } else { gastoIS = res > 0 ? r2(res * tipoIS / 100) : 0; resPyG = r2(res - gastoIS); isCalc = true; tipoISc = tipoIS; } }   /* el sumas y saldos del periodo aún no trae el IS contabilizado: 05 = tipo de gravamen × resultado antes de impuestos, 04 = resultado − 05 y 13 = resultado antes de impuestos */
     } catch { /* PyG ilegible */ }
     C['04'] = v('04', resPyG === null ? 0 : resPyG);
     C['05'] = v('05', gastoIS !== null && gastoIS > 0 ? gastoIS : 0); C['06'] = v('06', gastoIS !== null && gastoIS < 0 ? -gastoIS : 0); C['67'] = v('67'); C['37'] = v('37'); C['07'] = v('07'); C['08'] = v('08');
@@ -577,7 +578,7 @@ export function crearModelos3(c) {
     const pctMin = v('pctMin', 23);
     C['33'] = grande10 ? r2(Math.max(0, Math.max(0, C['04']) * pctMin / 100 - C['30'] - C['31'])) : 0;
     C['34'] = r2(Math.max(0, C['32'], C['33']));
-    return { ej, per, cl, modal, incn, grande: grande10, C, A, P, mas1, pctMin, resPyG, gastoIS, pyg: pp, pagosAnt, pres };
+    return { ej, per, cl, modal, incn, grande: grande10, C, A, P, mas1, pctMin, resPyG, gastoIS, isCalc, tipoISc, pyg: pp, pagosAnt, pres };
   }
 
   function vista202() {
@@ -609,9 +610,9 @@ export function crearModelos3(c) {
       ${L('A ingresar <span class="man-lbl">(18 % de [01] − [02])</span>', '03', { calc: true })}</div>`;
     } else {
       liq = `<div class="h202">B) Cálculo del pago fraccionado: modalidad artículo 40.3 LIS</div>
-      ${L('Resultado contable (después del IS e IC) <span class="man-lbl">' + (R.resPyG !== null ? (R.pyg && R.pyg.norm && !R.pyg.norm.is ? '(PyG del periodo, ' + esc(R.pyg.name) + ' · resultado ' + money(R.pyg.norm.res) + ' − IS 25 % ' + money(R.gastoIS) + ')' : '(PyG del periodo, ' + esc(R.pyg.name) + ' · D) Resultado del ejercicio: ' + money(R.resPyG) + ')') : '(suelta arriba el Excel con la PyG o el balance de sumas y saldos de los ' + FIN202[R.per] + ' primeros meses, o escríbelo)') + '</span>', '04')}
+      ${L('Resultado contable (después del IS e IC) <span class="man-lbl">' + (R.resPyG !== null ? (R.isCalc ? '(' + esc(R.pyg.name) + ' · resultado antes de impuestos ' + money(r2(R.resPyG + R.gastoIS)) + ' − IS ' + R.tipoISc + ' % ' + money(R.gastoIS) + ')' : '(PyG del periodo, ' + esc(R.pyg.name) + ' · D) Resultado del ejercicio: ' + money(R.resPyG) + ')') : '(suelta arriba el Excel con la PyG o el balance de sumas y saldos de los ' + FIN202[R.per] + ' primeros meses, o escríbelo)') + '</span>', '04')}
       <div class="l202 dos cab"><span class="t">Correcciones al resultado contable:</span><span class="c202h">Aumentos</span><span class="c202h">Disminuciones</span></div>
-      ${L2('Corrección por Impuesto sobre Sociedades (IS)' + (R.gastoIS !== null ? ' <span class="man-lbl">' + (R.pyg && R.pyg.norm && !R.pyg.norm.is ? '(25 % del resultado de la PyG, que no trae gasto por IS)' : '(PyG del periodo · 18. Impuesto sobre beneficios: ' + money(-R.gastoIS) + ')') + '</span>' : ''), '05', '06')}${L2('Corrección por Impuesto Complementario (IC)', '67', null)}
+      ${L2('Corrección por Impuesto sobre Sociedades (IS)' + (R.gastoIS !== null ? ' <span class="man-lbl">' + (R.isCalc ? '(' + R.tipoISc + ' % del resultado antes de impuestos del archivo, que no trae el IS contabilizado)' : '(PyG del periodo · 18. Impuesto sobre beneficios: ' + money(-R.gastoIS) + ')') + '</span>' : ''), '05', '06')}${L2('Corrección por Impuesto Complementario (IC)', '67', null)}
       ${L2('Reversión del 30% del importe de los gastos de amortiz. contable (art. 7 Ley 16/2012)', null, '37')}${L2('Resto correcciones al resultado contable, excepto comp. BI negativa ej. ant.', '07', '08')}
       ${L2('TOTAL', '38', '39', { a: { calc: true }, b: { calc: true } })}
       ${L('Base imponible previa', '13', { calc: true })}${L('Remanente reserva de capitalización no aplicada por insuficiencia de base', '44')}${L('Compensación de bases imponibles negativas de periodos anteriores', '14')}
