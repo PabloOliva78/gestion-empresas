@@ -4513,22 +4513,6 @@ export function crearModulos(c) {
     });
     return out;
   }
-  // columnas de una tabla pegada sin cabecera, reconocidas por su contenido (null si no se reconocen un importe y una fecha o cuenta)
-  function asiColumnas(R) {
-    const n = Math.max(...R.map((r) => r.length)), filas = R.filter((r) => r.some((v) => v));
-    if (!filas.length || n < 2) return null;
-    const esF = (v) => /^\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}$/.test(v), esC = (v) => /^[1-7]\d{8,11}$/.test(v.replace(/\s/g, ''));
-    const esI = (v) => !esF(v) && !esC(v) && /^[\d.,()\-€\s]+$/.test(v) && /\d/.test(v) && (/[,.]\d{1,2}[)\s€]*$/.test(v) || /^-?\d{1,6}$/.test(v)) && asiNum(v) !== null;
-    const esA = (v) => v && !/\s/.test(v) && v.length <= 18 && /\d/.test(v) && !esF(v) && !esC(v) && !/[.,]\d{1,2}$/.test(v);
-    const col = (test) => { const r = []; for (let j = 0; j < n; j++) { const vs = filas.map((f) => f[j] || '').filter(Boolean); if (vs.length && vs.filter(test).length / filas.length >= 0.6) r.push(j); } return r; };
-    const F = col(esF), Cc = col(esC), I = col(esI);
-    if (!I.length || (!F.length && !Cc.length)) return null;
-    const usadas = new Set([...F.slice(0, 1), ...Cc.slice(0, 1), ...I.slice(0, 2)]);
-    const A = col(esA).find((j) => !usadas.has(j)); if (A !== undefined) usadas.add(A);
-    let T = -1, mejor = 0;
-    for (let j = 0; j < n; j++) { if (usadas.has(j)) continue; const L = filas.reduce((s, f) => s + (/[A-Za-zÁÉÍÓÚÑ]/.test(f[j] || '') ? (f[j] || '').length : 0), 0); if (L > mejor) { mejor = L; T = j; } }
-    return { f: F.length ? F[0] : -1, a: A ?? -1, c: Cc.length ? Cc[0] : -1, t: T, d: I[0], h: I.length > 1 ? I[1] : -1 };
-  }
   function asiDeTexto(txt, B) {
     asiCtl = null;
     const R = tsvFilas(txt);
@@ -4536,13 +4520,11 @@ export function crearModulos(c) {
     if (!R.some((r) => r.length > 1)) return lineasDeTextoOcr(txt, B);
     const hi = R.findIndex((r) => r.some((v) => /^fecha/.test(sinAc(v))) && r.some((v) => /^(debe|haber)/.test(sinAc(v)))), H = (hi >= 0 ? R[hi] : []).map(sinAc);
     const ix = (rx) => H.findIndex((h) => rx.test(h));
-    // sin cabecera, las columnas se reconocen por lo que contienen (fecha, cuenta de 9 a 12 cifras, importes, asiento, concepto); si no se reconocen, el orden fecha, asiento, cuenta, concepto, debe, haber
-    const C = hi >= 0 ? { f: ix(/^fecha/), a: ix(/^asiento|^n.? ?asiento|documento/), c: ix(/^cuenta/), t: ix(/^concepto|^descrip/), d: ix(/^debe/), h: ix(/^haber/) } : (asiColumnas(R) ?? { f: 0, a: 1, c: 2, t: 3, d: 4, h: 5 });
+    const C = hi >= 0 ? { f: ix(/^fecha/), a: ix(/^asiento|^n.? ?asiento|documento/), c: ix(/^cuenta/), t: ix(/^concepto|^descrip/), d: ix(/^debe/), h: ix(/^haber/) } : { f: 0, a: 1, c: 2, t: 3, d: 4, h: 5 };
     const datos = R.slice(hi + 1), g = (r, k) => (k >= 0 ? (r[k] || '') : ''), out = [], fuera = [];
     let td = 0, th = 0;
     datos.forEach((r, n) => {
-      let d = asiNum(g(r, C.d)), h = asiNum(g(r, C.h)); const fila = hi + 2 + n;
-      if (C.h < 0 && d !== null && d < 0) { h = -d; d = 0; } // un solo importe: el negativo va al Haber
+      const d = asiNum(g(r, C.d)), h = asiNum(g(r, C.h)), fila = hi + 2 + n;
       if (d === null || h === null) { fuera.push(`fila ${fila}: importe no válido (${g(r, C.d)} / ${g(r, C.h)})`); return; }
       if (!d && !h) { if (r.join('').trim()) fuera.push(`fila ${fila}: sin importe en Debe ni Haber`); return; }
       td += d; th += h;
@@ -4554,11 +4536,9 @@ export function crearModulos(c) {
     asiCtl = { filas: datos.length, leidas: out.length, debe: rr(td), haber: rr(th), fuera, cab: hi >= 0 };
     return out;
   }
-  let asiTxtPend = ''; // texto que no se ha podido leer: se deja en el cuadro para poder corregirlo
   function asiTexto(t) {
     asiOrigen = 'texto';
     const L2 = asiLimpiarLote(asiDeTexto(t, asiBor())), c = asiCtl;
-    asiTxtPend = L2.length ? '' : String(t);
     asiPrev = asiPrev.concat(L2);
     asiOcr = L2.length ? `${L2.length} línea(s) leídas del texto${c ? ` · Debe ${fnum(c.debe)} · Haber ${fnum(c.haber)}` : ''}${c?.fuera.length ? ` · ${c.fuera.length} aviso(s): ${c.fuera.slice(0, 4).join('; ')}` : ''}`
       : 'No he encontrado líneas con importes en el texto';
@@ -4679,7 +4659,7 @@ export function crearModulos(c) {
       <div style="display:flex;gap:.6rem;align-items:stretch;flex-wrap:wrap"><div contenteditable="true" data-asipega="1" style="flex:1;min-width:280px;min-height:64px;border:2px dashed #7f9bd8;border-radius:6px;padding:.6rem;outline:none;cursor:text" title="Haz clic aquí y pulsa Ctrl+V"><b>Haz clic aquí y pulsa Ctrl+V</b> para pegar una captura o líneas copiadas de Excel</div>
         <button class="small" data-act="m-asipegabtn">📋 Pegar del portapapeles</button>
         ${dz('asiimg', 'o suelta / elige', 'un archivo de imagen', 'image/*')}</div>
-      <textarea id="asiPegaTxt" rows="4" style="width:100%;margin-top:.5rem;font-size:.85rem" placeholder="…o pega aquí líneas de Excel, del ERP o de un PDF: fecha, asiento, cuenta, concepto, debe y haber (con o sin fila de cabecera, con o sin asiento)">${esc(asiTxtPend)}</textarea>
+      <textarea id="asiPegaTxt" rows="4" style="width:100%;margin-top:.5rem;font-size:.85rem" placeholder="…o pega aquí líneas de Excel, del ERP o de un PDF: fecha, asiento, cuenta, concepto, debe y haber (con o sin fila de cabecera)"></textarea>
       <div style="margin:.4rem 0"><button class="small" data-act="m-asipegatxt">Leer el texto</button> <span class="hint">Las líneas salen abajo para revisarlas antes de registrarlas.</span></div>
       ${asiOcr ? `<p class="hint"><b>${esc(asiOcr)}</b></p>` : ''}${prev}</section>` : '';
     const todas = cfg.lineas ?? [], G = new Map();
@@ -4856,7 +4836,7 @@ export function crearModulos(c) {
     'm-asipegabtn': () => asiPegarBoton(),
     'm-asipegatxt': () => { const t = document.getElementById('asiPegaTxt')?.value ?? ''; if (t.trim()) asiTexto(t); },
     'm-asipreg': () => asiRegPrev(),
-    'm-asipvaciar': () => { asiPrev = []; asiOcr = ''; asiCtl = null; asiTxtPend = ''; render(); },
+    'm-asipvaciar': () => { asiPrev = []; asiOcr = ''; asiCtl = null; render(); },
     'm-asipdel': (d) => { asiPrev.splice(+d.i, 1); render(); },
     'm-asipswap': (d) => { const l = asiPrev[+d.i]; if (l) [l.debe, l.haber] = [l.haber, l.debe]; render(); },
     'm-asiquit': (d) => accionCta('quit', `m:${d.id}`, ''),
