@@ -530,8 +530,20 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
     for (const [c, v] of Object.entries(x.cats ?? {})) o.cats[c] = r2n((o.cats[c] || 0) + v);
     sm.set(k, o);
   }
+  // por qué una factura del SII no se empareja con la contabilidad: no está en el libro, tiene la fecha fuera del periodo o su código no cuenta
+  const idxLibro = new Map();
+  libro.filter((l) => l.sentido === sentido).forEach((l) => { const k = clave(l.factura, l.nif); (idxLibro.get(k) ?? idxLibro.set(k, []).get(k)).push(l); });
+  const fdmyL = (d) => String(d || '').split('-').reverse().join('/');
+  const excluidaL = (l) => (emit ? EXC_EMITIDAS.includes(l.codigo) || /^(R\.)?I\./.test(l.codigo) || l.codigo === 'R.NAC.NS' : EXC_RECIBIDAS.includes(l.codigo));
+  const motivoSii = (k) => {
+    const ls = idxLibro.get(k); if (!ls || !ls.length) return `No está en el libro de ${emit ? 'emitidas' : 'recibidas'} cargado: revisa el nº de factura (y el NIF) o carga el libro completo`;
+    const campo = emit ? 'ff' : 'fecha', dentro = ls.filter((l) => l[campo] >= r.desde && l[campo] <= r.hasta), cods = [...new Set(ls.map((l) => l.codigo || '(sin código)'))].join(' + ');
+    if (!dentro.length) return `Está en el libro (${cods}) con ${emit ? 'fecha contable' : 'fecha'} ${fdmyL(ls[0][campo])}, fuera del periodo: pásala al periodo del SII o concilia el periodo en que está contabilizada`;
+    if (dentro.every(excluidaL)) return `Está en el libro pero con código ${cods}, que no cuenta en esta conciliación: si debe ir al SII, corrige el código en el libro`;
+    return `Está en el libro (${cods}) y no se empareja: revisa el nº de factura${emit ? '' : ' y el NIF'}`;
+  };
   const A = [...cont.entries()].filter(([k]) => !sm.has(k)).map(([, v]) => v);
-  const B = [...sm.entries()].filter(([k]) => !cont.has(k)).map(([, v]) => v);
+  const B = [...sm.entries()].filter(([k]) => !cont.has(k)).map(([k, v]) => ({ ...v, motivo: motivoSii(k) }));
   const C = [...cont.entries()].filter(([k, v]) => sm.has(k) && (Math.abs(v.base - sm.get(k).base) > MARGEN_SII || Math.abs(v.cuota - sm.get(k).cuota) > MARGEN_SII))
     .map(([k, v]) => ({ fac: v.fac, nif: v.nif, nom: v.nom, bc: v.base, bs: sm.get(k).base, cc: v.cuota, cs: sm.get(k).cuota }));
   const tot = (m) => ({ n: m.size, base: r2n([...m.values()].reduce((s, v) => s + v.base, 0)), cuota: r2n([...m.values()].reduce((s, v) => s + v.cuota, 0)) });
@@ -539,12 +551,12 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   // descuadre por código de impuesto: cada factura va al código (o combinación de códigos) con que está contabilizada
   const facDesc = [], porCod = new Map();
   const add = (cod, c, s) => {
-    if (Math.abs(r2n(c.base - s.base)) > MARGEN_SII || Math.abs(r2n(c.cuota - s.cuota)) > MARGEN_SII) facDesc.push({ cod, fac: c.fac || s.fac, nif: c.nif || s.nif, nom: c.nom || s.nom, bc: c.base, bs: s.base, db: r2n(c.base - s.base), cc: c.cuota, cs: s.cuota, dc: r2n(c.cuota - s.cuota), _c: c });
+    if (Math.abs(r2n(c.base - s.base)) > MARGEN_SII || Math.abs(r2n(c.cuota - s.cuota)) > MARGEN_SII) facDesc.push({ cod, fac: c.fac || s.fac, nif: c.nif || s.nif, nom: c.nom || s.nom, bc: c.base, bs: s.base, db: r2n(c.base - s.base), cc: c.cuota, cs: s.cuota, dc: r2n(c.cuota - s.cuota), motivo: c.motivo || '', _c: c });
     const o = porCod.get(cod) ?? { cod, n: 0, bc: 0, bs: 0, cc: 0, cs: 0 };
     o.n++; o.bc = r2n(o.bc + c.base); o.cc = r2n(o.cc + c.cuota); o.bs = r2n(o.bs + s.base); o.cs = r2n(o.cs + s.cuota); porCod.set(cod, o);
   };
   cont.forEach((v, k) => add([...v.cods].sort().join(' + '), v, sm.get(k) ?? { base: 0, cuota: 0 }));
-  sm.forEach((v, k) => { if (!cont.has(k)) add('Solo en el SII (no contabilizadas)', { base: 0, cuota: 0, fac: v.fac, nif: v.nif, nom: v.nom }, v); });
+  sm.forEach((v, k) => { if (!cont.has(k)) add('Solo en el SII (no contabilizadas)', { base: 0, cuota: 0, fac: v.fac, nif: v.nif, nom: v.nom, motivo: motivoSii(k) }, v); });
   // facturas solo en contabilidad que se anulan entre sí (mismo NIF y código; una factura y su abono): cuadran
   const G = new Map();
   facDesc.forEach((x) => { if (Math.abs(x.bs) < 0.01 && Math.abs(x.cs) < 0.01 && x._c && x._c.cods) { const g = `${String(x.nif || '').toUpperCase()}|${x.cod}`; (G.get(g) ?? G.set(g, []).get(g)).push(x); } });

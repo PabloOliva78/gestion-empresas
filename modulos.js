@@ -2,12 +2,12 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=49';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=50';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
 import { crearModelos } from './modelos.js?v=24';
-import { crearModelos2 } from './modelos2.js?v=3';
+import { crearModelos2 } from './modelos2.js?v=4';
 import { crearModelos3 } from './modelos3.js?v=3';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=6';
@@ -1514,9 +1514,9 @@ export function crearModulos(c) {
         <div><div class="css-4760-t">Descuadre por código de impuesto</div><div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código de impuesto (contabilidad)</th><th>Nº facturas</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th></tr></thead>
           <tbody>${filasCod || '<tr><td colspan="8" class="vacio">Sin datos</td></tr>'}${D.cods.length ? `<tr class="ttot"><td>TOTAL</td><td class="num">${D.cods.reduce((t, o) => t + o.n, 0)}</td>${['bc', 'bs', 'db', 'cc', 'cs', 'dc'].map((k) => `<td class="num">${fnum(rr(D.cods.reduce((t, o) => t + o[k], 0)))}</td>`).join('')}</tr>` : ''}</tbody></table></div></div>
         <div><div class="css-4760-t">Facturas que descuadran${siiCod[s] ? ` · ${esc(siiCod[s])} <button class="small" data-act="m-siicod" data-t="${s}" data-cod="">(ver todas)</button>` : ''} · ${fd.filter((q) => !q.anula).length}${D.anuladas ? ` <span class="est-ok" style="font-weight:400">· ${D.anuladas} que se anulan entre sí (cuadran)</span>` : ''}</div>
-          <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th></tr></thead>
+          <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th><th>Qué pasa / qué hacer</th></tr></thead>
           <tbody>${fd.slice(0, TOPE_C).map((q) => `<tr${q.anula ? ' class="cf-ok" title="Se anula con otra factura del mismo NIF y código: cuadra"' : ''}><td>${esc(q.cod)}${q.anula ? ' ✓' : ''}</td><td>${esc(q.fac || '')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td class="num">${fnum(q.bc)}</td><td class="num">${fnum(q.bs)}</td>
-            <td class="num ${q.anula ? 'est-ok' : Math.abs(q.db) > 0.01 ? 'dif-ko' : ''}">${fnum(q.db)}</td><td class="num">${fnum(q.cc)}</td><td class="num">${fnum(q.cs)}</td><td class="num ${q.anula ? 'est-ok' : Math.abs(q.dc) > 0.01 ? 'dif-ko' : ''}">${fnum(q.dc)}</td></tr>`).join('') || '<tr><td colspan="10" class="vacio">Ninguna factura descuadra</td></tr>'}${mas(fd.length, 10)}</tbody></table></div></div></div>
+            <td class="num ${q.anula ? 'est-ok' : Math.abs(q.db) > 0.01 ? 'dif-ko' : ''}">${fnum(q.db)}</td><td class="num">${fnum(q.cc)}</td><td class="num">${fnum(q.cs)}</td><td class="num ${q.anula ? 'est-ok' : Math.abs(q.dc) > 0.01 ? 'dif-ko' : ''}">${fnum(q.dc)}</td><td>${esc(q.motivo || '')}</td></tr>`).join('') || '<tr><td colspan="11" class="vacio">Ninguna factura descuadra</td></tr>'}${mas(fd.length, 11)}</tbody></table></div></div></div>
       <div class="css-4760-t" style="margin:.8em 1em 0">Facturas declaradas en el SII de forma distinta a su código de impuesto · ${D.malSii.length}</div>
       <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código (contabilidad)</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Debería estar en el SII como</th><th>Está declarada en el SII como</th></tr></thead>
         <tbody>${D.malSii.slice(0, TOPE_C).map((q) => `<tr><td>${esc(q.cods)}</td><td>${esc(q.fac || '')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td>${esc(q.esp)}</td><td class="dif-ko">${esc(q.dec)}</td></tr>`).join('') || '<tr><td colspan="6" class="vacio">Todas las facturas están declaradas en el SII como corresponde a su código</td></tr>'}${mas(D.malSii.length, 6)}</tbody></table></div>
@@ -1525,7 +1525,7 @@ export function crearModulos(c) {
       <p class="hint">Pulsa un código para ver solo sus facturas. Cada factura se asigna al código (o combinación de códigos) con que está contabilizada; el SII no trae código, así que las declaradas que no están en la contabilidad salen aparte. Ordenado de mayor a menor descuadre. Margen para dar por cuadrado: ±0,10 €.</p>
       <div class="css-flex" style="align-items:flex-start;flex-wrap:wrap">
         <div><div class="css-4760-t">A. Contabilizadas que no están en el SII · ${D.A.length}</div>${lst(D.A, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base contab.', 'base', 'n'], ['Cuota contab.', 'cuota', 'n']])}</div>
-        <div><div class="css-4760-t">B. Declaradas en el SII que no están contabilizadas · ${D.B.length}</div>${lst(D.B, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base SII', 'base', 'n'], ['Cuota SII', 'cuota', 'n']])}</div>
+        <div><div class="css-4760-t">B. Declaradas en el SII que no están contabilizadas · ${D.B.length}</div>${lst(D.B, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base SII', 'base', 'n'], ['Cuota SII', 'cuota', 'n'], ['Qué pasa / qué hacer', 'motivo']])}</div>
         <div><div class="css-4760-t">C. En ambos con importes distintos · ${D.C.length}</div>${lst(D.C.map((q) => ({ ...q, db: rr(q.bc - q.bs), dc: rr(q.cc - q.cs) })), [['Factura', 'fac'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}</div>
       </div></section>`;
   }
