@@ -3271,7 +3271,7 @@ export function crearModulos(c) {
   }
   const d365Auto = (on) => d365Cambio((d) => { d.auto = !!on; });
 
-  // ---- Libros de IVA de D365: la tarea semanal deja D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx en la carpeta «Archivos Claude-D365»;
+  // ---- Libros de IVA de D365: la tarea semanal deja D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx en la carpeta «LIBROS IVA D365» (G:\Mi unidad\LIBROS IVA D365);
   // también se recogen los «Líneas de informes de IVA*.xlsx» exportados a mano (la empresa va por el prefijo del asiento). La carpeta se elige una vez y se recuerda en este navegador.
   const idbD365 = (modo, fn) => new Promise((ok, no) => {
     const r = indexedDB.open('gestion-d365', 1);
@@ -3493,7 +3493,7 @@ export function crearModulos(c) {
     return `<div class="inicio"><section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila">
         <label title="Marcado: cada semana se cargan solos los libros que la tarea de D365 deja en la carpeta de exportaciones. Sin marcar: los subes tú como siempre."><input type="checkbox" data-d365auto="1"${cfgD.auto ? ' checked' : ''}${ed ? '' : ' disabled'}> <b>Descarga automática semanal desde D365</b></label>
         ${ed && p ? `<label title="Marcado: ese mes no se vuelve a cargar desde D365."><input type="checkbox" data-d365liq="${lq.join(',')}"${liqHecha ? ' checked' : ''}> <b>Liquidación de IVA hecha · ${esc(per)}</b></label>` : ''}
-        <span class="dash-s">Exportaciones de D365: guárdalas en <b>${esc(d365H?.name ?? 'Archivos Claude-D365')}</b>${ed ? ` ${d365H ? '' : '<button class="small" data-act="m-d365carpeta" data-c="carpeta">Elegir carpeta…</button>'}${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
+        <span class="dash-s">Exportaciones de D365: guárdalas en <b>${esc(d365H?.name ?? 'LIBROS IVA D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta" data-c="carpeta" title="Elige la carpeta G:\\Mi unidad\\LIBROS IVA D365">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button>${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
         <span class="dash-s">${cfgD.auto ? 'Automático' : 'Manual'}${ultimos.length ? ` · liquidados: ${esc(ultimos.join(', '))}` : ''}</span></div>
         ${d365Msg ? `<div class="d-fila"><span class="dash-s">${esc(d365Msg)}</span></div>` : ''}</section>
       <section class="dsec"><h3>Impuestos del periodo · ${esc(per)}</h3>${p ? `<div class="dash-g">${imps.join('') || '<p class="hint">Sin datos de impuestos en este periodo.</p>'}</div>` : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>'}</section>
