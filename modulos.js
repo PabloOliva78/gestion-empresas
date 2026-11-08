@@ -4709,7 +4709,7 @@ export function crearModulos(c) {
 
   // ---- Archivos Documentación: todo lo que se ha dejado en la empresa y cuántas líneas se han leído de cada archivo ----
   const KIND_STORES = { emitidas: ['fact-E', 'fact-R'], recibidas: ['fact-E', 'fact-R'], sii: ['sii-E', 'sii-R'], extractos: ['may-mov'] };
-  const STORES_REV = [['fact-E', 'Libro emitidas', 'ff'], ['fact-R', 'Libro recibidas', 'fecha'], ['sii-E', 'SII emitidas', 'fecha'], ['sii-R', 'SII recibidas', 'fecha'], ['may-mov', 'Extracto contable', 'fecha']];
+  const STORES_REV = [['fact-E', 'Libro emitidas', 'fecha'], ['fact-R', 'Libro recibidas', 'fecha'], ['sii-E', 'SII emitidas', 'fecha'], ['sii-R', 'SII recibidas', 'fecha'], ['may-mov', 'Extracto contable', 'fecha']];
   function revDatos() {
     if (!S.sel) return null;
     const st = {};
