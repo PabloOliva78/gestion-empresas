@@ -541,14 +541,16 @@ export function crearModelos(c) {
       o.nifExp = x === '' ? '' : (iso && Number.isNaN(+x.charAt(2))) ? (iso === 'GR' ? 'EL' : iso) + x.slice(3) : (/^\d+$/.test(x) ? pref + x : x);
       o.incluir = (!f || o.servicio === 'Sí') ? 0 : 1;
       o.valor = o.incluir === 1 ? (intraNum(r[8]) || 0) : 0;
+      // en el fichero AEAT una línea con valor negativo se declara en el flujo contrario (llegada negativa = expedición y al revés); solo cambia el flujo del fichero
+      o.flujoF = (intraNum(r[8]) || 0) < 0 ? (o.flujo === 'Introducción' ? 'Expedición' : o.flujo === 'Expedición' ? 'Introducción' : o.flujo) : o.flujo;
       const av = [];
       if (f) {
         if (o.servicio === 'Sí') av.push('• Servicio: excluido del fichero');
         else {
           if (o.em === '') av.push('✖ País no reconocido'); if (String(r[3] ?? '').trim() === '') av.push('✖ Sin provincia'); if (!((intraNum(r[7]) || 0) > 0)) av.push('✖ Peso 0');
-          if (o.flujo === 'Expedición' && (o.nifExp.length < 4 || o.nifExp.length > 14 || o.nifExp.slice(0, 2) !== (o.em === 'GR' ? 'EL' : o.em))) av.push('✖ NIF IVA no válido');
+          if (o.flujoF === 'Expedición' && (o.nifExp.length < 4 || o.nifExp.length > 14 || o.nifExp.slice(0, 2) !== (o.em === 'GR' ? 'EL' : o.em))) av.push('✖ NIF IVA no válido');
           if (String(r[6] ?? '').trim() === '') av.push('• NC por defecto');
-          if (o.flujo === 'Introducción' && String(r[4] ?? '').trim() === '12') av.push('• Naturaleza 12 en llegada: revisar');
+          if (o.flujoF === 'Introducción' && String(r[4] ?? '').trim() === '12') av.push('• Naturaleza 12 en llegada: revisar');
         }
       }
       o.avisos = av.join(' | ');
@@ -564,7 +566,7 @@ export function crearModelos(c) {
     const nf = (x, d) => { const n = intraNum(x); return n === null ? '' : n.toFixed(d).replace('.', ','); };
     const pr = String(o.r[3] ?? '').trim(), prov = pr === '' ? '' : (/^\d+$/.test(pr) ? pr.padStart(2, '0') : intraTx(pr));
     const cn = String(o.r[4] ?? '').trim(), nat = /^\d+$/.test(cn) ? cn.padStart(2, '0') : intraTx(cn);
-    const nif = (o.flujo === 'Introducción' && C.nifIntro !== 'Sí') ? '' : o.nifExp;
+    const nif = (o.flujoF === 'Introducción' && C.nifIntro !== 'Sí') ? '' : o.nifExp;
     return `${[o.em, prov, intraTx(C.incoterm), nat, intraTx(o.r[5]), '', intraTx(o.nc), o.em, intraTx(C.regimen), nf(o.r[7], 3), '', nf(o.r[8], 2), nf(o.r[9], 2), nif].join(';')};`;
   }
   async function intraAnadirFilas(filas) {
@@ -605,14 +607,14 @@ export function crearModelos(c) {
     const celda = (v, i, j) => { const t = v instanceof Date ? fdmy(fechaUtc(v)) : (v == null ? '' : String(v)); return `<td><input class="facin" data-intracel="${i}|${j}" value="${esc(t)}" size="${Math.max(4, Math.min(28, t.length + 1))}"${dis}></td>`; };
     const lineas = D.rows.length ? `<div class="wrap" style="max-height:520px;overflow:auto"><table class="tabla"><thead><tr><th></th>${INTRA_COLS.map((c) => `<th>${c}</th>`).join('')}<th class="gris">Año</th><th class="gris">Mes</th><th class="gris">Flujo</th><th class="gris">Estado miembro</th><th class="gris">Servicio</th><th class="gris">NC exportar</th><th class="gris">NIF exportar</th><th class="gris">Incluir</th><th class="gris">Valor facturado (€)</th><th class="gris">Avisos</th><th class="gris">Flujo conciliación</th><th class="gris">Importe conciliación (€)</th></tr></thead><tbody>
       ${idx.map(([o, i]) => `<tr data-ffac="${esc(String(o.r[13] || '')).toUpperCase()}" data-fnif="${esc(`${o.r[10] || ''} ${o.nifExp || ''}`).toUpperCase()}" data-fpais="${esc(`${o.r[2] || ''} ${o.em || ''}`).toUpperCase()}" data-fflujo="${esc(`${o.flujo} ${o.flujoConc}`).toUpperCase()}" data-fimp="${esc([o.r[8], o.r[9], o.valor, o.impConc].map((v) => `${v ?? ''} ${typeof v === 'number' ? nf2(v) : ''}`).join(' '))}"><td>${ed ? `<button class="small" data-act="m-intradel" data-i="${i}" title="Quitar esta línea">✖</button>` : ''}</td>${INTRA_COLS.map((_, j) => celda(j === 0 ? (o.fecha ? fdmy(o.fecha) : o.r[0]) : o.r[j], i, j)).join('')}
-        <td class="c">${o.anio}</td><td class="c">${o.mes}</td><td>${o.flujo}</td><td class="c">${o.em}</td><td class="c">${o.servicio}</td><td>${esc(o.nc)}</td><td>${esc(o.nifExp)}</td><td class="c">${o.incluir}</td><td class="num">${guion(o.valor)}</td>
+        <td class="c">${o.anio}</td><td class="c">${o.mes}</td><td${o.flujoF !== o.flujo ? ' title="Valor negativo: en el fichero va en el flujo contrario"' : ''}>${o.flujoF}${o.flujoF !== o.flujo ? ' ↔' : ''}</td><td class="c">${o.em}</td><td class="c">${o.servicio}</td><td>${esc(o.nc)}</td><td>${esc(o.nifExp)}</td><td class="c">${o.incluir}</td><td class="num">${guion(o.valor)}</td>
         <td class="${/✖/.test(o.avisos) ? 'fila-pend' : ''}">${esc(o.avisos)}</td><td>${o.flujoConc}</td><td class="num">${guion(o.impConc)}</td></tr>`).join('')}</tbody></table></div>
       <p class="hint">${idx.length} línea(s) ${mSel ? `de ${MES_L[mSel - 1].toLowerCase()} ` : ''}de ${ej}${D.rows.length > idx0.length ? ` · ${D.rows.length - idx0.length} de otros ejercicios guardadas` : ''}. Las celdas blancas se pueden corregir; las grises se calculan solas.</p>` : '<p class="hint">Sin datos: suelta la descarga de Dynamics o pégala abajo.</p>';
     // exportación
     const E = D.exp, meses = /^\dT$/.test(E.per) ? [1, 2, 3].map((k) => (+E.per[0] - 1) * 3 + k) : [+E.per];
     const flujos = E.flujo === 'ambos' ? ['Expedición', 'Introducción'] : [E.flujo];
     intraFich = []; meses.forEach((m) => flujos.forEach((fl) => {
-      const sel = O.filter((o) => o.anio === ej && o.mes === m && o.flujo === fl && o.incluir === 1), excl = O.filter((o) => o.anio === ej && o.mes === m && o.flujo === fl && o.incluir === 0).length;
+      const sel = O.filter((o) => o.anio === ej && o.mes === m && o.flujoF === fl && o.incluir === 1), excl = O.filter((o) => o.anio === ej && o.mes === m && o.flujoF === fl && o.incluir === 0).length;
       const err = sel.filter((o) => /✖/.test(o.avisos)).length, nombre = `INTRASTAT_${fl === 'Expedición' ? 'E' : 'I'}_${ej}_${String(m).padStart(2, '0')}.txt`;
       const estado = (sel.length === 0 ? 'Sin líneas en este mes' : sel.length > 1000 ? '⚠ Más de 1000 líneas: dividir en varias declaraciones' : err ? `⚠ ${err} línea(s) con errores (✖ en columna Avisos)` : '✓ Listo para exportar') + (excl ? ` · ${excl} servicio(s) excluido(s)` : '');
       intraFich.push({ fl, m, nombre, estado, txt: sel.map((o) => lineaIntra(o, C)).join('\r\n'), n: sel.length });
