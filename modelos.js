@@ -7,6 +7,7 @@ export function crearModelos(c) {
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
   const nf = new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 2 });
   const parseNum = (s) => { const t = String(s ?? '').trim(); if (!t) return null; const v = t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t); return Number.isNaN(v) ? null : v; };
+  const miles232 = (v) => { const n = parseNum(v); return n === null ? String(v ?? '') : n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }); };
   const fmtIn = (v) => (v === '' || v == null ? '' : String(r2(v)).replace('.', ','));
   const nifN = (n) => String(n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '');
   const ejercicio = () => Number(S.ejercicio) || new Date().getFullYear();
@@ -170,7 +171,7 @@ export function crearModelos(c) {
         ${D.cab.just ? `<tr><td>Presentado</td><td>justificante ${esc(D.cab.just)}${D.cab.fpres ? ` · el ${esc(D.cab.fpres)}` : ''}${D.cab.pdf ? ` · ${esc(D.cab.pdf)}` : ''}</td></tr>` : ''}</tbody></table></div>
       <h4 style="margin:6px 0">(3) Información operaciones con personas o entidades vinculadas (art. 13.4 RIS)</h4>
       <div class="wrap" style="overflow-x:auto"><table class="tabla" style="width:auto"><thead><tr><th>#</th>${M232_COLS.map((x) => `<th>${x[1]}</th>`).join('')}<th class="no-print"></th></tr></thead><tbody>
-      ${F.map((f, i) => `<tr><td class="c">${i + 1}</td>${M232_COLS.map(([k, , w]) => `<td><input class="facin${k === 'imp' ? ' num' : ''}" data-m232f="${i}|${k}" value="${esc(f[k] || '')}" size="${w}"${dis}></td>`).join('')}<td class="no-print">${ed ? `<button class="small" data-act="m-232del" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('')
+      ${F.map((f, i) => `<tr><td class="c">${i + 1}</td>${M232_COLS.map(([k, , w]) => `<td><input class="facin${k === 'imp' ? ' num' : ''}" data-m232f="${i}|${k}" value="${esc(k === 'imp' ? miles232(f[k]) : (f[k] || ''))}" size="${w}"${dis}></td>`).join('')}<td class="no-print">${ed ? `<button class="small" data-act="m-232del" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('')
         || `<tr><td colspan="${M232_COLS.length + 2}" class="c">Sin registros: pulsa «Rehacer desde los libros», suelta el 232 presentado o añade líneas</td></tr>`}
       ${F.length ? `<tr class="tot"><td colspan="9">Total ingresos (I) · pagos (P)</td><td class="num">I ${n(tot('I'))}<br>P ${n(tot('P'))}</td><td></td></tr>` : ''}</tbody></table></div>
       <div class="no-print" style="margin-top:6px">${ed ? '<button class="small" data-act="m-232add">+ Añadir registro</button> ' : ''}${ed ? `<button class="small" data-act="m-232prop">Rehacer desde los libros de IVA (${ej})</button> ` : ''}<button class="small primary" data-act="m-232bor">Borrador para presentar</button>
@@ -185,12 +186,13 @@ export function crearModelos(c) {
     F.forEach((f) => { if (!f.nif) return; const g = gk(f.nif, f.op || '01', f.ip === 'P' ? 'P' : 'I'); g.pres = r2(g.pres + (parseNum(f.imp) || 0)); g.hayP = true; g.nom = f.nom || g.nom; });
     Object.entries(OPS).forEach(([k, v]) => { const [nif, op, ip] = k.split('|'); if (Math.abs(v) < 0.005) return; const g = gk(nif, op, ip); g.calc = r2(g.calc + v); });
     const FC = [...CMP.values()].sort((a, b) => a.nom.localeCompare(b.nom) || a.op.localeCompare(b.op) || a.ip.localeCompare(b.ip)).map((x) => ({ ...x, d: r2(x.pres - x.calc) }));
-    const tolC = 1, sumTipo = (op, ip, k) => r2(FC.filter((x) => x.op === op && x.ip === ip).reduce((s, x) => s + x[k], 0));
+    const tolC = 1, sumTipo = (op, ip, k) => r2(FCo.filter((x) => x.op === op && x.ip === ip).reduce((s, x) => s + x[k], 0));
+    const obIds = new Set(R.filas.filter((q) => q.oblig).map((q) => q.id)), FCo = FC.filter((q) => obIds.has(q.nif)); // solo las entidades que superan 250.000 € (las que se declaran)
     const lado = (titulo, nota, k) => {
-      const porTipo = Object.keys(TIPO_OP).flatMap((op) => ['I', 'P'].map((ip) => [op, ip])).filter(([op, ip]) => FC.some((x) => x.op === op && x.ip === ip && Math.abs(x[k]) > 0.004));
-      const totI = r2(FC.filter((x) => x.ip === 'I').reduce((s, x) => s + x[k], 0)), totP = r2(FC.filter((x) => x.ip === 'P').reduce((s, x) => s + x[k], 0));
+      const porTipo = Object.keys(TIPO_OP).flatMap((op) => ['I', 'P'].map((ip) => [op, ip])).filter(([op, ip]) => FCo.some((x) => x.op === op && x.ip === ip && Math.abs(x[k]) > 0.004));
+      const totI = r2(FCo.filter((x) => x.ip === 'I').reduce((s, x) => s + x[k], 0)), totP = r2(FCo.filter((x) => x.ip === 'P').reduce((s, x) => s + x[k], 0));
       const filasT = porTipo.map(([op, ip]) => `<tr><td>${op} · ${esc(TIPO_OP[op])}</td><td>${ip === 'I' ? 'Ingresos' : 'Pagos'}</td><td class="n">${n(sumTipo(op, ip, k))}</td></tr>`).join('');
-      const filasE = FC.filter((x) => Math.abs(x[k]) > 0.004).map((x) => `<tr><td>${esc(x.nom)}</td><td>${esc(x.nif)}</td><td>${x.op} · ${esc(TIPO_OP[x.op] || '')}</td><td>${x.ip === 'I' ? 'Ingreso' : 'Pago'}</td><td class="n">${n(x[k])}</td></tr>`).join('');
+      const filasE = FCo.filter((x) => Math.abs(x[k]) > 0.004).map((x) => `<tr><td>${esc(x.nom)}</td><td>${esc(x.nif)}</td><td>${x.op} · ${esc(TIPO_OP[x.op] || '')}</td><td>${x.ip === 'I' ? 'Ingreso' : 'Pago'}</td><td class="n">${n(x[k])}</td></tr>`).join('');
       return `<div class="c232"><h4 style="margin:0 0 2px">${titulo}</h4><p class="hint" style="margin:0 0 6px">${nota}</p>
         <h5 style="margin:6px 0 4px">Resumen por tipo de operación</h5>
         <div class="wrap"><table class="tabla it-conc" style="width:100%"><thead><tr><th>Tipo de operación</th><th>Ingreso / Pago</th><th>Importe</th></tr></thead><tbody>${filasT || '<tr><td colspan="3" class="c">Sin operaciones</td></tr>'}
