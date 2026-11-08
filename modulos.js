@@ -1085,7 +1085,7 @@ export function crearModulos(c) {
   const celdasNum = (v) => `<td class="num">${eur(v)}</td>`;
 
   // ---------- Facturas emitidas / recibidas: cabecera de filtros, columnas y acciones por línea ----------
-  let fcCod = '', fcPais = '', fcQ = '';
+  let fcCod = '', fcPais = '', fcQ = '', fcLim = 300; const fcTxt = new WeakMap();
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const PREFIJOS = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'GB', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'XI', 'CH', 'NO', 'US', 'AD', 'MA']);
   const paisDe = (nif) => {
@@ -1127,7 +1127,7 @@ export function crearModulos(c) {
     let f = datos.filter((l) => { const d = s === 'E' ? l.ff : l.fecha; return d >= r.desde && d <= r.hasta; });
     if (fcCod) f = f.filter((l) => l.codigo === fcCod);
     if (fcPais) f = f.filter((l) => paisL(l) === fcPais);
-    if (fcQ) { const q = sinAc(fcQ); f = f.filter((l) => sinAc(`${l.nif} ${l.nombre} ${l.factura}`).includes(q) || buscaImporte(l, fcQ)); }
+    if (fcQ) { const q = sinAc(fcQ), num = /^[-+]?[\d.,\s€]+$/.test(fcQ.trim()); f = f.filter((l) => { let t = fcTxt.get(l); if (t === undefined) { t = sinAc(`${l.nif} ${l.nombre} ${l.factura}`); fcTxt.set(l, t); } return t.includes(q) || (num && buscaImporte(l, fcQ)); }); }
     return f;
   }
   // Si lo escrito es un importe, casa con la base o la cuota (exacto) o con parte del importe (3 cifras o más)
@@ -1185,12 +1185,12 @@ export function crearModulos(c) {
       if (!ed) return `<td class="c">${esc(v)}</td>`;
       return `<td class="in c"><select data-fce="${s}|${idx.get(l)}|exenc" title="${esc(EXENCIONES.find(([k]) => k === v)?.[1] ?? '')}"><option value=""></option>${EXENCIONES.map(([k, t]) => `<option value="${esc(k)}"${k === v ? ' selected' : ''} title="${esc(t)}">${esc(k)}</option>`).join('')}</select></td>`;
     };
-    const filas = f.map((l) => { // todas las líneas del periodo, sin límite
+    const filas = f.slice(0, fcLim).map((l) => { // por tandas para que no se bloquee (el total y la búsqueda cuentan todas)
       const p = paisL(l);
       return `<tr class="fc">${ci(l, 'fecha', fmt(s === 'E' ? l.ff : l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(s === 'E' ? l.fecha : l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
         ${ci(l, 'pais', p)}${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
         ${ci(l, 'rec', l.rec !== undefined ? fnum(l.rec) : (/^R\.RC\./.test(l.codigo) ? fnum(l.cuota) : ''), 'num')}${exCell(l)}${ci(l, 'clasif', l.clasif ?? clasif(l.codigo))}<td class="acc">${l.manual ? '<span class="hint">a mano</span> ' : ''}${acc(l)}</td></tr>`;
-    }).join('');
+    }).join('') + (f.length > fcLim ? `<tr><td colspan="15" class="c"><b>Se muestran ${fcLim} de ${f.length} líneas.</b> <button class="pill" data-act="m-fcmas">Mostrar 500 más</button> <button class="pill" data-act="m-fcmas" data-t="1">Mostrar todas</button> <span class="hint">Escribe en el buscador para filtrar entre todas.</span></td></tr>` : '');
     const nv = fcNueva?.s === s && puede() ? (() => {
       const ni = (c, ph, cls = '') => `<td class="in ${cls}"><input data-fcnv="${c}" value="${esc(fcNueva[c] ?? '')}" placeholder="${ph}"${c === 'codigo' ? ' list="fcCods"' : ''}></td>`;
       return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}<td></td><td></td>${ni('factura', 'nº factura', 'tl')}${ni('nif', 'NIF', 'tl')}${ni('nombre', 'nombre', 'tl')}<td></td>${ni('codigo', 'código')}${ni('base', 'base', 'num')}${ni('pct', '% IVA', 'num')}${ni('cuota', 'cuota (auto)', 'num')}<td></td>${s === 'E' ? '<td></td>' : ''}<td></td>
@@ -1223,7 +1223,8 @@ export function crearModulos(c) {
   }
 
   // La búsqueda actualiza solo la tabla, para no perder el cursor al escribir
-  function buscarFc(v) {
+  function buscarFc(v, mas) {
+    if (!mas) fcLim = 300;
     fcQ = v;
     const s = sentidoTab(), datos = GR.get(`fact-${s}|${S.sel}`);
     if (!datos) return;
@@ -1272,7 +1273,7 @@ export function crearModulos(c) {
     try { await navigator.clipboard.writeText(n); } catch (_) { /* si no se copia, se escribe a mano */ }
     if (w) try { w.focus(); } catch (_) { /* otra pestaña */ }
   }
-  function setFc(campo, valor) { if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
+  function setFc(campo, valor) { fcLim = 300; if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
 
   // S.NC.ISP.A (ISP autorrepercutida) va siempre en el libro repercutido: lo que haya en el soportado se pasa (sin repetir lo que ya está)
   async function moverIspA(empresaId) {
@@ -4406,6 +4407,7 @@ export function crearModulos(c) {
       'm-esker': () => buscarEsker(d.n),
       'm-siixl': () => excelConcSii(d.s),
       'm-fcnv': () => fcNvAbrir(d.s),
+      'm-fcmas': () => { fcLim = d.t ? 1e9 : fcLim + 500; buscarFc(fcQ, true); },
       'm-fcnvok': () => fcNvOk(),
       'm-fcnvx': () => { fcNueva = null; render(); },
       'm-manret': () => formManRet(d.m),
