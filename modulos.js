@@ -1753,7 +1753,6 @@ export function crearModulos(c) {
         ${sec('Información adicional')}
         ${fila('Entregas intracomunitarias de bienes y servicios', '', '', bx('59', g.entregas.base))}
         ${fila('Exportaciones y operaciones asimiladas', '', '', bx('60', g.export.base))}
-        ${fila(`Operaciones no sujetas por reglas de localización (excepto las incluidas en la casilla 123)${nota('R.NAC.NS')}`, '', '', bx('120', g.locNS.base))}
         ${fila(`Operaciones sujetas con inversión del sujeto pasivo${nota('R.ISP · art. 84.1.2º.c')}`, '', '', bx('122', g.nosuj.base))}
         ${fila(`Operaciones exentas o no sujetas interiores${nota('casilla por verificar')}`, '', '', bx('¿?', g.exVentas.base + g.exCompras.base, 'warn'))}
         ${sec('Resultado')}
