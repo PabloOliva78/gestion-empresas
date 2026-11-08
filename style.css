@@ -1167,3 +1167,20 @@ body.fr-arrastrando { user-select: none; }
 table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 @media (prefers-color-scheme: dark) { table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #3a4254; } }
 @media print { table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #9aa3b5; } }
+
+/* Modelo 349 · copia de la antigua: bloque del fichero .txt, relación de operadores y facturas incluidas */
+.t349 .t349-b { padding: 8px 16px 12px; }
+.t349 .man-lbl { color: var(--muted); font-size: 14px; font-weight: 400; }
+.t349 table.t349-t, .t349 table.t349-rect { border-collapse: collapse; width: 100%; font-size: 14px; table-layout: fixed; margin-top: 4px; }
+.t349 table.rel th, .t349 table.t349-rect th { background: #1f3864; color: #fff; font-weight: 600; padding: 7px 8px; text-align: center; border: 1px solid #33507f; }
+.t349 table.rel td, .t349 table.t349-rect td { border: 1px solid #e3e6ec; padding: 5px 8px; vertical-align: top; overflow-wrap: break-word; }
+.t349 td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.t349 td.c { text-align: center; white-space: nowrap; }
+.t349 tr.aviso td { background: #fffaf0; }
+.t349 table.t349-rect input[type=checkbox] { width: 16px; height: 16px; }
+.t349 .filtros input, .t349 .filtros select { border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; font-size: 14px; background: #fff; color: var(--text); width: auto; }
+.t349 .lst-scroll { overflow: auto; border: 1px solid #c9d3e6; border-radius: 3px; overscroll-behavior: contain; }
+.t349 table.aud { table-layout: auto; width: auto; min-width: 100%; border-collapse: collapse; font-size: 14px; color: #002060; margin: 0; }
+.t349 table.aud th { background: #002060; color: #fff; font-weight: 400; padding: 10px 6px; border: 1px solid #3a5a9a; text-align: center; position: sticky; top: -1px; z-index: 3; }
+.t349 table.aud td { padding: 2px 6px; border-left: 1px dotted #8ea9db; border-right: 1px dotted #8ea9db; border-bottom: 0; border-top: 1px solid #e3e6ec; white-space: nowrap; }
+.t349 table.aud tr.totano td { background: #ddebf7; font-weight: 700; }

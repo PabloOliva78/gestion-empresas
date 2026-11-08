@@ -864,6 +864,33 @@ export function calcular349(libroE, libroR, ej, periodo) {
   return { periodo: r, detalle, porClave, porOperador, operadores: nOp(detalle), total: r2n(detalle.reduce((a, d) => a + d.base, 0)) };
 }
 
+// 349 de la antigua: operadores agrupados por país, NIF comunitario y clave; las facturas negativas van aparte como rectificaciones
+export const UE_PAISES = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'XI'];
+export const esUE = (c) => UE_PAISES.includes(c);
+const esNifEsp = (n) => /^[0-9]{8}[A-Z]$/.test(n) || /^[XYZKLM][0-9]{7}[A-Z]$/.test(n) || /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n);
+export function calcular349Ops(libroE, libroR, ej, periodo) {
+  const r = rangoPeriodo(ej, periodo), grupos = new Map(), gruposR = new Map();
+  for (const [clave, , lib, cods] of CLAVES349) {
+    for (const l of (lib === 'E' ? libroE : libroR)) {
+      if (!(l.fecha >= r.desde && l.fecha <= r.hasta && cods.includes(l.codigo))) continue;
+      let n = String(l.nif ?? '').toUpperCase().replace(/[\s.\-/]/g, ''), pais = '?';
+      if (/^[A-Z]{2}/.test(n) && !esNifEsp(n)) { const pre = n.slice(0, 2) === 'GR' ? 'EL' : n.slice(0, 2); pais = pre; n = n.slice(2); } // el prefijo del NIF dice el país
+      const k = `${pais}|${n}|${clave}`, G = l.base < 0 ? gruposR : grupos;
+      const gr = G.get(k) ?? { pais, nif: n, nombre: l.nombre, clave, base: 0, n: 0, avisos: new Set(), lineas: [] };
+      gr.base = r2n(gr.base + l.base); gr.n++; gr.lineas.push({ ...l, side: lib === 'E' ? 'rep' : 'sop', tipoop: l.codigo });
+      if (pais === '?' || !pais) gr.avisos.add('El NIF no lleva prefijo de país: no sé de qué Estado miembro es; complétalo antes de presentar');
+      else if (!esUE(pais)) gr.avisos.add(`País ${pais} no es un Estado miembro: esta operación probablemente no va en el 349`);
+      if (!n) gr.avisos.add('Falta el NIF-IVA');
+      G.set(k, gr);
+    }
+  }
+  const orden = (a, b) => a.clave.localeCompare(b.clave) || String(a.nombre).localeCompare(String(b.nombre));
+  const ops = [...grupos.values()].sort(orden), rect = [...gruposR.values()].sort(orden), avisos = [];
+  ops.forEach((o) => { if (o.base < 0) avisos.push(`${o.nombre} (${o.clave}): el neto del periodo es negativo; las rectificaciones de periodos anteriores se declaran en el apartado de rectificaciones, no aquí`); });
+  avisos.push('No se calculan rectificaciones de periodos anteriores ni las claves de ventas en consigna (M, H, R, D, C): si las tienes, añádelas en la presentación');
+  return { ops, rect, nOps: ops.length, total: r2n(ops.reduce((s, o) => s + o.base, 0)), nRect: rect.length, totRect: r2n(rect.reduce((s, o) => s + o.base, 0)), avisos, periodo: r };
+}
+
 // ---------- Retenciones (111 profesionales, 115, 123): libro soportado por código de impuesto, cuotas en positivo ----------
 export const RET = {
   111: [['I.PR.GN', 'Actividades profesionales - tipo general'], ['I.PR.PRA', 'Profesionales - inicio de actividad'], ['I.PR.SR', 'Actividades profesionales - tipo reducido']],

@@ -1,7 +1,8 @@
 // Bloque 4 · 349, 390 y resúmenes anuales 180 / 190 / 193 con el diseño de la aplicación antigua
 // (ficha del impreso para el 349; cuadro de doce meses o cuatro trimestres para el 390 y los resúmenes anuales).
+import { calcular349Ops, esUE } from './lectores.js?v=48';
 export function crearModelos2(c) {
-  const { S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet } = c;
+  const { S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet, render } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -241,32 +242,112 @@ export function crearModelos2(c) {
       ${cuadro(D.ej, D.pers, ['Perceptor', 'NIF', 'Clave'], 'Base ret.', 'Retención', F, D, ' tanual')}</section>`;
   }
 
-  // ================= 349 · ficha del impreso con el resumen y las operaciones por operador =================
+  // ================= 349 · copia de la pestaña de la antigua: fichero .txt, resumen, relación de operadores y facturas incluidas =================
+  const lsKey = () => `txt349-${S.sel}`;
+  const lsGet = () => { try { return JSON.parse(localStorage.getItem(lsKey()) || '{}') || {}; } catch { return {}; } };
+  const lsSet = (o) => { try { localStorage.setItem(lsKey(), JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
+  const fdateIso = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '');
+  const nf2 = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  // diseño de registro de la AEAT: 500 posiciones, ISO-8859-1
+  function t349Cfg() {
+    const c = lsGet(), p = S.periodo ?? '', perDef = esTrim() ? (/^\d\d$/.test(p) ? `${Math.ceil(+p / 3)}T` : p) : p;
+    return { per: c.per || perDef, tel: c.tel || '', cont: c.cont || '', just: c.just || '', comp: c.comp || '', ant: c.ant || '' };
+  }
+  const txtAlfa = (v, n) => String(v || '').toUpperCase().replace(/Ñ/g, '\u0001').replace(/Ç/g, '\u0002').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\u0001/g, 'Ñ').replace(/\u0002/g, 'Ç').replace(/[^A-Z0-9Ñ &,.\-'/()]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n).padEnd(n, ' ');
+  const txtNum = (v, n) => String(Math.round(Math.abs(+v || 0))).padStart(n, '0').slice(-n);
+  const datos349 = () => calcular349Ops(grande('fact-E') ?? [], grande('fact-R') ?? [], ejercicio(), S.periodo);
+  function bloque349Txt(m) {
+    const c = t349Cfg(), inp = (k, ph, w) => `<input data-t349="${k}" value="${esc(c[k])}" placeholder="${ph}" style="width:${w}ch">`;
+    const neg = m.rect, R = lsGet().rect ?? {}, ej = String(ejercicio()), cP = c.per;
+    const rect = neg.length ? `<h4 style="margin:10px 0 4px">Facturas negativas → rectificaciones</h4><table class="tabla t349-rect" style="width:100%;table-layout:fixed;font-size:12px"><colgroup><col style="width:22%"><col style="width:5%"><col style="width:19%"><col style="width:9%"><col style="width:8%"><col style="width:11%"><col style="width:10%"><col style="width:11%"><col style="width:5%"></colgroup><thead><tr><th>Operador</th><th>Clave</th><th>Facturas negativas</th><th>Importe</th><th>Ejercicio rectificado</th><th>Periodo rectificado</th><th>Base declarada anteriormente</th><th>Base rectificada (nueva)</th><th>Excluir</th></tr></thead><tbody>
+      ${neg.map((o) => { const k = `${o.pais}|${o.nif}|${o.clave}`, r = R[k] ?? {}, def = { ej, per: cP, ant: nf2(-o.base), nue: nf2(0) }, f = (cc) => `<input value="${esc(def[cc])}" readonly tabindex="-1" style="width:100%;box-sizing:border-box;text-align:right;color:#555;background:#f4f4f4">`;
+        return `<tr><td>${esc(o.pais + o.nif)} · ${esc(o.nombre)}</td><td class="c">${o.clave}</td><td>${o.lineas.map((l) => esc((l.factura || 's/n') + (l.fecha ? ` (${fdateIso(l.fecha)})` : ''))).join('<br>')}</td><td class="n">${money(o.base)}</td><td>${f('ej')}</td><td>${f('per')}</td><td>${f('ant')}</td><td>${f('nue')}</td><td class="c"><input type="checkbox" data-t349r="${esc(k)}|exc"${r.exc ? ' checked' : ''}></td></tr>`; }).join('')}</tbody></table>
+      <p class="leyenda">Las facturas negativas no restan del neto: van como registro de rectificación (por operador y clave). Automático: ejercicio y periodo de esta declaración, base declarada anteriormente = importe del abono y base rectificada = 0 (declarada + importe). «Excluir» lo deja fuera del fichero.</p>` : '';
+    return `<div class="filtros" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <label>Periodo <select data-t349="per">${['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '1T', '2T', '3T', '4T', '0A'].map((v) => `<option${v === c.per ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label>Teléfono contacto ${inp('tel', '9 dígitos', 11)}</label><label>Persona de contacto ${inp('cont', 'Apellidos y nombre', 28)}</label>
+      <label>Nº justificante ${inp('just', '349 + 10 dígitos', 15)}</label>
+      <label>Tipo <select data-t349="comp"><option value=""${!c.comp ? ' selected' : ''}>Normal</option><option value="C"${c.comp === 'C' ? ' selected' : ''}>Complementaria</option><option value="S"${c.comp === 'S' ? ' selected' : ''}>Sustitutiva</option></select></label>
+      ${c.comp ? `<label>Nº justificante anterior ${inp('ant', '13 dígitos', 15)}</label>` : ''}
+      <button class="btn small" data-gen349="1">Generar fichero .txt 349</button></div>${rect}
+      <p class="leyenda">Fichero para «Presentación mediante fichero» en la sede de la AEAT: registro 1 (declarante), un registro 2 por operador y un registro 2 de rectificación por cada operador/clave con facturas negativas. El justificante, si se deja vacío, se genera (349 + 10 dígitos).</p>`;
+  }
+  function generar349Txt() {
+    const m = datos349(), c = t349Cfg(), e = empresa(), ej = String(ejercicio()), err = [];
+    if (!e) return;
+    if (!m.ops.length && !m.rect.length) err.push('No hay operadores en el periodo');
+    m.ops.concat(m.rect).forEach((o) => { if (!o.pais || o.pais === '?' || !esUE(o.pais)) err.push(`${o.nombre}: país UE no válido (${o.pais || 'vacío'})`); if (!o.nif) err.push(`${o.nombre}: falta NIF-IVA`); });
+    const R = lsGet().rect ?? {}, rect = [];
+    m.rect.forEach((o) => {
+      const r = R[`${o.pais}|${o.nif}|${o.clave}`] ?? {}; if (r.exc) return;
+      const rej = ej, rper = String(c.per || '').padStart(2, '0'); const ant = r2(-o.base); let nue = null;
+      if (nue === null && ant !== null) nue = r2(ant + o.base); else if (nue !== null && nue < 0 && ant !== null) nue = r2(ant + nue);
+      const q = `${o.nombre} (${o.clave}, abono ${nf2(o.base)}): `;
+      if (!/^\d{4}$/.test(rej)) err.push(`${q}ejercicio rectificado no válido`);
+      else if (!/^(0[1-9]|1[0-2]|[1-4]T|0A)$/.test(rper)) err.push(`${q}periodo rectificado no válido (01-12, 1T-4T)`);
+      else if (ant === null) err.push(`${q}falta la base declarada anteriormente en el 349 de ${rper}/${rej}`);
+      else if (nue < 0) err.push(`${q}la base rectificada sale negativa (${nf2(nue)}). La base declarada anteriormente (${nf2(ant)}) debe ser la base total que se declaró para este operador y clave en ${rper}/${rej}; la rectificada = declarada − abono. Si no consta declarada, márcalo Excluir`);
+      else rect.push({ o, rej, rper, ant, nue });
+    });
+    if (!c.per) err.push('Elige el periodo del fichero');
+    if (c.tel && !/^\d{9}$/.test(c.tel)) err.push('Teléfono: 9 dígitos');
+    if (c.just && !/^349\d{10}$/.test(c.just)) err.push('Nº justificante: 349 + 10 dígitos');
+    if (c.comp && !/^349\d{10}$/.test(c.ant)) err.push('Nº justificante anterior obligatorio en complementaria/sustitutiva');
+    if (err.length) { alert(`No se genera el fichero:\n- ${err.join('\n- ')}`); return; }
+    const just = c.just || `349${String(Date.now()).slice(-10)}`, nif = txtAlfa(e.cif, 9), cent = (v) => Math.round(Math.abs(v) * 100);
+    const pos = m.ops.filter((o) => o.base >= 0), tot = pos.reduce((s, o) => s + cent(o.base), 0), totR = rect.reduce((s, x) => s + cent(x.nue), 0);
+    if (!pos.length && !rect.length) { alert('No hay operadores que incluir'); return; }
+    let r1 = `1349${ej}${nif}${txtAlfa(e.nombre, 40)}T${txtNum(c.tel, 9).replace(/^0{9}$/, '         ')}${txtAlfa(c.cont, 40)}${just}${c.comp === 'C' ? 'C' : ' '}${c.comp === 'S' ? 'S' : ' '}${c.comp ? c.ant : '0'.repeat(13)}${c.per.padEnd(2)}${txtNum(pos.length, 9)}${txtNum(tot, 15)}${txtNum(rect.length, 9)}${txtNum(totR, 15)} `;
+    r1 = r1.padEnd(500, ' ');
+    const cab2 = (o) => `2349${ej}${nif}${' '.repeat(58)}${txtAlfa(o.pais, 2)}${txtAlfa(String(o.nif).replace(/[^A-Za-z0-9]/g, ''), 15)}${txtAlfa(o.nombre, 40)}${o.clave}`;
+    const r2s = pos.map((o) => (cab2(o) + txtNum(cent(o.base), 13)).padEnd(500, ' ')).concat(rect.map((x) => (cab2(x.o) + ' '.repeat(13) + x.rej + x.rper + txtNum(cent(x.nue), 13) + txtNum(cent(x.ant), 13)).padEnd(500, ' ')));
+    const txt = [r1].concat(r2s).join('\r\n'), bad = [r1].concat(r2s).find((x) => x.length !== 500);
+    if (bad) { alert('Error interno: registro con longitud distinta de 500'); return; }
+    const bytes = new Uint8Array(txt.length); for (let i = 0; i < txt.length; i++) { const k = txt.charCodeAt(i); bytes[i] = k < 256 ? k : 32; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: 'text/plain;charset=iso-8859-1' }));
+    a.download = `${e.cif}_349_${ej}_${c.per}.txt`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    if (!c.just) { const o = lsGet(); o.just = just; lsSet(o); render(); }
+  }
+  document.addEventListener('change', (ev) => {
+    const t = ev.target; if (!t?.dataset) return;
+    if (t.dataset.t349) { const o = lsGet(); o[t.dataset.t349] = t.value.trim(); lsSet(o); render(); }
+    else if (t.dataset.t349r) { const [k, f] = t.dataset.t349r.split('|'), o = lsGet(); (o.rect ??= {}); (o.rect[k] ??= {})[f] = t.checked; lsSet(o); render(); }
+  });
+  document.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-gen349]')) generar349Txt(); });
   function vista349() {
     if (!S.sel) return sinEmpresa;
     const E = grande('fact-E'), R = grande('fact-R');
     if (!E || !R) return cargandoTxt;
     if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
-    const e = empresa(), ej = ejercicio(), p = S.periodo, cc = calcular349(E, R, ej, p);
-    const cl = { E: 'E · Entregas intracomunitarias de bienes', A: 'A · Adquisiciones intracomunitarias de bienes', T: 'T · Entregas en operaciones triangulares', S: 'S · Prestaciones intracomunitarias de servicios', I: 'I · Adquisiciones intracomunitarias de servicios' };
+    const e = empresa(), ej = ejercicio(), p = S.periodo, m = calcular349Ops(E, R, ej, p);
+    const cl = { E: 'E', A: 'A', T: 'T', S: 'S', I: 'I' };
     const sec = (t) => `<div class="f303-sec">${t}</div>`;
     const fila = (lb, q, cls = '') => `<div class="f-row l1 ${cls}"><span class="lb">${lb}</span>${q}</div>`;
-    const ops = cc.porOperador.map((o) => ({ ...o, n: new Set(cc.detalle.filter((d) => d.nif === o.nif && d.clave === o.clave).map((d) => d.factura)).size, pais: String(o.nif ?? '').slice(0, 2).toUpperCase(),
-      aviso: !o.nif ? 'Sin NIF comunitario' : '' }));
-    const tabla = ops.length ? `<h4 class="it-sec">Operaciones intracomunitarias</h4><div class="wrap"><table class="tabla"><thead><tr><th>Código país</th><th>NIF comunitario</th><th>Nombre o razón social</th><th>Clave de operación</th><th class="num">Base imponible</th><th>Facturas</th><th>Avisos</th></tr></thead><tbody>
-      ${ops.map((o) => `<tr class="${o.aviso ? 'fila-pend' : ''}"><td class="c">${esc(o.pais)}</td><td>${esc(o.nif)}</td><td>${esc(o.nombre)}</td><td>${esc(cl[o.clave] ?? o.clave)}</td><td class="num">${money(o.base)}</td><td class="c">${o.n}</td><td>${esc(o.aviso)}</td></tr>`).join('')}
-      <tr class="tot"><td colspan="4">Total</td><td class="num">${money(cc.total)}</td><td class="c">${ops.reduce((s, o) => s + o.n, 0)}</td><td></td></tr></tbody></table></div>` : '<p class="hint">No hay operaciones intracomunitarias en el periodo.</p>';
-    return `<div class="f303"><div class="f303-top"><div class="ag"><b>Agencia Tributaria</b><small>Borrador para transcribir en la Sede Electrónica</small></div>
+    const caja = (v, cls = '') => `<span class="bx ${cls}"><b></b><span class="v">${v}</span></span>`;
+    const rel = m.ops.length ? `<table class="t349-t rel"><colgroup><col style="width:70px"><col style="width:170px"><col><col style="width:80px"><col style="width:170px"></colgroup>
+      <thead><tr><th>Código país</th><th>NIF comunitario</th><th>Apellidos y nombre o razón social</th><th>Clave</th><th>Base imponible</th></tr></thead><tbody>
+      ${m.ops.map((o) => `<tr class="${o.avisos.size ? 'aviso' : ''}" title="${esc([...o.avisos].join('; '))}"><td class="c">${esc(o.pais)}</td><td>${esc(o.nif)}</td><td>${esc(o.nombre)}${o.avisos.size ? ` <span class="man-lbl">⚠ ${esc([...o.avisos].join('; '))}</span>` : ''}</td><td class="c"><b>${cl[o.clave] || o.clave}</b></td><td class="n">${money(o.base)}</td></tr>`).join('')}
+      </tbody></table>
+      <p class="leyenda" style="margin:8px 0 0">Claves: E entregas intracomunitarias de bienes · A adquisiciones intracomunitarias de bienes · T operaciones triangulares · S prestaciones intracomunitarias de servicios · I adquisiciones intracomunitarias de servicios.</p>`
+      : '<p class="leyenda">No hay operaciones intracomunitarias en el periodo.</p>';
+    const fact = m.ops.length ? `<div class="lst-scroll" style="max-height:480px"><table class="t349-t aud"><thead><tr><th>Clave</th><th>Libro</th><th>Fecha</th><th>Factura</th><th>País</th><th>NIF</th><th>Nombre</th><th>Código impuesto</th><th>Base imponible</th></tr></thead><tbody>
+      ${m.ops.map((o) => o.lineas.slice().sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || ''))).map((l) => `<tr><td class="c"><b>${o.clave}</b></td><td>${l.side === 'rep' ? 'Emitida' : 'Recibida'}</td><td class="c">${fdateIso(l.fecha)}</td><td>${esc(l.factura || '')}</td><td class="c">${esc(o.pais)}</td><td>${esc(l.nif || '')}</td><td>${esc(l.nombre || '')}</td><td>${esc(l.tipoop || '')}</td><td class="n">${money(l.base)}</td></tr>`).join('')
+        + `<tr class="totano"><td colspan="8">Total ${o.clave} · ${esc(o.nombre)} (${o.n} factura${o.n > 1 ? 's' : ''})</td><td class="n">${money(o.base)}</td></tr>`).join('')}
+      </tbody></table></div>` : '';
+    return `${avisos(m.avisos)}<p class="hint">Se agrupa por país, NIF comunitario y clave. Las facturas con NIF de otro Estado miembro se detectan solas; el resto depende del código de impuesto del libro de IVA.</p>
+      <div class="f303 t349"><div class="f303-top"><div class="ag"><b>Agencia Tributaria</b><small>Borrador para transcribir en la Sede Electrónica</small></div>
         <div class="tt">Declaración recapitulativa de operaciones intracomunitarias</div><div class="mod"><small>Modelo</small><b>349</b></div></div>
       ${sec('Identificación')}<div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e?.cif)}</span></span><span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(e?.nombre)}</span></span></div>
       ${sec('Devengo')}<div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${ej}</span></span><span class="idbox"><b>Período</b><span>${esc(p || '—')}</span></span></div>
+      ${sec('Fichero .txt para presentar')}<div class="t349-b">${bloque349Txt(m)}</div>
       ${sec('Resumen de los datos incluidos en la declaración')}
-      ${fila('Número total de operadores intracomunitarios', `<span class="bx"><b></b><span class="v">${cc.operadores}</span></span>`)}
-      ${fila('<b>Importe de las operaciones intracomunitarias</b>', `<span class="bx tot"><b></b><span class="v">${money(cc.total)}</span></span>`)}</div>
-      ${p ? '' : '<p class="hint">Sin periodo elegido se muestra el ejercicio completo.</p>'}${tabla}
-      <p class="hint">Borrador de trabajo. Claves de operación: E entregas de bienes · S servicios prestados · A adquisiciones de bienes · I servicios adquiridos · C rectificaciones. Verificar antes de presentar.</p>`;
+      ${fila('Número total de operadores intracomunitarios', caja(m.nOps))}
+      ${fila('<b>Importe de las operaciones intracomunitarias</b>', caja(money(m.total), 'tot'))}
+      ${fila('Número total de operadores intracomunitarios con rectificaciones', caja(m.nRect || 0))}
+      ${fila('Facturas negativas del periodo (rectificaciones) <span class="man-lbl">el importe a declarar es la base rectificada, ver «Fichero .txt»</span>', caja(money(m.totRect || 0)))}
+      ${sec('Relación de operadores intracomunitarios')}<div class="t349-b">${rel}</div>
+      ${m.ops.length ? `${sec('Facturas incluidas en la declaración')}<div class="t349-b">${fact}</div>` : ''}</div>`;
   }
-
   const tabs = {
     mod349: ['Modelo 349', 'Intracomunitarias', vista349],
     mod390: ['Modelo 390', 'Resumen anual IVA', vista390],
