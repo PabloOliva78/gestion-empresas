@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=220';
+import { crearModulos } from './modulos.js?v=221';
 import { activarRedimension, activarCajas } from './tablas.js?v=5';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -58,6 +58,7 @@ const ORDEN_EMP = [['HEROGRA FERTILIZANTES S.A.', /herogra\s+fertiliz/i], ['HERO
   ['MOTRILEÑA DE LIQUIDOS S.L.', /motrile/i], ['FARM CHEMICALS FGA S.L.', /farm\s*chemicals/i], ['PASEO DE CENES S.L.', /paseo\s*(de\s*)?cenes/i]];
 const idxEmp = (e) => ORDEN_EMP.findIndex(([, re]) => re.test(e?.nombre ?? ''));
 const etiquetaEmp = (e) => { const i = idxEmp(e); return i < 0 ? e.nombre : `${i + 1}.- ${ORDEN_EMP[i][0]}`; };
+const nombreEmp = (e) => { const i = idxEmp(e); return i < 0 ? (e?.nombre ?? '') : ORDEN_EMP[i][0]; }; // nombre de la empresa tal como se ve en la aplicación (sin el número)
 
 function empresaSelector() {
   const e = S.empresas.find((x) => x.id === S.sel);
@@ -713,7 +714,7 @@ function formCalendario() {
 }
 
 // Bloques 1 y 2 (ver modulos.js): se añaden a las pestañas ya definidas.
-const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml, idxEmp });
+const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml, idxEmp, nombreEmp });
 Object.assign(TABS, M.tabs);
 
 // Buscador de pestañas (Ctrl+K)

@@ -2,12 +2,12 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=48';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=49';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
 import { crearModelos } from './modelos.js?v=10';
-import { crearModelos2 } from './modelos2.js?v=2';
+import { crearModelos2 } from './modelos2.js?v=3';
 import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=6';
@@ -15,7 +15,7 @@ import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=6';
 
 export function crearModulos(c) {
-  const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS } = c;
+  const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, nombreEmp } = c;
 
   const SINO = { Sí: 'Sí', No: 'No' };
   const ESTADO = { Pendiente: 'Pendiente', Presentado: 'Presentado' };
@@ -5074,7 +5074,7 @@ export function crearModulos(c) {
     const m = S.registros.find((r) => r.tipo === 'm111' && r.empresa_id === S.sel && r.ejercicio === ej)?.datos?.[per] ?? {}, mv = (k) => Number(m[k]) || 0, np = nomPer(ej, per);
     return (np ? np.r : 0) + mv('t3') + mv('k06') + c.ret + ['k12', 'k15', 'k18', 'k21', 'k24', 'k27'].reduce((a, k) => a + mv(k), 0);
   };
-  const M5 = crearModelos2({ S, esc, render, empresa, grande, calcularRet: calcularRetOv, calcular349, c303, nomPer, totalRet });
+  const M5 = crearModelos2({ S, esc, render, nombreEmp, empresa, grande, calcularRet: calcularRetOv, calcular349, c303, nomPer, totalRet });
   Object.assign(tabs, M5.tabs);
   const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS, urlPdf: async (path) => { const { data } = await db.storage.from('documentos').createSignedUrl(path, 300); return data?.signedUrl ?? null; } });
   Object.assign(tabs, M6.tabs);

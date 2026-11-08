@@ -1,8 +1,9 @@
 // Bloque 4 · 349, 390 y resúmenes anuales 180 / 190 / 193 con el diseño de la aplicación antigua
 // (ficha del impreso para el 349; cuadro de doce meses o cuatro trimestres para el 390 y los resúmenes anuales).
-import { calcular349Ops, esUE } from './lectores.js?v=48';
+import { calcular349Ops, esUE, periodoAnterior349 } from './lectores.js?v=49';
 export function crearModelos2(c) {
   const { S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet, render } = c;
+  const nombreEmp = c.nombreEmp ?? ((e) => e?.nombre ?? ''); // nombre con que se muestra la empresa en la aplicación (p. ej. HEROGRA FERTILIZANTES S.A.)
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -258,11 +259,11 @@ export function crearModelos2(c) {
   const datos349 = () => calcular349Ops(grande('fact-E') ?? [], grande('fact-R') ?? [], ejercicio(), S.periodo);
   function bloque349Txt(m) {
     const c = t349Cfg(), inp = (k, ph, w) => `<input data-t349="${k}" value="${esc(c[k])}" placeholder="${ph}" style="width:${w}ch">`;
-    const neg = m.rect, R = lsGet().rect ?? {}, ej = String(ejercicio()), cP = c.per;
+    const neg = m.rect, R = lsGet().rect ?? {}, pa = periodoAnterior349(ejercicio(), c.per), ej = String(pa.ej), cP = pa.per; // rectificación: periodo inmediatamente anterior
     const rect = neg.length ? `<h4 style="margin:10px 0 4px">Facturas negativas → rectificaciones</h4><table class="tabla t349-rect" style="width:100%;table-layout:fixed;font-size:12px"><colgroup><col style="width:22%"><col style="width:5%"><col style="width:19%"><col style="width:9%"><col style="width:8%"><col style="width:11%"><col style="width:10%"><col style="width:11%"><col style="width:5%"></colgroup><thead><tr><th>Operador</th><th>Clave</th><th>Facturas negativas</th><th>Importe</th><th>Ejercicio rectificado</th><th>Periodo rectificado</th><th>Base declarada anteriormente</th><th>Base rectificada (nueva)</th><th>Excluir</th></tr></thead><tbody>
       ${neg.map((o) => { const k = `${o.pais}|${o.nif}|${o.clave}`, r = R[k] ?? {}, def = { ej, per: cP, ant: nf2(-o.base), nue: nf2(0) }, f = (cc) => `<input value="${esc(def[cc])}" readonly tabindex="-1" style="width:100%;box-sizing:border-box;text-align:right;color:#555;background:#f4f4f4">`;
         return `<tr><td>${esc(o.pais + o.nif)} · ${esc(o.nombre)}</td><td class="c">${o.clave}</td><td>${o.lineas.map((l) => esc((l.factura || 's/n') + (l.fecha ? ` (${fdateIso(l.fecha)})` : ''))).join('<br>')}</td><td class="n">${money(o.base)}</td><td>${f('ej')}</td><td>${f('per')}</td><td>${f('ant')}</td><td>${f('nue')}</td><td class="c"><input type="checkbox" data-t349r="${esc(k)}|exc"${r.exc ? ' checked' : ''}></td></tr>`; }).join('')}</tbody></table>
-      <p class="leyenda">Las facturas negativas no restan del neto: van como registro de rectificación (por operador y clave). Automático: ejercicio y periodo de esta declaración, base declarada anteriormente = importe del abono y base rectificada = 0 (declarada + importe). «Excluir» lo deja fuera del fichero.</p>` : '';
+      <p class="leyenda">Las facturas negativas no restan del neto: van como registro de rectificación (por operador y clave). Si el operador tiene facturas en el periodo, el abono se resta de ellas y no sale aquí. Automático: ejercicio y periodo inmediatamente anteriores al de esta declaración, base declarada anteriormente = importe del abono y base rectificada = 0 (declarada + importe). «Excluir» lo deja fuera del fichero.</p>` : '';
     return `<div class="filtros" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
       <label>Periodo <select data-t349="per">${['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '1T', '2T', '3T', '4T', '0A'].map((v) => `<option${v === c.per ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
       <label>Teléfono contacto ${inp('tel', '9 dígitos', 11)}</label><label>Persona de contacto ${inp('cont', 'Apellidos y nombre', 28)}</label>
@@ -280,7 +281,7 @@ export function crearModelos2(c) {
     const R = lsGet().rect ?? {}, rect = [];
     m.rect.forEach((o) => {
       const r = R[`${o.pais}|${o.nif}|${o.clave}`] ?? {}; if (r.exc) return;
-      const rej = ej, rper = String(c.per || '').padStart(2, '0'); const ant = r2(-o.base); let nue = null;
+      const pa = periodoAnterior349(ejercicio(), c.per), rej = String(pa.ej), rper = pa.per; const ant = r2(-o.base); let nue = null;
       if (nue === null && ant !== null) nue = r2(ant + o.base); else if (nue !== null && nue < 0 && ant !== null) nue = r2(ant + nue);
       const q = `${o.nombre} (${o.clave}, abono ${nf2(o.base)}): `;
       if (!/^\d{4}$/.test(rej)) err.push(`${q}ejercicio rectificado no válido`);
@@ -294,10 +295,12 @@ export function crearModelos2(c) {
     if (c.just && !/^349\d{10}$/.test(c.just)) err.push('Nº justificante: 349 + 10 dígitos');
     if (c.comp && !/^349\d{10}$/.test(c.ant)) err.push('Nº justificante anterior obligatorio en complementaria/sustitutiva');
     if (err.length) { alert(`No se genera el fichero:\n- ${err.join('\n- ')}`); return; }
+    const malV = m.ops.concat(m.rect).filter((o) => vies[clienteVies(o)]?.est === 'ko');
+    if (malV.length && !confirm(`VIES dice que estos NIF-IVA no están registrados:\n- ${malV.map((o) => `${o.pais}${o.nif} ${o.nombre}`).join('\n- ')}\n\nLa AEAT los rechazará. ¿Generar el fichero igualmente?`)) return;
     const just = c.just || `349${String(Date.now()).slice(-10)}`, nif = txtAlfa(e.cif, 9), cent = (v) => Math.round(Math.abs(v) * 100);
     const pos = m.ops.filter((o) => o.base >= 0), tot = pos.reduce((s, o) => s + cent(o.base), 0), totR = rect.reduce((s, x) => s + cent(x.nue), 0);
     if (!pos.length && !rect.length) { alert('No hay operadores que incluir'); return; }
-    let r1 = `1349${ej}${nif}${txtAlfa(e.nombre, 40)}T${txtNum(c.tel, 9).replace(/^0{9}$/, '         ')}${txtAlfa(c.cont, 40)}${just}${c.comp === 'C' ? 'C' : ' '}${c.comp === 'S' ? 'S' : ' '}${c.comp ? c.ant : '0'.repeat(13)}${c.per.padEnd(2)}${txtNum(pos.length, 9)}${txtNum(tot, 15)}${txtNum(rect.length, 9)}${txtNum(totR, 15)} `;
+    let r1 = `1349${ej}${nif}${txtAlfa(nombreEmp(e), 40)}T${txtNum(c.tel, 9).replace(/^0{9}$/, '         ')}${txtAlfa(c.cont, 40)}${just}${c.comp === 'C' ? 'C' : ' '}${c.comp === 'S' ? 'S' : ' '}${c.comp ? c.ant : '0'.repeat(13)}${c.per.padEnd(2)}${txtNum(pos.length, 9)}${txtNum(tot, 15)}${txtNum(rect.length, 9)}${txtNum(totR, 15)} `;
     r1 = r1.padEnd(500, ' ');
     const cab2 = (o) => `2349${ej}${nif}${' '.repeat(58)}${txtAlfa(o.pais, 2)}${txtAlfa(String(o.nif).replace(/[^A-Za-z0-9]/g, ''), 15)}${txtAlfa(o.nombre, 40)}${o.clave}`;
     const r2s = pos.map((o) => (cab2(o) + txtNum(cent(o.base), 13)).padEnd(500, ' ')).concat(rect.map((x) => (cab2(x.o) + ' '.repeat(13) + x.rej + x.rper + txtNum(cent(x.nue), 13) + txtNum(cent(x.ant), 13)).padEnd(500, ' ')));
@@ -314,6 +317,39 @@ export function crearModelos2(c) {
     else if (t.dataset.t349r) { const [k, f] = t.dataset.t349r.split('|'), o = lsGet(); (o.rect ??= {}); (o.rect[k] ??= {})[f] = t.checked; lsSet(o); render(); }
   });
   document.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-gen349]')) generar349Txt(); });
+  // ---- Comprobación de los NIF-IVA comunitarios con VIES (Comisión Europea) ----
+  // Resultado por país+NIF en memoria: { est: 'ok' | 'ko' | 'err', nombre, msg }. Si el navegador no deja la consulta, queda el enlace a VIES.
+  const vies = {};
+  let viesMsg = '', viesOcupado = false;
+  const clienteVies = (o) => `${o.pais === 'EL' ? 'EL' : o.pais}${String(o.nif).replace(/[^A-Za-z0-9]/g, '')}`;
+  async function comprobarVies() {
+    if (viesOcupado) return;
+    const m = datos349(), todos = [...new Map(m.ops.concat(m.rect).filter((o) => o.pais && o.pais !== '?' && o.nif).map((o) => [clienteVies(o), o])).values()];
+    if (!todos.length) { viesMsg = 'No hay NIF-IVA con prefijo de país que comprobar.'; render(); return; }
+    viesOcupado = true;
+    let n = 0;
+    for (const o of todos) {
+      n++; viesMsg = `Consultando VIES… ${n} de ${todos.length}`; render();
+      try {
+        const r = await fetch(`https://ec.europa.eu/taxation_customs/vies/rest-service/ms/${encodeURIComponent(o.pais)}/vat/${encodeURIComponent(String(o.nif).replace(/[^A-Za-z0-9]/g, ''))}`);
+        const j = await r.json();
+        if (j.isValid === true || j.valid === true) vies[clienteVies(o)] = { est: 'ok', nombre: j.name && j.name !== '---' ? j.name : '', msg: j.address && j.address !== '---' ? j.address : '' };
+        else if (j.isValid === false || j.valid === false) vies[clienteVies(o)] = { est: 'ko', nombre: '', msg: 'VIES dice que el NIF-IVA no está registrado' };
+        else vies[clienteVies(o)] = { est: 'err', nombre: '', msg: j.errorWrappers?.[0]?.error || j.userError || 'VIES no ha dado respuesta' };
+      } catch (err) { vies[clienteVies(o)] = { est: 'err', nombre: '', msg: 'No se ha podido consultar VIES desde el navegador' }; }
+      await new Promise((ok) => setTimeout(ok, 400)); // sin ráfagas: VIES limita las consultas
+    }
+    const k = Object.values(vies);
+    viesMsg = `VIES: ${k.filter((x) => x.est === 'ok').length} válidos · ${k.filter((x) => x.est === 'ko').length} no válidos · ${k.filter((x) => x.est === 'err').length} sin respuesta`;
+    viesOcupado = false; render();
+  }
+  document.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-vies349]')) comprobarVies(); });
+  const celdaVies = (o) => {
+    const r = vies[clienteVies(o)];
+    if (!r) return '<span class="hint">sin comprobar</span>';
+    return r.est === 'ok' ? `<span style="color:#14602a;font-weight:600" title="${esc(`${r.nombre} ${r.msg}`.trim())}">✓ válido${r.nombre ? ` · ${esc(r.nombre)}` : ''}</span>`
+      : r.est === 'ko' ? `<span style="color:#a4161a;font-weight:600">✕ no válido</span>` : `<span style="color:#8a6d00" title="${esc(r.msg)}">⚠ sin respuesta</span>`;
+  };
   function vista349() {
     if (!S.sel) return sinEmpresa;
     const E = grande('fact-E'), R = grande('fact-R');
@@ -324,9 +360,10 @@ export function crearModelos2(c) {
     const sec = (t) => `<div class="f303-sec">${t}</div>`;
     const fila = (lb, q, cls = '') => `<div class="f-row l1 ${cls}"><span class="lb">${lb}</span>${q}</div>`;
     const caja = (v, cls = '') => `<span class="bx ${cls}"><b></b><span class="v">${v}</span></span>`;
-    const rel = m.ops.length ? `<table class="t349-t rel"><colgroup><col style="width:70px"><col style="width:170px"><col><col style="width:80px"><col style="width:170px"></colgroup>
-      <thead><tr><th>Código país</th><th>NIF comunitario</th><th>Apellidos y nombre o razón social</th><th>Clave</th><th>Base imponible</th></tr></thead><tbody>
-      ${m.ops.map((o) => `<tr class="${o.avisos.size ? 'aviso' : ''}" title="${esc([...o.avisos].join('; '))}"><td class="c">${esc(o.pais)}</td><td>${esc(o.nif)}</td><td>${esc(o.nombre)}${o.avisos.size ? ` <span class="man-lbl">⚠ ${esc([...o.avisos].join('; '))}</span>` : ''}</td><td class="c"><b>${cl[o.clave] || o.clave}</b></td><td class="n">${money(o.base)}</td></tr>`).join('')}
+    const rel = m.ops.length ? `<p class="no-print" style="margin:0 0 8px"><button class="small" data-vies349="1"${viesOcupado ? ' disabled' : ''}>Comprobar los NIF-IVA con VIES</button> <a class="small" href="https://ec.europa.eu/taxation_customs/vies/#/vat-validation" target="_blank" rel="noopener">Abrir VIES</a> <span class="hint">${esc(viesMsg || 'Consulta la web oficial de la Comisión Europea, de uno en uno.')}</span></p>
+      <table class="t349-t rel"><colgroup><col style="width:70px"><col style="width:170px"><col><col style="width:80px"><col style="width:170px"><col style="width:230px"></colgroup>
+      <thead><tr><th>Código país</th><th>NIF comunitario</th><th>Apellidos y nombre o razón social</th><th>Clave</th><th>Base imponible</th><th>VIES</th></tr></thead><tbody>
+      ${m.ops.map((o) => `<tr class="${o.avisos.size ? 'aviso' : ''}" title="${esc([...o.avisos].join('; '))}"><td class="c">${esc(o.pais)}</td><td>${esc(o.nif)}</td><td>${esc(o.nombre)}${o.avisos.size ? ` <span class="man-lbl">⚠ ${esc([...o.avisos].join('; '))}</span>` : ''}</td><td class="c"><b>${cl[o.clave] || o.clave}</b></td><td class="n">${money(o.base)}</td><td>${o.pais === '?' ? '<span class="hint">falta el prefijo de país</span>' : celdaVies(o)}</td></tr>`).join('')}
       </tbody></table>
       <p class="leyenda" style="margin:8px 0 0">Claves: E entregas intracomunitarias de bienes · A adquisiciones intracomunitarias de bienes · T operaciones triangulares · S prestaciones intracomunitarias de servicios · I adquisiciones intracomunitarias de servicios.</p>`
       : '<p class="leyenda">No hay operaciones intracomunitarias en el periodo.</p>';
@@ -337,7 +374,7 @@ export function crearModelos2(c) {
     return `${avisos(m.avisos)}<p class="hint">Se agrupa por país, NIF comunitario y clave. Las facturas con NIF de otro Estado miembro se detectan solas; el resto depende del código de impuesto del libro de IVA.</p>
       <div class="f303 t349"><div class="f303-top"><div class="ag"><b>Agencia Tributaria</b><small>Borrador para transcribir en la Sede Electrónica</small></div>
         <div class="tt">Declaración recapitulativa de operaciones intracomunitarias</div><div class="mod"><small>Modelo</small><b>349</b></div></div>
-      ${sec('Identificación')}<div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e?.cif)}</span></span><span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(e?.nombre)}</span></span></div>
+      ${sec('Identificación')}<div class="f303-id"><span class="idbox"><b>NIF</b><span>${esc(e?.cif)}</span></span><span class="idbox grow"><b>Apellidos y nombre o razón social</b><span>${esc(nombreEmp(e))}</span></span></div>
       ${sec('Devengo')}<div class="f303-id"><span class="idbox"><b>Ejercicio</b><span>${ej}</span></span><span class="idbox"><b>Período</b><span>${esc(p || '—')}</span></span></div>
       ${sec('Fichero .txt para presentar')}<div class="t349-b">${bloque349Txt(m)}</div>
       ${sec('Resumen de los datos incluidos en la declaración')}

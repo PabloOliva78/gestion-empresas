@@ -884,11 +884,29 @@ export function calcular349Ops(libroE, libroR, ej, periodo) {
       G.set(k, gr);
     }
   }
+  // un abono se resta de las facturas del mismo operador y clave del periodo; solo queda como rectificación lo que no tiene factura en el periodo (o lo que la supera)
+  for (const [k, neg] of [...gruposR]) {
+    const pos = grupos.get(k); if (!pos) continue;
+    const net = r2n(pos.base + neg.base);
+    pos.lineas.push(...neg.lineas); pos.n += neg.n; neg.avisos.forEach((a) => pos.avisos.add(a));
+    if (net >= 0) { pos.base = net; gruposR.delete(k); } else { neg.base = net; neg.lineas = pos.lineas; neg.n = pos.n; grupos.delete(k); }
+  }
+  const ceros = [...grupos.values()].filter((o) => Math.abs(o.base) < 0.005); // los que quedan a cero no se declaran
+  ceros.forEach((o) => grupos.delete(`${o.pais}|${o.nif}|${o.clave}`));
   const orden = (a, b) => a.clave.localeCompare(b.clave) || String(a.nombre).localeCompare(String(b.nombre));
   const ops = [...grupos.values()].sort(orden), rect = [...gruposR.values()].sort(orden), avisos = [];
+  if (ceros.length) avisos.push(`${ceros.length} operador(es) con el neto del periodo a cero no se declaran: ${ceros.map((o) => `${o.nombre} (${o.clave})`).join(', ')}`);
   ops.forEach((o) => { if (o.base < 0) avisos.push(`${o.nombre} (${o.clave}): el neto del periodo es negativo; las rectificaciones de periodos anteriores se declaran en el apartado de rectificaciones, no aquí`); });
   avisos.push('No se calculan rectificaciones de periodos anteriores ni las claves de ventas en consigna (M, H, R, D, C): si las tienes, añádelas en la presentación');
   return { ops, rect, nOps: ops.length, total: r2n(ops.reduce((s, o) => s + o.base, 0)), nRect: rect.length, totRect: r2n(rect.reduce((s, o) => s + o.base, 0)), avisos, periodo: r };
+}
+
+// periodo inmediatamente anterior al de la declaración (para las rectificaciones): 01 → 12 del año anterior, 1T → 4T del año anterior, 0A → 0A del año anterior
+export function periodoAnterior349(ej, per) {
+  const p = String(per ?? '');
+  if (/^\d\d$/.test(p)) return +p > 1 ? { ej, per: String(+p - 1).padStart(2, '0') } : { ej: ej - 1, per: '12' };
+  if (/^[1-4]T$/.test(p)) return +p[0] > 1 ? { ej, per: `${+p[0] - 1}T` } : { ej: ej - 1, per: '4T' };
+  return { ej: ej - 1, per: '0A' };
 }
 
 // ---------- Retenciones (111 profesionales, 115, 123): libro soportado por código de impuesto, cuotas en positivo ----------
