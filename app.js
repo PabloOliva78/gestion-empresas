@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=212';
+import { crearModulos } from './modulos.js?v=213';
 import { activarRedimension } from './tablas.js?v=2';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -31,7 +31,11 @@ S.zooms = (() => { try { return JSON.parse(localStorage.getItem('zoom-pestanas')
 const zoomDe = () => Math.min(2, Math.max(0.5, Number(S.zooms[S.tab]) || 1));
 // ancho y tamaño del texto de los formularios de los modelos (111, 115, 303, 349, 583…), de cada pestaña
 S.formas = (() => { try { return JSON.parse(localStorage.getItem('forma-modelos') || '{}') || {}; } catch { return {}; } })();
-const formaDe = () => { const f = S.formas[S.tab] ?? {}; return { w: Math.min(2600, Math.max(500, Number(f.w) || 1200)), t: Math.min(2, Math.max(0.6, Number(f.t) || 1)) }; };
+const formaDe = () => {
+  const f = S.formas[S.tab] ?? {}, c = (k) => (Number(f[k]) > 0 ? Math.round(Number(f[k])) : undefined); // c1, c2, c3: ancho de las columnas de casillas (arrastrando el borde con el ratón)
+  return { w: Math.min(2600, Math.max(500, Number(f.w) || 1200)), t: Math.min(2, Math.max(0.6, Number(f.t) || 1)), c1: c('c1'), c2: c('c2'), c3: c('c3') };
+};
+const formaVars = () => { const f = formaDe(); return `--f-w:${f.w}px;--f-t:${f.t}${[1, 2, 3].map((n) => (f[`c${n}`] ? `;--fc${n}:${f[`c${n}`]}px` : '')).join('')}`; };
 activarRedimension(root, () => S.tab); // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -271,7 +275,7 @@ function render() {
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
         <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
-      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};--f-w:${formaDe().w}px;--f-t:${formaDe().t}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   alinearPanel();
@@ -758,7 +762,7 @@ root.addEventListener('click', (ev) => {
   if (t.dataset.forma !== undefined) {
     const [k, op] = [t.dataset.forma[0], t.dataset.forma.slice(1)], f = { ...formaDe() };
     if (k === 'w') f.w = op === '0' ? 1200 : f.w + (op === '+' ? 100 : -100); else f.t = op === '0' ? 1 : Math.round((f.t + (op === '+' ? 0.1 : -0.1)) * 10) / 10;
-    if (f.w === 1200 && f.t === 1) delete S.formas[S.tab]; else S.formas[S.tab] = f;
+    if (f.w === 1200 && f.t === 1 && !f.c1 && !f.c2 && !f.c3) delete S.formas[S.tab]; else S.formas[S.tab] = f;
     try { localStorage.setItem('forma-modelos', JSON.stringify(S.formas)); } catch { /* sin almacenamiento */ }
     return render();
   }
@@ -876,6 +880,44 @@ root.addEventListener('drop', (ev) => {
   ev.preventDefault();
   const fs = [...ev.dataTransfer.files];
   return void (dz.dataset.kind ? M.subirComo(dz.dataset.kind, fs) : M.cargarPdfs(fs));
+});
+
+// Ancho de las columnas de casillas de los formularios de los modelos: se arrastra el borde derecho de la columna (en la separación entre casillas); doble clic = anchos originales
+const colForma = (ev) => {
+  const row = ev.target.closest?.('.f-row'); if (!row || row.classList.contains('l1')) return null;
+  for (const n of [1, 2, 3]) {
+    const c = row.querySelector(`:scope > .c${n}`); if (!c) continue;
+    const r = c.getBoundingClientRect(), sig = row.querySelector(`:scope > .c${n + 1}`), limite = sig ? sig.getBoundingClientRect().left : r.right + 16;
+    if (ev.clientX >= r.right - 3 && ev.clientX < limite && ev.clientX <= r.right + 16) return { row, n, c };
+  }
+  return null;
+};
+const escalaForma = (el) => { const s = document.createElement('div'); s.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:1px'; el.appendChild(s); const z = s.getBoundingClientRect().width / 100; s.remove(); return Number.isFinite(z) && z > 0 ? z : 1; };
+root.addEventListener('mousemove', (ev) => { if (!document.body.classList.contains('fr-arrastrando')) document.body.classList.toggle('fr-borde', !!colForma(ev)); });
+root.addEventListener('mousedown', (ev) => {
+  if (ev.button !== 0) return;
+  const h = colForma(ev); if (!h) return;
+  ev.preventDefault();
+  const z = escalaForma(h.row), w0 = h.c.getBoundingClientRect().width / z, x0 = ev.clientX, caja = h.row.closest('.f303') ?? h.row, k = `c${h.n}`;
+  let w = Math.round(w0);
+  document.body.classList.add('fr-arrastrando');
+  const mover = (e) => { w = Math.max(70, Math.round(w0 + (e.clientX - x0) / z)); caja.style.setProperty(`--fc${h.n}`, `${w}px`); };
+  const soltar = () => {
+    document.removeEventListener('mousemove', mover); document.removeEventListener('mouseup', soltar);
+    document.body.classList.remove('fr-arrastrando', 'fr-borde');
+    S.formas[S.tab] = { ...formaDe(), [k]: w };
+    try { localStorage.setItem('forma-modelos', JSON.stringify(S.formas)); } catch { /* sin almacenamiento */ }
+  };
+  document.addEventListener('mousemove', mover); document.addEventListener('mouseup', soltar);
+});
+root.addEventListener('dblclick', (ev) => {
+  if (!colForma(ev)) return;
+  ev.preventDefault();
+  const f = { ...formaDe() }; delete f.c1; delete f.c2; delete f.c3;
+  if (f.w === 1200 && f.t === 1) delete S.formas[S.tab]; else S.formas[S.tab] = f;
+  try { localStorage.setItem('forma-modelos', JSON.stringify(S.formas)); } catch { /* sin almacenamiento */ }
+  root.querySelectorAll('.f303').forEach((b) => ['--fc1', '--fc2', '--fc3'].forEach((v) => b.style.removeProperty(v)));
+  render();
 });
 
 boot();

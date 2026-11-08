@@ -149,7 +149,7 @@ body { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 .idbox.grow { flex: 1; min-width: 320px; }
 .idbox b { background: #1f3a7a; color: #fff; padding: .4rem .7rem; font-size: .74rem; white-space: nowrap; display: flex; align-items: center; }
 .idbox span { padding: .4rem .9rem; min-width: 160px; font-weight: 600; flex: 1; }
-.f-row { display: grid; grid-template-columns: 1fr 230px 130px 230px; gap: 0 14px; align-items: center; padding: .28rem 1rem; border-bottom: 1px dotted #d6dbe8; }
+.f-row { display: grid; grid-template-columns: 1fr var(--fc1, 230px) var(--fc2, 130px) var(--fc3, 230px); gap: 0 14px; align-items: center; padding: .28rem 1rem; border-bottom: 1px dotted #d6dbe8; }
 .f-row .lb { padding-right: 1rem; }
 .f-row.head { border-bottom: 0; color: #6b7894; font-weight: 600; }
 .f-row .hd { display: block; text-align: center; }
@@ -1153,3 +1153,7 @@ details.libro-hoja > summary { cursor: pointer; padding: .3rem 0; }
 .css-pil { display: grid; gap: .15rem; min-width: 15rem; padding: .55rem .8rem; background: var(--card); border: 1px solid var(--line); border-left: 4px solid #2563eb; border-radius: 8px; }
 .css-pil small { color: var(--muted); }
 .css-pil span { font-weight: 600; font-variant-numeric: tabular-nums; background: #eef1f6; border-radius: 6px; padding: .1rem .5rem; justify-self: start; }
+
+/* Columnas de casillas de los modelos: el cursor avisa en el borde donde se puede arrastrar */
+body.fr-borde, body.fr-borde .f-row, body.fr-arrastrando, body.fr-arrastrando * { cursor: col-resize !important; }
+body.fr-arrastrando { user-select: none; }
