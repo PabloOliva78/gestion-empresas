@@ -114,7 +114,7 @@ const leerC = () => { try { return JSON.parse(localStorage.getItem(CLAVE_CAJAS) 
 const guardarC = (o) => { try { localStorage.setItem(CLAVE_CAJAS, JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
 const escalaCaja = (el) => { const s = document.createElement('div'); s.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:1px;padding:0;border:0'; (el.parentElement ?? document.body).appendChild(s); const z = s.getBoundingClientRect().width / 100; s.remove(); return Number.isFinite(z) && z > 0 ? z : 1; };
 export function activarCajas(raiz, pestana) {
-  const SEL = '.vista section.dsec, .vista section.prs-card, .vista section.block, .vista .dropzone, .vista .aviso, .vista .chk-banner, .vista .conc-resumen, .vista .ley-aviso, .vista .ley-msg, .vista .bloque-avisos';
+  const SEL = '.vista section.dsec, .vista section.prs-card, .vista section.block, .vista .dropzone, .vista .aviso, .vista .chk-banner, .vista .conc-resumen, .vista .ley-aviso, .vista .ley-msg, .vista .bloque-avisos, .vista .sii-fijo, .vista .ley-fijo';
   const preparar = () => {
     const g = leerC(); let n = 0;
     raiz.querySelectorAll(SEL).forEach((c) => {

@@ -1162,3 +1162,9 @@ body.fr-arrastrando { user-select: none; }
 .caja-rs { position: absolute; top: 0; right: 0; bottom: 0; width: 9px; cursor: col-resize; z-index: 6; border-radius: 0 12px 12px 0; }
 .caja-rs:hover, body.rs-arrastrando .caja-rs { background: rgba(59, 130, 246, .28); }
 @media print { .caja-rs { display: none; } }
+
+/* Líneas verticales entre columnas en todas las tablas de datos (la misma línea fina de las cabeceras); los formularios de los modelos no llevan */
+.vista table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
+.vista .f303 table :is(th, td) + :is(th, td) { border-left: 0; }
+@media (prefers-color-scheme: dark) { .vista table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #3a4254; } }
+@media print { .vista table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #9aa3b5; } }
