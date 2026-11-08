@@ -1163,8 +1163,7 @@ body.fr-arrastrando { user-select: none; }
 .caja-rs:hover, body.rs-arrastrando .caja-rs { background: rgba(59, 130, 246, .28); }
 @media print { .caja-rs { display: none; } }
 
-/* Líneas verticales entre columnas en todas las tablas de datos (la misma línea fina de las cabeceras); los formularios de los modelos no llevan */
-.vista table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
-.vista .f303 table :is(th, td) + :is(th, td) { border-left: 0; }
-@media (prefers-color-scheme: dark) { .vista table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #3a4254; } }
-@media print { .vista table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #9aa3b5; } }
+/* Líneas verticales entre columnas en todas las tablas de la aplicación (la misma línea fina de las cabeceras) */
+table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
+@media (prefers-color-scheme: dark) { table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #3a4254; } }
+@media print { table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left-color: #9aa3b5; } }
