@@ -547,7 +547,7 @@ export function crearModelos(c) {
       if (f) {
         if (o.servicio === 'Sí') av.push('• Servicio: excluido del fichero');
         else {
-          if (o.em === '') av.push('✖ País no reconocido'); if (String(r[3] ?? '').trim() === '') av.push('✖ Sin provincia'); if (!((intraNum(r[7]) || 0) > 0)) av.push('✖ Peso 0');
+          if (o.em === '') av.push('✖ País no reconocido'); if (String(r[3] ?? '').trim() === '') av.push('✖ Sin provincia'); if (!(Math.abs(intraNum(r[7]) || 0) > 0)) av.push('✖ Peso 0');
           if (o.flujoF === 'Expedición' && (o.nifExp.length < 4 || o.nifExp.length > 14 || o.nifExp.slice(0, 2) !== (o.em === 'GR' ? 'EL' : o.em))) av.push('✖ NIF IVA no válido');
           if (String(r[6] ?? '').trim() === '') av.push('• NC por defecto');
           if (o.flujoF === 'Introducción' && String(r[4] ?? '').trim() === '12') av.push('• Naturaleza 12 en llegada: revisar');
