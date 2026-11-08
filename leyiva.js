@@ -118,7 +118,7 @@ export const REGLAS = {
   dup: ['aviso', ['97', '164'], 'Posible factura duplicada'],
 };
 const CAUSA_EXENTA = [[/^R\.EX/, 'Art. 21 · exportación'], [/^R\.UE$/, 'Art. 25 · entrega intracomunitaria'], [/^R\.(NC|RC)\.EX/, 'Art. 20 · exención en operaciones interiores'],
-  [/^R\.UE\.S$/, 'Art. 69 · servicio no sujeto por localización'], [/^R\.NAC\.NS/, 'Art. 7 · operación no sujeta'], [/^R\.ISP\./, 'Art. 84.Uno · inversión del sujeto pasivo']];
+  [/^R\.UE\.S$/, 'Art. 69 · servicio no sujeto por localización'], [/^R\.NAC\.NS/, 'Art. 7 · operación no sujeta'], [/^R\.ISP\./, 'Art. 84.1.2º.c · inversión del sujeto pasivo (casilla 122 del 303)']];
 
 const masAnios = (iso, n) => `${+iso.slice(0, 4) + n}${iso.slice(4)}`;
 export function revisar(lineas, sentido, desde, hasta) {

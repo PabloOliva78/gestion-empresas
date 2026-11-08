@@ -12,7 +12,7 @@ import { crearModelos3 } from './modelos3.js?v=3';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=6';
 import { crearEstados } from './estados.js?v=4';
-import { crearLeyIva } from './leyiva.js?v=7';
+import { crearLeyIva } from './leyiva.js?v=8';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, nombreEmp } = c;
@@ -1115,13 +1115,14 @@ export function crearModulos(c) {
   const EXENCIONES = [['E1', 'Exenta por el art. 20 (operaciones interiores exentas: sanitarias, educativas, sociales…)'], ['E2', 'Exenta por el art. 21 (exportaciones de bienes fuera de la UE)'],
     ['E3', 'Exenta por el art. 22 (operaciones asimiladas a la exportación: buques, aeronaves, tráfico internacional)'], ['E4', 'Exenta por los arts. 23 y 24 (zonas francas, depósitos temporales y regímenes aduaneros)'],
     ['E5', 'Exenta por el art. 25 (entregas intracomunitarias de bienes)'], ['E6', 'Exenta por otras causas / exenciones diversas'],
-    ['N.S.R.L.', 'No sujeta por reglas de localización'], ['Art. 7-14', 'No sujeta (arts. 7 y 14 de la Ley del IVA): no se declara en el 303']];
+    ['Art. 84.1.2º.c', 'Inversión del sujeto pasivo (art. 84.Uno.2º.c LIVA): va a la casilla 122 del 303'], ['N.S.R.L.', 'No sujeta por reglas de localización'], ['Art. 7-14', 'No sujeta (arts. 7 y 14 de la Ley del IVA): no se declara en el 303']];
   // por defecto, según el código del ERP: R.NC.EX = E1 · R.EX = E2 · R.UE = E5 · R.UE.S = N.S.R.L. · R.NAC.NS = Art. 7-14
   const exencDe = (l) => {
     if (l.exenc !== undefined) return l.exenc;
     const c = String(l.codigo || '').toUpperCase();
     if (/^R\.(NC|RC)\.EX/.test(c)) return 'E1';
     if (c === 'R.EX' || c.startsWith('R.EX.')) return 'E2';
+    if (c === 'R.ISP') return 'Art. 84.1.2º.c';
     if (c === 'R.UE') return 'E5';
     if (c === 'R.UE.S') return 'N.S.R.L.';
     if (/^R\.NAC\.NS/.test(c)) return 'Art. 7-14';
@@ -1752,7 +1753,8 @@ export function crearModulos(c) {
         ${sec('Información adicional')}
         ${fila('Entregas intracomunitarias de bienes y servicios', '', '', bx('59', g.entregas.base))}
         ${fila('Exportaciones y operaciones asimiladas', '', '', bx('60', g.export.base))}
-        ${fila(`Operaciones sujetas con inversión del sujeto pasivo que originan el derecho a deducción${nota('casilla 122 según mi conocimiento: compruébala')}`, '', '', bx('122', g.nosuj.base, 'warn'))}
+        ${fila(`Operaciones no sujetas por reglas de localización (excepto las incluidas en la casilla 123)${nota('R.NAC.NS')}`, '', '', bx('120', g.locNS.base))}
+        ${fila(`Operaciones sujetas con inversión del sujeto pasivo${nota('R.ISP · art. 84.1.2º.c')}`, '', '', bx('122', g.nosuj.base))}
         ${fila(`Operaciones exentas o no sujetas interiores${nota('casilla por verificar')}`, '', '', bx('¿?', g.exVentas.base + g.exCompras.base, 'warn'))}
         ${sec('Resultado')}
         ${fila('Suma de resultados ( [46] )', '', '', bx('64', c.c46))}
