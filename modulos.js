@@ -1044,8 +1044,15 @@ export function crearModulos(c) {
   function listaArch(kind) {
     if (!S.sel || !ARCH[kind]) return '';
     const l = S.registros.filter((r) => r.tipo === `arch-${kind}` && r.empresa_id === S.sel).sort((a, b) => String(b.datos.subido).localeCompare(String(a.datos.subido)));
-    if (!l.length) return '';
-    return `<details class="arch-det"><summary>Archivos dejados aquí (${l.length})</summary><table class="tprs tnom" style="width:auto"><tbody>${l.map((r) => `<tr><td>${esc(r.datos.nombre)}</td><td>${esc(r.datos.subido ?? '')}</td>
+    // archivos que aportaron líneas al libro pero no tienen registro en la lista (cargados antes o desde una carpeta): también se pueden quitar
+    let huerfanos = '';
+    if (kind === 'emitidas' || kind === 'recibidas') {
+      const conReg = new Set(l.map((r) => r.datos.nombre)), O = new Map();
+      for (const t of ['fact-E', 'fact-R']) (GR.get(`${t}|${S.sel}`) ?? []).forEach((x) => { if (!x.src || conReg.has(x.src)) return; const o = O.get(x.src) ?? O.set(x.src, { n: 0, f: [] }).get(x.src); o.n++; if (x.fecha) o.f.push(x.fecha); });
+      if (O.size) huerfanos = `<details class="arch-det" open><summary>Archivos con líneas en el libro y sin registro en la lista (${O.size})</summary><table class="tprs tnom" style="width:auto"><tbody>${[...O.entries()].sort().map(([nom, o]) => { o.f.sort(); return `<tr><td>${esc(nom)}</td><td class="num">${o.n} líneas</td><td>${o.f.length ? `${o.f[0].split('-').reverse().join('/')} → ${o.f[o.f.length - 1].split('-').reverse().join('/')}` : ''}</td><td>${puede() ? `<button class="small danger" data-act="m-srcdel" data-n="${esc(nom)}" title="Quitar las líneas que aportó este archivo">✖ Quitar</button>` : ''}</td></tr>`; }).join('')}</tbody></table></details>`;
+    }
+    if (!l.length) return huerfanos;
+    return huerfanos + `<details class="arch-det"><summary>Archivos dejados aquí (${l.length})</summary><table class="tprs tnom" style="width:auto"><tbody>${l.map((r) => `<tr><td>${esc(r.datos.nombre)}</td><td>${esc(r.datos.subido ?? '')}</td>
       <td>${verArchivo(r.datos.archivo)}</td><td>${puede() ? `<button class="small danger" data-act="m-archdel" data-id="${r.id}" title="Quitar el archivo y los datos que aportó">✖ Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></details>`;
   }
   async function quitarDatosArchivo(tipo, nombre, empresaId) {
@@ -4419,6 +4426,11 @@ export function crearModulos(c) {
       'm-siitodo': () => { siiTodo = true; render(); },
       'm-siidel': () => quitarSii2(d.s, d.i),
       'm-archdel': () => quitarArch(d.id),
+      'm-srcdel': async () => {
+        if (!confirm(`¿Quitar de los libros de emitidas y recibidas todas las líneas que aportó «${d.n}»? Después puedes volver a soltar el archivo.`)) return;
+        let n = 0; for (const t of ['fact-E', 'fact-R']) n += (await quitarDatosArchivo(t, d.n, S.sel)).length;
+        render(); alert(`${n} líneas quitadas de «${d.n}».`);
+      },
       'm-siirec': () => recuperarSii(d.s, d.i),
       'm-siimas': () => { siiN[d.s] += 150; render(); },
       'm-ctamas': () => { ctaMas += 300; render(); },
