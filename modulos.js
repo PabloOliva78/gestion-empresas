@@ -581,7 +581,18 @@ export function crearModulos(c) {
     const ej = Number(S.ejercicio), m = mesPagos(), y2 = m === 12 ? ej + 1 : ej, m2 = m === 12 ? 1 : m + 1, ix = presIndex(), clavePer = `${ej}-${String(m).padStart(2, '0')}`;
     const cargo = (o) => o.fin; // fecha de cargo = último día de presentación
     const delMes = (o) => { const d = new Date(cargo(o)); return d.getUTCFullYear() === y2 && d.getUTCMonth() + 1 === m2; };
-    const todas = empOrden().map((e) => ({ e, os: obligaciones(e, ej, ix).filter((o) => MODS_PAGO.includes(o.mod) && delMes(o)) }));
+    // el 111 se toma del modelo 111 (nóminas con sus diferencias + ajustes a mano + libro de soportado), no de Presentados; si no hay nóminas, queda lo presentado
+    const imp111 = (e, y, per) => {
+      const meses = /^[1-4]T$/.test(per) ? [0, 1, 2].map((i) => String((+per[0] - 1) * 3 + i + 1).padStart(2, '0')) : /^\d\d$/.test(per ?? '') ? [per] : [];
+      const dN = S.registros.find((r) => r.tipo === 'nominas' && r.empresa_id === e.id && r.ejercicio === y)?.datos, nm = meses.map((mm) => nomCalc(dN?.[mm])).filter(Boolean);
+      if (!nm.length) return null;
+      const man = S.registros.find((r) => r.tipo === 'm111' && r.empresa_id === e.id && r.ejercicio === y)?.datos?.[per] ?? {}, mv = (k) => Number(man[k]) || 0;
+      const R = GR.get(`fact-R|${e.id}`), prs = S.registros.find((r) => r.tipo === 'prs' && r.empresa_id === e.id && r.ejercicio === y)?.datos?.[`111|${per}`];
+      const cret = Array.isArray(R) ? (e.id === S.sel ? calcularRetOv : calcularRet)('111', R, y, per).ret : Number(prs?.retP) || 0; // libro de soportado cargado; si no, lo presentado en profesionales
+      return rr(nm.reduce((a, x) => a + (Number(x.ret) || 0), 0) + mv('t3') + mv('k06') + cret + ['k12', 'k15', 'k18', 'k21', 'k24', 'k27'].reduce((a, k) => a + mv(k), 0) - mv('c29'));
+    };
+    const delModelo = (o) => (o.mod === '111' ? { ...o, imp: imp111(o.e, o.yPres ?? ej, o.pk ?? o.per) ?? o.imp } : o);
+    const todas = empOrden().map((e) => ({ e, os: obligaciones(e, ej, ix).filter((o) => MODS_PAGO.includes(o.mod) && delMes(o)).map(delModelo) }));
     const items = todas.flatMap((x) => x.os.filter((o) => o.imp > 0).map((o) => ({ ...o, banco: bancoEmp(o.e, o.mod), fc: cargo(o) })));
     const bancos = [...new Set(items.map((f) => f.banco))].sort((a, b) => (a === 'Sin banco') - (b === 'Sin banco') || a.localeCompare(b));
     const fechas = [...new Set(items.map((f) => f.fc))].sort((a, b) => a - b);
@@ -604,7 +615,7 @@ export function crearModulos(c) {
     const filas = P.filas.map((fr, i) => `<tr style="background:${FONDO_EMP[i % FONDO_EMP.length]}"><td class="pg-e" style="border-left:6px solid ${colorDe(fr.e.id)}"><b>${esc(fr.e.nombre)}</b>${fr.sinImp ? ` <span class="dash-s" title="${fr.sinImp} liquidación(es) de este mes sin presentar">(${fr.sinImp} sin presentar)</span>` : ''}</td>${celdas(fr)}
       ${celdaMan(fr, 'pagado', fr.pagAuto, fr.pagadoMan)}${celdaMan(fr, 'pend', fr.pendAuto, fr.pendMan)}<td class="num pg-tot">${fnum(fr.tot)}</td></tr>`).join('');
     return `<section class="dsec sec-pagos"><h3>PAGOS DOMICILIADOS <span class="dash-s">· ${esc(P.titulo)}</span> <label class="no-print" style="font-weight:400">Periodo <select data-pgmes="1">${MES_L.map((n, i) => `<option value="${i + 1}"${P.m === i + 1 ? ' selected' : ''}>${n} ${P.ej}</option>`).join('')}</select></label></h3>
-      <p class="hint">Importes de los impuestos que se cargan el mes siguiente, de la pestaña Presentados de cada empresa. Fecha: último día de presentación de cada impuesto. Cada impuesto va a una sola columna según su estado (Domiciliado → su banco y fecha · Pagado · Pendiente de pago), que se elige en el calendario de abajo; en Pagado y Pendiente también se puede añadir importe a mano.</p>
+      <p class="hint">Importes de los impuestos que se cargan el mes siguiente, de la pestaña Presentados de cada empresa (el 111, del modelo 111: nóminas con sus diferencias, ajustes a mano y libro de soportado). Fecha: último día de presentación de cada impuesto. Cada impuesto va a una sola columna según su estado (Domiciliado → su banco y fecha · Pagado · Pendiente de pago), que se elige en el calendario de abajo; en Pagado y Pendiente también se puede añadir importe a mano.</p>
       <div class="wrap"><table class="tabla pagos-t"><thead><tr><th rowspan="2">Empresa</th>${cab1}<th rowspan="2">PAGADO</th><th rowspan="2">PENDIENTE DE PAGO</th><th rowspan="2">TOTALES</th></tr><tr>${cab2}</tr></thead><tbody>${filas}
       <tr class="pg-sum"><td>TOTALES</td>${P.bancos.map((b) => P.fechas.map((t) => `<td class="num">${fnum(totCol(b, t))}</td>`).join('') || '<td></td>').join('')}<td class="num">${fnum(rr(P.filas.reduce((s, f) => s + f.pagado, 0)))}</td><td class="num">${fnum(rr(P.filas.reduce((s, f) => s + f.pend, 0)))}</td><td class="num">${fnum(rr(P.filas.reduce((s, f) => s + f.tot, 0)))}</td></tr></tbody></table></div></section>`;
   }
