@@ -2,11 +2,11 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=49';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=49';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=12';
+import { crearModelos } from './modelos.js?v=13';
 import { crearModelos2 } from './modelos2.js?v=3';
 import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
@@ -5063,7 +5063,7 @@ export function crearModulos(c) {
   };
   const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir, docs: DOCS, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
-  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f), calc303: (...a) => c303(...a), calc349: calcular349 });
+  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f), calc303: (...a) => c303(...a), calc349: calcular349, calc349Ops: calcular349Ops });
   Object.assign(tabs, M4.tabs);
   Object.assign(badges, M4.badges);
   // 303 de un periodo (con sus ajustes y la compensación disponible) y casilla total de retenciones de cada modelo, para el 390 y los resúmenes anuales

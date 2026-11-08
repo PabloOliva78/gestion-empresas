@@ -1,7 +1,7 @@
 // Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
 // Los datos de cada modelo se guardan en `registros` (tipo m232 / m583, un registro por empresa y ejercicio).
 export function crearModelos(c) {
-  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592, bancoDe = () => '', calc303, calc349 } = c;
+  const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592, bancoDe = () => '', calc303, calc349, calc349Ops } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -713,7 +713,7 @@ export function crearModelos(c) {
       const fila = (t, ta, a, tb, b, acc) => { const d = r2(a - b), bien = ok(d); return `<tr class="${bien ? 'cf-ok' : 'cf-ko'}"><td>${t}</td><td>${ta}</td><td class="n">${nf2(a)}</td><td>${tb}</td><td class="n">${nf2(b)}</td><td class="n">${guion(d)}</td><td>${bien ? '✓ Cuadra' : `✖ ${acc}`}</td></tr>`; };
       // 303 y 349 del mes (mismo cálculo que los modelos): casilla 59 y 10 frente a las claves del 349 y al Intrastat
       const pMes = String(sel).padStart(2, '0'); let c59 = null, c10 = null, neg10 = 0, k349 = null;
-      try { const C3 = calc303(rep, sop, ej, pMes); c59 = r2(C3.G.entregas.base); neg10 = r2(sop.filter((l) => mesDe(l) === sel && /^S\.UE/.test(l.codigo || '') && (+l.base || 0) < 0).reduce((s, l) => s + (+l.base || 0), 0)); c10 = r2(C3.G.intra.base + neg10); const P9 = calc349(rep, sop, ej, pMes).porClave; k349 = (k) => r2((P9.find((x) => x.clave === k) || {}).importe || 0); } catch { /* sin datos del 303 */ }
+      try { const C3 = calc303(rep, sop, ej, pMes); c59 = r2(C3.G.entregas.base); neg10 = r2(sop.filter((l) => mesDe(l) === sel && /^S\.UE/.test(l.codigo || '') && (+l.base || 0) < 0).reduce((s, l) => s + (+l.base || 0), 0)); c10 = r2(C3.G.intra.base + neg10); const P9 = calc349Ops(rep, sop, ej, pMes).ops; k349 = (k) => r2(P9.filter((x) => x.clave === k).reduce((s, x) => s + x.base, 0)); } catch { /* sin datos del 303 */ }
       const k349E = k349 ? k349('E') : e349, k349AI = k349 ? r2(k349('A') + k349('I')) : r2(a349);
       const filas = [...(c59 === null ? [] : [fila('Entregas intracomunitarias', '303 casilla 59', c59, '349 clave E (neto)', k349E, 'El 303 y el 349 deben llevar las mismas facturas R.UE: revisa los códigos del libro')]),
         fila(c59 === null ? 'Entregas intracomunitarias' : '', '349 clave E (neto)', k349E, 'Intrastat expediciones', itE, 'Ver las facturas en rojo de abajo'),
