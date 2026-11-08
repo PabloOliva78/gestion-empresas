@@ -1185,3 +1185,10 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 .t349 table.aud th { background: #002060; color: #fff; font-weight: 400; padding: 10px 6px; border: 1px solid #3a5a9a; text-align: center; position: sticky; top: -1px; z-index: 3; }
 .t349 table.aud td { padding: 2px 6px; border-left: 1px dotted #8ea9db; border-right: 1px dotted #8ea9db; border-bottom: 0; border-top: 1px solid #e3e6ec; white-space: nowrap; }
 .t349 table.aud tr.totano td { background: #ddebf7; font-weight: 700; }
+
+/* Conciliación 349 - Intrastat: verde si cuadra, rojo si no (filas del control, facturas y pestañas de mes) */
+.it-conc tr.cf-ok td { background: #d6f2d6 !important; color: #14631f; }
+.it-conc tr.cf-ko td { background: #fbdada !important; color: #a11212; }
+.it-conctabs button.mes-ok { background: #d6f2d6; color: #14631f; border-color: #6fbf73; }
+.it-conctabs button.mes-ko { background: #fbdada; color: #a11212; border-color: #e08a8a; }
+.it-conctabs button.mes-ok.primary, .it-conctabs button.mes-ko.primary { box-shadow: 0 0 0 2px #1f3a7a; font-weight: 700; }

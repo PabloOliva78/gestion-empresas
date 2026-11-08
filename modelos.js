@@ -732,7 +732,7 @@ export function crearModelos(c) {
     if (!MS.length) concFac = `<section class="block"><h3 class="bt">Conciliación por nº de factura · fichero Intrastat vs modelo 349 · ${ej}</h3><p class="leyenda">Sin líneas Intrastat ni facturas del 349 en ${ej}.</p></section>`;
     else {
       let sel = intraConcMes || intraMes || 0; if (!MS.some((x) => x.m === sel)) sel = (MS.find((x) => x.B.some((b) => b.nKo)) || MS[MS.length - 1]).m;
-      const tabsM = `<div class="it-subtabs it-conctabs no-print" style="margin:0 0 8px">${MS.map((x) => { const k = x.B.reduce((s, b) => s + b.nKo, 0); return `<button class="small${x.m === sel ? ' primary' : ''}" data-act="m-intraconcmes" data-m="${x.m}">${MES_L[x.m - 1].slice(0, 3)} ${k ? `· ${k} ✖` : '✓'}</button>`; }).join('')}</div>`;
+      const tabsM = `<div class="it-subtabs it-conctabs no-print" style="margin:0 0 8px">${MS.map((x) => { const k = x.B.reduce((s, b) => s + b.nKo, 0); return `<button class="small${x.m === sel ? ' primary' : ''} ${k ? 'mes-ko' : 'mes-ok'}" data-act="m-intraconcmes" data-m="${x.m}">${MES_L[x.m - 1].slice(0, 3)} ${k ? `· ${k} ✖` : '✓'}</button>`; }).join('')}</div>`;
       const B = MS.find((x) => x.m === sel).B;
       const itE = r2(O.filter((o) => o.anio === ej && o.mes === sel && o.flujoConc === 'Expedición').reduce((s, o) => s + o.impConc, 0)), itI = r2(O.filter((o) => o.anio === ej && o.mes === sel && o.flujoConc === 'Introducción').reduce((s, o) => s + o.impConc, 0));
       const e349 = r2(rep.filter((l) => mesDe(l) === sel && bienE(l)).reduce((s, l) => s + (+l.base || 0), 0)), a349 = r2(sop.filter((l) => mesDe(l) === sel && bienA(l)).reduce((s, l) => s + (+l.base || 0), 0));
