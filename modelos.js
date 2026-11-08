@@ -5,7 +5,7 @@ export function crearModelos(c) {
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
-  const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+  const nf = new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 2 });
   const parseNum = (s) => { const t = String(s ?? '').trim(); if (!t) return null; const v = t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t); return Number.isNaN(v) ? null : v; };
   const fmtIn = (v) => (v === '' || v == null ? '' : String(r2(v)).replace('.', ','));
   const nifN = (n) => String(n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '');

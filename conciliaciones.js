@@ -5,8 +5,8 @@ export function crearConciliaciones(c) {
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
-  const money = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
-  const nf2 = (v) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(v ?? 0);
+  const money = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  const nf2 = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 2 }).format(v ?? 0);
   const guion = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '-' : money(v));
   const bloqueAvisos = (l) => `<div class="aviso">${l.map((t) => `<div>${esc(t)}</div>`).join('')}</div>`;
   const ejNum = () => Number(S.ejercicio) || new Date().getFullYear();

@@ -7,8 +7,8 @@ export function crearModelos2(c) {
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
-  const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
-  const money = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  const nf = new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 2 });
+  const money = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
   const guion = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '-' : money(v));
   const avisos = (l) => (l.length ? `<div class="aviso">${l.map((t) => `<div>${esc(t)}</div>`).join('')}</div>` : '');
   const MES_L = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
@@ -248,7 +248,7 @@ export function crearModelos2(c) {
   const lsGet = () => { try { return JSON.parse(localStorage.getItem(lsKey()) || '{}') || {}; } catch { return {}; } };
   const lsSet = (o) => { try { localStorage.setItem(lsKey(), JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
   const fdateIso = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '');
-  const nf2 = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  const nf2 = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
   // diseño de registro de la AEAT: 500 posiciones, ISO-8859-1
   function t349Cfg() {
     const c = lsGet(), p = S.periodo ?? '', perDef = esTrim() ? (/^\d\d$/.test(p) ? `${Math.ceil(+p / 3)}T` : p) : p;

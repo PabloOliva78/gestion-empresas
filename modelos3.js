@@ -8,8 +8,8 @@ export function crearModelos3(c) {
   const { db, S, esc, render, empresa, puede, grande, prsVal, casaCta } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
-  const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
-  const money = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  const nf = new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 2 });
+  const money = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
   const guion = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '-' : money(v));
   const parseNum = (s) => { const t = String(s ?? '').trim(); if (!t) return null; const v = t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t); return Number.isNaN(v) ? null : v; };
   const fmtIn = (v) => (v === '' || v == null ? '' : String(r2(v)).replace('.', ','));

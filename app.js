@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=247';
+import { crearModulos } from './modulos.js?v=248';
 import { activarRedimension, activarCajas, activarAlineacion } from './tablas.js?v=6';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -602,7 +602,7 @@ const PLANTILLAS = [
   ['640', 'Sueldos y salarios', 'Resumen de nóminas / Modelo 190'],
   ['642', 'Seguridad Social a cargo de la empresa', 'RLC / RNT (cuota empresa)'],
 ];
-const eur = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n ?? 0);
+const eur = (n) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', style: 'currency', currency: 'EUR' }).format(n ?? 0);
 const estadoConc = (c) => (Math.abs(c.diferencia) < 0.005 ? 'Cuadra' : c.justificada ? 'Justificada' : 'Descuadre');
 const pad = (n) => String(n).padStart(2, '0');
 
