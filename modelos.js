@@ -279,6 +279,7 @@ export function crearModelos(c) {
   }
   async function bigGuardar(tipo, datos) {
     const k = `${tipo}|${S.sel}`, cur = BIG.get(k) ?? {};
+    BIG.set(k, { id: cur.id, datos }); render(); // se ve al momento en todas las pestañas; el guardado sigue después
     if (cur.id) { const { error } = await db.from('registros').update({ datos }).eq('id', cur.id); if (error) alert(error.message); }
     else { cur.id = crypto.randomUUID(); const { error } = await db.from('registros').insert({ id: cur.id, empresa_id: S.sel, tipo, ejercicio: null, datos }); if (error) alert(error.message); }
     BIG.set(k, { id: cur.id, datos });

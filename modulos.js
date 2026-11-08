@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=14';
+import { crearModelos } from './modelos.js?v=15';
 import { crearModelos2 } from './modelos2.js?v=3';
 import { crearModelos3 } from './modelos3.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
@@ -1287,6 +1287,7 @@ export function crearModulos(c) {
     return isp.length;
   }
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
+    GR.set(`${tipo}|${empresaId}`, filas); if (String(empresaId) === String(S.sel)) render(); // se ve al momento en todas las pestañas; el guardado sigue después
     const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
     const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
     if (err) { alert(/statement timeout/i.test(err) ? 'La base de datos ha tardado demasiado en guardar el libro (es muy grande). Amplía el tiempo máximo de las consultas: ejecuta supabase/05_timeout.sql en el editor SQL de Supabase.' : err); return false; }
