@@ -282,12 +282,12 @@ export function leerLibroIVA(filas) {
     out.push({ asiento: String(f[c.as] ?? ''), factura, fecha, ff: fechaIso(f[c.ff]) || fecha, nif: String(f[c.nif] ?? '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), base: numero(f[c.ba]), pct: numero(f[c.pc]), cuota: numero(f[c.cu]), codigo,
       ...(c.tp >= 0 && String(f[c.tp] ?? '').trim() ? { tipoPais: String(f[c.tp]).trim() } : {}),
-      sentido: /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) || /^S\.NC\.ISP\.A/.test(codigo) ? 'E' : 'R' }); // S.NC.ISP.A (ISP autorrepercutida) siempre va en el libro repercutido
+      sentido: /^S\.UE\./.test(codigo) ? 'R' : /repercut/i.test(String(f[c.tl] ?? '')) || /^R\./.test(codigo) || /^S\.NC\.ISP\.A/.test(codigo) ? 'E' : 'R' }); // S.NC.ISP.A (ISP autorrepercutida) siempre va en el libro repercutido; las S.UE.* (adquisiciones intracomunitarias) siempre en el soportado, vengan en el archivo que vengan
   }
   // Si casi todo el archivo es del libro repercutido, TODO él es repercutido: sus líneas autorrepercutidas (S.NC.ISP.A, adquisiciones intracomunitarias…) vienen con tipo de libro «Impuestos soportados»
   // y se aceptan igualmente en este libro (no se descartan ni se pasan al soportado).
   const nRep = tipos.filter((t) => /repercut/i.test(t)).length, nSop = tipos.filter((t) => /soportad/i.test(t)).length;
-  if (nRep + nSop > 0 && nRep / (nRep + nSop) >= 0.9) out.forEach((l) => { l.sentido = 'E'; });
+  if (nRep + nSop > 0 && nRep / (nRep + nSop) >= 0.9) out.forEach((l) => { if (!/^S\.UE\./.test(l.codigo)) l.sentido = 'E'; });
   return out.length ? out : null;
 }
 
