@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=278';
+import { crearModulos } from './modulos.js?v=279';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -55,8 +55,10 @@ const logoHtml = (e, cls = 'logo') => (e?.datos?.logo
 const ORDEN_EMP = [['HEROGRA FERTILIZANTES S.A.', /herogra\s+fertiliz/i], ['HEROGRA ESPECIALES', /herogra\s+especiales/i], ['HISPALENSE DE LIQUIDOS S.L', /hispalense/i],
   ['MAXLOGTRANS S.L.', /maxlogtrans/i], ['LYS DEL SUR S.L.', /lys\s*del\s*sur|lysur/i], ['GESUFER S.L.', /gesufer|gesti[oó]n unificada/i], ['FERTINOVA S.L.', /fertinova/i],
   ['PRODUFER S.L.', /produfer/i], ['FERTICRONOS S.L.', /ferticronos/i], ['TECNOPLUS SOLUBLES S.L.', /tecnoplus/i], ['BISAR AGROINNOVATION S.L.', /bisar/i],
-  ['MOTRILEÑA DE LIQUIDOS S.L.', /motrile/i], ['FARM CHEMICALS FGA S.L.', /farm\s*chemicals/i], ['PASEO DE CENES S.L.', /paseo\s*(de\s*)?cenes/i]];
-const idxEmp = (e) => ORDEN_EMP.findIndex(([, re]) => re.test(e?.nombre ?? ''));
+  ['MOTRILEÑA DE LIQUIDOS S.L.', /motrile/i], ['FARM CHEMICALS FGA S.L.', /farm\s*chemicals/i], ['PASEO DE CENES S.L.', /paseo|cenes/i]];
+// si el nombre guardado no encaja con el patrón, se reconoce por la sigla (mismo orden que ORDEN_EMP)
+const ORDEN_SIG = ['HER', 'ESP', 'HIS', 'MAX', 'LYS', 'GRU', 'FER', 'PDF', 'FTC', 'TCP', 'BSR', 'MOT', 'FCH', 'PAS'];
+const idxEmp = (e) => { const i = ORDEN_EMP.findIndex(([, re]) => re.test(e?.nombre ?? '')); return i >= 0 ? i : ORDEN_SIG.indexOf(String(e?.siglas ?? '').toUpperCase()); };
 const etiquetaEmp = (e) => { const i = idxEmp(e); return i < 0 ? e.nombre : `${i + 1}.- ${ORDEN_EMP[i][0]}`; };
 const nombreEmp = (e) => { const i = idxEmp(e); return i < 0 ? (e?.nombre ?? '') : ORDEN_EMP[i][0]; }; // nombre de la empresa tal como se ve en la aplicación (sin el número)
 
@@ -250,9 +252,16 @@ function ejercicios() {
   return [...a].sort((p, q) => q - p);
 }
 
+// Periodos que tiene cada empresa: sus 12 meses (grandes) o sus 4 trimestres (pymes); todas tienen además el anual (valor vacío). Sin empresa elegida salen meses y trimestres.
+const MESES_N = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MM12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+const periodosDe = (e) => (!e ? [...MM12, '1T', '2T', '3T', '4T'] : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'] : MM12);
+const etiquetaPeriodo = (p) => (/^\d\d$/.test(p) ? `${p} · ${MESES_N[+p - 1]}` : `${p[0]}º trimestre (${p})`);
+
 function render() {
   if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'ini';
   const e = S.empresas.find((x) => x.id === S.sel);
+  if (S.periodo && !periodosDe(e).includes(S.periodo)) S.periodo = ''; // el periodo elegido tiene que ser de esta empresa (meses o trimestres)
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   const scrollTablas = [...root.querySelectorAll('.wrap')].map((w) => [w.scrollLeft, w.scrollTop]); // al redibujar, las tablas anchas no vuelven al principio
   root.innerHTML = `<div class="layout">
@@ -261,7 +270,7 @@ function render() {
       <div class="two">
         <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
     `<option${y === Number(S.ejercicio) ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
-        <label>Periodo<select data-glob="periodo"><option value="">Todo el ejercicio</option>${opts(PERIODOS, S.periodo)}</select></label>
+        <label>Periodo<select data-glob="periodo">${periodosDe(e).map((p) => `<option value="${p}"${p === S.periodo ? ' selected' : ''}>${etiquetaPeriodo(p)}</option>`).join('')}<option value=""${S.periodo ? '' : ' selected'}>Anual (todo el ejercicio)</option></select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
