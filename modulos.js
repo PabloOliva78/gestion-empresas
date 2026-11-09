@@ -5032,7 +5032,9 @@ export function crearModulos(c) {
     const l = libros();
     if (!l) return { t: '…' };
     if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
-    return imp(calcular303(l.E, l.R, Number(S.ejercicio), S.periodo, manuales(), { rectif: rectif303 }).c71);
+    const ej = Number(S.ejercicio), pl = prsVal(ej, '303', perEf(empresa(), S.periodo), 'liq'); // como en la pestaña: manda el 303 presentado de este periodo y, si no, el calculado con las cuotas a compensar del periodo anterior
+    if (pl !== undefined && pl !== null && pl !== '') return imp(Number(pl));
+    return imp(calcular303(l.E, l.R, ej, S.periodo, manuales(), { rectif: rectif303, c110: disponible303(l.E, l.R, ej, S.periodo) }).c71);
   };
   // SII y libros de IVA: cuota del periodo y estado de la conciliación
   const cacheCs = new Map();
