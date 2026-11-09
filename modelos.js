@@ -669,7 +669,7 @@ export function crearModelos(c) {
       ${ed ? `<div class="dropzone" data-kind="intra" tabindex="0" role="button"><b>Suelta aquí el Excel o CSV de Dynamics</b> o haz clic para elegirlo (se añade a lo que hay)
         <input type="file" data-dzkind="intra" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden></div>
       <div class="no-print" style="margin:8px 0"><textarea id="intraPega" rows="3" style="width:100%;font-size:11px" placeholder="…o pega aquí las filas copiadas de Excel (13 columnas más el nº de factura opcional: ${INTRA_COLS.join(', ')})"></textarea>
-        <button class="small" data-act="m-intrapega">Añadir lo pegado</button> <button class="small" data-act="m-intravaciar">Vaciar las líneas de ${ej}</button>${mSel ? ` <button class="small" data-act="m-intravaciarmes" data-m="${mSel}">Vaciar las líneas de ${MES_L[mSel - 1].toLowerCase()}</button>` : ''} ${subtabs}</div>` : `<div class="no-print">${subtabs}</div>`}
+        <button class="small" data-act="m-intrapega">Añadir lo pegado</button> <button class="small" data-act="m-intraadd" title="Añade una fila en blanco al final de la tabla para rellenarla a mano">＋ Añadir línea a mano</button><button class="small" data-act="m-intravaciar">Vaciar las líneas de ${ej}</button>${mSel ? ` <button class="small" data-act="m-intravaciarmes" data-m="${mSel}">Vaciar las líneas de ${MES_L[mSel - 1].toLowerCase()}</button>` : ''} ${subtabs}</div>` : `<div class="no-print">${subtabs}</div>`}
       ${D.rows.length ? filtros : ''}${lineas}</section>
       <section class="block"><h3 class="bt">Exportación Intrastat (formato AEAT .txt)</h3>${exp}</section>`;
   }
@@ -793,6 +793,13 @@ export function crearModelos(c) {
   // ================= Eventos propios =================
   const acciones = {
     'm-intraconcmes': (d) => { intraConcMes = +d.m; render(); },
+    'm-intraadd': async () => {
+      const D = datosIntra(); if (!D) return; const ej = ejercicio(), hoy = new Date();
+      const m = intraMes || (hoy.getFullYear() === ej ? hoy.getMonth() + 1 : 1), dia = !intraMes && hoy.getFullYear() === ej ? hoy.getDate() : 1;
+      const fila = INTRA_COLS.map(() => ''); fila[0] = `${String(dia).padStart(2, '0')}/${String(m).padStart(2, '0')}/${ej}`; fila[1] = 'Distribuciones'; fila[3] = '18'; fila[4] = '11'; fila[5] = '3';
+      D.rows.push(fila); await guardarIntra(D);
+      const i = D.rows.length - 1; setTimeout(() => { const c = document.querySelector(`[data-intracel="${i}|0"]`); if (c) { c.scrollIntoView({ block: 'center' }); c.focus(); c.select?.(); } }, 60);
+    },
     'm-intraservdel': async (d) => { const D = datosIntra(); if (!D) return; D.serv.splice(+d.i, 1); await guardarIntra(D); render(); },
     'm-intrames': (d) => { intraMes = +d.m; render(); },
     'm-intradel': async (d) => { const D = datosIntra(); if (!D) return; D.rows.splice(+d.i, 1); await guardarIntra(D); render(); },
