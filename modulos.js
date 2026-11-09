@@ -1319,23 +1319,27 @@ export function crearModulos(c) {
     if (!(await reemplazarGrande('fact-R', empresaId, filasR.filter((l) => !(/^S\.NC\.ISP\.A/.test(l.codigo) && filtro(l))), r))) return 0;
     return isp.length;
   }
+  const esSue = (l) => /^S\.UE\./.test(String(l.codigo ?? '').trim().toUpperCase());
+  // fecha de la línea en ISO (aaaa-mm-dd), venga como venga
+  const fIsoL = (l) => { const s = String(l.fecha || l.ff || '').trim(), m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/.exec(s); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : s.slice(0, 10); };
   // Las S.UE.* (adquisiciones intracomunitarias) son del soportado: si alguna hubiera quedado en el repercutido (p. ej. por venir en el archivo del libro repercutido), vuelve al soportado
   async function moverSueA(empresaId, filtro = () => true) {
     const { data: e } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-E').maybeSingle();
-    const filasE = e?.datos?.filas ?? [], sue = filasE.filter((l) => /^S\.UE\./.test(l.codigo) && filtro(l));
+    const filasE = e?.datos?.filas ?? [], sue = filasE.filter((l) => esSue(l) && filtro(l));
     if (!sue.length) return 0;
     const { data: r } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').maybeSingle();
     const filasR = r?.datos?.filas ?? [], k = (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|'), claves = new Set(filasR.map(k));
     if (!(await reemplazarGrande('fact-R', empresaId, [...filasR, ...sue.filter((l) => !claves.has(k(l))).map((l) => ({ ...l, sentido: 'R' }))], r))) return 0;
-    if (!(await reemplazarGrande('fact-E', empresaId, filasE.filter((l) => !(/^S\.UE\./.test(l.codigo) && filtro(l))), e))) return 0;
+    if (!(await reemplazarGrande('fact-E', empresaId, filasE.filter((l) => !(esSue(l) && filtro(l))), e))) return 0;
     return sue.length;
   }
   // Revisa los libros ya guardados de la empresa (sin leer archivos): cada línea en su libro (S.UE.* al soportado, S.NC.ISP.A al repercutido)
   async function revisarLibros() {
     if (!S.sel) return;
-    const rg = rangoPeriodo(Number(S.ejercicio), S.periodo), dentro = (l) => l.fecha >= rg.desde && l.fecha <= rg.hasta, per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'todo el ejercicio';
+    const rg = rangoPeriodo(Number(S.ejercicio), S.periodo), dentro = (l) => { const f = fIsoL(l); return !f || (f >= rg.desde && f <= rg.hasta); }, per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'todo el ejercicio';
+    const E0 = GR.get(`fact-E|${S.sel}`) ?? [], totE = E0.filter(esSue).length, enPer = E0.filter((l) => esSue(l) && dentro(l)).length;
     const nSue = await moverSueA(S.sel, dentro), nIsp = await moverIspA(S.sel, dentro);
-    d365Msg = nSue || nIsp ? `Libros revisados (${per}): ${nSue} S.UE.* pasadas al soportado y ${nIsp} S.NC.ISP.A al repercutido.` : `Libros revisados (${per}): todo estaba ya en su libro.`;
+    d365Msg = nSue || nIsp ? `Libros revisados (${per}): ${nSue} S.UE.* pasadas al soportado y ${nIsp} S.NC.ISP.A al repercutido.` : `Libros revisados (${per}): todo estaba ya en su libro (S.UE.* en el repercutido: ${totE}, de ellas en el periodo: ${enPer}).`;
     await cargar(); render();
   }
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
