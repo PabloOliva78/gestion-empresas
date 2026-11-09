@@ -1330,6 +1330,13 @@ export function crearModulos(c) {
     if (!(await reemplazarGrande('fact-E', empresaId, filasE.filter((l) => !/^S\.UE\./.test(l.codigo)), e))) return 0;
     return sue.length;
   }
+  // Revisa los libros ya guardados de la empresa (sin leer archivos): cada línea en su libro (S.UE.* al soportado, S.NC.ISP.A al repercutido)
+  async function revisarLibros() {
+    if (!S.sel) return;
+    const nSue = await moverSueA(S.sel), nIsp = await moverIspA(S.sel);
+    d365Msg = nSue || nIsp ? `Libros revisados: ${nSue} S.UE.* pasadas al soportado y ${nIsp} S.NC.ISP.A al repercutido.` : 'Libros revisados: todo estaba ya en su libro.';
+    await cargar(); render();
+  }
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
     const k = `${tipo}|${empresaId}`;
     GR.set(k, filas); if (String(empresaId) === String(S.sel)) render(); // se ve al momento en todas las pestañas; el guardado sigue después
@@ -3383,7 +3390,7 @@ export function crearModulos(c) {
     return undefined;
   }
   // manual = con un clic del usuario (puede pedir permiso); sin manual solo se lee si el navegador ya lo permite
-  async function d365Recoger(manual) {
+  async function d365Recoger(manual, forzar = false) { // forzar: vuelve a leer también los archivos ya cargados
     if (d365Ocupado) return;
     d365Ocupado = true;
     try {
@@ -3412,7 +3419,7 @@ export function crearModulos(c) {
         const mN = /^D365_([^_]+)_(Repercutido|Soportado)_(\d{4})-(\d{2})(?:_.*)?\.xlsx$/i.exec(n), esL = /^L[ií]neas de informes de IVA.*\.xlsx$/i.test(n);
         if (!mN && !esL) continue;
         const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
-        if (hecho.has(clave)) continue;
+        if (!forzar && hecho.has(clave)) continue;
         let sig, ym;
         if (mN) { sig = mN[1].toUpperCase(); ym = `${mN[3]}-${mN[4]}`; } else { const R = await reconocerD365(f).catch(() => null); if (!R) { omit.push(`${n} (no reconocido)`); continue; } ({ sig, ym } = R); }
         const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === sig);
@@ -3572,7 +3579,7 @@ export function crearModulos(c) {
     return `<div class="inicio"><section class="dsec"><h3>Libros de IVA · ${esc(e.nombre)}</h3><div class="d-fila">
         <label title="Marcado: cada semana se cargan solos los libros que la tarea de D365 deja en la carpeta de exportaciones. Sin marcar: los subes tú como siempre."><input type="checkbox" data-d365auto="1"${cfgD.auto ? ' checked' : ''}${ed ? '' : ' disabled'}> <b>Descarga automática semanal desde D365</b></label>
         ${ed && p ? `<label title="Marcado: ese mes no se vuelve a cargar desde D365."><input type="checkbox" data-d365liq="${lq.join(',')}"${liqHecha ? ' checked' : ''}> <b>Liquidación de IVA hecha · ${esc(per)}</b></label>` : ''}
-        <span class="dash-s">Exportaciones de D365: guárdalas en <b>${esc(d365H?.name ?? 'LIBROS IVA D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta" data-c="carpeta" title="Elige la carpeta G:\\Mi unidad\\LIBROS IVA D365">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button>${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button>` : ''}</span>
+        <span class="dash-s">Exportaciones de D365: guárdalas en <b>${esc(d365H?.name ?? 'LIBROS IVA D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta" data-c="carpeta" title="Elige la carpeta G:\\Mi unidad\\LIBROS IVA D365">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button>${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button> <button class="small" data-act="m-d365releer" title="Vuelve a leer todos los libros de la carpeta, también los ya cargados">Releer todo</button> <button class="small" data-act="m-librosrev" title="Revisa los libros ya cargados: pasa las S.UE.* al soportado y las S.NC.ISP.A al repercutido, sin volver a leer archivos">Revisar libros</button>` : ''}</span>
         <span class="dash-s">${cfgD.auto ? 'Automático' : 'Manual'}${ultimos.length ? ` · liquidados: ${esc(ultimos.join(', '))}` : ''}</span></div>
         ${d365Est?.aviso ? `<div class="d-fila"><span class="d-ko">⚠ ${esc(d365Est.aviso)}</span></div>` : d365Est?.ultima ? `<div class="d-fila"><span class="dash-s">Última descarga de D365: ${esc(new Date(d365Est.ultima.fecha).toLocaleString('es-ES'))} · semana ${esc(d365Est.ultima.semana)} · sin errores</span></div>` : ''}
         ${d365Msg ? `<div class="d-fila"><span class="dash-s">${esc(d365Msg)}</span></div>` : ''}</section>
@@ -4481,6 +4488,8 @@ export function crearModulos(c) {
       'm-ntsol': () => ntRehacer(d.id),
       'm-d365carpeta': () => d365Carpeta(d.c),
       'm-d365recoger': () => d365Recoger(true),
+      'm-d365releer': () => d365Recoger(true, true),
+      'm-librosrev': () => revisarLibros(),
       'm-new': () => formReg(d.m),
       'm-edit': () => formReg(d.m, reg()),
       'm-del': () => borrarReg(reg()),
