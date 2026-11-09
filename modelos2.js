@@ -1,6 +1,6 @@
 // Bloque 4 · 349, 390 y resúmenes anuales 180 / 190 / 193 con el diseño de la aplicación antigua
 // (ficha del impreso para el 349; cuadro de doce meses o cuatro trimestres para el 390 y los resúmenes anuales).
-import { calcular349Ops, esUE, periodoAnterior349 } from './lectores.js?v=52';
+import { calcular349Ops, esUE, periodoAnterior349 } from './lectores.js?v=53';
 export function crearModelos2(c) {
   const { S, esc, empresa, grande, calcularRet, calcular349, c303, nomPer, totalRet, render } = c;
   const nombreEmp = c.nombreEmp ?? ((e) => e?.nombre ?? ''); // nombre con que se muestra la empresa en la aplicación (p. ej. HEROGRA FERTILIZANTES S.A.)

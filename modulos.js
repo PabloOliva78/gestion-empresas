@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=52';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=53';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
@@ -10,7 +10,7 @@ import { crearModelos } from './modelos.js?v=28';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=8';
+import { crearConciliaciones } from './conciliaciones.js?v=9';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=9';
 

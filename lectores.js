@@ -425,7 +425,19 @@ export function catEsperadaSii(sentido, cod) {
 export const txtCatSii = (k) => (/^AIC-/.test(k) ? `adquisición intracomunitaria (clave 09) al ${k.slice(4)} %` : /-BI$/.test(k) ? `${txtCatSii(k.slice(0, -3))} · bien de inversión SÍ` : k === 'NSL' ? 'no sujeta por localización'
   : k === 'NS' ? 'no sujeta' : k === 'S2' ? 'inversión sujeto pasivo (S2)' : k === 'ISP' ? 'ISP' : /^S1-/.test(k) ? `S1 al ${k.slice(3)} %` : /^NOISP-/.test(k) ? `no ISP al ${k.slice(6)} %` : /^EX-/.test(k) ? `exenta ${k.slice(3)}` : k);
 export const normFac = (f) => String(f || '').toUpperCase().replace(/\s+/g, '');
-export const normNif = (n) => { const x = String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-Z]{2}/.test(x) ? x.slice(2) : x; }; // sin el prefijo de país, como el Excel
+// sin el prefijo de país (se quitan los que haya apilados: GBCZ684027135 = CZ684027135 = 684027135) y sin ceros a la izquierda; DMCC192962 no lleva prefijo (DM no es de los países de la lista)
+const PREF_PAIS = new Set(['AE', 'AT', 'BE', 'BG', 'CH', 'CN', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MA', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'TR', 'US', 'XI']);
+export const normNif = (n) => { let x = String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); while (x.length > 6 && PREF_PAIS.has(x.slice(0, 2))) x = x.slice(2); return x.replace(/^0+(?=\d)/, ''); };
+// recibidas: una factura con una línea S.NAC.NS del mismo importe que otra línea con IVA (reflejo en el libro) cuenta una sola vez; el SII la declara una vez
+export function espejosNS(lineas) {
+  const g = new Map(), out = new Set();
+  lineas.forEach((l) => { const k = `${normFac(l.factura)}|${normNif(l.nif)}`; (g.get(k) ?? g.set(k, []).get(k)).push(l); });
+  g.forEach((ls) => {
+    const con = ls.filter((l) => l.codigo !== 'S.NAC.NS' && Math.abs(+l.cuota || 0) > 0.005);
+    ls.filter((l) => l.codigo === 'S.NAC.NS').forEach((n) => { if (con.some((c) => Math.abs((+c.base || 0) - (+n.base || 0)) < 0.01)) out.add(n); });
+  });
+  return out;
+}
 // cómo está declarada una fila del SII: {categoría: base}
 function catsFilaSii(emit, H, r) {
   const o = {}, add = (k, v) => { if (Math.abs(v) > 0.005) o[k] = r2n((o[k] || 0) + v); };
@@ -511,7 +523,8 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   // las retenciones (I.ALQ, R.I.ALQ, I.PR…) llevan la misma base que la factura y no son IVA: no se cuentan en emitidas (en recibidas ya están en EXC_RECIBIDAS)
   const ls = sii.filter((s) => s.sentido === sentido && (emit ? s.fecha >= r.desde && s.fecha <= r.hasta : s.ej === ej && (!periodo || s.per === periodo)));
   const claveSii = new Set(ls.map((s) => clave(s.factura, s.nif)));   // las no sujetas (R.NAC.NS) solo cuentan si la factura está declarada en el SII
-  const lc = libro.filter((l) => l.sentido === sentido && (emit ? l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || claveSii.has(clave(l.factura, l.nif)))
+  const espejo = emit ? new Set() : espejosNS(libro.filter((l) => l.sentido === sentido));
+  const lc = libro.filter((l) => l.sentido === sentido && !espejo.has(l) && (emit ? l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_EMITIDAS.includes(l.codigo) && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || claveSii.has(clave(l.factura, l.nif)))
     : l.fecha >= r.desde && l.fecha <= r.hasta && !EXC_RECIBIDAS.includes(l.codigo)));
   const cont = new Map();
   for (const l of lc) {

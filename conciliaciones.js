@@ -99,7 +99,7 @@ export function crearConciliaciones(c) {
       const libE = LE.filter((l) => dentro(l, 'fecha') && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || enSii.has(nfac(l.factura))) && !/^R\.RC\./.test(l.codigo));
       f.e.t = suma(libE); f.e.a = suma(libE.filter((l) => AUTO_E.includes(l.codigo))); f.e.k = { b: r2(f.e.t.b - f.e.a.b), c: r2(f.e.t.c - f.e.a.c) };
       f.e.s = suma(seP);
-      f.r.t = suma(LR.filter((l) => dentro(l, 'fecha') && !/^I\./.test(l.codigo)));
+      f.r.t = suma(LR.filter((l) => dentro(l, 'fecha') && !/^I\./.test(l.codigo) && !espejo.has(l)));
       f.r.s = suma(SR.filter((s) => s.ej === ej && s.per === per));
       if (f.e.s.c || f.e.s.b || f.e.t.c || f.e.t.b || f.r.s.c || f.r.s.b || f.r.t.c || f.r.t.b) hay = true;
       filas.push(f);
