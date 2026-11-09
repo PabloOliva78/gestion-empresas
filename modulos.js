@@ -1146,13 +1146,14 @@ export function crearModulos(c) {
     if (fcF.fecha.trim()) { const q = fcF.fecha.trim(); f = f.filter((l) => String(l.fecha ?? '').includes(q) || String(l.fecha ?? '').split('-').reverse().join('/').includes(q)); }
     return f;
   }
-  // Un solo importe (base o cuota): exacto, o parte de sus cifras (3 o más)
+  // Un solo importe (base o cuota): lo escrito, literal
   function buscaNum(v, q) {
     q = String(q ?? '').trim();
     if (!/^[-+]?[\d.,\s€]+$/.test(q) || !/\d/.test(q) || !Number.isFinite(v)) return false;
-    const n = parseES(q.replace(/[€\s]/g, '')), t = q.replace(/[€\s]/g, '').replace(/^[-+]/, '');
-    if (n && Math.abs(Math.abs(v) - Math.abs(n)) < 0.006) return true;
-    return t.length >= 3 && (fnum(Math.abs(v)).includes(t) || String(Math.abs(rr(v))).includes(t));
+    const n = parseES(q.replace(/[€\s]/g, ''));
+    if (n === null || n === undefined || Number.isNaN(n)) return false;
+    // importe literal: 0,00 trae solo las de cero; sin signo vale para positivas y negativas, con signo solo para ese signo
+    return /^[-+]/.test(q) ? Math.abs(v - n) < 0.006 : Math.abs(Math.abs(v) - Math.abs(n)) < 0.006;
   }
   // Si lo escrito es un importe, casa con la base o la cuota (exacto) o con parte del importe (3 cifras o más)
   function buscaImporte(l, q) {
