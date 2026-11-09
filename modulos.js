@@ -3284,6 +3284,27 @@ export function crearModulos(c) {
     }
     if (nuevo) await cargar();
   }
+  // Escribe en config.json las marcas de TODAS las empresas (la base de datos manda): devuelve cuántas cambió, 0 si ya estaba al día, -1 si no hay permiso de escritura
+  async function d365CfgVolcar(h, manual) {
+    try {
+      let p = await h.queryPermission({ mode: 'readwrite' });
+      if (p !== 'granted' && manual) p = await h.requestPermission({ mode: 'readwrite' });
+      if (p !== 'granted') return manual ? -1 : 0;
+      const j = (await d365CfgLeer(h)) ?? { empresas: {} }; j.empresas ??= {};
+      let n = 0;
+      for (const e of S.empresas) {
+        const d = liqReg(e.id)?.datos;
+        if (!e.cif || !d) continue;
+        const nuevo = { auto: !!d.auto, liquidados: d.meses ?? [] };
+        if (JSON.stringify(j.empresas[e.cif]) !== JSON.stringify(nuevo)) { j.empresas[e.cif] = nuevo; n++; }
+      }
+      if (!n) return 0;
+      j.actualizado = new Date().toISOString();
+      const w = await (await h.getFileHandle('config.json', { create: true })).createWritable();
+      await w.write(JSON.stringify(j, null, 1)); await w.close();
+      return n;
+    } catch { return manual ? -1 : 0; }
+  }
   async function d365Cambio(mut) {
     const h = await d365Main(), e = empresa();
     let permiso = false;
@@ -3363,7 +3384,13 @@ export function crearModulos(c) {
       }
       if (!d365H && !d365O) { if (manual) { d365Msg = 'Elige primero la carpeta de exportaciones de D365.'; render(); } return; }
       if (!carpetas.length) return;
-      if (carpetas.includes(d365H)) { await d365CfgSembrar(d365H); d365Est = await d365EstadoLeer(d365H); render(); }
+      let cfgTxt = '';
+      if (carpetas.includes(d365H)) {
+        await d365CfgSembrar(d365H);
+        const nCfg = await d365CfgVolcar(d365H, manual);
+        cfgTxt = nCfg > 0 ? ` · config.json actualizado con ${nCfg} empresa${nCfg > 1 ? 's' : ''}` : nCfg < 0 ? ' · sin permiso de escritura: config.json no se ha actualizado (pulsa «Recoger ahora» y elige «Editar archivos»)' : '';
+        d365Est = await d365EstadoLeer(d365H); render();
+      }
       const hecho = d365Hecho(), omit = [], tocadas = new Set(); let cargados = 0;
       const entradas = [];
       for (const dir of carpetas) for await (const [n, h] of dir.entries()) entradas.push([n, h]);
@@ -3383,7 +3410,7 @@ export function crearModulos(c) {
         try { await ingestaIVA(f, e.id); hecho.add(clave); cargados++; tocadas.add(e.id); } catch (err) { omit.push(`${n} (${err.message})`); }
       }
       d365Marca(hecho);
-      d365Msg = `${cargados ? `${cargados} libro(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}`;
+      d365Msg = `${cargados ? `${cargados} libro(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}${cfgTxt}`;
       if (cargados || manual) { await cargar(); render(); }
     } finally { d365Ocupado = false; }
   }
