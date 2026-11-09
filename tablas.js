@@ -184,17 +184,17 @@ export function activarAlineacion(raiz) {
   raiz.querySelectorAll('table').forEach((x) => pend.add(x)); if (pend.size) requestAnimationFrame(lanzar);
 }
 
-// ---------- Botón «Imprimir» en cada tabla de la conciliación SII: la tabla sola, en una hoja apaisada ----------
+// ---------- Botón «Imprimir» en cada tabla de la conciliación SII: la tabla sola, en una hoja vertical ----------
 function imprimirTabla(tabla, titulo) {
   const w = window.open('', '_blank'); if (!w) { alert('El navegador ha bloqueado la ventana de impresión'); return; }
   const c = tabla.cloneNode(true); c.querySelectorAll('button,input,select,.no-print').forEach((x) => x.remove());
   const esc = (s) => String(s).replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + esc(titulo) + '</title><style>'
-    + '@page{size:A4 landscape;margin:8mm}body{font:11px Arial,sans-serif;color:#000;margin:0}h1{font-size:13px;margin:0 0 6px}'
+    + '@page{size:A4 portrait;margin:8mm}body{font:11px Arial,sans-serif;color:#000;margin:0}h1{font-size:13px;margin:0 0 6px}'
     + 'table{border-collapse:collapse;width:100%}th{background:#fdf0c9;border:1px solid #999;padding:2px 5px;font-size:10px}'
     + 'td{border:1px solid #ccc;padding:2px 5px;white-space:nowrap}td.num,td.n{text-align:right}tr.ttot td{font-weight:700;background:#fff7dc}'
     + '.dif-ko{color:#b00020;font-weight:700}.est-ok{color:#1b7f3b}tr.cf-ok td{background:#e1f3e6}tr.cf-ko td{background:#fdecea}'
-    + '</style></head><body><h1>' + esc(titulo) + '</h1><div id="c">' + c.outerHTML + '</div><script>onload=function(){var c=document.getElementById("c"),W=1062,H=690,z=Math.min(1,W/c.scrollWidth,H/c.scrollHeight);'
+    + '</style></head><body><h1>' + esc(titulo) + '</h1><div id="c">' + c.outerHTML + '</div><script>onload=function(){var c=document.getElementById("c"),W=733,H=1020,z=Math.min(1,W/c.scrollWidth,H/c.scrollHeight);'
     + 'if(z<0.45)z=Math.min(1,W/c.scrollWidth);c.style.zoom=z;setTimeout(function(){print()},250)}<\/script></body></html>');
   w.document.close();
 }
