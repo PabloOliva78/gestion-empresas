@@ -536,9 +536,13 @@ export function crearConciliaciones(c) {
       else {
         const cl = (p, k) => r2(fm(p).reduce((s, x) => s + ((x.K.porClave.find((y) => y.clave === k) || {}).importe || 0), 0)), itf = extra?.intra(ej);
         const itv = (p, fl) => (itf ? r2(fm(p).reduce((s, x) => s + itf(x.mes, fl), 0)) : null);
-        C = [{ t: 'Entregas (E)', pres: (p) => P('E', p), cont: [['349 calculado', (p) => cl(p, 'E')], ['303 casilla 59', (p) => r2(fm(p).reduce((s, x) => s + x.C3.G.entregas.base, 0))], ['Intrastat expedición', (p) => itv(p, 'Expedición')]] },
+        // hasta 2024 se presentó el abono de servicios prestados (S negativo) restado de las entregas (E); desde 2025 cada clave va por separado
+        const viejo = ej <= 2024, clx = (x, k) => (x.K.porClave.find((y) => y.clave === k) || {}).importe || 0;
+        const clE = (p) => (viejo ? r2(fm(p).reduce((s, x) => s + clx(x, 'E') + Math.min(0, clx(x, 'S')), 0)) : cl(p, 'E'));
+        const clS = (p) => (viejo ? r2(fm(p).reduce((s, x) => s + Math.max(0, clx(x, 'S')), 0)) : cl(p, 'S'));
+        C = [{ t: 'Entregas (E)', pres: (p) => P('E', p), cont: [[viejo ? '349 calculado (E − abonos de S)' : '349 calculado', clE], ['303 casilla 59', (p) => r2(fm(p).reduce((s, x) => s + x.C3.G.entregas.base, 0))], ['Intrastat expedición', (p) => itv(p, 'Expedición')]] },
           { t: 'Adquisiciones (A)', pres: (p) => P('A', p), cont: [['349 calculado', (p) => cl(p, 'A')], ['Intrastat introducción', (p) => itv(p, 'Introducción')]] },
-          { t: 'Servicios prestados (S)', pres: (p) => P('S', p), cont: [['349 calculado', (p) => cl(p, 'S')]] },
+          { t: 'Servicios prestados (S)', pres: (p) => P('S', p), cont: [[viejo ? '349 calculado (sin abonos)' : '349 calculado', clS]] },
           { t: 'Servicios adquiridos (I)', pres: (p) => P('I', p), cont: [['349 calculado', (p) => cl(p, 'I')]] }];
       }
     }
