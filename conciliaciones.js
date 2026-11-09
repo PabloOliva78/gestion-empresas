@@ -90,6 +90,10 @@ export function crearConciliaciones(c) {
     const LE = lib('fact-E') ?? [], LR = lib('fact-R') ?? [], SE = lib('sii-E') ?? [], SR = lib('sii-R') ?? [];
     const o0 = () => ({ b: 0, c: 0 }), suma = (L) => ({ b: r2(L.reduce((s, l) => s + (+l.base || 0), 0)), c: r2(L.reduce((s, l) => s + (+l.cuota || 0), 0)) });
     const filas = []; let hay = false;
+    // recibidas: una línea S.NAC.NS con el mismo importe que otra línea con IVA de la misma factura es un reflejo en el libro y el SII la declara una vez
+    const nf = (v) => String(v ?? '').toUpperCase().replace(/\s+/g, ''), gF = new Map(), espejo = new Set();
+    LR.forEach((l) => { const k = `${nf(l.factura)}|${nf(l.nif)}`; (gF.get(k) ?? gF.set(k, []).get(k)).push(l); });
+    gF.forEach((ls) => { const con = ls.filter((l) => l.codigo !== 'S.NAC.NS' && Math.abs(+l.cuota || 0) > 0.005); ls.filter((l) => l.codigo === 'S.NAC.NS').forEach((n) => { if (con.some((c) => Math.abs((+c.base || 0) - (+n.base || 0)) < 0.01)) espejo.add(n); }); });
     for (let i = 0; i < nP; i++) {
       const per = trim ? `${i + 1}T` : String(i + 1).padStart(2, '0'), a = rngPer(ej, per).map((t) => new Date(t).toISOString().slice(0, 10));
       const f = { txt: trim ? TRN[i] : MESES[i], per, e: { s: o0(), t: o0(), a: o0(), k: o0() }, r: { s: o0(), t: o0(), a: o0(), k: o0() } };
