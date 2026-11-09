@@ -1024,6 +1024,9 @@ export function crearModulos(c) {
     const lib = bc ?? leerLibroIVA(filas);
     if (lib) {
       const partes = [];
+      // Libro del mes que deja la tarea semanal de D365 (D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx): cada semana trae el mes acumulado,
+      // así que primero se quitan las líneas que aportó la carga anterior de ese mismo archivo (facturas corregidas o anuladas) y luego se añaden las nuevas: nunca se duplican.
+      if (/^D365_[^_]+_(Repercutido|Soportado)_\d{4}-\d{2}/i.test(f.name)) for (const t of ['fact-E', 'fact-R']) await quitarDatosArchivo(t, f.name, empresaId);
       for (const s of ['E', 'R']) {
         const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name }));
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
