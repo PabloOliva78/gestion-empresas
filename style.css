@@ -1204,3 +1204,4 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 .fc-cab.fc-una > input[data-fq] { flex: 2 1 0; }
 .fc-cab.fc-una > .hint { flex: none; white-space: nowrap; }
 .fc-cab.fc-una > button { flex: none; white-space: nowrap; }
+.fc-cab.fc-una > select { flex: 1 1 0; min-width: 84px; width: 0; padding: .3rem .5rem; font-size: .78rem; }
