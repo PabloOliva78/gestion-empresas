@@ -202,11 +202,11 @@ function botonImprimir(wrap) {
   if (wrap.dataset.imp) return; wrap.dataset.imp = '1';
   const t = wrap.querySelector('table'); if (!t) return;
   const barra = document.createElement('div'); barra.className = 'no-print'; barra.style.cssText = 'margin:2px 0 4px';
-  const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = '🖨 Imprimir esta tabla';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = '📄 Exportar a PDF';
   b.onclick = () => {
     const ant = wrap.previousElementSibling, cab = ant && ant.classList.contains('css-4760-t') ? ant : wrap.parentElement?.querySelector(':scope > .css-4760-t');
     const card = wrap.closest('.prs-card')?.querySelector('.prs-h');
-    imprimirTabla(t, [cab?.textContent.trim().replace(/\s+/g, ' '), card?.textContent.trim()].filter(Boolean).join(' · ') || 'Tabla');
+    exportarPdf(t, [cab?.textContent.trim().replace(/\s+/g, ' '), card?.textContent.trim()].filter(Boolean).join(' · ') || 'Tabla');
   };
   barra.appendChild(b); wrap.parentElement.insertBefore(barra, wrap);
 }
@@ -216,4 +216,37 @@ export function activarImprimir(raiz) {
   const ver = (n) => { if (n.nodeType !== 1) return; n.querySelectorAll?.('table.conc-t').forEach((t) => { const w = t.closest('.wrap'); if (w) pend.add(w); }); if (n.matches?.('table.conc-t')) { const w = n.closest('.wrap'); if (w) pend.add(w); } };
   new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach(ver); if (pend.size && !prog) { prog = true; requestAnimationFrame(lanzar); } }).observe(raiz, { childList: true, subtree: true });
   ver(raiz); if (pend.size) requestAnimationFrame(lanzar);
+}
+
+// ---------- Exportar una tabla a PDF (A4 vertical): todas las columnas caben a lo ancho, las filas siguen en las hojas que haga falta ----------
+function exportarPdf(tabla, titulo) {
+  const J = window.jspdf?.jsPDF;
+  if (!J || !window.jspdf || typeof J.API?.autoTable !== 'function') { imprimirTabla(tabla, titulo); return; } // sin la librería: ventana de impresión
+  const txt = (c) => c.textContent.replace(/\s+/g, ' ').trim();
+  const numC = (c) => c.classList.contains('num') || c.classList.contains('n') || c.style.textAlign === 'right';
+  const filasDe = (trs, cab) => trs.filter((tr) => tr.cells.length).map((tr) => {
+    const cf = tr.classList.contains('cf-ok') ? [225, 243, 230] : tr.classList.contains('cf-ko') ? [253, 236, 234] : tr.classList.contains('ttot') ? [255, 247, 220] : null;
+    return [...tr.cells].map((c) => {
+      const o = { content: txt(c), styles: {} };
+      if (c.colSpan > 1) o.colSpan = c.colSpan;
+      if (!cab && numC(c)) o.styles.halign = 'right';
+      if (cf) o.styles.fillColor = cf;
+      if (tr.classList.contains('ttot')) o.styles.fontStyle = 'bold';
+      if (/dif-ko/.test(c.className)) o.styles.textColor = [176, 0, 32];
+      return o;
+    });
+  });
+  const head = filasDe([...tabla.querySelectorAll('thead tr')], true), body = filasDe([...tabla.querySelectorAll('tbody tr')], false);
+  const nCols = head.length ? head[head.length - 1].reduce((s, c) => s + (c.colSpan || 1), 0) : 8;
+  const fs = nCols <= 8 ? 8.5 : nCols <= 10 ? 7.5 : 6.5;
+  const doc = new J({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  doc.setFontSize(11); doc.setFont(undefined, 'bold');
+  const tl = doc.splitTextToSize(titulo, 194); doc.text(tl, 8, 11);
+  doc.autoTable({
+    head, body, startY: 11 + tl.length * 5 + 1, theme: 'grid', margin: { left: 8, right: 8, top: 14, bottom: 12 }, tableWidth: 'auto',
+    styles: { fontSize: fs, cellPadding: 1.2, overflow: 'linebreak', valign: 'middle', lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 0 },
+    headStyles: { fillColor: [253, 240, 201], textColor: 0, fontStyle: 'bold', halign: 'center', lineColor: [150, 150, 150] },
+    didDrawPage: () => { const n = doc.internal.getNumberOfPages(); doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.text('Página ' + n, 202, 292, { align: 'right' }); },
+  });
+  doc.save(titulo.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) + '.pdf');
 }

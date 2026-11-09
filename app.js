@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=254';
-import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=9';
+import { crearModulos } from './modulos.js?v=255';
+import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
