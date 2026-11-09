@@ -531,7 +531,8 @@ export function crearConciliaciones(c) {
       const fm = (p) => FM[p] ??= (/T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : [+p]).map((x) => { try { const pp = String(x).padStart(2, '0'); return { mes: x, C3: calc303(RE, RR, ej, pp), K: calc349(RE, RR, ej, pp) }; } catch { return null; } }).filter(Boolean);
       if (m === '303') C = [
         { t: 'IVA diferido importación (77)', pres: (p) => P('adu', p), cont: [['Calculado', (p) => r2(fm(p).reduce((s, x) => s + (+x.C3.c77 || 0), 0))]] },
-        { t: 'Resultado', pres: (p) => P('res', p), cont: [['Calculado (46 + 77 − 78)', (p) => r2(fm(p).reduce((s, x) => s + x.C3.c46 + x.C3.c77 - x.C3.c78, 0))]] }];
+        // lo presentado guardado como «Resultado IVA» es la casilla 46 (régimen general); el IVA diferido (77) y las cuotas aplicadas (78) se comparan aparte
+        { t: 'Resultado (casilla 46)', pres: (p) => P('res', p), cont: [['Calculado (46)', (p) => r2(fm(p).reduce((s, x) => s + x.C3.c46, 0))]] }];
       else {
         const cl = (p, k) => r2(fm(p).reduce((s, x) => s + ((x.K.porClave.find((y) => y.clave === k) || {}).importe || 0), 0)), itf = extra?.intra(ej);
         const itv = (p, fl) => (itf ? r2(fm(p).reduce((s, x) => s + itf(x.mes, fl), 0)) : null);
