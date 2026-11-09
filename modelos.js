@@ -305,6 +305,16 @@ export function crearModelos(c) {
   async function bigGuardar(tipo, datos) {
     const k = `${tipo}|${S.sel}`, cur = BIG.get(k) ?? {};
     BIG.set(k, { id: cur.id, datos }); render(); // se ve al momento en todas las pestañas; el guardado sigue después
+    // los guardados van de uno en uno (si hay otro esperando, guardará lo último): dos a la vez se bloquean entre sí en la base de datos
+    let q = colaBig.get(k); if (!q) { q = { p: Promise.resolve(), pend: null }; colaBig.set(k, q); }
+    if (q.pend) return q.pend;
+    q.pend = q.p.then(async () => { q.pend = null; await bigGuardar0(tipo, BIG.get(k)?.datos ?? datos); });
+    q.p = q.pend.catch(() => {});
+    return q.pend;
+  }
+  const colaBig = new Map();
+  async function bigGuardar0(tipo, datos) {
+    const k = `${tipo}|${S.sel}`, cur = BIG.get(k) ?? {};
     if (cur.id) { const { error } = await db.from('registros').update({ datos }).eq('id', cur.id); if (error) alert(error.message); }
     else { cur.id = crypto.randomUUID(); const { error } = await db.from('registros').insert({ id: cur.id, empresa_id: S.sel, tipo, ejercicio: null, datos }); if (error) alert(error.message); }
     BIG.set(k, { id: cur.id, datos });

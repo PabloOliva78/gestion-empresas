@@ -1313,13 +1313,27 @@ export function crearModulos(c) {
     return isp.length;
   }
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
-    GR.set(`${tipo}|${empresaId}`, filas); if (String(empresaId) === String(S.sel)) render(); // se ve al momento en todas las pestañas; el guardado sigue después
-    const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
-    const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
-    if (err) { alert(/statement timeout/i.test(err) ? 'La base de datos ha tardado demasiado en guardar el libro (es muy grande). Amplía el tiempo máximo de las consultas: ejecuta supabase/05_timeout.sql en el editor SQL de Supabase.' : err); return false; }
-    GR.set(`${tipo}|${empresaId}`, filas);
-    return true;
+    const k = `${tipo}|${empresaId}`;
+    GR.set(k, filas); if (String(empresaId) === String(S.sel)) render(); // se ve al momento en todas las pestañas; el guardado sigue después
+    // los guardados del mismo libro van de uno en uno (si hay otro esperando, guardará lo último): dos a la vez se bloquean entre sí en la base de datos
+    let q = colaGr.get(k); if (!q) { q = { p: Promise.resolve(), pend: null }; colaGr.set(k, q); }
+    if (q.pend) return q.pend;
+    q.pend = q.p.then(async () => {
+      q.pend = null;
+      const fl = GR.get(k) ?? filas;
+      const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
+      const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas: fl } });
+      if (err) {
+        alert(/statement timeout/i.test(err) ? 'La base de datos ha tardado demasiado en guardar el libro (es muy grande). Amplía el tiempo máximo de las consultas: ejecuta supabase/05_timeout.sql en el editor SQL de Supabase.'
+          : /lock timeout/i.test(err) ? 'La base de datos estaba ocupada guardando este mismo libro y ha cancelado el guardado. Espera unos segundos y repite el cambio. Si se repite, ejecuta supabase/07_lock_timeout.sql en el editor SQL de Supabase.' : err);
+        return false;
+      }
+      return true;
+    });
+    q.p = q.pend.catch(() => {});
+    return q.pend;
   }
+  const colaGr = new Map();
 
   // ± signo · → pasar al otro libro · ✕ línea · ✕ factura
   async function opFc(s, op, key) {
