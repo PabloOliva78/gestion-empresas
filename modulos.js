@@ -1092,7 +1092,7 @@ export function crearModulos(c) {
   const celdasNum = (v) => `<td class="num">${eur(v)}</td>`;
 
   // ---------- Facturas emitidas / recibidas: cabecera de filtros, columnas y acciones por línea ----------
-  let fcCod = '', fcPais = '', fcQ = '', fcLim = 300; const fcTxt = new WeakMap();
+  let fcCod = '', fcPais = '', fcQ = '', fcLim = 300; const fcF = { pais: '', nombre: '', nif: '', codigo: '', base: '', cuota: '', fecha: '' }; const fcTxt = new WeakMap();
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const PREFIJOS = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'GB', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'XI', 'CH', 'NO', 'US', 'AD', 'MA']);
   const paisDe = (nif) => {
@@ -1136,7 +1136,23 @@ export function crearModulos(c) {
     if (fcCod) f = f.filter((l) => l.codigo === fcCod);
     if (fcPais) f = f.filter((l) => paisL(l) === fcPais);
     if (fcQ) { const q = sinAc(fcQ), num = /^[-+]?[\d.,\s€]+$/.test(fcQ.trim()); f = f.filter((l) => { let t = fcTxt.get(l); if (t === undefined) { t = sinAc(`${l.nif} ${l.nombre} ${l.factura}`); fcTxt.set(l, t); } return t.includes(q) || (num && buscaImporte(l, fcQ)); }); }
+    const U = (s) => String(s ?? '').toUpperCase();
+    if (fcF.pais.trim()) { const q = sinAc(fcF.pais); f = f.filter((l) => sinAc(paisL(l)).includes(q)); }
+    if (fcF.nombre.trim()) { const q = sinAc(fcF.nombre); f = f.filter((l) => sinAc(l.nombre).includes(q)); }
+    if (fcF.nif.trim()) { const q = U(fcF.nif).replace(/\s/g, ''); f = f.filter((l) => U(l.nif).replace(/\s/g, '').includes(q)); }
+    if (fcF.codigo.trim()) { const q = U(fcF.codigo).trim(); f = f.filter((l) => U(l.codigo).includes(q)); }
+    if (fcF.base.trim()) f = f.filter((l) => buscaNum(l.base, fcF.base));
+    if (fcF.cuota.trim()) f = f.filter((l) => buscaNum(l.cuota, fcF.cuota));
+    if (fcF.fecha.trim()) { const q = fcF.fecha.trim(); f = f.filter((l) => String(l.fecha ?? '').includes(q) || String(l.fecha ?? '').split('-').reverse().join('/').includes(q)); }
     return f;
+  }
+  // Un solo importe (base o cuota): exacto, o parte de sus cifras (3 o más)
+  function buscaNum(v, q) {
+    q = String(q ?? '').trim();
+    if (!/^[-+]?[\d.,\s€]+$/.test(q) || !/\d/.test(q) || !Number.isFinite(v)) return false;
+    const n = parseES(q.replace(/[€\s]/g, '')), t = q.replace(/[€\s]/g, '').replace(/^[-+]/, '');
+    if (n && Math.abs(Math.abs(v) - Math.abs(n)) < 0.006) return true;
+    return t.length >= 3 && (fnum(Math.abs(v)).includes(t) || String(Math.abs(rr(v))).includes(t));
   }
   // Si lo escrito es un importe, casa con la base o la cuota (exacto) o con parte del importe (3 cifras o más)
   function buscaImporte(l, q) {
@@ -1227,10 +1243,12 @@ export function crearModulos(c) {
       <label>País ${sel('pais', fcPais, [...new Set(datos.map((l) => paisL(l)))].sort())}</label>
       <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}"><span id="fcCuenta" class="hint">${c.n} facturas</span>
       ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
+      <div class="fc-cab no-print fc-fil2">${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => `<label>${t} <input data-fqf="${k}" type="search" value="${esc(fcF[k])}" placeholder="${k === 'fecha' ? 'dd/mm/aaaa o mm/aaaa' : ''}" style="min-width:${k === 'nombre' ? 200 : k === 'fecha' ? 170 : 110}px"></label>`).join(' ')}</div>
       <div id="fcTabla">${c.html}</div>`;
   }
 
   // La búsqueda actualiza solo la tabla, para no perder el cursor al escribir
+  function buscarFcCampo(k, v) { if (k in fcF) { fcF[k] = v; buscarFc(fcQ); } }
   function buscarFc(v, mas) {
     if (!mas) fcLim = 300;
     fcQ = v;
@@ -5148,5 +5166,5 @@ export function crearModulos(c) {
   });
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'nomexcel' ? nomCargarExcel(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, setDuaAnio, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, setDuaAnio, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, buscarFcCampo, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }

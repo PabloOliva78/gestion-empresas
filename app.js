@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=255';
+import { crearModulos } from './modulos.js?v=256';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -859,6 +859,7 @@ root.addEventListener('change', (ev) => {
 // Buscador de facturas: filtra mientras se escribe
 let tFq;
 root.addEventListener('input', (ev) => {
+  if (ev.target.dataset.fqf !== undefined) { const k = ev.target.dataset.fqf, v = ev.target.value; clearTimeout(tFq); tFq = setTimeout(() => M.buscarFcCampo(k, v), 250); return; }
   if (ev.target.dataset.fq === undefined) return;
   const v = ev.target.value;
   clearTimeout(tFq);
