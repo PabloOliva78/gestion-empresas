@@ -183,3 +183,37 @@ export function activarAlineacion(raiz) {
   new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach(ver); if (pend.size && !prog) { prog = true; requestAnimationFrame(lanzar); } }).observe(raiz, { childList: true, subtree: true });
   raiz.querySelectorAll('table').forEach((x) => pend.add(x)); if (pend.size) requestAnimationFrame(lanzar);
 }
+
+// ---------- Botón «Imprimir» en cada tabla de la conciliación SII: la tabla sola, en una hoja apaisada ----------
+function imprimirTabla(tabla, titulo) {
+  const w = window.open('', '_blank'); if (!w) { alert('El navegador ha bloqueado la ventana de impresión'); return; }
+  const c = tabla.cloneNode(true); c.querySelectorAll('button,input,select,.no-print').forEach((x) => x.remove());
+  const esc = (s) => String(s).replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + esc(titulo) + '</title><style>'
+    + '@page{size:A4 landscape;margin:8mm}body{font:11px Arial,sans-serif;color:#000;margin:0}h1{font-size:13px;margin:0 0 6px}'
+    + 'table{border-collapse:collapse;width:100%}th{background:#fdf0c9;border:1px solid #999;padding:2px 5px;font-size:10px}'
+    + 'td{border:1px solid #ccc;padding:2px 5px;white-space:nowrap}td.num,td.n{text-align:right}tr.ttot td{font-weight:700;background:#fff7dc}'
+    + '.dif-ko{color:#b00020;font-weight:700}.est-ok{color:#1b7f3b}tr.cf-ok td{background:#e1f3e6}tr.cf-ko td{background:#fdecea}'
+    + '</style></head><body><h1>' + esc(titulo) + '</h1><div id="c">' + c.outerHTML + '</div><script>onload=function(){var c=document.getElementById("c"),W=1062,H=690,z=Math.min(1,W/c.scrollWidth,H/c.scrollHeight);'
+    + 'if(z<0.45)z=Math.min(1,W/c.scrollWidth);c.style.zoom=z;setTimeout(function(){print()},250)}<\/script></body></html>');
+  w.document.close();
+}
+function botonImprimir(wrap) {
+  if (wrap.dataset.imp) return; wrap.dataset.imp = '1';
+  const t = wrap.querySelector('table'); if (!t) return;
+  const barra = document.createElement('div'); barra.className = 'no-print'; barra.style.cssText = 'margin:2px 0 4px';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = '🖨 Imprimir esta tabla';
+  b.onclick = () => {
+    const ant = wrap.previousElementSibling, cab = ant && ant.classList.contains('css-4760-t') ? ant : wrap.parentElement?.querySelector(':scope > .css-4760-t');
+    const card = wrap.closest('.prs-card')?.querySelector('.prs-h');
+    imprimirTabla(t, [cab?.textContent.trim().replace(/\s+/g, ' '), card?.textContent.trim()].filter(Boolean).join(' · ') || 'Tabla');
+  };
+  barra.appendChild(b); wrap.parentElement.insertBefore(barra, wrap);
+}
+export function activarImprimir(raiz) {
+  const pend = new Set(); let prog = false;
+  const lanzar = () => { prog = false; pend.forEach((w) => { try { botonImprimir(w); } catch { /* tabla rara */ } }); pend.clear(); };
+  const ver = (n) => { if (n.nodeType !== 1) return; n.querySelectorAll?.('table.conc-t').forEach((t) => { const w = t.closest('.wrap'); if (w) pend.add(w); }); if (n.matches?.('table.conc-t')) { const w = n.closest('.wrap'); if (w) pend.add(w); } };
+  new MutationObserver((ms) => { for (const m of ms) m.addedNodes.forEach(ver); if (pend.size && !prog) { prog = true; requestAnimationFrame(lanzar); } }).observe(raiz, { childList: true, subtree: true });
+  ver(raiz); if (pend.size) requestAnimationFrame(lanzar);
+}

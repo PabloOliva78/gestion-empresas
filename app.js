@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=251';
-import { activarRedimension, activarCajas, activarAlineacion } from './tablas.js?v=6';
+import { crearModulos } from './modulos.js?v=252';
+import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=7';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -37,7 +37,7 @@ const formaDe = () => {
 };
 const formaVars = () => { const f = formaDe(); return `--f-w:${f.w}px;--f-t:${f.t}${[1, 2, 3].map((n) => (f[`c${n}`] ? `;--fc${n}:${f[`c${n}`]}px` : '')).join('')}`; };
 activarRedimension(root, () => S.tab);
-activarAlineacion(root); activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratón
+activarAlineacion(root); activarImprimir(root); activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
