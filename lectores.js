@@ -589,7 +589,11 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   malSii.sort((a, b) => a.cods.localeCompare(b.cods) || String(a.fac).localeCompare(String(b.fac)));
   facDesc.sort((a, b) => a.cod.localeCompare(b.cod) || (Math.abs(b.db) + Math.abs(b.dc)) - (Math.abs(a.db) + Math.abs(a.dc)));
   const cero = (x) => Math.abs(x.base || 0) < 0.01 && Math.abs(x.cuota || 0) < 0.01;
-  return { desde: r.desde, hasta: r.hasta, tc, ts, A, B, C, cods, facDesc, malSii, anuladas: facDesc.filter((x) => x.anula).length, ceros: A.concat(B).filter(cero).length,
+  // facturas en ambos con diferencias de céntimos, dentro del margen: no descuadran una a una, pero pueden sumar un descuadre en el total
+  const cents = [...cont.entries()].filter(([k]) => sm.has(k)).map(([k, v]) => { const s = sm.get(k); return { fac: v.fac, nif: v.nif, nom: v.nom, bc: v.base, bs: s.base, db: r2n(v.base - s.base), cc: v.cuota, cs: s.cuota, dc: r2n(v.cuota - s.cuota) }; })
+    .filter((x) => (Math.abs(x.db) > 0.004 || Math.abs(x.dc) > 0.004) && Math.abs(x.db) <= MARGEN_SII && Math.abs(x.dc) <= MARGEN_SII)
+    .sort((a, b) => (Math.abs(b.db) + Math.abs(b.dc)) - (Math.abs(a.db) + Math.abs(a.dc)));
+  return { desde: r.desde, hasta: r.hasta, tc, ts, A, B, C, cents, cods, facDesc, malSii, anuladas: facDesc.filter((x) => x.anula).length, ceros: A.concat(B).filter(cero).length,
     cuadra: Math.abs(r2n(tc.base - ts.base)) <= MARGEN_SII && Math.abs(r2n(tc.cuota - ts.cuota)) <= MARGEN_SII && A.filter((x) => !x._anul).concat(B).every(cero) && !C.length };
 }
 
