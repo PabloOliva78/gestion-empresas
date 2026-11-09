@@ -1196,3 +1196,11 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 .it-conctabs button.mes-ok { background: #d6f2d6; color: #14631f; border-color: #6fbf73; }
 .it-conctabs button.mes-ko { background: #fbdada; color: #a11212; border-color: #e08a8a; }
 .it-conctabs button.mes-ok.primary, .it-conctabs button.mes-ko.primary { box-shadow: 0 0 0 2px #1f3a7a; font-weight: 700; }
+
+/* Emitidas / Recibidas: todos los buscadores en una sola línea */
+.fc-cab.fc-una { flex-wrap: nowrap; gap: .4rem; align-items: center; }
+.fc-cab.fc-una > label { flex: none; }
+.fc-cab.fc-una > input { flex: 1 1 0; min-width: 64px !important; width: 0; padding: .3rem .6rem; font-size: .78rem; }
+.fc-cab.fc-una > input[data-fq] { flex: 2 1 0; }
+.fc-cab.fc-una > .hint { flex: none; white-space: nowrap; }
+.fc-cab.fc-una > button { flex: none; white-space: nowrap; }

@@ -1238,12 +1238,11 @@ export function crearModulos(c) {
       ...['1T', '2T', '3T', '4T'].map((q) => `<option value="${q}"${S.periodo === q ? ' selected' : ''}>Trimestre ${q} ${ej}</option>`)].join('');
     const sel = (campo, valor, lista) => `<select data-fc="${campo}"><option value="">Todos</option>${lista.map((x) => `<option${x === valor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
     const c = cuerpoFc(s, datos);
-    return `<div class="fc-cab"><label>Ver <select data-glob="periodo">${per}</select></label>
-      <label>Código ${sel('cod', fcCod, [...new Set(datos.map((l) => l.codigo))].sort())}</label>
-      <label>País ${sel('pais', fcPais, [...new Set(datos.map((l) => paisL(l)))].sort())}</label>
-      <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}"><span id="fcCuenta" class="hint">${c.n} facturas</span>
+    return `<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
+      <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}">
+      ${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => `<input data-fqf="${k}" type="search" value="${esc(fcF[k])}" placeholder="${t}" title="${t}">`).join('')}
+      <span id="fcCuenta" class="hint">${c.n} facturas</span>
       ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
-      <div class="fc-cab no-print fc-fil2">${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => `<label>${t} <input data-fqf="${k}" type="search" value="${esc(fcF[k])}" placeholder="${k === 'fecha' ? 'dd/mm/aaaa o mm/aaaa' : ''}" style="min-width:${k === 'nombre' ? 200 : k === 'fecha' ? 170 : 110}px"></label>`).join(' ')}</div>
       <div id="fcTabla">${c.html}</div>`;
   }
 
