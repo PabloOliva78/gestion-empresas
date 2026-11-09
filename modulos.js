@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=272';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=276';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
@@ -1673,6 +1673,10 @@ export function crearModulos(c) {
     const pp = prevPer(ej, p);
     if (!pp || prof > 24) return 0;
     const [e2, p2] = pp, r = rangoPeriodo(e2, p2);
+    // si el 303 del periodo anterior está en Presentados, manda lo presentado: 87 (pendiente) + el resultado a compensar (71 negativo)
+    const kP = perEf(empresa(), p2), hayP = (v) => v !== undefined && v !== null && v !== '';
+    const liqP = prsVal(e2, '303', kP, 'liq'), c87P = prsVal(e2, '303', kP, 'c87');
+    if (hayP(liqP) || hayP(c87P)) return Math.round(((Number(c87P) || 0) + (Number(liqP) < 0 ? -Number(liqP) : 0)) * 100) / 100;
     if (![...E, ...R].some((l) => l.fecha >= r.desde && l.fecha <= r.hasta)) return 0;
     const c = calcular303(E, R, e2, p2, manualDe(e2, p2), { rectif: rectif303, c110: disponible303(E, R, e2, p2, prof + 1) });
     return Math.round((c.c87 + (c.c71 < 0 ? -c.c71 : 0)) * 100) / 100;

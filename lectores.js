@@ -712,7 +712,8 @@ export function calcular303(libroE0, libroR, ej, periodo, man = {}, opc = {}) {
   // operaciones a tipos distintos de 4, 10 y 21 % (5 % y 2 %): se suman a la cuota devengada y se enseñan en filas aparte, con la casilla por verificar
   const otros = [[5, G.rg5], [2, G.rg2]].filter(([, x]) => x.base || x.cuota).map(([tipo, x]) => ({ tipo, base: x.base, cuota: x.cuota }));
   const c110 = m('c110') ? Math.abs(m('c110')) : (opc.c110 ?? 0); // pendiente de periodos previos (lo calcula la vista desde el 303 anterior)
-  const c78 = Math.abs(m('c78'));
+  // casilla 78: si no se ha escrito a mano, se aplican las cuotas pendientes de periodos anteriores (110) hasta donde llegue el IVA a ingresar de este periodo; lo que sobre queda en la 87 para el siguiente
+  const c78 = m('c78') ? Math.abs(m('c78')) : r2n(Math.min(c110, Math.max(0, c66 + c77)));
   const c69 = r2n(c66 + c77 - c78 + m('c68'));
   return { periodo: r, G, detalle, man, b14, c14, b25, c25, b40, c41, devengado, deducir, c46, pct, c66, c77, hayDua, otros, c110, c78, c87: r2n(c110 - c78),
     c68: m('c68'), c69, c70: m('c70'), c71: r2n(c69 - m('c70')), suma: c46 };
