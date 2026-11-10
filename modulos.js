@@ -502,7 +502,7 @@ export function crearModulos(c) {
       }
       if (o.mod === '303') return calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
       if (o.mod === '349') return calcular349(E, R, ej, p).total;
-      if (o.mod === 'Intrastat') { const im = M4.intraImportes(ej, [+p]); if (im) return rr(im.exp + im.int); const x = intraDeLibros(E, R, ej, p); return rr(x.exp + x.int); }
+      if (o.mod === 'Intrastat') { const im = M4.intraImportes(ej, [+p]); return im ? rr(im.exp + im.int) : null; } // solo del Intrastat cargado; nunca de los libros
     } catch (err) { /* sin libros */ }
     return null;
   }  function tablaOb(titulo, pago) {
@@ -3549,7 +3549,7 @@ export function crearModulos(c) {
         if (E.length || R.length) {
           calc['303'] = calcular303(E, R, ej, p, manuales(), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
           calc['349'] = calcular349(E, R, ej, p).total;
-          const ix = intraDeLibros(E, R, ej, p); calc.IntraE = ix.exp; calc.IntraI = ix.int; calc.Intrastat = rr(ix.exp + ix.int);
+          // (el Intrastat ya no se calcula desde los libros: solo cuenta lo que sea del propio Intrastat)
         }
       } catch (err) { /* sin libros: solo se muestra lo presentado */ }
     }
@@ -3558,11 +3558,14 @@ export function crearModulos(c) {
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
     const ii = M4.intraImportes(ej, meses.map(Number)); // Intrastat cargado (bloque 4): expediciones e introducciones del periodo; null si no hay
+    // Intrastat: solo cifras del propio Intrastat (el fichero cargado o lo presentado); si no hay ninguna, no se pone nada (nunca el 349 ni los libros)
+    const pExp = meses.map((mm) => prsVal(ej, 'INT', mm, 'exp')), pInt = meses.map((mm) => prsVal(ej, 'INT', mm, 'int')), sumaP = (a) => rr(a.reduce((s, v) => s + (Number(v) || 0), 0));
+    const intr = ii ? { exp: ii.exp, int: ii.int } : [...pExp, ...pInt].some((v) => v !== undefined && v !== null && v !== '') ? { exp: sumaP(pExp), int: sumaP(pInt) } : null;
     const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
     const obl = new Set(obP.map((o) => o.mod));
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
       const c = calc[m], pr = pres[m], o = obP.find((x) => x.mod === m), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
-      if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(ii ? rr(ii.exp + ii.int) : hay(o.imp) ? o.imp : calc.Intrastat)}</div><div class="dash-s">Informativa · Exp. ${g(ii ? ii.exp : calc.IntraE)} · Imp. ${g(ii ? ii.int : calc.IntraI)}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
+      if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(intr ? rr(intr.exp + intr.int) : null)}</div><div class="dash-s">Informativa${intr ? ` · Exp. ${g(intr.exp)} · Imp. ${g(intr.int)}${ii ? '' : ' (presentado)'}` : ' · sin Intrastat este mes'}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!['111', '115', '123', '303', '349'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!o && c === undefined && pr === null) return '';
       if (!o && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005) && m !== '111' && m !== '303') return ''; // fuera de lo obligatorio, solo con datos
@@ -3659,7 +3662,7 @@ export function crearModulos(c) {
       } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
     }
     // 4) liquidaciones pendientes de presentar
-    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.mod === 'Intrastat' && ii ? rr(ii.exp + ii.int) : o.imp ?? calc[o.mod] ?? null })) : [];
+    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.mod === 'Intrastat' ? (intr ? rr(intr.exp + intr.int) : null) : o.imp ?? calc[o.mod] ?? null })) : [];
     const siiTxt = [];
     [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
       const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
