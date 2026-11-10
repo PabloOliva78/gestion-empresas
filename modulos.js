@@ -2347,9 +2347,11 @@ export function crearModulos(c) {
     if (!w) return void alert('Permite las ventanas emergentes para imprimir');
     w.document.write('<p style="font:14px system-ui">Preparando el listado de todas las empresas…</p>');
     const mods = mod === 'todos' ? ['111', '115', '123'] : [mod], sel0 = S.sel, per0 = S.periodo || '01';
+    // las pymes presentan por trimestres: si el mes elegido no es el último de un trimestre, solo salen las grandes empresas (mensuales) de ese mes
+    const finTrim = /^[1-4]T$/.test(per0) || (/^\d\d$/.test(per0) && +per0 % 3 === 0), empresas = S.empresas.filter((e) => finTrim || e.tipo !== 'PYME'), sinPymes = S.empresas.length - empresas.length;
     const pags = [];
     try {
-      for (const e of S.empresas) {
+      for (const e of empresas) {
         const R = await datosR(e.id);
         S.sel = e.id;
         pags.push(`<div class="pag">${mods.map((m) => listadoRetHtml(m, e, R, 'imprimir')).join('<div style="height:14px"></div>')}</div>`);
@@ -2361,7 +2363,7 @@ export function crearModulos(c) {
       @page{size:A4 portrait;margin:10mm} body{font:10.5pt 'Bricolage Grotesque',Arial,sans-serif;color:#000} .pag+.pag{break-before:page;page-break-before:always} tr{break-inside:avoid} h4{break-after:avoid;font-size:11.5pt;margin:10px 0 4px}
       .rl-cab{font-size:13pt;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px} table{width:100%;border-collapse:collapse;margin-bottom:6px}
       th,td{border:1px solid #999;padding:3px 5px;font-size:10pt} th{background:#eee} td.n{text-align:right;white-space:nowrap} td.c{text-align:center} tr.total td{font-weight:bold;background:#f4f4f4} .hint{color:#555}
-      select{border:0;background:none;font:inherit;appearance:none}</style></head><body>${pags.join('')}<script>onload=()=>setTimeout(()=>print(),400)<\/script></body></html>`);
+      select{border:0;background:none;font:inherit;appearance:none}</style></head><body>${sinPymes ? `<p class="hint" style="margin:0 0 6px">Periodo ${per0}/${S.ejercicio}: solo grandes empresas (mensuales). Las ${sinPymes} pyme(s) presentan por trimestres y no coinciden con este mes.</p>` : ''}${pags.join('')}<script>onload=()=>setTimeout(()=>print(),400)<\/script></body></html>`);
     w.document.close();
   }
 
