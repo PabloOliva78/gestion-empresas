@@ -1155,7 +1155,7 @@ export function crearModulos(c) {
   function lineasFc(s, datos) {
     const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
     let f = datos.filter((l) => { const d = l.fecha; return d >= r.desde && d <= r.hasta; });
-    if (fcCod) f = f.filter((l) => l.codigo === fcCod);
+    if (fcCod) f = f.filter((l) => (fcCod === '__sin' ? !l.codigo : l.codigo === fcCod));
     if (fcPais) f = f.filter((l) => paisL(l) === fcPais);
     if (fcQ) { const q = sinAc(fcQ), num = /^[-+]?[\d.,\s€]+$/.test(fcQ.trim()); f = f.filter((l) => { let t = fcTxt.get(l); if (t === undefined) { t = sinAc(`${l.nif} ${l.nombre} ${l.factura}`); fcTxt.set(l, t); } return t.includes(q) || (num && buscaImporte(l, fcQ)); }); }
     const U = (s) => String(s ?? '').toUpperCase();
@@ -1264,7 +1264,7 @@ export function crearModulos(c) {
     return `<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
       <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}">
       ${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => (k === 'codigo'
-        ? `<select data-fc="cod" title="Código"><option value="">Código (todos)</option>${[...new Set(datos.map((l) => l.codigo))].sort().map((x) => `<option${x === fcCod ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`
+        ? `<select data-fc="cod" title="Código"><option value="">Código (todos)</option>${[...new Set(datos.map((l) => l.codigo || ''))].sort().map((x) => (x ? `<option${x === fcCod ? ' selected' : ''}>${esc(x)}</option>` : `<option value="__sin"${fcCod === '__sin' ? ' selected' : ''}>(sin código)</option>`)).join('')}</select>`
         : `<input data-fqf="${k}" type="search" value="${esc(fcF[k])}" placeholder="${t}" title="${t}">`)).join('')}
       <span id="fcCuenta" class="hint">${c.n} facturas</span>
       ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
