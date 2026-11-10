@@ -627,10 +627,14 @@ export function crearModelos(c) {
     const d = data?.datos ?? { rows: [], serv: [], cfg: {}, exp: {} }, rows = d.rows ?? [];
     const firma = (r) => JSON.stringify(INTRA_COLS.map((_, j) => String(r[j] ?? '').trim()));
     const tengo = new Map(); rows.forEach((r) => { const k = firma(r); tengo.set(k, (tengo.get(k) || 0) + 1); });
+    // el Excel de D365 trae la cabecera y alguna columna más («Es válido»): las columnas se buscan por su nombre; sin cabecera, por posición
+    const hd = filas.find((r) => r && String(r[0] ?? '').trim().toLowerCase() === 'fecha'), nm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const pos = INTRA_COLS.map((c, j) => { const i = hd ? hd.findIndex((x) => nm(x) === nm(c)) : j; return i; });
+    const porNombre = hd && pos.filter((i) => i >= 0).length >= 12 ? pos : INTRA_COLS.map((_, j) => j);
     const nuevas = []; filas.forEach((r) => {
       if (!r || !r.some((v) => v !== null && v !== '')) return; if (String(r[0] ?? '').trim().toLowerCase() === 'fecha') return;
-      const f = fechaUtc(r[0]); if (!f) return;
-      const fila = INTRA_COLS.map((_, j) => { const v = r[j]; return v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v); }); fila[0] = fdmy(f); nuevas.push(fila);
+      const rr0 = porNombre.map((i) => (i >= 0 ? r[i] : undefined)), f = fechaUtc(rr0[0]); if (!f) return;
+      const fila = rr0.map((v) => (v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v))); fila[0] = fdmy(f); nuevas.push(fila);
     });
     const vistas = new Map(), añadir = [];
     nuevas.forEach((fila) => { const k = firma(fila), c = (vistas.get(k) || 0) + 1; vistas.set(k, c); if (c > (tengo.get(k) || 0)) añadir.push(fila); });
