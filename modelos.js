@@ -917,8 +917,8 @@ export function crearModelos(c) {
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
   };
   // Importe (valor) de expediciones e introducciones de los datos de Intrastat ya cargados, de los meses dados (1-12) del ejercicio; null si no hay nada cargado en esos meses
-  const intraImportes = (ej, meses, rep, sop) => { // rep y sop = libros de IVA emitidas y recibidas: con ellos se reparte cada línea entre expediciones e introducciones igual que la conciliación con el 349
-    if (!BIG.get(`intra|${S.sel}`)?.datos) return null;
+  const intraImportes = (ej, meses, rep, sop, cargar = false) => { // rep y sop = libros de IVA emitidas y recibidas: con ellos se reparte cada línea entre expediciones e introducciones igual que la conciliación con el 349
+    if (!BIG.get(`intra|${S.sel}`)?.datos) { if (cargar) datosIntra(); return null; } // cargar: Inicio pide los datos del Intrastat si aún no están en memoria (se redibuja al llegar); las píldoras del menú no los piden
     const D = datosIntra(); if (!D) return null;
     const O = calcIntra(D, rep ?? [], sop ?? []).filter((o) => o.anio === ej && meses.includes(o.mes));
     if (!O.length) return null;
