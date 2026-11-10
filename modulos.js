@@ -1065,12 +1065,13 @@ export function crearModulos(c) {
   // archivos dejados en cada pestaña, con la opción de quitarlos (y los datos que aportaron)
   function listaArch(kind) {
     if (!S.sel || !ARCH[kind]) return '';
-    const l = S.registros.filter((r) => r.tipo === `arch-${kind}` && r.empresa_id === S.sel).sort((a, b) => String(b.datos.subido).localeCompare(String(a.datos.subido)));
+    const ejSel = Number(S.ejercicio); // cada ejercicio enseña solo sus archivos (los guardados sin ejercicio salen siempre)
+    const l = S.registros.filter((r) => r.tipo === `arch-${kind}` && r.empresa_id === S.sel && (r.ejercicio == null || Number(r.ejercicio) === ejSel)).sort((a, b) => String(b.datos.subido).localeCompare(String(a.datos.subido)));
     // archivos que aportaron líneas al libro pero no tienen registro en la lista (cargados antes o desde una carpeta): también se pueden quitar
     let huerfanos = '';
     if (kind === 'emitidas' || kind === 'recibidas') {
-      const conReg = new Set(l.map((r) => r.datos.nombre)), O = new Map();
-      for (const t of ['fact-E', 'fact-R']) (GR.get(`${t}|${S.sel}`) ?? []).forEach((x) => { if (!x.src || conReg.has(x.src)) return; const o = O.get(x.src) ?? O.set(x.src, { n: 0, f: [] }).get(x.src); o.n++; if (x.fecha) o.f.push(x.fecha); });
+      const conReg = new Set(S.registros.filter((r) => r.tipo === `arch-${kind}` && r.empresa_id === S.sel).map((r) => r.datos.nombre)), O = new Map(); // «sin registro» = ningún ejercicio lo tiene en su lista
+      for (const t of ['fact-E', 'fact-R']) (GR.get(`${t}|${S.sel}`) ?? []).forEach((x) => { if (!x.src || conReg.has(x.src)) return; if (x.fecha && String(x.fecha).slice(0, 4) !== String(ejSel)) return; const o = O.get(x.src) ?? O.set(x.src, { n: 0, f: [] }).get(x.src); o.n++; if (x.fecha) o.f.push(x.fecha); });
       if (O.size) huerfanos = `<details class="arch-det"><summary>Archivos con líneas en el libro y sin registro en la lista (${O.size})</summary><table class="tprs tnom" style="width:auto"><tbody>${[...O.entries()].sort().map(([nom, o]) => { o.f.sort(); return `<tr><td>${esc(nom)}</td><td class="num">${o.n} líneas</td><td>${o.f.length ? `${o.f[0].split('-').reverse().join('/')} → ${o.f[o.f.length - 1].split('-').reverse().join('/')}` : ''}</td><td>${puede() ? `<button class="small danger" data-act="m-srcdel" data-n="${esc(nom)}" title="Quitar las líneas que aportó este archivo">✖ Quitar</button>` : ''}</td></tr>`; }).join('')}</tbody></table></details>`;
     }
     if (!l.length) return huerfanos;
