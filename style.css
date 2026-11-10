@@ -1215,3 +1215,7 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 /* SII: botones para quitar el mes elegido */
 .siimes { display: flex; flex-direction: column; gap: .4rem; align-self: flex-start; margin-left: auto; padding-right: 1rem; }
 .siimes button { white-space: nowrap; }
+
+/* Resumen de cuentas contables: celdas editables */
+.res td.in input { width: 100%; text-align: right; font: inherit; }
+.res td.in input.ed { background: #e0ecff; font-weight: 600; }

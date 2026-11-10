@@ -2659,6 +2659,7 @@ export function crearModulos(c) {
     if (tipo === 'pref') return guardarCta((d) => setIn(d, 'pref', a, valor.trim() === ctaDe(a)?.cta ? '' : valor.trim()));
     if (tipo === 'ambito') return guardarCta((d) => setIn(d, 'ambito', a, valor === 'todo' ? '' : valor));
     if (tipo === 'balance') return guardarCta((d) => setIn(d, 'balance', a, valor.trim() === '' ? '' : parseES(valor)));
+    if (tipo === 'res') { const [kk, pk, cn] = id.split('§'); return guardarCta((d) => setIn(d, 'res', kk, pk, cn, valor.trim() === '' ? '' : parseES(valor))); }
     if (tipo === 'manual') return guardarCta((d) => setIn(d, 'manual', a, b, valor.trim() === '' ? '' : parseES(valor)));
     if (tipo === 'comp') return guardarCta((d) => setIn(d, 'comp', a, valor));
     if (tipo === 'clase') return guardarCta((d) => setIn(d, 'clases', id, valor));
@@ -2735,7 +2736,8 @@ export function crearModulos(c) {
       for (let y = +lo.slice(0, 4); y <= +hi.slice(0, 4); y++) MM12.forEach((mm) => { const ym = `${y}-${mm}`; if (ym >= lo && ym <= hi && nomMes(y, mm)) keys.add(ym); });
     }
     const suma = (code, t0, t1) => rr(todos.filter((l) => l._tipo === code && l.ms >= t0 && l.ms < t1).reduce((s, l) => s + l.debe + l.haber, 0));
-    const man = cfg.manual?.[k] ?? {}, acum = {}, filas = [], od = {};
+    const man = cfg.manual?.[k] ?? {}, acum = {}, filas = [], od = {}, resOv = cfg.res?.[k] ?? {}; // resOv: celdas del resumen escritas a mano (periodo → columna → importe)
+    const ovDe = (key, c) => { const x = resOv[key]?.[c]; return x === undefined || x === null || x === '' ? undefined : +x; };
     [...keys].sort().forEach((key) => {
       const [t0, t1] = rangoDe(T, key), v = {}, fuente = {};
       C.cols.forEach(([t, c, lab, x]) => {
@@ -2764,8 +2766,9 @@ export function crearModulos(c) {
           v[c] = val; fuente[c] = src || 'vacio';
         }
       });
-      C.cols.forEach(([t, c, lab, f]) => { if (t === 'f') { const r = f(v); v[c] = r === null ? null : rr(r); } });
-      C.cols.forEach(([t, c, lab, de]) => { if (t === 'a') { if (v[de] !== null && v[de] !== undefined) acum[c] = rr((acum[c] || 0) + v[de]); v[c] = v[de] === null ? null : (acum[c] || 0); } });
+      C.cols.forEach(([t, c]) => { if ((t === 'c' || t === 's' || t === 'x') && ovDe(key, c) !== undefined) { v[c] = ovDe(key, c); fuente[c] = 'ov'; } }); // lo escrito a mano manda sobre lo calculado
+      C.cols.forEach(([t, c, lab, f]) => { if (t === 'f') { const r = f(v); v[c] = r === null ? null : rr(r); if (ovDe(key, c) !== undefined) { v[c] = ovDe(key, c); fuente[c] = 'ov'; } } });
+      C.cols.forEach(([t, c, lab, de]) => { if (t === 'a') { if (v[de] !== null && v[de] !== undefined) acum[c] = rr((acum[c] || 0) + v[de]); v[c] = v[de] === null ? null : (acum[c] || 0); if (ovDe(key, c) !== undefined) { v[c] = ovDe(key, c); acum[c] = v[c]; fuente[c] = 'ov'; } } }); // un saldo escrito a mano pasa a ser el de partida del periodo siguiente
       filas.push({ key, lbl: etiquetaPer(T, key), v, fuente, y: key.slice(0, 4) });
     });
     const avisos = [];
@@ -2828,6 +2831,8 @@ export function crearModulos(c) {
       if (t === 'x' && f === 'nom') return `<td class="num pdfok" title="Total del mes en la pestaña Nóminas">${fnum(v)}</td>`;
       if (t === 'x' && f === 'pres') return `<td class="num pdfok" title="De Impuestos Presentados">${fnum(v)}</td>`;
       if (t === 'x' && f === 'man') return `<td class="in"><input data-cta="manual" data-id="${k}§${fila.key}" value="${fnum(v)}"></td>`;
+      // cualquier importe del resumen se puede escribir a mano (queda en azul); vacío = vuelve al calculado
+      if (ed && !(t === 'x' && v === null)) return `<td class="in"><input class="${f === 'ov' ? 'ed' : ''}" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${v === null || v === undefined ? '' : fnum(v)}" placeholder="-"${f === 'ov' ? ' title="Escrito a mano: bórralo para volver al calculado"' : ''}></td>`;
       const dif = t === 'f' && cc[4];
       return `<td class="num${dif && v !== null && Math.abs(v) > 0.01 ? ' dif-ko' : ''}${xc(cc)}">${v === null || v === undefined ? '-' : (t === 'f' || t === 'a' ? fnum(v) : z(v))}</td>`;
     };
