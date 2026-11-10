@@ -1487,6 +1487,8 @@ export function crearModulos(c) {
       if (F.clave && !String(iClave >= 0 ? w[iClave] ?? '' : '').toLowerCase().includes(F.clave.toLowerCase())) return false;
       if (F.estado && !String(x.estado).toLowerCase().includes(F.estado.toLowerCase())) return false;
       if (F.csv && !Object.values(w).some((v) => String(v).toLowerCase().includes(F.csv.toLowerCase()))) return false;
+      if (F.base && !buscaNum(x.base, F.base)) return false;
+      if (F.cuota && !buscaNum(x.cuota, F.cuota)) return false;
       const imp = x.base + x.cuota;
       if (F.imin !== undefined && F.imin !== '' && imp < parseES(F.imin)) return false;
       if (F.imax !== undefined && F.imax !== '' && imp > parseES(F.imax)) return false;
@@ -1525,7 +1527,7 @@ export function crearModulos(c) {
         <table class="tprs tnom" style="width:auto"><tbody><tr><td>Registros que cumplen filtros / pegados</td><td class="amar num"><b>${cumple.length} / ${todos.length}</b></td></tr>
         <tr><td>Total base declarada (filtrada)</td><td class="amar num"><b>${fnum(sumB)}</b></td></tr><tr><td>Total cuota ${emit ? 'repercutida' : 'soportada'} (filtrada)</td><td class="amar num"><b>${fnum(sumC)}</b></td></tr></tbody></table></div>
       <div class="fc-cab" style="margin:.4em 1em"><b>Filtros adicionales:</b>${fil('nif', emit ? 'NIF Destinatario' : 'NIF Emisor')}${fil('nom', 'Nombre')}${fil('fac', 'Nº Serie + Nº Factura')}${fil('tipo', 'Tipo de factura', 'F1, F2, R1…')}
-        ${fil('desde', 'Fecha expedición desde', 'dd/mm/aaaa')}${fil('hasta', 'hasta', 'dd/mm/aaaa')}${fil('clave', 'Clave régimen')}${fil('estado', 'Estado', 'Correcta…')}${fil('csv', 'CSV')}${fil('imin', 'Importe total desde')}${fil('imax', 'hasta')}
+        ${fil('desde', 'Fecha expedición desde', 'dd/mm/aaaa')}${fil('hasta', 'hasta', 'dd/mm/aaaa')}${fil('clave', 'Clave régimen')}${fil('estado', 'Estado', 'Correcta…')}${fil('csv', 'CSV')}${fil('base', 'Base declarada', 'ej. 1.250,00')}${fil('cuota', emit ? 'Cuota repercutida' : 'Cuota soportada', 'ej. 262,50')}${fil('imin', 'Importe total desde')}${fil('imax', 'hasta')}
         <label><input type="checkbox" data-siitodos="${s}"${siiTodos[s] ? ' checked' : ''}> Ver también los que no cumplen</label></div></section></div>
       <section class="prs-card sii-cuerpo"><div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th class="${colNum[k] ? 'num' : ''}">${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
         <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(sumC)}</td><td></td><td></td></tr></tbody></table></div>

@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=284';
+import { crearModulos } from './modulos.js?v=286';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
