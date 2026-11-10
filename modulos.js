@@ -3509,7 +3509,7 @@ export function crearModulos(c) {
       } catch (err) { /* sin libros: solo se muestra lo presentado */ }
     }
     const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
-      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? pv('303', 'res') ?? null, 349: pv('349', 'imp') ?? null };
+      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: pv('349', 'imp') ?? null };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
     const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
@@ -3520,7 +3520,7 @@ export function crearModulos(c) {
       if (!o && c === undefined && pr === null) return '';
       if (!o && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005) && m !== '111' && m !== '303') return ''; // fuera de lo obligatorio, solo con datos
       const est = c === undefined ? '' : m === '349' ? 'Informativa' : c > 0.005 ? 'A ingresar' : c < -0.005 ? 'A compensar' : 'Cero';
-      const cu = pr === null ? nd('Sin presentar') : Math.abs(pr - (c || 0)) <= 1 ? ok('Presentado') : ko(`Presentado ${g(pr)}`);
+      const cu = pr === null ? (o?.pres ? ok('Presentado') : nd('Sin presentar')) : Math.abs(pr - (c || 0)) <= 1 ? ok('Presentado') : ko(`Presentado ${g(pr)}`); // presentado pero sin importe cargado: sigue siendo «Presentado»
       return tarjeta(id, tit, `<div class="dash-v">${g(c)}</div><div class="dash-s">${est}</div><div class="dash-s">${cu}</div>`);
     }).filter(Boolean);
     const tiene = (m) => imps.some((h) => h.includes(`data-ir="mod${m}"`));
