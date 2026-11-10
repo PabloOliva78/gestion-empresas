@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=277';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=277';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
@@ -1500,6 +1500,10 @@ export function crearModulos(c) {
     const cols = cab.map((_, i) => i); // todas las columnas de la descarga, con o sin datos
     const conRaw = todos.filter((x) => raw.has(siiKey(x))).length, aviso = conRaw < todos.length ? `<div class="aviso"><p>⚠ Solo ${conRaw} de ${todos.length} facturas de este periodo traen todas las columnas de la descarga: suelta de nuevo el CSV de ese periodo para completarlas (no se duplican).</p></div>` : '';
     const nOcultas = 0;
+    // base y cuota de la misma factura en el libro (Emitidas / Recibidas): emitidas se casan por nº de factura, recibidas por nº de factura y NIF (como la conciliación)
+    const libro = grande(emit ? 'fact-E' : 'fact-R') ?? [], kL = (f, n) => (emit ? normFac(f) : `${normFac(f)}|${normNif(n)}`), enLibro = new Map();
+    libro.forEach((l) => { const k = kL(l.factura, l.nif), a = enLibro.get(k) ?? enLibro.set(k, { base: 0, cuota: 0 }).get(k); a.base += Number(l.base) || 0; a.cuota += Number(l.cuota) || 0; });
+    const lib = (x) => enLibro.get(kL(x.factura, x.nif));
     // columnas numéricas de la descarga (importes, bases, cuotas, tipos…): siempre a la derecha y con miles y dos decimales
     const NUMH = /(base|cuota|importe|tipo impositivo|recargo|porcentaje|total|retenci|compensaci|precio|cantidad|%)/i, NOH = /(n[º°o]\s*(serie|factura)|nif|fecha|ejercicio|periodo|clave|c[oó]digo|estado|csv|tipo de factura|descripci|nombre|raz[oó]n|moneda|referencia|identific)/i;
     const colNum = cab.map((h) => NUMH.test(h ?? '') && !NOH.test(h ?? ''));
@@ -1513,7 +1517,7 @@ export function crearModulos(c) {
     const fil = (k, lbl, ph = '') => `<label>${lbl}<input class="emp-in" style="width:7em" data-siifil="${s}|${k}" value="${esc(F[k] ?? '')}" placeholder="${esc(ph)}"></label>`;
     const ci = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-sie="${s}|${idx.get(x)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
     const Q = quitReg()?.datos?.[s] ?? [];
-    const filas = lista.map((x) => `<tr class="${ok(x) ? '' : 'sii-no'}">${cols.map((k) => celdaRaw((raw.get(siiKey(x)) ?? {})[k], k)).join('')}${ci(x, 'factura', x.factura)}${ci(x, 'nif', x.nif)}${ci(x, 'nombre', x.nombre)}${ci(x, 'base', fnum(x.base), 'num')}${ci(x, 'cuota', fnum(x.cuota), 'num')}
+    const filas = lista.map((x) => `<tr class="${ok(x) ? '' : 'sii-no'}">${cols.map((k) => celdaRaw((raw.get(siiKey(x)) ?? {})[k], k)).join('')}${ci(x, 'factura', x.factura)}${ci(x, 'nif', x.nif)}${ci(x, 'nombre', x.nombre)}${ci(x, 'base', fnum(x.base), 'num')}<td class="num">${lib(x) ? fnum(rr(lib(x).base)) : '—'}</td>${ci(x, 'cuota', fnum(x.cuota), 'num')}<td class="num">${lib(x) ? fnum(rr(lib(x).cuota)) : '—'}</td>
       <td class="c">${ok(x) ? 'VERDADERO' : 'FALSO'}</td><td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('');
     const quitados = Q.length ? `<div class="aviso"><b>Facturas quitadas del SII (${Q.length})</b> ${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${Q.length - 1}">↩ Deshacer la última (${esc(Q[Q.length - 1].factura)})</button> <button class="small" data-act="m-siirec" data-s="${s}" data-i="todas">Recuperar todas</button>` : ''}
       <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
@@ -1529,8 +1533,8 @@ export function crearModulos(c) {
       <div class="fc-cab" style="margin:.4em 1em"><b>Filtros adicionales:</b>${fil('nif', emit ? 'NIF Destinatario' : 'NIF Emisor')}${fil('nom', 'Nombre')}${fil('fac', 'Nº Serie + Nº Factura')}${fil('tipo', 'Tipo de factura', 'F1, F2, R1…')}
         ${fil('desde', 'Fecha expedición desde', 'dd/mm/aaaa')}${fil('hasta', 'hasta', 'dd/mm/aaaa')}${fil('clave', 'Clave régimen')}${fil('estado', 'Estado', 'Correcta…')}${fil('csv', 'CSV')}${fil('base', 'Base declarada', 'ej. 1.250,00')}${fil('cuota', emit ? 'Cuota repercutida' : 'Cuota soportada', 'ej. 262,50')}${fil('imin', 'Importe total desde')}${fil('imax', 'hasta')}
         <label><input type="checkbox" data-siitodos="${s}"${siiTodos[s] ? ' checked' : ''}> Ver también los que no cumplen</label></div></section></div>
-      <section class="prs-card sii-cuerpo"><div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th class="${colNum[k] ? 'num' : ''}">${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
-        <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(sumC)}</td><td></td><td></td></tr></tbody></table></div>
+      <section class="prs-card sii-cuerpo"><div class="wrap siiwrap"><table class="tabla sii-t"><thead><tr>${cols.map((k) => `<th class="${colNum[k] ? 'num' : ''}">${esc(cab[k] ?? '')}</th>`).join('')}<th>Nº factura (corregir)</th><th>NIF (corregir)</th><th>Nombre (corregir)</th><th>TOTAL BASE DECLARADA (SII)</th><th>Base (${emit ? 'Emitidas' : 'Recibidas'})</th><th>TOTAL CUOTA ${emit ? 'REPERCUTIDA' : 'SOPORTADA'} (SII)</th><th>Cuota (${emit ? 'Emitidas' : 'Recibidas'})</th><th>CUMPLE TODOS LOS FILTROS</th><th></th></tr></thead>
+        <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(rr(cumple.reduce((t, x) => t + (lib(x)?.base ?? 0), 0)))}</td><td class="num">${fnum(sumC)}</td><td class="num">${fnum(rr(cumple.reduce((t, x) => t + (lib(x)?.cuota ?? 0), 0)))}</td><td></td><td></td></tr></tbody></table></div>
       ${quitados}
       ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section></div>${plazoSii(s, todos, raw, cab)}`;
   }
