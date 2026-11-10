@@ -1,7 +1,8 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=310';
+import { crearModulos } from './modulos.js?v=311';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 import { crearHistorial } from './historial.js?v=1';
+import { activarExportar, activarAvisoSesion } from './herramientas.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -38,6 +39,7 @@ const formaDe = () => {
 };
 const formaVars = () => { const f = formaDe(); return `--f-w:${f.w}px;--f-t:${f.t}${[1, 2, 3].map((n) => (f[`c${n}`] ? `;--fc${n}:${f[`c${n}`]}px` : '')).join('')}`; };
 activarRedimension(root, () => S.tab);
+activarExportar(); activarAvisoSesion(); // herramientas del armazón: exportar la pestaña abierta y aviso de sesión a punto de caducar
 activarAlineacion(root); activarImprimir(root); activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -293,6 +295,7 @@ function render() {
       ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
       <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
       <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
+      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> <button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button></div>
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
