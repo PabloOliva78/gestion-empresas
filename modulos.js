@@ -3885,7 +3885,12 @@ export function crearModulos(c) {
     for (let k = Math.max(0, iDoc + 1); k < Math.min(ls.length, iDoc + 8); k++) { const x = ls[k]; if (x.length > 8 && x === x.toUpperCase() && /[A-ZÁÉÍÓÚ]{4}/.test(x) && !/^(N\.I\.F|NIF|IDENTIFICACI)/.test(x)) { tit = x; if (ls[k + 1] && ls[k + 1] === ls[k + 1].toUpperCase() && ls[k + 1].length < 60 && !/^(IDENTIFICACI|N\.I\.F)/.test(ls[k + 1]) && /[A-Z]{4}/.test(ls[k + 1])) tit += ' ' + ls[k + 1]; break; } }
     { const k = ls.findIndex((x) => /RESUMEN INFORMATIVO/i.test(x)); if (k >= 0 && ls[k + 1]) tit = ls[k + 1]; }
     r.asunto = tit.replace(/\s+/g, ' ');
-    r.obligado = (campo('Obligado(?: tributario)?') || campo('Nombre o raz[oó]n social') || campo('Raz[oó]n social') || campo('Destinatario')).split(/\s{2,}|\s+N\.?I\.?F/i)[0].trim().slice(0, 80); // quién es el obligado tributario según el documento (si no se lee, se muestra la empresa elegida)
+    { // obligado tributario: la empresa de la aplicación cuyo NIF o nombre sale antes en el documento (el destinatario va arriba)
+      const U2 = ' ' + U.replace(/[.,]/g, ' ').replace(/\s+/g, ' ') + ' ', quitaForma = (s) => ` ${sinAc(s).toUpperCase().replace(/[.,]/g, ' ').replace(/\b(S ?L ?U?|S ?A ?U?|S ?L ?L)\b/g, ' ').replace(/\s+/g, ' ').trim()} `;
+      const cand = S.empresas.map((q) => { const nom = quitaForma(q.nombre ?? ''), a = q.cif ? U.indexOf(String(q.cif).toUpperCase()) : -1, b = nom.trim().length > 5 ? U2.indexOf(nom) : -1; const ix = [a, b].filter((x) => x >= 0); return { q, i: ix.length ? Math.min(...ix) : -1 }; }).filter((x) => x.i >= 0).sort((x, y) => x.i - y.i)[0];
+      r.obligado = cand ? cand.q.nombre : ''; r.obligadoId = cand?.q.id ?? '';
+    }
+    r.org = r.org.replace(/^AEAT · .*$/, 'AEAT').replace(/^TGSS$/, 'Seguridad Social (TGSS)').replace(/^Diputación.*$/, 'SPT (Servicio Provincial Tributario · Diputación)').replace(/^Ayto\. (.*)$/, (m, c) => 'Ayuntamiento de ' + c.toLowerCase().replace(/(^|\s)([a-z])/g, (a, b, d) => b + d.toUpperCase()));
     const UT = sinAc(r.asunto).toUpperCase() + ' ' + U.slice(0, 3000);
     const TIP = [[/NOTA INFORMATIVA|COMUNICACION INFORMATIVA|NO CONSTITUYE UN REQUERIMIENTO/, 'Informativa'], [/PROVIDENCIA DE APREMIO/, 'Providencia de apremio'], [/DILIGENCIA DE EMBARGO DE CREDITOS/, 'Diligencia de embargo de créditos (a terceros)'], [/DILIGENCIA DE EMBARGO/, 'Diligencia de embargo'], [/ACUERDO DE IMPOSICION DE SANCION|RESOLUCION SANCIONADORA|ACUERDO SANCIONADOR/, 'Sanción'], [/INICIO (DE(L)? )?(UN |DEL )?(EXPEDIENTE|PROCEDIMIENTO) SANCIONADOR|PROPUESTA DE (IMPOSICION DE )?SANCION/, 'Expediente sancionador'], [/PROPUESTA DE LIQUIDACION/, 'Propuesta de liquidación'], [/RESOLUCION EXPRESA|RESOLUCION DEL PROCEDIMIENTO|NO PROCEDE PRACTICAR LIQUIDACION/, 'Resolución'], [/LIQUIDACION/, 'Liquidación'], [/COMPROBACION LIMITADA/, 'Comprobación limitada'], [/VERIFICACION DE DATOS/, 'Verificación de datos'], [/ACTUACIONES INSPECTORAS|PROCEDIMIENTO INSPECTOR/, 'Inspección'], [/REQUERIMIENTO/, 'Requerimiento'], [/DEVOLUCION/, 'Devolución'], [/RECURSO|RECLAMACION/, 'Recurso / reclamación'], [/COMUNICACION/, 'Comunicación']];
     r.tipo = (TIP.find(([re]) => re.test(sinAc(r.asunto).toUpperCase())) || TIP.find(([re]) => re.test(UT)) || [, 'Notificación'])[1];
@@ -3901,6 +3906,10 @@ export function crearModulos(c) {
     if (ff && MES[sinAc(ff[2]).toUpperCase()]) fd.unshift(ff[3] + '-' + String(MES[sinAc(ff[2]).toUpperCase()]).padStart(2, '0') + '-' + ff[1].padStart(2, '0'));
     if (fe) fd.unshift(iso(fe[1]));
     r.fdoc = iso((T1.match(new RegExp('Fecha de (?:la diligencia|la resoluci[oó]n|la propuesta|emisi[oó]n|del acuerdo|del documento|la liquidaci[oó]n)\\s*[:.]?\\s*' + D8, 'i')) || [])[1]) || iso((T1.match(new RegExp('firmado electr[oó]nicamente[\\s\\S]{0,160}?con fecha\\s*' + D8, 'i')) || [])[1]) || fd[0] || '';
+    { // la fecha del documento es la de la firma electrónica («Documento firmado electrónicamente por … a … de … de …»)
+      const m1 = T1.match(/firmado electr[oó]nicamente[\s\S]{0,220}?(\d{1,2}) de ([a-záéíóú]+) de ((?:19|20)\d{2})/i), firma = (m1 && MES[sinAc(m1[2]).toUpperCase()] ? m1[3] + '-' + String(MES[sinAc(m1[2]).toUpperCase()]).padStart(2, '0') + '-' + m1[1].padStart(2, '0') : '') || iso((T1.match(new RegExp('firmado electr[oó]nicamente[\\s\\S]{0,160}?con fecha\\s*' + D8, 'i')) || [])[1]);
+      if (firma) r.fdoc = firma;
+    }
     r.fnot = iso((T1.match(new RegExp('fecha (?:de )?(?:notificaci[oó]n|aceptaci[oó]n|comparecencia|acceso al contenido|recepci[oó]n)\\D{0,25}' + D8, 'i')) || [])[1]) || r.fdoc || ntHoyIso();
     /* importe */
     const im = T1.match(/(?:importe (?:a ingresar|total)(?: de(?: la deuda)?)?|total a ingresar|deuda tributaria|importe de la deuda|importe de la sanci[oó]n|deuda pendiente)\s*(?:\(euros\)|\(€\))?\s*[:.]?\s*(-?\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2})\s*(?:euros|€)?/i); if (im) r.imp = eur(im[1]);
@@ -3968,7 +3977,7 @@ export function crearModulos(c) {
         ntMsg = `Leyendo ${f.name}…`; render();
         const t = (await textoPdf(f)).split('\n').filter((l) => l.trim() && !l.startsWith('--- página')).map((l) => l.replace(/\s+/g, ' ').trim()).join('\n');
         if (!t.trim()) { mal.push(`${f.name} (sin texto)`); continue; }
-        const r = ntLeer(t, f.name), nifs = [...new Set([...t.matchAll(/\b([ABCDEFGHJNPQRSUVW]\d{7}[0-9A-J])\b/g)].map((m) => m[1]))], E = S.empresas.find((q) => nifs.includes(q.cif)), id = E ? E.id : S.sel;
+        const r = ntLeer(t, f.name), nifs = [...new Set([...t.matchAll(/\b([ABCDEFGHJNPQRSUVW]\d{7}[0-9A-J])\b/g)].map((m) => m[1]))], E = S.empresas.find((q) => q.id === r.obligadoId) ?? S.empresas.find((q) => nifs.includes(q.cif)), id = E ? E.id : S.sel;
         if (E && E.id !== S.sel) otras.add(E.nombre);
         r.key = (r.ref || f.name) + '|' + (r.asunto || r.tipo);
         r.solucion = ntSolucion({ ...r, reclaman: (r.reclaman || '') + ' ' + t.slice(0, 4000) });
@@ -3986,6 +3995,31 @@ export function crearModulos(c) {
       } catch (err) { mal.push(`${f.name} (${err.message})`); }
     }
     ntMsg = `${n} notificación(es) nueva(s)${act ? ` · ${act} actualizada(s)` : ''}${otras.size ? ` · guardadas en ${[...otras].join(', ')}` : ''}${mal.length ? ` · sin leer: ${mal.join(', ')}` : ''}`;
+    await cargar(); render();
+  }
+  // vuelve a leer los PDF ya guardados: empresa destinataria, organismo, asunto y fecha de la firma (no toca el estado, fechas puestas a mano, observaciones ni propuestas editadas)
+  async function ntReleer() {
+    const todas = S.registros.filter((r) => r.tipo === 'notif' && (r.datos?.arch ?? r.datos?.archivo)?.path);
+    if (!todas.length) return void (ntMsg = 'No hay notificaciones con PDF guardado.') || render();
+    let ok = 0, movidas = 0; const mal = [];
+    for (let i = 0; i < todas.length; i++) {
+      const reg = todas[i], a = reg.datos.arch ?? reg.datos.archivo;
+      try {
+        ntMsg = `Releyendo ${i + 1} de ${todas.length}: ${a.nombre || reg.datos.pdf || ''}…`; render();
+        const { data: blob, error } = await db.storage.from('documentos').download(a.path);
+        if (error || !blob) throw new Error(error?.message || 'no se pudo descargar');
+        const t = (await textoPdf(new File([blob], a.nombre || 'notificacion.pdf', { type: 'application/pdf' }))).split('\n').filter((l) => l.trim() && !l.startsWith('--- página')).map((l) => l.replace(/\s+/g, ' ').trim()).join('\n');
+        if (!t.trim()) throw new Error('sin texto');
+        const n = ntLeer(t, reg.datos.pdf || a.nombre || ''), v = reg.datos ?? {};
+        const datos = { ...v, org: n.org || v.org || v.organismo || '', obligado: n.obligado || v.obligado || '', obligadoId: n.obligadoId || '', tipo: n.tipo, asunto: n.asunto || v.asunto, concepto: n.concepto || v.concepto, ref: n.ref || v.ref, fdoc: n.fdoc || v.fdoc };
+        if (!v.fnotMan) { datos.fnot = n.fnot || v.fnot; datos.fin = ntVence(datos.fnot, datos.plazo || n.plazo) || datos.fin; }
+        const destino = n.obligadoId && n.obligadoId !== reg.empresa_id ? n.obligadoId : reg.empresa_id;
+        const err = await guardarRegistro(reg, { datos, empresa_id: destino });
+        if (err) throw new Error(err);
+        ok++; if (destino !== reg.empresa_id) movidas++;
+      } catch (err) { mal.push(`${a.nombre || reg.datos?.pdf || '?'} (${err.message})`); }
+    }
+    ntMsg = `${ok} notificación(es) releída(s)${movidas ? ` · ${movidas} pasada(s) a la empresa a la que van dirigidas` : ''}${mal.length ? ` · sin poder leer: ${mal.join(', ')}` : ''}`;
     await cargar(); render();
   }
   // al cambiar el tamaño de un cajón de la notificación (arrastrando su esquina) se guarda su altura
@@ -4016,7 +4050,7 @@ export function crearModulos(c) {
     const tarjeta = (r) => {
       const a = ntDe(r, 'arch'), est = ntDe(r, 'estado'), f = ilFecha(ntDe(r, 'fin'));
       return `<div class="nt-card" ${a?.path ? `data-ntpdf="${esc(a.path)}" title="Doble clic: abrir ${esc(a.nombre || '')}"` : ''} style="border:1px solid #d0d7e2;border-left:6px solid ${est !== 'Pendiente' ? '#1a7f37' : (f !== null && f - hoy <= 5 * 864e5 ? '#b42318' : '#1f3864')};border-radius:6px;padding:8px 10px;margin:10px 0;${a?.path ? 'cursor:pointer' : ''}">
-        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center"><b>${esc(ntDe(r, 'tipo') || 'Notificación')}</b>${ntDe(r, 'asunto') ? ` <span class="leyenda">(${esc(ntDe(r, 'asunto'))})</span>` : ''} · <span class="leyenda">Obligado tributario:</span> <input class="facin" data-nt="${r.id}|obligado" value="${esc(ntDe(r, 'obligado') || e.nombre)}" size="26"${ed ? '' : ' readonly'}> · <span class="leyenda">Organismo:</span> ${inp(r, 'org', 22)} · <span class="leyenda">Ref.</span> ${inp(r, 'ref', 20)} · <span class="leyenda">Versa sobre:</span> ${inp(r, 'concepto', 34)} <span style="margin-left:auto">${sit(r)}</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center"><b>${esc(ntDe(r, 'tipo') || 'Notificación')}</b> · <span class="leyenda">Obligado tributario:</span> <input class="facin" data-nt="${r.id}|obligado" value="${esc(ntDe(r, 'obligado') || e.nombre)}" size="26"${ed ? '' : ' readonly'}> · <span class="leyenda">Organismo:</span> ${inp(r, 'org', 22)} · <span class="leyenda">Ref.</span> ${inp(r, 'ref', 20)} · <span class="leyenda">Versa sobre:</span> <input class="facin" data-nt="${r.id}|concepto" value="${esc(ntDe(r, 'concepto') || ntDe(r, 'asunto'))}" size="40"${ed ? '' : ' readonly'}> <span style="margin-left:auto">${sit(r)}</span></div>
         <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:6px">Documento ${inp(r, 'fdoc', 0, 'date')} Notificado ${inp(r, 'fnot', 0, 'date')} Plazo ${inp(r, 'plazo', 16)} Vence ${inp(r, 'fin', 0, 'date')} Importe ${inp(r, 'imp', 11)} Estado ${sel(r, 'estado', NT_ESTADOS.includes(est) ? NT_ESTADOS : [...NT_ESTADOS, est])} Fecha ${inp(r, 'fresp', 0, 'date')} <span class="leyenda">📄 ${esc(ntDe(r, 'pdf') || a?.nombre || '')}</span> ${ed ? `<button class="small no-print" data-act="m-ntdel" data-id="${r.id}">Quitar</button>` : ''}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px"><label><b>Lo que reclaman / motivo</b>${ta(r, 'reclaman', 6)}</label><label><b>Documentación a aportar</b>${ta(r, 'aportar', 6)}</label></div>
         <label style="display:block;margin-top:6px"><b>Propuesta de actuación conforme a la normativa</b> <span class="leyenda">(orientativa: contrastar con el expediente)</span> ${ed ? `<button class="small no-print" data-act="m-ntsol" data-id="${r.id}">Rehacer</button>` : ''}${ta(r, 'solucion', 5, ';background:#f4f8ff')}</label>
@@ -4028,7 +4062,7 @@ export function crearModulos(c) {
         <input type="file" data-dzkind="notif" accept=".pdf" multiple hidden></div>${listaArch('notif')}` : ''}
       ${ntMsg ? `<p class="dash-s">${esc(ntMsg)}</p>` : ''}
       ${L.map(tarjeta).join('') || `<p class="leyenda">${ntVer === 'pend' ? 'Sin notificaciones pendientes de contestar.' : 'Sin notificaciones.'}</p>`}
-      ${ed ? '<button class="small no-print" data-act="m-ntadd">+ Añadir a mano</button>' : ''}</section>`;
+      ${ed ? `<button class="small no-print" data-act="m-ntadd">+ Añadir a mano</button> <button class="small no-print" data-act="m-ntreleer" title="Vuelve a leer los PDF guardados: empresa a la que va dirigida, organismo, asunto y fecha de la firma">↻ Releer los PDF de todas las empresas</button>` : ''}</section>`;
   }
   const bloqueAvisosNt = (l) => `<div class="aviso">${l.map((t) => `<div>${esc(t)}</div>`).join('')}</div>`;
   async function guardarNt(clave, valor) {
@@ -4631,6 +4665,7 @@ export function crearModulos(c) {
       'm-calmes': () => setCalMes(d.m),
       'm-calav': () => calfAvisoHoy(true),
       'm-ntadd': () => ntAnadir(),
+      'm-ntreleer': () => ntReleer(),
       'm-ntdel': () => ntQuitar(d.id),
       'm-ntsol': () => ntRehacer(d.id),
       'm-d365carpeta': () => d365Carpeta(d.c),
