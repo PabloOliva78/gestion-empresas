@@ -917,12 +917,12 @@ export function crearModelos(c) {
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
   };
   // Importe (valor) de expediciones e introducciones de los datos de Intrastat ya cargados, de los meses dados (1-12) del ejercicio; null si no hay nada cargado en esos meses
-  const intraImportes = (ej, meses) => {
+  const intraImportes = (ej, meses, rep, sop) => { // rep y sop = libros de IVA emitidas y recibidas: con ellos se reparte cada línea entre expediciones e introducciones igual que la conciliación con el 349
     if (!BIG.get(`intra|${S.sel}`)?.datos) return null;
     const D = datosIntra(); if (!D) return null;
-    const O = calcIntra(D, [], []).filter((o) => o.anio === ej && meses.includes(o.mes));
+    const O = calcIntra(D, rep ?? [], sop ?? []).filter((o) => o.anio === ej && meses.includes(o.mes));
     if (!O.length) return null;
-    const s = (fl) => r2(O.filter((o) => o.flujo === fl).reduce((a, o) => a + o.valor, 0));
+    const s = (fl) => r2(O.filter((o) => o.flujoConc === fl).reduce((a, o) => a + o.impConc, 0)); // mismo importe que «Intrastat (valor facturado)» de la conciliación
     return { exp: s('Expedición'), int: s('Introducción'), n: O.length };
   };
   // datos para Conciliaciones fiscales › Análisis Diferencias (583, 592 e Intrastat por mes); null mientras cargan
@@ -973,7 +973,7 @@ export function crearModelos(c) {
       if (!cur?.datos) return { t: 'Sin datos' };
       const ej = ejercicio(), n = (cur.datos.rows ?? []).filter((r) => fechaUtc(r[0])?.getUTCFullYear() === ej).length;
       // importe del periodo elegido: suma de expediciones e introducciones (informativo, no se paga)
-      const ms = /^\d\d$/.test(S.periodo ?? '') ? [+S.periodo] : /^[1-4]T$/.test(S.periodo ?? '') ? [0, 1, 2].map((i) => (+S.periodo[0] - 1) * 3 + i + 1) : Array.from({ length: 12 }, (_, i) => i + 1), im = intraImportes(ej, ms);
+      const ms = /^\d\d$/.test(S.periodo ?? '') ? [+S.periodo] : /^[1-4]T$/.test(S.periodo ?? '') ? [0, 1, 2].map((i) => (+S.periodo[0] - 1) * 3 + i + 1) : Array.from({ length: 12 }, (_, i) => i + 1), im = intraImportes(ej, ms, grande('fact-E') ?? [], grande('fact-R') ?? []);
       if (im) return { t: eur(r2(im.exp + im.int)), c: 'amar' };
       return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
     },

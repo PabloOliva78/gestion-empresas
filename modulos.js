@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=299';
+import { crearModelos } from './modelos.js?v=315';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
@@ -406,6 +406,11 @@ export function crearModulos(c) {
     const o = ltOb(e, ej, ix, mod, per);
     if (o.pres || o.imp !== null) return true;
     const R = GR.get(`fact-R|${e.id}`);
+    if (mod === '349') { // 349: hay datos si el libro cargado tiene operaciones intracomunitarias en ese periodo (aunque aún no esté presentado)
+      const E = GR.get(`fact-E|${e.id}`);
+      if (Array.isArray(E) && Array.isArray(R)) { try { return calcular349(E, R, ej, per).detalle.length > 0; } catch { return false; } }
+      return false;
+    }
     return ['111', '115', '123'].includes(mod) && Array.isArray(R) && R.length > 0 && tieneRet(mod, R, ej, per);
   }
   // casillas marcadas de verdad: según el modo de cada modelo
