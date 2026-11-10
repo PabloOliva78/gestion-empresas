@@ -491,11 +491,27 @@ export function crearModulos(c) {
     if (err) return void alert(err);
     await cargar(); render();
   }
-  function tablaOb(titulo, pago) {
+  // Importe calculado (de los libros, de Nóminas o del Intrastat cargado) de una obligación aún no presentada; null si no se puede calcular
+  function importeCalcOb(o, E, R) {
+    const e = o.e, ej = o.yP, p = o.per;
+    try {
+      if (['111', '115', '123'].includes(o.mod)) {
+        const man = (tipo) => S.registros.find((r) => r.tipo === tipo && r.empresa_id === e.id && r.ejercicio === ej)?.datos?.[p] ?? {};
+        if (o.mod === '111') { const np = nomPer(ej, perEf(e, p)), m = man('m111'); return rr((np ? np.r : Number(m.t3) || 0) + calcularRet('111', R, ej, p).ret - (Number(m.c29) || 0)); }
+        return rr(calcularRet(o.mod, R, ej, p).ret - (Number(man('m' + o.mod).c4) || 0));
+      }
+      if (o.mod === '303') return calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
+      if (o.mod === '349') return calcular349(E, R, ej, p).total;
+      if (o.mod === 'Intrastat') { const im = M4.intraImportes(ej, [+p]); if (im) return rr(im.exp + im.int); const x = intraDeLibros(E, R, ej, p); return rr(x.exp + x.int); }
+    } catch (err) { /* sin libros */ }
+    return null;
+  }  function tablaOb(titulo, pago) {
     const ej = Number(S.ejercicio), hoy = hoyUtc(), ix = presIndex(), ed = puede();
     let L = empOrden().filter((e) => pago || !S.sel || e.id === S.sel).flatMap((e) => obligaciones(e, ej, ix).map(pago ? delModelo : (o) => o)); // liquidaciones: solo la empresa elegida; en pagos, el 111 del modelo
     if (pago) L = L.filter((o) => MODS_PAGO.includes(o.mod));
     L = filtroLista(L, hoy).sort((a, b) => a.fin - b.fin || String(a.e.nombre).localeCompare(String(b.e.nombre)) || a.mod.localeCompare(b.mod));
+    const E0 = S.sel ? grande('fact-E') : null, R0 = S.sel ? grande('fact-R') : null; // sin presentar: el importe sale calculado de los libros (de la empresa elegida, que es la que tiene los libros cargados)
+    if (E0 && R0) L.forEach((o) => { if (o.e.id === S.sel && !o.pres && (o.imp === null || o.imp === undefined)) { const v = importeCalcOb(o, E0, R0); if (v !== null) o.imp = v; } });
     const fila = (o) => { const k = `${o.yPres}|${o.clave}|${o.pk}`, manual = ix.marcas.has(`${o.e.id}|${k}`);
       return `<tr class="${o.pres ? 'fila-ok' : estadoOb(o, hoy) === 'venc' ? 'fila-pend' : ''}"><td>${esc(o.e.nombre)}</td><td class="c">${/^\d+$/.test(o.mod) ? 'Modelo ' + esc(o.mod) : esc(o.mod)}</td><td class="c">${esc(perTxt(o))}</td>
         <td class="c">${fechaTxt(o.fin)}</td>${pago ? `<td>${esc(bancoEmp(o.e, o.mod))}</td>` : ''}<td class="num">${o.imp === null ? '—' : fnum(o.imp)}</td>${pago ? `<td class="c">${o.imp > 0 ? (() => { const s = estPago(o.e.id, o), col = { dom: '#1f3864', pag: '#0a6', pend: '#b00' }[s]; return ed ? `<select data-pgest="${o.e.id}|${esc(claveEst(o))}" style="color:${col};font-weight:600">${[['dom', 'Domiciliado'], ['pag', 'Pagado'], ['pend', 'Pendiente de pago']].map(([v, t]) => `<option value="${v}"${v === s ? ' selected' : ''}>${t}</option>`).join('')}</select>` : { dom: 'Domiciliado', pag: 'Pagado', pend: 'Pendiente de pago' }[s]; })() : ''}</td>` : ''}<td class="c">${chipEst(estadoOb(o, hoy), o.fin)}</td>
