@@ -5159,14 +5159,14 @@ export function crearModulos(c) {
     return c.detalle.length ? { t: fnum(c.total), c: 'amar' } : { t: 'Sin importe' };
   };
   ['mod200', 'mod202', 'mod583', 'mod592', 'moda22', 'mod232'].forEach((id) => { badges[id] = () => ({ t: 'Sin datos' }); });
-  // Intrastat: importe de expediciones (exportaciones) e introducciones (importaciones) del periodo elegido, de «Impuestos Presentados»
+  // Intrastat: suma del importe de expediciones (exportaciones) e introducciones (importaciones) del periodo elegido, de «Impuestos Presentados»
   badges.modintra = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const ej = Number(S.ejercicio), v = (mm, k) => prsVal(ej, 'INT', mm, k), ms = siiMeses();
     const hay = ms.some((mm) => [v(mm, 'exp'), v(mm, 'int')].some((x) => x !== undefined && x !== null && x !== ''));
     if (!hay) return { t: 'Sin datos' };
     const suma = (k) => rr(ms.reduce((a, mm) => a + (Number(v(mm, k)) || 0), 0));
-    return { t: `Exp. ${fnum(suma('exp'))} · Imp. ${fnum(suma('int'))}`, c: 'amar' };
+    return { t: fnum(rr(suma('exp') + suma('int'))), c: 'amar' }; // suma de expediciones e introducciones
   };
   badges.bss = () => {
     if (!S.sel) return { t: 'Por empresa' };
