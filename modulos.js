@@ -293,8 +293,11 @@ export function crearModulos(c) {
   };
   const colMes = (per) => (per === '0A' || per === 'A' ? 12 : /^\d\d$/.test(per) ? +per - 1 : /^[1-4]T$/.test(per) ? +per[0] * 3 - 1 : ({ 1: 2, 2: 8, 3: 10 })[per[0]] ?? 12);
   // ¿el periodo de la obligación (mes, trimestre, pago fraccionado) cae dentro del periodo p elegido?
+  // gran empresa: el 583 del 3T del ejercicio y el 0A del anterior van siempre en octubre, aunque se presenten en septiembre
+  const en583Oct = (o) => o.mod === '583' && o.e && o.e.tipo !== 'PYME' && (o.per === '3T' || o.per === '0A');
   const enPeriodo = (o, p) => {
     if (!p) return true;
+    if (en583Oct(o)) return (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10);
     if (o.per === p) return true;
     const mesesDe = (q) => (/^\d\d$/.test(q) ? [+q] : /^[1-4]T$/.test(q) ? [0, 1, 2].map((i) => (+q[0] - 1) * 3 + i + 1) : []);
     const a = mesesDe(o.per), b = mesesDe(p);
@@ -3474,7 +3477,7 @@ export function crearModulos(c) {
     const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
       123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? pv('303', 'res') ?? null, 349: pv('349', 'imp') ?? null };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
-    const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p))) : [];
+    const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
     const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
     const obl = new Set(obP.map((o) => o.mod));
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
@@ -3575,7 +3578,7 @@ export function crearModulos(c) {
       } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
     }
     // 4) liquidaciones pendientes de presentar
-    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.imp ?? calc[o.mod] ?? null })) : [];
+    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.imp ?? calc[o.mod] ?? null })) : [];
     const siiTxt = [];
     [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
       const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
