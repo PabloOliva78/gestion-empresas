@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=316';
+import { crearModelos } from './modelos.js?v=317';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
@@ -507,7 +507,7 @@ export function crearModulos(c) {
       }
       if (o.mod === '303') return calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
       if (o.mod === '349') return calcular349(E, R, ej, p).total;
-      if (o.mod === 'Intrastat') { const im = M4.intraImportes(ej, [+p]); return im ? rr(im.exp + im.int) : null; } // solo del Intrastat cargado; nunca de los libros
+      if (o.mod === 'Intrastat') { const im = M4.intraImportes(ej, [+p], E, R); return im ? rr(im.exp + im.int) : null; } // solo del Intrastat cargado; nunca de los libros
     } catch (err) { /* sin libros */ }
     return null;
   }  function tablaOb(titulo, pago) {
@@ -3568,7 +3568,7 @@ export function crearModulos(c) {
       123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */ };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
-    const ii = M4.intraImportes(ej, meses.map(Number)); // Intrastat cargado (bloque 4): expediciones e introducciones del periodo; null si no hay
+    const ii = M4.intraImportes(ej, meses.map(Number), E, R, true); // Intrastat cargado (bloque 4): expediciones e introducciones del periodo; null si no hay
     // Intrastat: solo cifras del propio Intrastat (el fichero cargado o lo presentado); si no hay ninguna, no se pone nada (nunca el 349 ni los libros)
     const pExp = meses.map((mm) => prsVal(ej, 'INT', mm, 'exp')), pInt = meses.map((mm) => prsVal(ej, 'INT', mm, 'int')), sumaP = (a) => rr(a.reduce((s, v) => s + (Number(v) || 0), 0));
     const intr = ii ? { exp: ii.exp, int: ii.int } : [...pExp, ...pInt].some((v) => v !== undefined && v !== null && v !== '') ? { exp: sumaP(pExp), int: sumaP(pInt) } : null;
