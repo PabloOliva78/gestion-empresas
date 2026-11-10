@@ -1,6 +1,7 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=309';
+import { crearModulos } from './modulos.js?v=310';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
+import { crearHistorial } from './historial.js?v=1';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -192,7 +193,7 @@ const GRUPOS = [
   ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
-  ['11.- ADMINISTRACIÓN', ['usuarios', 'envio'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
+  ['11.- ADMINISTRACIÓN', ['usuarios', 'envio', 'hist'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
 ];
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
@@ -743,6 +744,7 @@ function formCalendario() {
 // Bloques 1 y 2 (ver modulos.js): se añaden a las pestañas ya definidas.
 const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml, idxEmp, nombreEmp });
 Object.assign(TABS, M.tabs);
+Object.assign(TABS, crearHistorial({ db, S, esc, render, empNombre }).tabs); // Historial de cambios (bloque 11): pestaña nueva, solo administradores
 
 // Buscador de pestañas (Ctrl+K)
 function paleta() {
