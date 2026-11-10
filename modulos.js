@@ -2203,7 +2203,7 @@ export function crearModulos(c) {
     const grupos = PRS.map((g) => `<section class="prs-card"><div class="prs-h">${g.t}</div>${g.tipo === 'ano' ? fila(g, ej)
       : anios.map((y) => `${anios.length > 1 ? `<div class="prs-y">Ejercicio ${y}</div>` : ''}${fila(g, y)}`).join('')}</section>`).join('');
     return `${dz('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '(uno o varios) o haz clic para elegirlos', '.pdf')}<div class="fc-cab"><span><b>${esc(e.nombre)}</b> · ${e.tipo === 'PYME' ? 'Pyme (trimestral)' : 'Gran empresa (mensual)'}</span>
-      <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label></div>
+      <label>Ver <select data-prsver><option value="ej"${prsVer === 'ej' ? ' selected' : ''}>Ejercicio ${ej}</option><option value="todo"${prsVer === 'todo' ? ' selected' : ''}>Todos los ejercicios</option></select></label>${puede() ? ` <button class="small" data-act="m-prsreleer" title="Vuelve a leer los PDF ya guardados de este ejercicio y rellena las casillas que falten (lo ya escrito o corregido no se toca)">⟳ Releer los PDF de ${ej}</button>` : ''}</div>
       <p class="hint">Importes de las declaraciones presentadas, con las casillas de cada modelo. Al soltar el PDF se leen modelo, ejercicio, periodo y casillas y se rellenan solos; también puedes escribirlos o corregirlos a mano (se guardan al salir). El 583 tiene dos filas: el 3T del ejercicio (enero–septiembre) y el anual 0A del ejercicio anterior, que se presenta en el mismo mes.</p>${grupos}${listaPrsPdf()}`;
   }
 
@@ -4380,7 +4380,33 @@ export function crearModulos(c) {
     render();
     alert(informe.join('\n'));
   }
-  const listaPrsPdf = () => {
+  // Vuelve a leer los PDF ya guardados (Storage) del ejercicio elegido con el lector actual y rellena SOLO las casillas que faltan: lo ya guardado o corregido a mano manda
+  async function releerPresentados() {
+    if (!S.sel) return;
+    const ej = Number(S.ejercicio), regs = S.registros.filter((r) => r.tipo === 'prspdf' && r.empresa_id === S.sel && r.ejercicio === ej && r.datos.archivo?.path);
+    if (!regs.length) return void alert(`No hay PDF guardados de ${ej} en esta empresa.`);
+    if (!confirm(`¿Volver a leer los ${regs.length} PDF guardados de ${ej}? Solo se añaden las casillas que falten; lo que ya hay no se cambia.`)) return;
+    const ex = S.registros.find((x) => x.tipo === 'prs' && x.empresa_id === S.sel && x.ejercicio === ej);
+    const datos = JSON.parse(JSON.stringify(ex?.datos ?? {})), informe = []; let nuevas = 0;
+    for (const r of regs) {
+      try {
+        const { data: blob, error } = await db.storage.from('documentos').download(r.datos.archivo.path);
+        if (error || !blob) throw new Error(error?.message ?? 'no se pudo descargar');
+        const f = new File([blob], r.datos.nombre || 'presentado.pdf', { type: 'application/pdf' }), { texto: t, pags } = await leerPdf(f);
+        const modelo = r.datos.modelo || cabeceraPresentado(t).modelo;
+        if (!modelo) { informe.push(`↷ ${r.datos.nombre}: sin modelo`); continue; }
+        const val = valoresPresentado(modelo, casillasPDF(pags), t), clave = `${modelo}|${r.datos.periodo || 'A'}`, previo = datos[clave] ?? {};
+        const falta = Object.keys(val).filter((c) => previo[c] === undefined);
+        if (falta.length) { datos[clave] = { ...val, ...previo }; nuevas += falta.length; informe.push(`✔ ${clave}: ${falta.map((c) => `${c} ${fnum(val[c])}`).join(', ')}`); }
+      } catch (err) { informe.push(`✖ ${r.datos.nombre}: ${err.message}`); }
+    }
+    if (nuevas) {
+      const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'prs', ejercicio: ej, datos });
+      if (err) return void alert(err);
+    }
+    await cargar(); render();
+    alert(`${regs.length} PDF releídos · ${nuevas} casilla(s) nuevas${informe.length ? '\n' + informe.slice(0, 30).join('\n') : ''}`);
+  }  const listaPrsPdf = () => {
     const l = S.registros.filter((r) => r.tipo === 'prspdf' && r.empresa_id === S.sel).sort((a, b) => b.ejercicio - a.ejercicio || String(a.datos.modelo).localeCompare(b.datos.modelo));
     return l.length ? `<details class="prs-card prs-pdf"><summary class="prs-h">PDF incorporados (${l.length}) · pulsa para ver la lista</summary><div class="wrap"><table class="tprs" style="width:100%"><thead><tr><th class="pp">Modelo</th><th>Ejercicio</th><th>Periodo</th><th>Archivo</th><th></th></tr></thead><tbody>
       ${l.map((r) => `<tr><td class="pp">${esc(r.datos.modelo || '?')}</td><td class="num">${r.ejercicio}</td><td class="num">${esc(r.datos.periodo || '—')}</td><td>${verArchivo(r.datos.archivo)}</td>
@@ -4551,6 +4577,7 @@ export function crearModulos(c) {
       ...M6.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
       'm-iladd': () => ilAnadir(),
+      'm-prsreleer': () => releerPresentados(),
       'm-duadel': () => duaQuitar(d.n),
       'm-ildel': () => ilQuitar(d.id),
       'm-nomxls': () => nomAsientoXls(),
