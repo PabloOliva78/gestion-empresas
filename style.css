@@ -1222,3 +1222,5 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 
 /* Impuestos Presentados: línea azul (la de la cabecera) entre un modelo y el siguiente */
 .prs-row > table + table { box-shadow: -.3rem 0 0 0 #1b3274; margin-left: .35rem; }
+
+.res td.in input.pdfok { color: #17703a; }
