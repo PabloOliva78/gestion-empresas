@@ -324,6 +324,7 @@ export function crearModulos(c) {
     if (m === '111') return n('retN') === null && n('retP') === null ? null : (n('retN') || 0) + (n('retP') || 0);
     if (m === '115' || m === '123') return n('ret');
     if (m === '349') return n('imp') === null ? null : Math.round((n('imp') - (n('rect') || 0)) * 100) / 100; // importe de operaciones menos importe de rectificaciones
+    if (m === 'INT') return n('exp') === null && n('int') === null ? null : (n('exp') || 0) + (n('int') || 0); // Intrastat (informativo): expediciones + introducciones
     return n('res') ?? n('imp');
   };
   // 115: solo si el censo lo tiene de ALTA en el periodo (si está de baja o no aparece, no se pone)
@@ -3482,6 +3483,8 @@ export function crearModulos(c) {
       if (cargados || manual) { await cargar(); render(); }
     } finally { d365Ocupado = false; }
   }
+  // Intrastat es informativo (no se paga): expediciones = entregas de bienes (clave E del 349) e introducciones = adquisiciones de bienes (clave A), de los libros del periodo
+  function intraDeLibros(E, R, ej, p) { const c = calcular349(E, R, ej, p), x = (k) => c.porClave.find((q) => q.clave === k)?.importe ?? 0; return { exp: x('E'), int: x('A') }; }
   function vistaInicio() {
     if (!S.sel) return sinEmpresa;
     const E = grande('fact-E'), R = grande('fact-R'), M = grande('may-mov'), sE = grande('sii-E'), sR = grande('sii-R');
@@ -3505,6 +3508,7 @@ export function crearModulos(c) {
         if (E.length || R.length) {
           calc['303'] = calcular303(E, R, ej, p, manuales(), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
           calc['349'] = calcular349(E, R, ej, p).total;
+          const ix = intraDeLibros(E, R, ej, p); calc.IntraE = ix.exp; calc.IntraI = ix.int; calc.Intrastat = rr(ix.exp + ix.int);
         }
       } catch (err) { /* sin libros: solo se muestra lo presentado */ }
     }
@@ -3516,6 +3520,7 @@ export function crearModulos(c) {
     const obl = new Set(obP.map((o) => o.mod));
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
       const c = calc[m], pr = pres[m], o = obP.find((x) => x.mod === m), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
+      if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(hay(o.imp) ? o.imp : calc.Intrastat)}</div><div class="dash-s">Informativa · Exp. ${g(calc.IntraE)} · Imp. ${g(calc.IntraI)}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!['111', '115', '123', '303', '349'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!o && c === undefined && pr === null) return '';
       if (!o && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005) && m !== '111' && m !== '303') return ''; // fuera de lo obligatorio, solo con datos
@@ -5164,7 +5169,13 @@ export function crearModulos(c) {
     if (!S.sel) return { t: 'Por empresa' };
     const ej = Number(S.ejercicio), v = (mm, k) => prsVal(ej, 'INT', mm, k), ms = siiMeses();
     const hay = ms.some((mm) => [v(mm, 'exp'), v(mm, 'int')].some((x) => x !== undefined && x !== null && x !== ''));
-    if (!hay) return { t: 'Sin datos' };
+    if (!hay) { // sin lo presentado: expediciones + introducciones de los libros del periodo (informativo, no se paga)
+      const l = libros();
+      if (!l) return { t: '…' };
+      if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
+      const x = intraDeLibros(l.E, l.R, ej, S.periodo), tot = rr(x.exp + x.int);
+      return tot ? { t: fnum(tot), c: 'amar' } : { t: 'Sin importe' };
+    }
     const suma = (k) => rr(ms.reduce((a, mm) => a + (Number(v(mm, k)) || 0), 0));
     return { t: fnum(rr(suma('exp') + suma('int'))), c: 'amar' }; // suma de expediciones e introducciones
   };
