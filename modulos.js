@@ -5343,7 +5343,7 @@ export function crearModulos(c) {
   Object.assign(badges, M10.badges);
   // Cierre del mes (bloque 1): pestaña nueva que solo lee; modelos de cada mes según la misma regla del cuadro de mando
   const obDelMes = (e, ej, mm) => obligaciones(e, ej, presIndex()).filter((o) => (o.mod === '583' ? 9 : o.mod === '200' ? 5 : o.mod === '232' ? 9 : colMes(o.per)) + 1 === +mm);
-  const M11 = crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar: conciliarSiiCompleta, empresa });
+  const M11 = crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar: conciliarSiiCompleta, rangoPeriodo, empresa });
   Object.assign(tabs, M11.tabs);
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();

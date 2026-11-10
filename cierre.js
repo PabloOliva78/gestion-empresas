@@ -1,6 +1,6 @@
 // Cierre del mes (bloque 1): lista de comprobación por empresa y mes + semáforo del grupo. Pestaña nueva; no modifica ninguna otra.
 // Solo LEE datos (libros de IVA, SII, mayor, nóminas y modelos presentados) y los cuenta; no guarda nada.
-export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar, empresa }) {
+export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar, rangoPeriodo, empresa }) {
   const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const MM12 = MES.map((_, i) => String(i + 1).padStart(2, '0'));
   const E = { mes: '', resumen: new Map(), cargando: new Set(), todas: false, prog: '', error: '' };
@@ -22,8 +22,8 @@ export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, 
       const [fE, fR, sE, sR, may] = [await leerLibro(emp.id, 'fact-E'), await leerLibro(emp.id, 'fact-R'), await leerLibro(emp.id, 'sii-E'), await leerLibro(emp.id, 'sii-R'), await leerLibro(emp.id, 'may-mov')];
       const out = {};
       MM12.forEach((mm) => {
-        const ym = `${ej}-${mm}`, cuenta = (L) => L.filter((x) => x.ej === ej && x.per === mm).length;
-        const r = { E: cuenta(fE), R: cuenta(fR), sE: cuenta(sE), sR: cuenta(sR), M: may.filter((l) => String(l.fecha ?? '').slice(0, 7) === ym).length, cE: null, cR: null };
+        const ym = `${ej}-${mm}`, rg = rangoPeriodo(ej, mm), enRango = (L) => L.filter((x) => x.fecha >= rg.desde && x.fecha <= rg.hasta).length; // libros de IVA y SII emitidas: por fecha; SII recibidas: por ejercicio y periodo
+        const r = { E: enRango(fE), R: enRango(fR), sE: enRango(sE.filter((x) => x.sentido === 'E')), sR: sR.filter((x) => x.ej === ej && x.per === mm).length, M: may.filter((l) => String(l.fecha ?? '').slice(0, 7) === ym).length, cE: null, cR: null };
         try { if (r.E && r.sE) r.cE = conciliar('E', fE, sE, ej, mm).cuadra; } catch { /* sin datos */ }
         try { if (r.R && r.sR) r.cR = conciliar('R', fR, sR, ej, mm).cuadra; } catch { /* sin datos */ }
         out[mm] = r;
