@@ -4062,7 +4062,7 @@ export function crearModulos(c) {
         <input type="file" data-dzkind="notif" accept=".pdf" multiple hidden></div>${listaArch('notif')}` : ''}
       ${ntMsg ? `<p class="dash-s">${esc(ntMsg)}</p>` : ''}
       ${L.map(tarjeta).join('') || `<p class="leyenda">${ntVer === 'pend' ? 'Sin notificaciones pendientes de contestar.' : 'Sin notificaciones.'}</p>`}
-      ${ed ? `<button class="small no-print" data-act="m-ntadd">+ Añadir a mano</button> <button class="small no-print" data-act="m-ntreleer" title="Vuelve a leer los PDF guardados: empresa a la que va dirigida, organismo, asunto y fecha de la firma">↻ Releer solo las notificaciones (de todas las empresas)</button>` : ''}</section>`;
+      ${ed ? `<button class="small no-print" data-act="m-ntadd">+ Añadir a mano</button> <button class="small no-print" data-act="m-ntreleer" title="Vuelve a leer los PDF guardados: empresa a la que va dirigida, organismo, asunto y fecha de la firma">↻ Releer solo las notificaciones</button>` : ''}</section>`;
   }
   const bloqueAvisosNt = (l) => `<div class="aviso">${l.map((t) => `<div>${esc(t)}</div>`).join('')}</div>`;
   async function guardarNt(clave, valor) {
