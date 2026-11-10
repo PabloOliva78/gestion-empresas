@@ -279,6 +279,7 @@ function render() {
       <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
       ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
       <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
+      <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -809,9 +810,27 @@ root.addEventListener('click', (ev) => {
   acciones[t.dataset.act]?.();
 });
 
+// Medidor de subida (botonera izquierda, encima del usuario): % de archivos ya procesados, en tiempo real.
+// Se envuelve la lista de archivos: cada vez que el proceso pasa al siguiente archivo, el anterior cuenta como hecho.
+const PROG = { total: 0, hecho: 0, activo: false, n: 0 };
+function progHtml() {
+  if (!PROG.activo) return '';
+  const pc = PROG.total ? Math.round((PROG.hecho / PROG.total) * 100) : 100;
+  return `<div class="prog-t">${PROG.hecho >= PROG.total ? '✔ Archivos procesados' : `Procesando ${Math.min(PROG.hecho + 1, PROG.total)} de ${PROG.total}`} · <b>${pc} %</b></div><div class="prog-b"><i style="width:${pc}%"></i></div>`;
+}
+const pintarProg = () => { const el = document.getElementById('progSub'); if (el) el.innerHTML = progHtml(); };
+async function conProgreso(fn, files) {
+  const base = [...files], arr = [...base], n = ++PROG.n;
+  PROG.total = base.length; PROG.hecho = 0; PROG.activo = true; pintarProg();
+  const it = function* () { for (const f of base) { yield f; PROG.hecho++; pintarProg(); } };
+  arr[Symbol.iterator] = it;
+  arr.entries = function* () { let k = 0; for (const f of it()) yield [k++, f]; };
+  try { return await fn(arr); } finally { PROG.hecho = PROG.total; pintarProg(); setTimeout(() => { if (PROG.n === n) { PROG.activo = false; pintarProg(); } }, 3000); }
+}
+
 root.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
+  if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void conProgreso(M.cargarPdfs, fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
   if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
@@ -852,9 +871,9 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.man) return void M.guardarMan303(t.dataset.man, t.value);
   if (t.dataset.iban !== undefined) return void M.guardarIban(t.value);
   if (t.dataset.rectif !== undefined) return void M.setRectif(t.checked);
-  if (t.dataset.dzkind) { const fs = [...t.files]; t.value = ''; return void M.subirComo(t.dataset.dzkind, fs); }
-  if (t.id === 'aeatIn') { const fs = [...t.files]; t.value = ''; return void M.cargarPdfs(fs); }
-  if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void M.subirArchivos(fs); }
+  if (t.dataset.dzkind) { const fs = [...t.files]; t.value = ''; return void conProgreso((a) => M.subirComo(t.dataset.dzkind, a), fs); }
+  if (t.id === 'aeatIn') { const fs = [...t.files]; t.value = ''; return void conProgreso(M.cargarPdfs, fs); }
+  if (t.id === 'archIn') { const fs = [...t.files]; t.value = ''; return void conProgreso(M.subirArchivos, fs); }
   if (t.dataset.glob) {
     S[t.dataset.glob] = t.dataset.glob === 'ejercicio' ? (parseInt(t.value, 10) || S.ejercicio) : t.value;
     return render();
@@ -896,7 +915,7 @@ root.addEventListener('drop', (ev) => {
   if (!dz) return;
   ev.preventDefault();
   const fs = [...ev.dataTransfer.files];
-  return void (dz.dataset.kind ? M.subirComo(dz.dataset.kind, fs) : M.cargarPdfs(fs));
+  return void (dz.dataset.kind ? conProgreso((a) => M.subirComo(dz.dataset.kind, a), fs) : conProgreso(M.cargarPdfs, fs));
 });
 
 // Ancho de las columnas de casillas de los formularios de los modelos: se arrastra el borde derecho de la columna (en la separación entre casillas); doble clic = anchos originales
