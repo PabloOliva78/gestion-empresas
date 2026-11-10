@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=33';
+import { crearModelos } from './modelos.js?v=299';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
@@ -3516,11 +3516,12 @@ export function crearModulos(c) {
       123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */ };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
+    const ii = M4.intraImportes(ej, meses.map(Number)); // Intrastat cargado (bloque 4): expediciones e introducciones del periodo; null si no hay
     const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
     const obl = new Set(obP.map((o) => o.mod));
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
       const c = calc[m], pr = pres[m], o = obP.find((x) => x.mod === m), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
-      if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(hay(o.imp) ? o.imp : calc.Intrastat)}</div><div class="dash-s">Informativa · Exp. ${g(calc.IntraE)} · Imp. ${g(calc.IntraI)}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
+      if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(ii ? rr(ii.exp + ii.int) : hay(o.imp) ? o.imp : calc.Intrastat)}</div><div class="dash-s">Informativa · Exp. ${g(ii ? ii.exp : calc.IntraE)} · Imp. ${g(ii ? ii.int : calc.IntraI)}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!['111', '115', '123', '303', '349'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!o && c === undefined && pr === null) return '';
       if (!o && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005) && m !== '111' && m !== '303') return ''; // fuera de lo obligatorio, solo con datos
@@ -3617,7 +3618,7 @@ export function crearModulos(c) {
       } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
     }
     // 4) liquidaciones pendientes de presentar
-    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.imp ?? calc[o.mod] ?? null })) : [];
+    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.mod === 'Intrastat' && ii ? rr(ii.exp + ii.int) : o.imp ?? calc[o.mod] ?? null })) : [];
     const siiTxt = [];
     [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
       const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
@@ -5164,21 +5165,6 @@ export function crearModulos(c) {
     return c.detalle.length ? { t: fnum(c.total), c: 'amar' } : { t: 'Sin importe' };
   };
   ['mod200', 'mod202', 'mod583', 'mod592', 'moda22', 'mod232'].forEach((id) => { badges[id] = () => ({ t: 'Sin datos' }); });
-  // Intrastat: suma del importe de expediciones (exportaciones) e introducciones (importaciones) del periodo elegido, de «Impuestos Presentados»
-  badges.modintra = () => {
-    if (!S.sel) return { t: 'Por empresa' };
-    const ej = Number(S.ejercicio), v = (mm, k) => prsVal(ej, 'INT', mm, k), ms = siiMeses();
-    const hay = ms.some((mm) => [v(mm, 'exp'), v(mm, 'int')].some((x) => x !== undefined && x !== null && x !== ''));
-    if (!hay) { // sin lo presentado: expediciones + introducciones de los libros del periodo (informativo, no se paga)
-      const l = libros();
-      if (!l) return { t: '…' };
-      if (!l.E.length && !l.R.length) return { t: 'Sin datos' };
-      const x = intraDeLibros(l.E, l.R, ej, S.periodo), tot = rr(x.exp + x.int);
-      return tot ? { t: fnum(tot), c: 'amar' } : { t: 'Sin importe' };
-    }
-    const suma = (k) => rr(ms.reduce((a, mm) => a + (Number(v(mm, k)) || 0), 0));
-    return { t: fnum(rr(suma('exp') + suma('int'))), c: 'amar' }; // suma de expediciones e introducciones
-  };
   badges.bss = () => {
     if (!S.sel) return { t: 'Por empresa' };
     const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
