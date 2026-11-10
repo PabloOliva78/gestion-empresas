@@ -1,0 +1,24 @@
+# Evita que Supabase (plan gratuito) pause el proyecto por no recibir actividad en 7 días:
+# cada día hace una consulta mínima a la base de datos. No necesita ninguna clave secreta (usa la clave pública que ya está en config.js).
+# Si algún día la consulta falla (por ejemplo, proyecto pausado), GitHub avisa por correo de que este flujo ha fallado.
+name: Mantener Supabase activo
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # todos los días a las 06:17 (UTC)
+  workflow_dispatch:        # también se puede lanzar a mano desde la pestaña Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consulta ligera a Supabase
+        run: |
+          URL=$(grep -o "https://[a-z0-9]*\.supabase\.co" config.js | head -1)
+          KEY=$(grep -o "eyJ[A-Za-z0-9._-]*" config.js | head -1)
+          test -n "$URL" && test -n "$KEY" || { echo "No se encontró la dirección o la clave en config.js"; exit 1; }
+          curl --fail --silent --show-error --max-time 30 -o /dev/null \
+            "$URL/rest/v1/empresas?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
+          echo "Supabase responde: $(date -u +%FT%TZ)"
