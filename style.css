@@ -1229,3 +1229,7 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 .exp-c { display: flex; flex-wrap: wrap; gap: .4rem; }
 .exp-c .small { font-size: .72rem; }
 .aviso-sesion { position: fixed; right: 1rem; bottom: 1rem; z-index: 9999; background: #fff3cd; color: #5c4400; border: 1px solid #e0b64a; border-radius: 10px; padding: .7rem 1rem; box-shadow: 0 4px 16px rgba(0,0,0,.2); font-size: .85rem; max-width: 22rem; }
+
+/* Cierre del mes */
+.aviso-cierre{background:#fdecea;border:1px solid #f5c2c0;border-radius:6px;padding:.5rem .8rem;margin:.6rem 0;font-size:.8rem;color:#7a1d16}
+
