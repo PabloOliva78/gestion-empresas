@@ -618,6 +618,30 @@ export function crearModelos(c) {
   async function cargarIntra(files) {
     for (const f of files) { const sh = await hojasExcel(f); if (sh[0]) await intraAnadirFilas(sh[0].rows); }
   }
+  // «Recoger ahora» (descarga semanal de D365): carga un Intrastat en la empresa del fichero (no tiene por qué ser la elegida), sin duplicar lo que ya está.
+  // Se compara por contenido y por número de veces, así dos líneas iguales del mismo archivo (mismas mercancías y factura) se conservan.
+  async function intraIngesta(empId, file) {
+    const sh = await hojasExcel(file), filas = (sh.find((h) => h.rows.some((r) => r && String(r[0] ?? '').trim().toLowerCase() === 'fecha')) ?? sh[0])?.rows ?? [];
+    const { data, error: e0 } = await db.from('registros').select('id,datos').eq('empresa_id', empId).eq('tipo', 'intra').maybeSingle();
+    if (e0) throw new Error(e0.message);
+    const d = data?.datos ?? { rows: [], serv: [], cfg: {}, exp: {} }, rows = d.rows ?? [];
+    const firma = (r) => JSON.stringify(INTRA_COLS.map((_, j) => String(r[j] ?? '').trim()));
+    const tengo = new Map(); rows.forEach((r) => { const k = firma(r); tengo.set(k, (tengo.get(k) || 0) + 1); });
+    const nuevas = []; filas.forEach((r) => {
+      if (!r || !r.some((v) => v !== null && v !== '')) return; if (String(r[0] ?? '').trim().toLowerCase() === 'fecha') return;
+      const f = fechaUtc(r[0]); if (!f) return;
+      const fila = INTRA_COLS.map((_, j) => { const v = r[j]; return v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v); }); fila[0] = fdmy(f); nuevas.push(fila);
+    });
+    const vistas = new Map(), añadir = [];
+    nuevas.forEach((fila) => { const k = firma(fila), c = (vistas.get(k) || 0) + 1; vistas.set(k, c); if (c > (tengo.get(k) || 0)) añadir.push(fila); });
+    if (!nuevas.length) throw new Error('no he encontrado líneas Intrastat (fecha, dirección, país…)');
+    if (!añadir.length) return { leidas: nuevas.length, nuevas: 0 };
+    const datos = { ...d, rows: [...rows, ...añadir] };
+    const { error } = data?.id ? await db.from('registros').update({ datos }).eq('id', data.id) : await db.from('registros').insert({ id: crypto.randomUUID(), empresa_id: empId, tipo: 'intra', ejercicio: null, datos });
+    if (error) throw new Error(error.message);
+    BIG.delete(`intra|${empId}`); // se vuelve a leer de la base de datos al abrir la pestaña
+    return { leidas: nuevas.length, nuevas: añadir.length };
+  }
   function intraFiltrar() {
     const q = (k) => String(intraF[k] || '').trim().toUpperCase(); let n = 0, t = 0;
     const imp = q('imp').replace(/\s/g, ''), nimp = (x) => x.replace(/\./g, '').replace(',', '.');
@@ -938,5 +962,5 @@ export function crearModelos(c) {
       return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
     },
   };
-  return { tabs, kinds, acciones, adif, badges };
+  return { tabs, kinds, acciones, adif, badges, intraIngesta, oblIntE };
 }

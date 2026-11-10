@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=31';
+import { crearModelos } from './modelos.js?v=32';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
@@ -3428,11 +3428,24 @@ export function crearModulos(c) {
         cfgTxt = nCfg > 0 ? ` · config.json actualizado con ${nCfg} empresa${nCfg > 1 ? 's' : ''}` : nCfg < 0 ? ' · sin permiso de escritura: config.json no se ha actualizado (pulsa «Recoger ahora» y elige «Editar archivos»)' : '';
         d365Est = await d365EstadoLeer(d365H); render();
       }
-      const hecho = d365Hecho(), omit = [], tocadas = new Set(); let cargados = 0;
+      const hecho = d365Hecho(), omit = [], tocadas = new Set(), intr = []; let cargados = 0;
       const entradas = [];
       for (const dir of carpetas) for await (const [n, h] of dir.entries()) entradas.push([n, h]);
       for (const [n, h] of entradas) {
         if (h.kind !== 'file') continue;
+        // Intrastat de D365 (HER, ESP e HIS): D365_<SIGLA>_Intrastat_<AAAA-MM>.xlsx, o cualquier Excel con «Intrastat» y la sigla en el nombre
+        if (/intrastat/i.test(n) && /\.xlsx?$/i.test(n) && !/^D365_[^_]+_(Repercutido|Soportado)_/i.test(n)) {
+          const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
+          if (!forzar && hecho.has(clave)) continue;
+          const sig = ((/^D365_([^_]+)_Intrastat/i.exec(n) || /(?:^|[_\s-])(HER|ESP|HIS)(?:[_\s.-]|$)/i.exec(n) || [])[1] || '').toUpperCase(), ym = (/(\d{4})-(\d{2})/.exec(n) || []).slice(1, 3).join('-');
+          if (soloPer && ym && !soloPer.has(ym)) continue; // solo los meses del periodo elegido
+          const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === sig);
+          if (!e) { omit.push(`${n} (Intrastat sin empresa: pon HER, ESP o HIS en el nombre)`); continue; }
+          if (!M4.oblIntE(e)) { omit.push(`${n} (${e.siglas}: sin Intrastat)`); continue; }
+          if (!(liqReg(e.id)?.datos ?? {}).auto && !manual) { omit.push(`${n} (automático desactivado)`); continue; }
+          try { const r = await M4.intraIngesta(e.id, f); hecho.add(clave); intr.push(`${e.siglas} ${ym || ''}: ${r.nuevas} línea(s) nuevas de ${r.leidas}`.replace('  ', ' ')); if (r.nuevas) { cargados++; tocadas.add(e.id); } } catch (err) { omit.push(`${n} (${err.message})`); }
+          continue;
+        }
         const mN = /^D365_([^_]+)_(Repercutido|Soportado)_(\d{4})-(\d{2})(?:_.*)?\.xlsx$/i.exec(n), esL = /^L[ií]neas de informes de IVA.*\.xlsx$/i.test(n);
         if (!mN && !esL) continue;
         const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
@@ -3448,7 +3461,7 @@ export function crearModulos(c) {
         try { await ingestaIVA(f, e.id); hecho.add(clave); cargados++; tocadas.add(e.id); } catch (err) { omit.push(`${n} (${err.message})`); }
       }
       d365Marca(hecho);
-      d365Msg = `${cargados ? `${cargados} libro(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}${cfgTxt}`;
+      d365Msg = `${cargados ? `${cargados} archivo(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${intr.length ? ` · Intrastat: ${intr.join('; ')}` : ''}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}${cfgTxt}`;
       if (cargados || manual) { await cargar(); render(); }
     } finally { d365Ocupado = false; }
   }
