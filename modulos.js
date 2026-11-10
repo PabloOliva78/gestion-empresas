@@ -1003,7 +1003,8 @@ export function crearModulos(c) {
   // Las insignias del panel de modelos enseñan importes: al abrir el grupo se piden los libros de la empresa elegida (una vez, luego quedan en memoria)
   const peek = (tipo) => (S.sel ? grande(tipo) : null);
   async function guardarGrande(tipo, empresaId, nuevas, clave) {
-    const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
+    const { data, error: eLee } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).order('id').limit(1).maybeSingle();
+    if (eLee) throw new Error(`no se pudo leer ${tipo} antes de guardar (${eLee.message}); no se ha guardado nada para no duplicar el libro`);
     const mapa = new Map((data?.datos?.filas ?? []).map((x) => [clave(x), x]));
     nuevas.forEach((x) => mapa.set(clave(x), x));
     const filas = sinDupSii(tipo, [...mapa.values()]);
@@ -1345,10 +1346,10 @@ export function crearModulos(c) {
 
   // S.NC.ISP.A (ISP autorrepercutida) va siempre en el libro repercutido: lo que haya en el soportado se pasa (sin repetir lo que ya está)
   async function moverIspA(empresaId, filtro = () => true) {
-    const { data: r } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').maybeSingle();
+    const { data: r, error: err1 } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').order('id').limit(1).maybeSingle(); if (err1) return 0; // si la lectura falla no se toca nada
     const filasR = r?.datos?.filas ?? [], isp = filasR.filter((l) => /^S\.NC\.ISP\.A/.test(l.codigo) && filtro(l));
     if (!isp.length) return 0;
-    const { data: e } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-E').maybeSingle();
+    const { data: e, error: err2 } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-E').order('id').limit(1).maybeSingle(); if (err2) return 0; // si la lectura falla no se toca nada
     const filasE = e?.datos?.filas ?? [], k = (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|'), claves = new Set(filasE.map(k));
     if (!(await reemplazarGrande('fact-E', empresaId, [...filasE, ...isp.filter((l) => !claves.has(k(l))).map((l) => ({ ...l, sentido: 'E' }))], e))) return 0;
     if (!(await reemplazarGrande('fact-R', empresaId, filasR.filter((l) => !(/^S\.NC\.ISP\.A/.test(l.codigo) && filtro(l))), r))) return 0;
@@ -1359,10 +1360,10 @@ export function crearModulos(c) {
   const fIsoL = (l) => { const s = String(l.fecha || l.ff || '').trim(), m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/.exec(s); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : s.slice(0, 10); };
   // Las S.UE.* (adquisiciones intracomunitarias) son del soportado: si alguna hubiera quedado en el repercutido (p. ej. por venir en el archivo del libro repercutido), vuelve al soportado
   async function moverSueA(empresaId, filtro = () => true) {
-    const { data: e } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-E').maybeSingle();
+    const { data: e, error: err3 } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-E').order('id').limit(1).maybeSingle(); if (err3) return 0; // si la lectura falla no se toca nada
     const filasE = e?.datos?.filas ?? [], sue = filasE.filter((l) => esSue(l) && filtro(l));
     if (!sue.length) return 0;
-    const { data: r } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').maybeSingle();
+    const { data: r, error: err4 } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').order('id').limit(1).maybeSingle(); if (err4) return 0; // si la lectura falla no se toca nada
     const filasR = r?.datos?.filas ?? [], k = (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|'), claves = new Set(filasR.map(k));
     if (!(await reemplazarGrande('fact-R', empresaId, [...filasR, ...sue.filter((l) => !claves.has(k(l))).map((l) => ({ ...l, sentido: 'R' }))], r))) return 0;
     if (!(await reemplazarGrande('fact-E', empresaId, filasE.filter((l) => !(esSue(l) && filtro(l))), e))) return 0;
@@ -1386,7 +1387,12 @@ export function crearModulos(c) {
     q.pend = q.p.then(async () => {
       q.pend = null;
       const fl = GR.get(k) ?? filas;
-      const ex = existente ?? (await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle()).data;
+      let ex = existente;
+      if (!ex) { // si la lectura falla NO se crea una fila nueva (eso duplicaba el libro): se avisa y no se guarda
+        const { data: d0, error: e0 } = await db.from('registros').select('id').eq('empresa_id', empresaId).eq('tipo', tipo).order('id').limit(1).maybeSingle();
+        if (e0) { alert(`No se pudo guardar ${tipo}: ${e0.message}. No se ha guardado nada; inténtalo de nuevo en unos segundos.`); return false; }
+        ex = d0;
+      }
       const err = await guardarRegistro(ex, { ...(ex ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas: fl } });
       if (err) {
         alert(/statement timeout/i.test(err) ? 'La base de datos ha tardado demasiado en guardar el libro (es muy grande). Amplía el tiempo máximo de las consultas: ejecuta supabase/05_timeout.sql en el editor SQL de Supabase.'
@@ -4481,7 +4487,15 @@ export function crearModulos(c) {
   }
   const textoPdf = async (file) => (await leerPdf(file)).texto;
 
+  // Registros que son únicos por empresa (y ejercicio): si se va a CREAR uno y en la base ya existe, se actualiza ese en vez de duplicarlo (la lista de la pantalla puede ir por detrás)
+  const UNICOS = new Set(['prs', 'nominas', 'ctacfg', 'm303', 'm111', 'm115', 'm123', 'liqiva', 'liqpres']);
   async function guardarRegistro(existente, fila) {
+    if (!existente && UNICOS.has(fila.tipo) && fila.empresa_id) {
+      let q = db.from('registros').select('id').eq('empresa_id', fila.empresa_id).eq('tipo', fila.tipo);
+      q = fila.ejercicio == null ? q.is('ejercicio', null) : q.eq('ejercicio', fila.ejercicio);
+      const { data: ya } = await q.order('id').limit(1).maybeSingle();
+      if (ya) { const { id: nuevoId, ...resto } = fila; existente = ya; fila = resto; }
+    }
     const { error } = existente
       ? await db.from('registros').update(fila).eq('id', existente.id)
       : await db.from('registros').insert(fila);
