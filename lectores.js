@@ -752,6 +752,12 @@ export function casillasPDF(pags) {
       const tk = its.map((x) => x.str.trim()).join(' ').split(/\s+/).filter(Boolean);
       if (tk.length >= 4 && tk.length % 2 === 0 && tk.every((x, k) => (k % 2 === 0 ? /^\d{2,5}$/.test(x) : MONEY.test(x) || ENTERO.test(x)))
         && tk.filter((_, k) => k % 2 === 0).every((x, k, a) => !k || +x > +a[k - 1])) for (let k = 0; k < tk.length; k += 2) poner(tk[k], tk[k + 1]);
+      // e) «etiqueta … 69» o «euros 71» sin importe en la línea; el importe va al final de la línea siguiente (impresiones antiguas del 303, p. ej. 2022). No se toma si esa línea trae su propia casilla antes del importe.
+      const ult = its[its.length - 1]?.str.trim();
+      if (ult && /^\d{2,3}$/.test(ult) && its.length >= 2 && !its.some((x) => MONEY.test(x.str.trim())) && sig && sig.length >= 2) {
+        const u = sig[sig.length - 1].str.trim(), antes = sig[sig.length - 2].str.trim();
+        if (MONEY.test(u) && !/^\d{1,3}$/.test(antes) && sig.some((x) => /[A-Za-zÁ-ú]/.test(x.str))) poner(ult, u);
+      }
       // b) línea con solo la casilla; la siguiente trae «etiqueta … importe»
       if (ss.length === 1 && /^\d{1,3}$/.test(ss[0]) && sig && sig.some((x) => /[A-Za-zÁ-ú]/.test(x.str))) {
         const u = sig[sig.length - 1].str.trim();
