@@ -1219,3 +1219,6 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 /* Resumen de cuentas contables: celdas editables */
 .res td.in input { width: 100%; text-align: right; font: inherit; }
 .res td.in input.ed { background: #e0ecff; font-weight: 600; }
+
+/* Impuestos Presentados: línea azul (la de la cabecera) entre un modelo y el siguiente */
+.prs-row > table + table { box-shadow: -.3rem 0 0 0 #1b3274; margin-left: .35rem; }
