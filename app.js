@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=301';
+import { crearModulos } from './modulos.js?v=302';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -74,19 +74,31 @@ const opts = (obj, sel) => Object.entries(obj)
   .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
 
 // ---------- Datos ----------
+// La base devuelve como mucho 1.000 filas por consulta: los registros se piden por tandas (ordenados por id) hasta traerlos todos; si no, lo último que se guarda puede no aparecer
+async function pedirRegistros() {
+  const out = [];
+  for (let d = 0; ; d += 1000) {
+    const { data, error } = await db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R,may-mov,m592-mov,a22src,intra)')
+      .not('tipo', 'like', 'sii-raw-%').order('id').range(d, d + 999);
+    if (error || !data) { if (error) console.warn('registros:', error.message); break; }
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+
 async function cargar() {
   const [e, o, c, r] = await Promise.all([
     db.from('empresas').select('*').order('nombre'),
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
     // las facturas (libros de IVA y SII) pesan mucho: se piden aparte, solo al abrir su pestaña
-    db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,sii-E,sii-R,may-mov,m592-mov,a22src,intra)')
-    .not('tipo', 'like', 'sii-raw-%'),
+    pedirRegistros(),
   ]);
   S.empresas = e.data ?? [];
   S.obligaciones = o.data ?? [];
   S.conciliaciones = c.data ?? [];
-  S.registros = r.data ?? [];
+  S.registros = r;
   if (!S.empresas.some((x) => x.id === S.sel)) S.sel = '';
   if (esAdmin()) {
     const [u, a] = await Promise.all([
