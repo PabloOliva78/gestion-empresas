@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=30';
+import { crearModelos } from './modelos.js?v=31';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
@@ -264,13 +264,16 @@ export function crearModulos(c) {
   const FONDO_EMP = ['#e8eef8', '#fbe7ea', '#e0f4f6', '#e3e8f2', '#fdece6', '#e6f2ea', '#f6e3e3', '#e6e9f5', '#efe7f5', '#fae8f3', '#efe9f8', '#f8e6ec', '#fcebe8', '#e3f5e6'];
   const CMG_ST = { ok: ['#1a7f37', '#e6f4ea', '✓', 'presentado'], venc: ['#b42318', '#fde8e8', '✖', 'vencido sin presentar'], pron: ['#8a6d00', '#fff8d6', '●', 'vence en 7 días o menos'], fut: ['#667085', '#f2f4f7', '○', 'en plazo'] };
   // ---- Qué modelos le tocan a cada empresa y cómo van: lo usan el cuadro de mando, las liquidaciones a presentar, los pagos domiciliados e Inicio ----
-  // 111, 303, 200 y 390: obligatorios · 115: solo si está de ALTA en el censo · 123, 202, 349, Intrastat, 232 y A22: si tiene datos ·
+  // 111, 303, 200 y 390: obligatorios · 115: solo si está de ALTA en el censo · 123, 202, 349, 232 y A22: si tiene datos · Intrastat: HER, ESP e HIS, todos los meses ·
   // 592: HER, ESP y LYS · 583: HER, LYS, GRU (Gesufer) e HIS · 180, 190 y 193: con datos del ejercicio
   const SIG_592 = ['HER', 'ESP', 'LYS'], SIG_583 = ['HER', 'LYS', 'GRU', 'HIS'];
   // por sigla o, si no coincide, por el nombre de la empresa
   const RX_592 = /herogra\s+fertiliz|herogra\s+especiales|lys\s+del\s+sur|lysur/i, RX_583 = /herogra\s+fertiliz|lys\s+del\s+sur|lysur|gesti[oó]n\s+unificada|gesufer|hispalense/i;
   const obl592 = (e) => SIG_592.includes(String(e.siglas ?? '').toUpperCase()) || RX_592.test(e.nombre ?? '');
   const obl583 = (e) => SIG_583.includes(String(e.siglas ?? '').toUpperCase()) || RX_583.test(e.nombre ?? '');
+  // Intrastat: solo Herogra Fertilizantes (HER), Herogra Especiales (ESP) e Hispalense (HIS), y va por meses
+  const SIG_INT = ['HER', 'ESP', 'HIS'], RX_INT = /herogra\s+fertiliz|herogra\s+especiales|hispalense/i;
+  const oblInt = (e) => SIG_INT.includes(String(e.siglas ?? '').toUpperCase()) || RX_INT.test(e.nombre ?? '');
   const MODS_PAGO = ['303', '111', '115', '123', '202', '200', '592', '583'];
   const hoyUtc = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
   const habilF = (y, m, d) => { let t = Date.UTC(y, m - 1, d); while (!esHabil(t)) t += 864e5; return t; };
@@ -377,6 +380,7 @@ export function crearModulos(c) {
     if (mod === '115') return alta115(e, ej, '12') ? 'S' : 'D';
     if (mod === '592') return obl592(e) ? 'S' : 'D';
     if (mod === '583') return obl583(e) ? 'S' : 'D';
+    if (mod === 'Intrastat') return oblInt(e) ? 'S' : 'D';
     return 'D';
   }
   function ltDeAuto(e, ej, ix) {
@@ -436,7 +440,7 @@ export function crearModulos(c) {
     if (obl592(e)) pers.forEach((p) => add('592', p, ej, ej, '592'));
     if (!trim || uso('202')) ['1P', '2P', '3P'].forEach((p) => add('202', p, ej, ej, '202'));
     if (obl583(e)) { add('583', '3T', ej, ej, '583'); add('583', '0A', ej - 1, ej - 1, '583'); }
-    if (uso('INT')) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT'));
+    if (oblInt(e)) MM12.forEach((p) => add('Intrastat', p, ej, ej, 'INT')); // todos los meses, solo HER, ESP e HIS
     if (uso('A22')) ['1T', '2T', '3T', '4T'].forEach((p) => add('A22', p, ej, ej, 'A22'));
     if (uso('232') || m232Obligados(ej - 1).has(e.id)) { add('232', 'A', ej - 1, ej, '232'); const o232 = out[out.length - 1]; o232.pres = o232.pres || !!m232Datos(e.id, ej - 1)?.pres; } // el 232 del ejercicio anterior, en noviembre
     add('390', 'A', ej, ej, '390'); add('200', 'A', ej, ej + 1, '200'); add('190', 'A', ej, ej, '190');

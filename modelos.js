@@ -333,6 +333,7 @@ export function crearModelos(c) {
   const fdmy = (d) => (d ? `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` : '');
   const nf3 = (n) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   const k3 = (v) => (+v).toLocaleString('es-ES', { maximumFractionDigits: 3 });
+  const oblIntE = (e) => ['HER', 'ESP', 'HIS'].includes(String(e?.siglas ?? '').toUpperCase()) || /herogra\s+fertiliz|herogra\s+especiales|hispalense/i.test(e?.nombre ?? ''); // Intrastat: solo Herogra, Especiales e Hispalense
   const MES_L = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
   // ================= Modelo 592 · impuesto especial sobre los envases de plástico no reutilizables =================
@@ -662,10 +663,18 @@ export function crearModelos(c) {
         ${f.n ? `<pre style="max-height:160px;overflow:auto;background:#f7f7f7;padding:6px;font-size:11px">${esc(f.txt)}</pre>` : ''}</div>`).join('')}
       <p class="hint">Formato de línea: EM;Provincia;Incoterm;Naturaleza;Transporte;Puerto;NC;País origen;Régimen;Masa kg;Unid.supl.;Valor facturado;Valor estadístico;NIF IVA. Guarda el .txt en una carpeta llamada AEAT y en la Sede (Intrastat > Presentación por fichero) indica flujo, mes y año.</p>`;
     setTimeout(intraFiltrar, 0);
+    // el día 4 de cada mes toca sacar de Dynamics el Intrastat del mes anterior (solo HER, ESP e HIS: se presenta por meses)
+    let avisoDia4 = '';
+    if (oblIntE(empresa())) {
+      const hoy = new Date(), ene = hoy.getMonth() === 0, mm = ene ? 12 : hoy.getMonth(), yy = ene ? hoy.getFullYear() - 1 : hoy.getFullYear(), nMes = O.filter((o) => o.anio === yy && o.mes === mm).length;
+      if (nMes) avisoDia4 = `<p class="hint" style="color:#1a7f37">✓ Intrastat de ${MES_L[mm - 1].toLowerCase()} ${yy} cargado (${nMes} líneas).</p>`;
+      else if (hoy.getDate() >= 4) avisoDia4 = `<div class="aviso no-print"><p>⚠ Desde el día 4 toca sacar de Dynamics el Intrastat de <b>${MES_L[mm - 1].toLowerCase()} ${yy}</b>: todavía no hay líneas de ese mes. Usa el botón «Abrir Intrastat en Dynamics», descarga el Excel y suéltalo aquí.</p></div>`;
+      else avisoDia4 = `<p class="hint no-print">El día 4 se saca de Dynamics el Intrastat del mes anterior (${MES_L[mm - 1].toLowerCase()} ${yy}).</p>`;
+    }
     return `${avisoHtml()}<section class="block"><h3 class="bt">INTRASTAT · ${ej}</h3>
       <p class="hint">Distribuciones = Expedición, Llegadas = Introducción. País ISO3 → ISO2. Servicios (Categoría con «${esc(C.txtServ)}») se excluyen; producto sin NC toma el NC por defecto. Avisos: ✖ = error que hay que corregir antes de presentar; • = informativo. El 349 se calcula desde los libros registro (R.UE y S.UE.NR/RD/SR).</p>
       ${cfg}<p class="hint no-print">La conciliación con el modelo 349 está en Conciliaciones → Conciliación 349 - Intrastat.</p></section>
-      <section class="block"><h3 class="bt">Descarga de Dynamics (13 columnas + nº de factura) <button class="small no-print" data-act="m-intradyn" title="Abre la página de Intrastat de Dynamics 365 de esta empresa en otra pestaña">↗ Abrir Intrastat en Dynamics</button></h3>
+      <section class="block"><h3 class="bt">Descarga de Dynamics (13 columnas + nº de factura) ${oblIntE(empresa()) ? '<button class="small no-print" data-act="m-intradyn" title="Abre la página de Intrastat de Dynamics 365 de esta empresa en otra pestaña">↗ Abrir Intrastat en Dynamics</button>' : ''}</h3>${avisoDia4}
       ${ed ? `<div class="dropzone" data-kind="intra" tabindex="0" role="button"><b>Suelta aquí el Excel o CSV de Dynamics</b> o haz clic para elegirlo (se añade a lo que hay)
         <input type="file" data-dzkind="intra" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden></div>
       <div class="no-print" style="margin:8px 0"><textarea id="intraPega" rows="3" style="width:100%;font-size:11px" placeholder="…o pega aquí las filas copiadas de Excel (13 columnas más el nº de factura opcional: ${INTRA_COLS.join(', ')})"></textarea>
