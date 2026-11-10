@@ -1487,6 +1487,7 @@ export function crearModulos(c) {
     if (!datos.length) return `${dropz}<div class="aviso"><p>⚠ Suelta la consulta de facturas ${emit ? 'emitidas' : 'recibidas'} descargada de la Sede Electrónica (el Excel o CSV con la columna «Nº Serie + Nº Factura»).</p></div>`;
     const r = rangoPeriodo(ej, S.periodo), F = siiFil[s], idx = new Map(datos.map((l, i) => [l, i]));
     const todos = datos.filter((x) => (emit ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && (!S.periodo || x.per === S.periodo)));
+    const botonesMes = ed ? `<div class="no-print siimes">${S.periodo ? ['E', 'R'].map((x) => `<button class="small danger" data-act="m-siimes" data-s="${x}" title="Quita de la web todos los registros de este periodo del SII ${x === 'E' ? 'emitidas' : 'recibidas'}">🗑 Quitar ${esc(PERIODOS[S.periodo] ?? S.periodo)} del SII ${x === 'E' ? 'emitidas' : 'recibidas'}</button>`).join('') : '<span class="hint">Elige un mes en Periodo para poder quitarlo del SII.</span>'}</div>` : '';
     const iClave = cab.findIndex((c) => /^Clave de R[eé]gimen Especial/i.test(c));
     const ok = (x) => {
       const w = raw.get(siiKey(x)) ?? {};
@@ -1541,7 +1542,7 @@ export function crearModulos(c) {
         <tr><td>Libro registro</td><td class="amar"><b>Facturas ${emit ? 'Emitidas' : 'Recibidas'}</b></td></tr><tr><td>Ejercicio</td><td class="amar"><b>${ej}</b></td></tr>
         <tr><td>Periodo</td><td class="amar"><b>${S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio'}</b></td></tr></tbody></table>
         <table class="tprs tnom" style="width:auto"><tbody><tr><td>Registros que cumplen filtros / pegados</td><td class="amar num"><b>${cumple.length} / ${todos.length}</b></td></tr>
-        <tr><td>Total base declarada (filtrada)</td><td class="amar num"><b>${fnum(sumB)}</b></td></tr><tr><td>Total cuota ${emit ? 'repercutida' : 'soportada'} (filtrada)</td><td class="amar num"><b>${fnum(sumC)}</b></td></tr></tbody></table></div>
+        <tr><td>Total base declarada (filtrada)</td><td class="amar num"><b>${fnum(sumB)}</b></td></tr><tr><td>Total cuota ${emit ? 'repercutida' : 'soportada'} (filtrada)</td><td class="amar num"><b>${fnum(sumC)}</b></td></tr></tbody></table>${botonesMes}</div>
       <div class="fc-cab" style="margin:.4em 1em"><b>Filtros adicionales:</b>${fil('nif', emit ? 'NIF Destinatario' : 'NIF Emisor')}${fil('nom', 'Nombre')}${fil('fac', 'Nº Serie + Nº Factura')}${fil('tipo', 'Tipo de factura', 'F1, F2, R1…')}
         ${fil('desde', 'Fecha expedición desde', 'dd/mm/aaaa')}${fil('hasta', 'hasta', 'dd/mm/aaaa')}${fil('clave', 'Clave régimen')}${fil('estado', 'Estado', 'Correcta…')}${fil('csv', 'CSV')}${fil('base', 'Base declarada', 'ej. 1.250,00')}${fil('cuota', emit ? 'Cuota repercutida' : 'Cuota soportada', 'ej. 262,50')}${fil('imin', 'Importe total desde')}${fil('imax', 'hasta')}
         <label><input type="checkbox" data-siitodos="${s}"${siiTodos[s] ? ' checked' : ''}> Ver también los que no cumplen</label></div></section></div>
@@ -1549,6 +1550,23 @@ export function crearModulos(c) {
         <tbody>${filas}<tr class="ttot"><td colspan="${cols.length + 3}"><b>TOTAL (registros que cumplen)</b></td><td class="num">${fnum(sumB)}</td><td class="num">${fnum(rr(cumple.reduce((t, x) => t + (lib(x)?.base ?? 0), 0)))}</td><td class="num">${fnum(sumC)}</td><td class="num">${fnum(rr(cumple.reduce((t, x) => t + (lib(x)?.cuota ?? 0), 0)))}</td><td></td><td></td></tr></tbody></table></div>
       ${quitados}
       ${(siiTodos[s] ? todos : cumple).length > lista.length ? `<button class="small" data-act="m-siimas" data-s="${s}" style="margin:.6em 1em">Ver más (${lista.length} de ${(siiTodos[s] ? todos : cumple).length})</button>` : ''}</section></div>${plazoSii(s, todos, raw, cab)}`;
+  }
+  // Quita de la web todos los registros del SII (emitidas o recibidas) del periodo elegido, con sus columnas completas; los demás meses no se tocan
+  async function quitarMesSii(s) {
+    if (!S.sel || !S.periodo) return void alert('Elige un mes en el selector Periodo de la barra lateral.');
+    const ej = Number(S.ejercicio), emit = s === 'E', r = rangoPeriodo(ej, S.periodo), meses = siiMeses(), per = PERIODOS[S.periodo] ?? S.periodo, nom = emit ? 'emitidas' : 'recibidas';
+    const tipo = `sii-${s}`, { data } = await db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle();
+    const arr = data?.datos?.filas ?? [], dentro = (x) => (emit ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && meses.includes(x.per));
+    const quitar = arr.filter(dentro);
+    if (!quitar.length) return void alert(`No hay registros del SII ${nom} en ${per} ${ej}.`);
+    if (!confirm(`¿Quitar del SII ${nom} los ${quitar.length} registros de ${per} ${ej}? Los demás meses no se tocan.`)) return;
+    const kq = new Set(quitar.map(siiKey));
+    await reemplazarGrande(tipo, S.sel, arr.filter((x) => !dentro(x)), data);
+    for (const c of new Set(quitar.map((x) => `${x.ej}-${x.per}`))) { // sus columnas completas (las de la descarga)
+      const tp = `sii-raw-${s}-${c}`, { data: sh } = await db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', tp).maybeSingle();
+      if (sh) await reemplazarGrande(tp, S.sel, (sh.datos?.filas ?? []).filter((q) => !kq.has(q.k)), sh);
+    }
+    await cargar(); render();
   }
   async function quitarSii2(s, i) {
     const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
@@ -4569,6 +4587,7 @@ export function crearModulos(c) {
       'm-siicod': () => { siiCod[d.t] = d.cod; render(); },
       'm-siitodo': () => { siiTodo = true; render(); },
       'm-siidel': () => quitarSii2(d.s, d.i),
+      'm-siimes': () => quitarMesSii(d.s),
       'm-archdel': () => quitarArch(d.id),
       'm-srcdel': async () => {
         if (!confirm(`¿Quitar de los libros de emitidas y recibidas todas las líneas que aportó «${d.n}»? Después puedes volver a soltar el archivo.`)) return;
