@@ -1233,3 +1233,9 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 /* Cierre del mes */
 .aviso-cierre{background:#fdecea;border:1px solid #f5c2c0;border-radius:6px;padding:.5rem .8rem;margin:.6rem 0;font-size:.8rem;color:#7a1d16}
 
+
+/* Notificaciones: la zona de soltar queda en su sitio (no se desplaza sobre las tarjetas) */
+.dsec.nt-s .dropzone{top:auto !important;z-index:auto !important}
+.dsec.nt-s .nt-card{position:relative;z-index:0}
+.dsec.nt-s .nt-card > div:first-child{row-gap:4px}
+
