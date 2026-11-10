@@ -665,7 +665,7 @@ export function crearModelos(c) {
     return `${avisoHtml()}<section class="block"><h3 class="bt">INTRASTAT · ${ej}</h3>
       <p class="hint">Distribuciones = Expedición, Llegadas = Introducción. País ISO3 → ISO2. Servicios (Categoría con «${esc(C.txtServ)}») se excluyen; producto sin NC toma el NC por defecto. Avisos: ✖ = error que hay que corregir antes de presentar; • = informativo. El 349 se calcula desde los libros registro (R.UE y S.UE.NR/RD/SR).</p>
       ${cfg}<p class="hint no-print">La conciliación con el modelo 349 está en Conciliaciones → Conciliación 349 - Intrastat.</p></section>
-      <section class="block"><h3 class="bt">Descarga de Dynamics (13 columnas + nº de factura)</h3>
+      <section class="block"><h3 class="bt">Descarga de Dynamics (13 columnas + nº de factura) <button class="small no-print" data-act="m-intradyn" title="Abre la página de Intrastat de Dynamics 365 de esta empresa en otra pestaña">↗ Abrir Intrastat en Dynamics</button></h3>
       ${ed ? `<div class="dropzone" data-kind="intra" tabindex="0" role="button"><b>Suelta aquí el Excel o CSV de Dynamics</b> o haz clic para elegirlo (se añade a lo que hay)
         <input type="file" data-dzkind="intra" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden></div>
       <div class="no-print" style="margin:8px 0"><textarea id="intraPega" rows="3" style="width:100%;font-size:11px" placeholder="…o pega aquí las filas copiadas de Excel (13 columnas más el nº de factura opcional: ${INTRA_COLS.join(', ')})"></textarea>
@@ -793,6 +793,8 @@ export function crearModelos(c) {
   // ================= Eventos propios =================
   const acciones = {
     'm-intraconcmes': (d) => { intraConcMes = +d.m; render(); },
+    // Dynamics 365: la página de Intrastat de la empresa (el código de la empresa en Dynamics va en cmp: HER, ESP, LYS…)
+    'm-intradyn': () => { const e = empresa(), cmp = String(e?.siglas || '').trim().toUpperCase(); window.open(`https://herogra.operations.dynamics.com/?cmp=${encodeURIComponent(cmp || 'HER')}&mi=Intrastat`, '_blank', 'noopener'); },
     'm-intraadd': async () => {
       const D = datosIntra(); if (!D) return; const ej = ejercicio(), hoy = new Date();
       const m = intraMes || (hoy.getFullYear() === ej ? hoy.getMonth() + 1 : 1), dia = !intraMes && hoy.getFullYear() === ej ? hoy.getDate() : 1;
