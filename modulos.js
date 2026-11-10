@@ -964,12 +964,22 @@ export function crearModulos(c) {
   // ---------- Bloque 6: SII y libros de IVA ----------
   // Las facturas son muchas: se guardan en filas aparte (fact-E, fact-R, sii-E, sii-R) y se leen solo al abrir la pestaña.
   const GR = new Map(); // `${tipo}|${empresa}` → filas (null mientras carga)
+  // SII: una carga antigua pudo dejar una factura sin NIF y otra posterior la misma con NIF; se queda solo la que tiene NIF (no se cuenta dos veces)
+  const sinDupSii = (tipo, fl) => {
+    if (!/^sii-[ER]$/.test(tipo)) return fl;
+    const kq = (x) => `${x.factura}|${x.ej}|${x.per}`, con = new Set(fl.filter((x) => x.nif).map(kq));
+    return fl.filter((x) => x.nif || !con.has(kq(x)));
+  };
   function grande(tipo) {
     const k = `${tipo}|${S.sel}`;
     if (GR.has(k)) return GR.get(k);
     GR.set(k, null);
     db.from('registros').select('datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle()
-      .then(({ data }) => { GR.set(k, data?.datos?.filas ?? []); render(); });
+      .then(({ data }) => {
+        const bd = data?.datos?.filas ?? [], lim = sinDupSii(tipo, bd);
+        GR.set(k, lim); render();
+        if (lim.length < bd.length && puede()) reemplazarGrande(tipo, S.sel, lim); // corrige también lo ya guardado en la base de datos
+      });
     return null;
   }
   // Solo mira lo que ya está cargado (las insignias del menú no deben disparar descargas pesadas)
@@ -979,7 +989,7 @@ export function crearModulos(c) {
     const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
     const mapa = new Map((data?.datos?.filas ?? []).map((x) => [clave(x), x]));
     nuevas.forEach((x) => mapa.set(clave(x), x));
-    const filas = [...mapa.values()];
+    const filas = sinDupSii(tipo, [...mapa.values()]);
     const err = await guardarRegistro(data, { ...(data ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
     if (err) throw new Error(err);
     GR.set(`${tipo}|${empresaId}`, filas);
