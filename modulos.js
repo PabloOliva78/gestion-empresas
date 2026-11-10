@@ -1487,7 +1487,7 @@ export function crearModulos(c) {
     if (!datos.length) return `${dropz}<div class="aviso"><p>⚠ Suelta la consulta de facturas ${emit ? 'emitidas' : 'recibidas'} descargada de la Sede Electrónica (el Excel o CSV con la columna «Nº Serie + Nº Factura»).</p></div>`;
     const r = rangoPeriodo(ej, S.periodo), F = siiFil[s], idx = new Map(datos.map((l, i) => [l, i]));
     const todos = datos.filter((x) => (emit ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && (!S.periodo || x.per === S.periodo)));
-    const botonesMes = ed ? `<div class="no-print siimes">${S.periodo ? ['E', 'R'].map((x) => `<button class="small danger" data-act="m-siimes" data-s="${x}" title="Quita de la web todos los registros de este periodo del SII ${x === 'E' ? 'emitidas' : 'recibidas'}">🗑 Quitar ${esc(PERIODOS[S.periodo] ?? S.periodo)} del SII ${x === 'E' ? 'emitidas' : 'recibidas'}</button>`).join('') : '<span class="hint">Elige un mes en Periodo para poder quitarlo del SII.</span>'}</div>` : '';
+    const botonesMes = ed ? `<div class="no-print siimes">${S.periodo ? [s].map((x) => `<button class="small danger" data-act="m-siimes" data-s="${x}" title="Quita de la web todos los registros de este periodo del SII ${x === 'E' ? 'emitidas' : 'recibidas'}">🗑 Quitar ${esc(PERIODOS[S.periodo] ?? S.periodo)} del SII ${x === 'E' ? 'emitidas' : 'recibidas'}</button>`).join('') : '<span class="hint">Elige un mes en Periodo para poder quitarlo del SII.</span>'}</div>` : '';
     const iClave = cab.findIndex((c) => /^Clave de R[eé]gimen Especial/i.test(c));
     const ok = (x) => {
       const w = raw.get(siiKey(x)) ?? {};
