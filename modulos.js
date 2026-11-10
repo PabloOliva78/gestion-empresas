@@ -323,7 +323,7 @@ export function crearModulos(c) {
     if (m === '303') return n('liq') ?? n('res');
     if (m === '111') return n('retN') === null && n('retP') === null ? null : (n('retN') || 0) + (n('retP') || 0);
     if (m === '115' || m === '123') return n('ret');
-    if (m === '349') return n('imp');
+    if (m === '349') return n('imp') === null ? null : Math.round((n('imp') - (n('rect') || 0)) * 100) / 100; // importe de operaciones menos importe de rectificaciones
     return n('res') ?? n('imp');
   };
   // 115: solo si el censo lo tiene de ALTA en el periodo (si está de baja o no aparece, no se pone)
@@ -3509,7 +3509,7 @@ export function crearModulos(c) {
       } catch (err) { /* sin libros: solo se muestra lo presentado */ }
     }
     const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
-      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: pv('349', 'imp') ?? null };
+      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */ };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
     const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
@@ -4974,7 +4974,7 @@ export function crearModulos(c) {
         const calc = rr(pers.reduce((a, p, i) => a + (liq[i] === undefined ? 0 : calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71), 0));
         add('Mod. 303', 'Resultado presentado frente a calculado con los libros', rr(liq.reduce((a, v) => a + (Number(v) || 0), 0)), calc, MARGEN_IVA, 'Casilla 71 del 303 presentado frente al calculado en la pestaña 303');
       } else add('Mod. 303', 'Resultado presentado frente a calculado con los libros', null, null, 0, 'Sin 303 en Impuestos Presentados');
-      const i349 = pers.map((p) => prsVal(ej, '349', p, 'imp'));
+      const i349 = pers.map((p) => { const a = prsVal(ej, '349', p, 'imp'); return a === undefined || a === null || a === '' ? a : rr(Number(a) - (Number(prsVal(ej, '349', p, 'rect')) || 0)); }); // operaciones − rectificaciones
       if (i349.some((v) => v !== undefined)) {
         const calc = rr(pers.reduce((a, p, i) => a + (i349[i] === undefined ? 0 : calcular349(E, R, ej, p).total), 0));
         add('Mod. 349', 'Importe presentado frente a calculado con los libros', rr(i349.reduce((a, v) => a + (Number(v) || 0), 0)), calc, MARGEN_IVA, 'Operaciones intracomunitarias');
