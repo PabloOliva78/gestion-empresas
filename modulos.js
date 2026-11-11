@@ -4553,10 +4553,15 @@ export function crearModulos(c) {
   const UNICOS = new Set(['prs', 'nominas', 'ctacfg', 'm303', 'm111', 'm115', 'm123', 'liqiva', 'liqpres']);
   async function guardarRegistro(existente, fila) {
     if (!existente && UNICOS.has(fila.tipo) && fila.empresa_id) {
-      let q = db.from('registros').select('id').eq('empresa_id', fila.empresa_id).eq('tipo', fila.tipo);
+      let q = db.from('registros').select('id,datos').eq('empresa_id', fila.empresa_id).eq('tipo', fila.tipo);
       q = fila.ejercicio == null ? q.is('ejercicio', null) : q.eq('ejercicio', fila.ejercicio);
-      const { data: ya } = await q.order('id').limit(1).maybeSingle();
-      if (ya) { const { id: nuevoId, ...resto } = fila; existente = ya; fila = resto; }
+      const { data: ya, error: eYa } = await q.order('id').limit(1).maybeSingle();
+      if (eYa) return `No se pudo comprobar si ya existía este registro (${eYa.message}); no se ha guardado nada para no pisar lo que haya.`;
+      if (ya) {
+        // ya existía y la lista de la pantalla no lo tenía: se UNEN los datos (lo nuevo manda solo en lo que trae); nunca se sustituye todo el registro, que borraba lo anterior
+        const { id: nuevoId, ...resto } = fila; existente = { id: ya.id }; fila = resto;
+        if (resto.datos && typeof resto.datos === 'object' && ya.datos && typeof ya.datos === 'object' && !Array.isArray(resto.datos)) fila = { ...resto, datos: { ...ya.datos, ...resto.datos } };
+      }
     }
     // si se corta la conexión (libros grandes, wifi…) se reintenta hasta 3 veces; guardar dos veces lo mismo no duplica nada (misma fila por id)
     let error;
