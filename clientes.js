@@ -1,7 +1,7 @@
 // Bloque 12 · Proveedores - Clientes. Pestaña «Clientes»: listado de clientes del ERP; el Excel ya trae el país de cada cliente.
 // Se guarda un solo registro por empresa con el tipo «fact-cli» (como los libros grandes: no se carga con el resto de datos).
 import { paisDeSiglas } from './paises.js?v=1';
-import { crearVistaTercero } from './terceros-vista.js?v=1';
+import { crearVistaTercero } from './terceros-vista.js?v=2';
 export function crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }) {
   const TIPO = 'fact-cli';
   const esNifEsp = (n) => /^[0-9]{8}[A-Z]$/.test(n) || /^[XYZKLM][0-9]{7}[A-Z]$/.test(n) || /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n);
@@ -25,9 +25,10 @@ export function crearClientes({ S, esc, render, empresa, puede, grande, reemplaz
         const a = await leerExcel(f), cab = (a[0] ?? []).map((x) => txt(x).toLowerCase());
         if (!(cab.includes('cuenta') && cab.includes('grupo de clientes'))) throw new Error(`${f.name}: no reconozco el listado (debe ser el de CLIENTES, con «Cuenta», «Nombre», «Grupo de clientes» y «País/región»).`);
         const c = { cta: cab.indexOf('cuenta'), nom: cab.indexOf('nombre'), nif: cab.indexOf('nif'), gr: cab.indexOf('grupo de clientes'), div: cab.indexOf('divisa'), tel: cab.indexOf('teléfono'), imp: cab.indexOf('grupo de impuestos'), pais: cab.indexOf('país/región'), fac: cab.indexOf('cuenta de facturación') };
-        filas = (filas ?? []).concat(a.slice(1).filter((r) => txt(r[c.cta]) || txt(r[c.nom])).map((r) => ({ cuenta: txt(r[c.cta]), nombre: txt(r[c.nom]), nif: txt(r[c.nif]), grupo: txt(r[c.gr]), divisa: txt(r[c.div]), tel: txt(r[c.tel]), imp: txt(r[c.imp]), pais: txt(r[c.pais]).toUpperCase(), cfact: c.fac >= 0 ? txt(r[c.fac]) : '' })));
+        filas = (filas ?? []).concat(a.slice(1).filter((r) => txt(r[c.cta]) || txt(r[c.nom])).map((r) => ({ cuenta: txt(r[c.cta]), nombre: txt(r[c.nom]), nif: txt(r[c.nif]), grupo: txt(r[c.gr]), divisa: txt(r[c.div]), imp: txt(r[c.imp]), pais: txt(r[c.pais]).toUpperCase(), cfact: c.fac >= 0 ? txt(r[c.fac]) : '' })));
       }
       if (!filas?.length) throw new Error('El listado no trae clientes.');
+      { const prevC = new Map((grande(TIPO) ?? []).filter((x) => !x.manual).map((x) => [x.cuenta, x])); filas.forEach((x) => { const o = prevC.get(x.cuenta); if (o?.ed) Object.assign(x, o.ed, { ed: o.ed }); }); } // lo editado a mano se conserva
       filas = filas.concat((grande(TIPO) ?? []).filter((x) => x.manual).map((x) => ({ ...x }))); // lo añadido a mano se conserva
       P.msg = 'Guardando…'; render();
       const ok = await reemplazarGrande(TIPO, S.sel, filas);
@@ -37,7 +38,7 @@ export function crearClientes({ S, esc, render, empresa, puede, grande, reemplaz
   }
 
   const zona = () => (puede() ? `<div class="dropzone" data-clidz tabindex="0" role="button"><b>Suelta aquí el listado de CLIENTES</b> (Excel del ERP con «Cuenta», «Nombre», «NIF», «Grupo de clientes» y «País/región») o pulsa para elegirlo. Sustituye al listado anterior; lo añadido a mano se conserva.<input type="file" data-clifile accept=".xlsx,.xls" multiple hidden></div>` : '');
-  const V = crearVistaTercero({ S, esc, render, empresa, puede, grande, reemplazarGrande, P, TIPO, clave: 'cli', titulo: 'Clientes', singular: 'cliente', extras: [['grupo', 'Grupo'], ['imp', 'Grupo de impuestos'], ['divisa', 'Divisa'], ['tel', 'Teléfono']], paisNif,
+  const V = crearVistaTercero({ S, esc, render, empresa, puede, grande, reemplazarGrande, P, TIPO, clave: 'cli', titulo: 'Clientes', singular: 'cliente', extras: [['grupo', 'Grupo'], ['imp', 'Grupo de impuestos'], ['divisa', 'Divisa']], paisNif,
     zona, nota: 'País = el que trae el listado de clientes del ERP. Si algún cliente no lo trae, se deduce del prefijo del NIF-IVA y se marca «por NIF». «UE» indica Estado miembro de la Unión Europea. Los clientes añadidos a mano no se pierden al volver a cargar el Excel.' });
   V.activar();
   const vista = () => V.vista();

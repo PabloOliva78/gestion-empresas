@@ -21,11 +21,14 @@ export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reem
     const inp = (c, t) => `<td class="in"><input data-tvf="${clave}|${c}" value="${esc(nv?.[c] ?? '')}" placeholder="${esc(t)}"${c === 'pais' ? ' size="4" maxlength="3" style="text-transform:uppercase"' : ''}></td>`;
     const filaNueva = nv ? `<tr class="nueva">${FORM.map(([c, t]) => (c === 'pais' ? `${inp(c, t)}<td></td>` : inp(c, t))).join('')}<td class="acc"><button class="pill" data-tvact="${clave}|ok">✔ Añadir</button> <button class="pill" data-tvact="${clave}|x">✕</button></td></tr>` : '';
     const cab = `<tr><th>Cuenta</th><th>NIF</th><th>Nombre</th><th>País</th><th>UE</th>${extras.map(([, t]) => `<th>${esc(t)}</th>`).join('')}<th></th></tr>`;
+    // todas las celdas se pueden editar (se guarda al salir de la casilla); lo editado sobrevive a una nueva carga del Excel
+    const ce = (x, c, v) => (ed ? `<td class="in"><input data-tve="${clave}|${x.i}|${c}" value="${esc(v ?? '')}"></td>` : `<td>${esc(v ?? '')}</td>`);
     const cuerpo = vis.map((x) => {
-      const b = sinAc(`${x.cuenta} ${x.nif} ${x.nombre} ${extras.map(([c]) => x[c] ?? '').join(' ')}`);
-      return `<tr data-b="${esc(b)}"${q && !b.includes(q) ? ' style="display:none"' : ''}><td>${esc(x.cuenta)}</td><td>${esc(x.nif)}</td><td>${esc(x.nombre)}${x.manual ? ' <span class="hint">a mano</span>' : ''}</td>
-        <td>${x.p ? `${esc(nombrePais(x.p))}${x.inf ? ' <span class="hint" title="No viene en el listado: se deduce del prefijo del NIF">(por NIF)</span>' : ''}` : '<span class="d-ko">sin país</span>'}</td><td style="text-align:center">${paisDeSiglas(x.p)?.ue ? '✓' : ''}</td>
-        ${extras.map(([c]) => `<td>${esc(x[c] ?? '')}</td>`).join('')}<td class="acc no-print">${ed && x.manual ? `<button class="pill" data-tvact="${clave}|del|${x.i}">Quitar</button>` : ''}</td></tr>`;
+      const b = sinAc(`${x.cuenta} ${x.nif} ${x.nombre} ${extras.map(([c]) => x[c] ?? '').join(' ')}`), pd = paisDeSiglas(x.p);
+      const celdaPais = ed ? `<td class="in"><input data-tve="${clave}|${x.i}|pais" value="${esc(x.p || '')}" size="4" maxlength="3" style="text-transform:uppercase" title="Siglas del país (2 o 3 letras)"> <small class="pais-n">${x.p ? esc(pd ? pd.nombre : 'sigla desconocida') : '<span class="d-ko">sin país</span>'}${x.inf ? ' <span class="hint" title="No viene en el listado: se deduce del prefijo del NIF">(por NIF)</span>' : ''}</small></td>`
+        : `<td>${x.p ? `${esc(nombrePais(x.p))}${x.inf ? ' (por NIF)' : ''}` : '<span class="d-ko">sin país</span>'}</td>`;
+      return `<tr data-b="${esc(b)}"${q && !b.includes(q) ? ' style="display:none"' : ''}>${ce(x, 'cuenta', x.cuenta)}${ce(x, 'nif', x.nif)}${ce(x, 'nombre', x.nombre)}${celdaPais}<td style="text-align:center">${pd?.ue ? '✓' : ''}</td>
+        ${extras.map(([c]) => ce(x, c, x[c])).join('')}<td class="acc no-print">${x.manual ? '<span class="hint">a mano</span> ' : ''}${ed && x.manual ? `<button class="pill" data-tvact="${clave}|del|${x.i}">Quitar</button>` : ''}</td></tr>`;
     }).join('');
     return `<div class="inicio m347 tercero ${clave} tercero-pag"><div class="tercero-top"><section class="dsec m347-fijo"><h3>${titulo} · ${esc(e?.nombre ?? '')} · ${L.length} ${titulo.toLowerCase()} · ${sinPais ? `<span class="d-ko">${sinPais} sin país</span>` : '<span class="d-ok">todos con país</span>'}</h3>
       <div class="m347-bar"><select data-tvpais="${clave}"><option value="">Todos los países</option>${sinPais ? `<option value="__sin"${P.pais === '__sin' ? ' selected' : ''}>(sin país) · ${sinPais}</option>` : ''}${paises.map((p) => `<option value="${p}"${P.pais === p ? ' selected' : ''}>${esc(nombrePais(p))} · ${cuenta[p]}</option>`).join('')}</select>
@@ -53,13 +56,24 @@ export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reem
     const ok = await reemplazarGrande(TIPO, S.sel, L.filter((_, j) => j !== +i));
     P.msg = ok === false ? 'No se pudo guardar (mira el aviso).' : '✓ Quitado.'; render();
   }
+  async function editar(i, campo, valor) {
+    const L = grande(TIPO) ?? [], x = L[+i]; if (!x) return;
+    let v = String(valor ?? '').trim(); if (campo === 'pais') v = v.toUpperCase();
+    if (campo === 'pais' && v && !paisDeSiglas(v)) { if (!confirm(`«${v}» no está en el listado de países de la AEAT. ¿Guardarlo igualmente?`)) return render(); }
+    if ((x[campo] ?? '') === v) return;
+    await reemplazarGrande(TIPO, S.sel, L.map((y, j) => (j === +i ? { ...y, [campo]: v, ed: x.manual ? y.ed : { ...(y.ed ?? {}), [campo]: v } } : y)));
+  }
   function activar() {
     document.addEventListener('click', (ev) => {
       const b = ev.target.closest?.('[data-tvact]'); if (!b) return;
       const [c, acc, i] = b.dataset.tvact.split('|'); if (c !== clave) return;
       if (acc === 'add') { P.nuevo = {}; render(); } else if (acc === 'x') { P.nuevo = null; render(); } else if (acc === 'ok') alta(); else if (acc === 'del') quitar(i);
     });
-    document.addEventListener('change', (ev) => { if (ev.target.dataset?.tvpais === clave) { P.pais = ev.target.value; render(); } });
+    document.addEventListener('change', (ev) => {
+      const d = ev.target.dataset ?? {};
+      if (d.tvpais === clave) { P.pais = ev.target.value; render(); }
+      else if (d.tve?.startsWith(clave + '|')) { const [, i, c] = d.tve.split('|'); editar(i, c, ev.target.value); }
+    });
     document.addEventListener('input', (ev) => {
       const d = ev.target.dataset ?? {};
       if (d.tvq === clave) { P.q = ev.target.value; const q = sinAc(P.q).trim(); document.querySelectorAll(`.tercero.${clave} tbody tr[data-b]`).forEach((tr) => { tr.style.display = !q || tr.dataset.b.includes(q) ? '' : 'none'; }); }

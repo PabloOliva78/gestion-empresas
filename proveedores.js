@@ -2,7 +2,7 @@
 // Se cargan dos Excel del ERP (PROVEEDORES: Id. de parte, Cuenta, NIF, Nombre… · DIRECCIONES: Id. de parte, Ciudad, CP, País…) y se cruzan por «Id. de parte».
 // Se guarda un solo registro por empresa con el tipo «fact-prov» (así comparte las protecciones de los libros grandes: no se carga con el resto de datos).
 import { paisDeSiglas } from './paises.js?v=1';
-import { crearVistaTercero } from './terceros-vista.js?v=1';
+import { crearVistaTercero } from './terceros-vista.js?v=2';
 export function crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }) {
   const TIPO = 'fact-prov';
   const esNifEsp = (n) => /^[0-9]{8}[A-Z]$/.test(n) || /^[XYZKLM][0-9]{7}[A-Z]$/.test(n) || /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n);
@@ -33,7 +33,7 @@ export function crearProveedores({ S, esc, render, empresa, puede, grande, reemp
       if (provs) {
         const c = { id: col(provs, 'id. de parte'), cta: col(provs, 'cuenta de proveedor'), nif: col(provs, 'nif'), nom: col(provs, 'nombre'), gr: col(provs, 'grupo'), div: col(provs, 'divisa'), imp: col(provs, 'grupo de impuestos') };
         const prev = new Map(filas.map((x) => [id0(x.id), x]));
-        filas = provs.a.slice(1).filter((r) => txt(r[c.id]) || txt(r[c.cta])).map((r) => { const id = txt(r[c.id]), o = prev.get(id0(id)) ?? {}; return { id, cuenta: txt(r[c.cta]), nif: txt(r[c.nif]), nombre: txt(r[c.nom]), grupo: txt(r[c.gr]), divisa: txt(r[c.div]), imp: txt(r[c.imp]), pais: o.pais ?? '', ciudad: o.ciudad ?? '', estado: o.estado ?? '', cp: o.cp ?? '', tel: o.tel ?? '', nDir: o.nDir ?? 0 }; });
+        filas = provs.a.slice(1).filter((r) => txt(r[c.id]) || txt(r[c.cta])).map((r) => { const id = txt(r[c.id]), o = prev.get(id0(id)) ?? {}; return { id, cuenta: txt(r[c.cta]), nif: txt(r[c.nif]), nombre: txt(r[c.nom]), grupo: txt(r[c.gr]), divisa: txt(r[c.div]), imp: txt(r[c.imp]), pais: o.pais ?? '', ciudad: o.ciudad ?? '', estado: o.estado ?? '', cp: o.cp ?? '', tel: o.tel ?? '', nDir: o.nDir ?? 0, ...(o.ed ? { ...o.ed, ed: o.ed } : {}) }; });
       }
       if (provs) filas = filas.concat((grande(TIPO) ?? []).filter((x) => x.manual).map((x) => ({ ...x }))); // lo añadido a mano se conserva
       let conPais = 0;
@@ -45,7 +45,7 @@ export function crearProveedores({ S, esc, render, empresa, puede, grande, reemp
           const d = { pais: txt(r[c.pais]).toUpperCase(), ciudad: txt(r[c.ciu]), estado: txt(r[c.est]), cp: txt(r[c.cp]), tel: txt(r[c.tel]) }, a = M.get(id);
           if (!a) M.set(id, { ...d, n: 1 }); else { a.n++; if ((!a.pais && d.pais) || (a.pais === d.pais && !a.ciudad && d.ciudad)) Object.assign(a, d); }
         }
-        filas.forEach((x) => { const d = M.get(id0(x.id)); if (d) { Object.assign(x, { pais: d.pais, ciudad: d.ciudad, estado: d.estado, cp: d.cp, tel: d.tel, nDir: d.n }); } if (x.pais) conPais++; });
+        filas.forEach((x) => { const d = M.get(id0(x.id)); if (d) { Object.assign(x, { pais: d.pais, ciudad: d.ciudad, estado: d.estado, cp: d.cp, tel: d.tel, nDir: d.n }); } if (x.ed) Object.assign(x, x.ed); if (x.pais) conPais++; });
       }
       if (!filas.length) throw new Error('El listado no trae proveedores.');
       P.msg = 'Guardando…'; render();
