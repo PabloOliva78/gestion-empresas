@@ -1251,3 +1251,12 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 .m347 .m347-c table{font-size:.72rem}
 .m347 .m347-c td,.m347 .m347-c th{padding:.2rem .35rem}
 @media (max-width:1100px){.m347 .m347-g{grid-template-columns:1fr}}
+
+/* Modelo 347: se ajusta a la pantalla (sin barra de la página: cada mitad se desplaza por dentro y el texto crece o se reduce con el ancho) */
+.m347 .m347-c .wrap{max-height:calc(100vh - 15.5rem);overflow:auto}
+.m347 .m347-c table{font-size:clamp(.62rem,.5vw + .22rem,1rem)}
+.m347 .m347-c th{position:sticky;top:0;z-index:2;background:#143a7b;color:#fff}
+.m347 .m347-c h3{font-size:clamp(.8rem,.6vw + .3rem,1.1rem)}
+.m347 .m347-res{font-size:clamp(.65rem,.45vw + .2rem,.9rem);margin:.1rem 0 .3rem}
+.m347 .hint{font-size:clamp(.6rem,.35vw + .2rem,.8rem);margin:.3rem 0 0}
+@media (max-width:1100px){.m347 .m347-c .wrap{max-height:60vh}}
