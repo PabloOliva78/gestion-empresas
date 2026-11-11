@@ -1313,7 +1313,14 @@ export function crearModulos(c) {
       ...['1T', '2T', '3T', '4T'].map((q) => `<option value="${q}"${S.periodo === q ? ' selected' : ''}>Trimestre ${q} ${ej}</option>`)].join('');
     const sel = (campo, valor, lista) => `<select data-fc="${campo}"><option value="">Todos</option>${lista.map((x) => `<option${x === valor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
     const c = cuerpoFc(s, datos);
-    const selPais = `<select data-fc="pais" title="País"><option value="">País (todos)</option>${OPC_PAISES.map(([cc, n]) => `<option value="${cc}"${cc === fcPais ? ' selected' : ''}>${cc} - ${esc(n.toUpperCase())}</option>`).join('')}</select>`;
+    // el desplegable de países solo ofrece los que hay en la selección actual (periodo, código de impuesto y demás filtros), con su número de líneas
+    const selPais = (() => {
+      const guardado = fcPais; fcPais = ''; const base = lineasFc(s, datos); fcPais = guardado;
+      const cnt = new Map(); base.forEach((l) => { const cc = paisVis(l); cnt.set(cc, (cnt.get(cc) || 0) + 1); });
+      if (fcPais && !cnt.has(fcPais)) cnt.set(fcPais, 0);
+      const ops = [...cnt].map(([cc, n]) => [cc, String(NOMBRE_PAIS[cc] ?? cc).toUpperCase(), n]).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+      return `<select data-fc="pais" title="País (solo los de la selección actual)"><option value="">País (todos · ${ops.length})</option>${ops.map(([cc, n, k]) => `<option value="${cc}"${cc === fcPais ? ' selected' : ''}>${cc} - ${esc(n)} (${k})</option>`).join('')}</select>`;
+    })();
     const vuelta = S.vuelta && S.vuelta.fac === fcQ ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige la factura aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
     return `${vuelta}<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
       <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}">
@@ -1377,7 +1384,7 @@ export function crearModulos(c) {
     try { await navigator.clipboard.writeText(n); } catch (_) { /* si no se copia, se escribe a mano */ }
     if (w) try { w.focus(); } catch (_) { /* otra pestaña */ }
   }
-  function setFc(campo, valor) { fcLim = 300; if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
+  function setFc(campo, valor) { fcLim = 300; if (campo === 'cod') { fcCod = valor; fcPais = ''; } else fcPais = valor; render(); }
 
   // S.NC.ISP.A (ISP autorrepercutida) va siempre en el libro repercutido: lo que haya en el soportado se pasa (sin repetir lo que ya está)
   async function moverIspA(empresaId, filtro = () => true) {
