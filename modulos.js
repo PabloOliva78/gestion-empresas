@@ -1276,7 +1276,7 @@ export function crearModulos(c) {
     // si el cliente (Emitidas) o el proveedor (Recibidas) está en el listado del bloque 12, manda el país de ese listado; el escrito a mano en la línea manda sobre todo
     const mapaPais = (arr) => { let m = MAPA_PAIS.get(arr); if (!m) { m = new Map(); (arr ?? []).forEach((x) => { const k = normNif(x.nif), c = paisDeSiglas(x.pais)?.c; if (k && c && !m.has(k)) m.set(k, c); }); MAPA_PAIS.set(arr ?? MAPA_PAIS, m); } return m; };
     const listaTer = s === 'E' ? grande('fact-cli') : grande('fact-prov'), mp = Array.isArray(listaTer) && listaTer.length ? mapaPais(listaTer) : null;
-    const paisCelda = (sent, l, p0) => { const p = l.pais ? p0 : (mp?.get(normNif(l.nif)) ?? p0), pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; return ed ? `<td class="in"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" title="${esc(nom)}"> <small class="pais-n">${esc(nom)}</small></td>` : `<td>${esc(p)} <small class="pais-n">${esc(nom)}</small></td>`; };
+    const paisCelda = (sent, l, p0) => { const p = l.pais ? p0 : (mp?.get(normNif(l.nif)) ?? p0), pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; const nomM = nom.toUpperCase(); return ed ? `<td class="in pais-1l"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" title="${esc(nom)}"><span class="pais-n">${nomM ? ' - ' + esc(nomM) : ''}</span></td>` : `<td class="pais-1l">${esc(p)}<span class="pais-n">${nomM ? ' - ' + esc(nomM) : ''}</span></td>`; };
     const filas = f.slice(0, fcLim).map((l) => { // por tandas para que no se bloquee (el total y la búsqueda cuentan todas)
       const p = paisL(l);
       return `<tr class="fc">${ci(l, 'fecha', fmt(l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
@@ -1295,11 +1295,11 @@ export function crearModulos(c) {
       <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th>${s === 'E' ? '<th title="Facturas sin cuota de IVA: E1 a E6 (exenciones), N.S.R.L. (no sujeta por reglas de localización) o Art. 7-14 (no sujeta)">Exención</th>' : ''}<th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
   }
 
-  function vistaFacturas(s) {
-    if (!S.sel) return sinEmpresa;
+  function vistaFacturas(s, dzh = '') { // dzh: la zona de soltar del libro; queda dentro de la parte fija de arriba
+    if (!S.sel) return dzh + sinEmpresa;
     const datos = grande('fact-' + s);
-    if (!datos) return cargandoTxt;
-    if (!datos.length && fcNueva?.s !== s) return `<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura a mano</button>` : ''}`;
+    if (!datos) return dzh + cargandoTxt;
+    if (!datos.length && fcNueva?.s !== s) return `${dzh}<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura a mano</button>` : ''}`;
     const ej = Number(S.ejercicio);
     const per = [`<option value="">Todo el ejercicio ${ej}</option>`,
       ...MESES.map((m, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}"${S.periodo === v ? ' selected' : ''}>Periodo ${v} (${m}) ${ej}</option>`; }),
