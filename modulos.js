@@ -1164,6 +1164,7 @@ export function crearModulos(c) {
   const claveL = (l) => [l.asiento, l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo].join('|');
   const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const sentidoTab = () => (S.tab === 'fr' ? 'R' : 'E');
+  const MAPA_PAIS = new WeakMap(); // listado de clientes/proveedores → NIF → país (se calcula una vez por listado cargado)
   const TABS_NOMBRE = (id) => tabs[id]?.[0] ?? 'la pestaña anterior';
   // desde «Conciliación 349 - Intrastat»: abre la factura en Emitidas o Recibidas (buscada por su número, en todo el ejercicio) y recuerda de dónde vienes
   document.addEventListener('ir-factura', (ev) => {
@@ -1272,7 +1273,10 @@ export function crearModulos(c) {
       return `<td class="in c"><select data-fce="${s}|${idx.get(l)}|exenc" title="${esc(EXENCIONES.find(([k]) => k === v)?.[1] ?? '')}"><option value=""></option>${EXENCIONES.map(([k, t]) => `<option value="${esc(k)}"${k === v ? ' selected' : ''} title="${esc(t)}">${esc(k)}</option>`).join('')}</select></td>`;
     };
     // país: siglas editables y, al lado, el nombre del país según el listado de códigos de la AEAT
-    const paisCelda = (sent, l, p) => { const pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; return ed ? `<td class="in"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" title="${esc(nom)}"> <small class="pais-n">${esc(nom)}</small></td>` : `<td>${esc(p)} <small class="pais-n">${esc(nom)}</small></td>`; };
+    // si el cliente (Emitidas) o el proveedor (Recibidas) está en el listado del bloque 12, manda el país de ese listado; el escrito a mano en la línea manda sobre todo
+    const mapaPais = (arr) => { let m = MAPA_PAIS.get(arr); if (!m) { m = new Map(); (arr ?? []).forEach((x) => { const k = normNif(x.nif), c = paisDeSiglas(x.pais)?.c; if (k && c && !m.has(k)) m.set(k, c); }); MAPA_PAIS.set(arr ?? MAPA_PAIS, m); } return m; };
+    const listaTer = sent === 'E' ? grande('fact-cli') : grande('fact-prov'), mp = Array.isArray(listaTer) && listaTer.length ? mapaPais(listaTer) : null;
+    const paisCelda = (sent, l, p0) => { const p = l.pais ? p0 : (mp?.get(normNif(l.nif)) ?? p0), pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; return ed ? `<td class="in"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" title="${esc(nom)}"> <small class="pais-n">${esc(nom)}</small></td>` : `<td>${esc(p)} <small class="pais-n">${esc(nom)}</small></td>`; };
     const filas = f.slice(0, fcLim).map((l) => { // por tandas para que no se bloquee (el total y la búsqueda cuentan todas)
       const p = paisL(l);
       return `<tr class="fc">${ci(l, 'fecha', fmt(l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
