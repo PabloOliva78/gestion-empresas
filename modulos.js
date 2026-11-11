@@ -15,7 +15,7 @@ import { crearModelo347 } from './modelo347.js?v=2';
 import { crearFase3 } from './fase3.js?v=1';
 import { crearProveedores } from './proveedores.js?v=5';
 import { crearClientes } from './clientes.js?v=4';
-import { paisDeSiglas, datalistPaises } from './paises.js?v=2';
+import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=12';
 import { crearEstados } from './estados.js?v=4';
@@ -1191,15 +1191,22 @@ export function crearModulos(c) {
     return '';
   };
   const paisL = (l) => l.pais || paisDe(l.nif); // el país escrito a mano en la línea manda sobre el del NIF
+  // país tal como se ve en la lista (a mano > listado de clientes/proveedores del bloque 12 > NIF), en siglas de 2 letras: es el que usa el filtro de país
+  const paisVis = (l) => {
+    let c = l.pais;
+    if (!c) { const arr = GR.get(`${l.sentido === 'R' ? 'fact-prov' : 'fact-cli'}|${S.sel}`); if (Array.isArray(arr) && arr.length) { let mm = MAPA_PAIS.get(arr); if (!mm) { mm = new Map(); arr.forEach((x) => { const k = normNif(x.nif), cc = paisDeSiglas(x.pais)?.c; if (k && cc && !mm.has(k)) mm.set(k, cc); }); MAPA_PAIS.set(arr, mm); } c = mm.get(normNif(l.nif)); } }
+    c = c || paisDe(l.nif); return paisDeSiglas(c)?.c ?? c;
+  };
+  const OPC_PAISES = Object.entries(NOMBRE_PAIS).sort((a, b) => a[1].localeCompare(b[1], 'es')); // todos los países del listado de la AEAT
 
   function lineasFc(s, datos) {
     const r = rangoPeriodo(Number(S.ejercicio), S.periodo);
     let f = datos.filter((l) => { const d = l.fecha; return d >= r.desde && d <= r.hasta; });
     if (fcCod) f = f.filter((l) => (fcCod === '__sin' ? !l.codigo : l.codigo === fcCod));
-    if (fcPais) f = f.filter((l) => paisL(l) === fcPais);
+    if (fcPais) f = f.filter((l) => paisVis(l) === fcPais);
     if (fcQ) { const q = sinAc(fcQ), num = /^[-+]?[\d.,\s€]+$/.test(fcQ.trim()); f = f.filter((l) => { let t = fcTxt.get(l); if (t === undefined) { t = sinAc(`${l.nif} ${l.nombre} ${l.factura}`); fcTxt.set(l, t); } return t.includes(q) || (num && buscaImporte(l, fcQ)); }); }
     const U = (s) => String(s ?? '').toUpperCase();
-    if (fcF.pais.trim()) { const q = sinAc(fcF.pais); f = f.filter((l) => sinAc(paisL(l)).includes(q)); }
+    if (fcF.pais.trim()) { const q = sinAc(fcF.pais); f = f.filter((l) => sinAc(paisVis(l)).includes(q)); }
     if (fcF.nombre.trim()) { const q = sinAc(fcF.nombre); f = f.filter((l) => sinAc(l.nombre).includes(q)); }
     if (fcF.nif.trim()) { const q = U(fcF.nif).replace(/\s/g, ''); f = f.filter((l) => U(l.nif).replace(/\s/g, '').includes(q)); }
     if (fcF.codigo.trim()) { const q = U(fcF.codigo).trim(); f = f.filter((l) => U(l.codigo).includes(q)); }
@@ -1306,10 +1313,11 @@ export function crearModulos(c) {
       ...['1T', '2T', '3T', '4T'].map((q) => `<option value="${q}"${S.periodo === q ? ' selected' : ''}>Trimestre ${q} ${ej}</option>`)].join('');
     const sel = (campo, valor, lista) => `<select data-fc="${campo}"><option value="">Todos</option>${lista.map((x) => `<option${x === valor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
     const c = cuerpoFc(s, datos);
+    const selPais = `<select data-fc="pais" title="País"><option value="">País (todos)</option>${OPC_PAISES.map(([cc, n]) => `<option value="${cc}"${cc === fcPais ? ' selected' : ''}>${cc} - ${esc(n.toUpperCase())}</option>`).join('')}</select>`;
     const vuelta = S.vuelta && S.vuelta.fac === fcQ ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige la factura aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
     return `${vuelta}<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
       <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}">
-      ${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => (k === 'codigo'
+      ${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => (k === 'pais' ? selPais : k === 'codigo'
         ? `<select data-fc="cod" title="Código"><option value="">Código (todos)</option>${[...new Set(datos.map((l) => l.codigo || ''))].sort().map((x) => (x ? `<option${x === fcCod ? ' selected' : ''}>${esc(x)}</option>` : `<option value="__sin"${fcCod === '__sin' ? ' selected' : ''}>(sin código)</option>`)).join('')}</select>`
         : `<input data-fqf="${k}" type="search" value="${esc(fcF[k])}" placeholder="${t}" title="${t}">`)).join('')}
       <span id="fcCuenta" class="hint">${c.n} facturas</span>
