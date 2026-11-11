@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=317';
+import { crearModelos } from './modelos.js?v=332';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { crearCierre } from './cierre.js?v=2';
@@ -1161,6 +1161,14 @@ export function crearModulos(c) {
   const claveL = (l) => [l.asiento, l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo].join('|');
   const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const sentidoTab = () => (S.tab === 'fr' ? 'R' : 'E');
+  const TABS_NOMBRE = (id) => tabs[id]?.[0] ?? 'la pestaña anterior';
+  // desde «Conciliación 349 - Intrastat»: abre la factura en Emitidas o Recibidas (buscada por su número, en todo el ejercicio) y recuerda de dónde vienes
+  document.addEventListener('ir-factura', (ev) => {
+    const { s, fac } = ev.detail ?? {}; if (!s || !fac) return;
+    S.vuelta = { tab: S.tab, periodo: S.periodo, fac };
+    fcQ = fac; fcCod = ''; fcPais = ''; Object.keys(fcF).forEach((k) => { fcF[k] = ''; }); fcLim = 300;
+    S.periodo = ''; S.tab = s === 'R' ? 'fr' : 'fe'; S.grp = -1; render();
+  });
   // Causas de exención (arts. 20 a 25 de la Ley 37/1992) y operaciones no sujetas que se enseñan en la columna «Exención» de las emitidas
   const EXENCIONES = [['E1', 'Exenta por el art. 20 (operaciones interiores exentas: sanitarias, educativas, sociales…)'], ['E2', 'Exenta por el art. 21 (exportaciones de bienes fuera de la UE)'],
     ['E3', 'Exenta por el art. 22 (operaciones asimiladas a la exportación: buques, aeronaves, tráfico internacional)'], ['E4', 'Exenta por los arts. 23 y 24 (zonas francas, depósitos temporales y regímenes aduaneros)'],
@@ -1289,7 +1297,8 @@ export function crearModulos(c) {
       ...['1T', '2T', '3T', '4T'].map((q) => `<option value="${q}"${S.periodo === q ? ' selected' : ''}>Trimestre ${q} ${ej}</option>`)].join('');
     const sel = (campo, valor, lista) => `<select data-fc="${campo}"><option value="">Todos</option>${lista.map((x) => `<option${x === valor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
     const c = cuerpoFc(s, datos);
-    return `<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
+    const vuelta = S.vuelta && S.vuelta.fac === fcQ ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige la factura aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
+    return `${vuelta}<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
       <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}">
       ${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => (k === 'codigo'
         ? `<select data-fc="cod" title="Código"><option value="">Código (todos)</option>${[...new Set(datos.map((l) => l.codigo || ''))].sort().map((x) => (x ? `<option${x === fcCod ? ' selected' : ''}>${esc(x)}</option>` : `<option value="__sin"${fcCod === '__sin' ? ' selected' : ''}>(sin código)</option>`)).join('')}</select>`
@@ -4695,6 +4704,7 @@ export function crearModulos(c) {
       'm-esker': () => buscarEsker(d.n),
       'm-siixl': () => excelConcSii(d.s),
       'm-fcnv': () => fcNvAbrir(d.s),
+      'm-fcvuelta': () => { const v = S.vuelta; if (!v) return; S.vuelta = null; fcQ = ''; S.periodo = v.periodo; S.tab = v.tab; S.grp = -1; render(); },
       'm-fcmas': () => { fcLim = d.t ? 1e9 : fcLim + 500; buscarFc(fcQ, true); },
       'm-fcnvok': () => fcNvOk(),
       'm-fcnvx': () => { fcNueva = null; render(); },

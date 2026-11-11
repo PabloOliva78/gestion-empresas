@@ -1260,3 +1260,8 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 .m347 .m347-res{font-size:clamp(.65rem,.45vw + .2rem,.9rem);margin:.1rem 0 .3rem}
 .m347 .hint{font-size:clamp(.6rem,.35vw + .2rem,.8rem);margin:.3rem 0 0}
 @media (max-width:1100px){.m347 .m347-c .wrap{max-height:60vh}}
+
+/* Conciliación 349–Intrastat: el nº de factura es un enlace a Emitidas/Recibidas, con botón para volver */
+a.lnk-fac{color:#0b57d0;text-decoration:underline;cursor:pointer;font-weight:600}
+a.lnk-fac:hover{background:#e3ebf8}
+.vuelta-fac{position:sticky;top:calc(var(--tabsH, 64px) / var(--z, 1));z-index:30;background:#fff7d6;border:1px solid #e6cf7a;border-radius:6px;padding:.4rem .7rem;margin:0 0 .5rem}
