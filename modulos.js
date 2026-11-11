@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=306';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=307';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
@@ -1374,6 +1374,18 @@ export function crearModulos(c) {
     await reemplazarGrande(tipo, S.sel, arr.map((x, j) => (j === +i ? nl : x)));
     render();
   }
+  // quita las siglas del país a los NIF de países fuera de la UE de las facturas del periodo elegido (el NIF original se guarda en nifOrig para no perder las columnas de la descarga)
+  async function quitarSiglasSii(s) {
+    const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), ej = Number(S.ejercicio), r = rangoPeriodo(ej, S.periodo);
+    if (!arr) return;
+    const enPer = (x) => (s === 'E' ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && (!S.periodo || x.per === S.periodo));
+    const lista = arr.filter((x) => enPer(x) && sigNoUE(x.nif));
+    if (!lista.length) return void alert('No hay NIF con siglas de países fuera de la UE en este periodo.');
+    const ej1 = lista.slice(0, 5).map((x) => `${x.nif} → ${sigNoUE(x.nif).resto}`).join('\n');
+    if (!confirm(`¿Quitar las siglas del país a ${lista.length} NIF de países fuera de la UE?\n\nPor ejemplo:\n${ej1}\n\nLa factura y los importes no cambian.`)) return;
+    await reemplazarGrande(tipo, S.sel, arr.map((x) => { if (!(enPer(x) && sigNoUE(x.nif))) return x; return { ...x, nifOrig: x.nifOrig ?? x.nif, nif: sigNoUE(x.nif).resto }; }));
+    render();
+  }
   async function quitarSii(s, i) {
     const tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`);
     if (!arr?.[+i] || !confirm(`¿Quitar la factura ${arr[+i].factura} del SII?`)) return;
@@ -1498,7 +1510,14 @@ export function crearModulos(c) {
 
   // ---- SII-LRFE / SII-LRFR: la descarga de la sede con todas sus columnas, filtros, corrección de factura/NIF/nombre/importes y registros quitados ----
   let siiFil = { E: {}, R: {} }, siiTodos = { E: false, R: false }, siiN = { E: 150, R: 150 };
-  const siiKey = (x) => `${x.factura}|${x.nif}|${x.ej}|${x.per}`;
+  const siiKey = (x) => `${x.factura}|${x.nifOrig ?? x.nif}|${x.ej}|${x.per}`; // nifOrig: el NIF tal como vino de la descarga (si se le quitaron las siglas del país)
+  // solo los NIF-IVA de la UE llevan las siglas del país; si el NIF es de un país fuera de la UE y las lleva, devuelve el país y el NIF sin ellas
+  const sigNoUE = (nif) => {
+    const n = String(nif ?? '').toUpperCase().replace(/[\s.\-/]/g, '');
+    if (!n || /^[0-9]{8}[A-Z]$|^[XYZKLM][0-9]{7}[A-Z]$|^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n)) return null;
+    const mm = n.match(/^([A-Z]{2})(.{3,})$/); if (!mm) return null;
+    const pa = paisDeSiglas(mm[1]); return pa && !pa.ue ? { c: pa.c, nombre: pa.nombre, resto: mm[2] } : null;
+  };
   const siiMeses = () => (/^\d\d$/.test(S.periodo) ? [S.periodo] : /^[1-4]T$/.test(S.periodo) ? [0, 1, 2].map((i) => String((+S.periodo[0] - 1) * 3 + i + 1).padStart(2, '0')) : MM12);
   const quitReg = () => S.registros.find((r) => r.tipo === 'siiquit' && r.empresa_id === S.sel);
   // Plazo de presentación al SII: 4 días hábiles desde la expedición (emitidas) o el registro contable (recibidas), con tope el día 15 del mes siguiente
@@ -1599,12 +1618,14 @@ export function crearModulos(c) {
     const fil = (k, lbl, ph = '') => `<label>${lbl}<input class="emp-in" style="width:7em" data-siifil="${s}|${k}" value="${esc(F[k] ?? '')}" placeholder="${esc(ph)}"></label>`;
     const ci = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input data-sie="${s}|${idx.get(x)}|${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
     const Q = quitReg()?.datos?.[s] ?? [];
-    const filas = lista.map((x) => `<tr class="${ok(x) ? '' : 'sii-no'}">${cols.map((k) => celdaRaw((raw.get(siiKey(x)) ?? {})[k], k)).join('')}${ci(x, 'factura', x.factura)}${ci(x, 'nif', x.nif)}${ci(x, 'nombre', x.nombre)}${ci(x, 'base', fnum(x.base), 'num')}<td class="num">${lib(x) ? fnum(rr(lib(x).base)) : '—'}</td>${ci(x, 'cuota', fnum(x.cuota), 'num')}<td class="num">${lib(x) ? fnum(rr(lib(x).cuota)) : '—'}</td>
+    const filas = lista.map((x) => `<tr class="${ok(x) ? '' : 'sii-no'}">${cols.map((k) => celdaRaw((raw.get(siiKey(x)) ?? {})[k], k)).join('')}${ci(x, 'factura', x.factura)}${ci(x, 'nif', x.nif, sigNoUE(x.nif) ? 'dif-ko' : '')}${ci(x, 'nombre', x.nombre)}${ci(x, 'base', fnum(x.base), 'num')}<td class="num">${lib(x) ? fnum(rr(lib(x).base)) : '—'}</td>${ci(x, 'cuota', fnum(x.cuota), 'num')}<td class="num">${lib(x) ? fnum(rr(lib(x).cuota)) : '—'}</td>
       <td class="c">${ok(x) ? 'VERDADERO' : 'FALSO'}</td><td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('');
     const quitados = Q.length ? `<div class="aviso"><b>Facturas quitadas del SII (${Q.length})</b> ${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${Q.length - 1}">↩ Deshacer la última (${esc(Q[Q.length - 1].factura)})</button> <button class="small" data-act="m-siirec" data-s="${s}" data-i="todas">Recuperar todas</button>` : ''}
       <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
+    const nSig = todos.filter((x) => sigNoUE(x.nif)).length;
+    const avisoSig = nSig ? `<div class="aviso"><p>⚠ ${nSig} NIF de países fuera de la UE llevan las siglas del país (casillas en rojo): solo los NIF-IVA de la UE las llevan.${ed ? ` <button class="small" data-act="m-siisig" data-s="${s}" title="Quita las dos letras del país al NIF de estas facturas del periodo (el resto de la factura no cambia)">Quitar las siglas a estos ${nSig}</button>` : ''}</p></div>` : '';
     const vuelta = S.vuelta && F.fac && S.vuelta.fac === F.fac ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige el registro aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
-    return `<div class="sii-vista"><div class="sii-fijo">${vuelta}${dropz}${aviso}
+    return `<div class="sii-vista"><div class="sii-fijo">${vuelta}${dropz}${aviso}${avisoSig}
       <section class="prs-card sii-cab"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
       <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas de la descarga (desliza la tabla hacia los lados para verlas todas)</p>
       <div class="css-flex" style="gap:2em;flex-wrap:wrap;padding-bottom:.2em"><table class="tprs tnom" style="width:auto"><tbody>
@@ -4753,6 +4774,7 @@ export function crearModulos(c) {
       'm-siitodo': () => { siiTodo = true; render(); },
       'm-siidel': () => quitarSii2(d.s, d.i),
       'm-siimes': () => quitarMesSii(d.s),
+      'm-siisig': () => quitarSiglasSii(d.s),
       'm-archdel': () => quitarArch(d.id),
       'm-srcdel': async () => {
         if (!confirm(`¿Quitar de los libros de emitidas y recibidas todas las líneas que aportó «${d.n}»? Después puedes volver a soltar el archivo.`)) return;

@@ -426,7 +426,8 @@ export const txtCatSii = (k) => (/^AIC-/.test(k) ? `adquisición intracomunitari
   : k === 'NS' ? 'no sujeta' : k === 'S2' ? 'inversión sujeto pasivo (S2)' : k === 'ISP' ? 'ISP' : /^S1-/.test(k) ? `S1 al ${k.slice(3)} %` : /^NOISP-/.test(k) ? `no ISP al ${k.slice(6)} %` : /^EX-/.test(k) ? `exenta ${k.slice(3)}` : k);
 export const normFac = (f) => String(f || '').toUpperCase().replace(/\s+/g, '');
 // sin el prefijo de país (se quitan los que haya apilados: GBCZ684027135 = CZ684027135 = 684027135) y sin ceros a la izquierda; DMCC192962 no lleva prefijo (DM no es de los países de la lista)
-const PREF_PAIS = new Set(['AE', 'AT', 'BE', 'BG', 'CH', 'CN', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MA', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'TR', 'US', 'XI']);
+import { NOMBRE_PAIS } from './paises.js?v=2';
+const PREF_PAIS = new Set([...Object.keys(NOMBRE_PAIS), 'EL', 'AE', 'AT', 'BE', 'BG', 'CH', 'CN', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MA', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'TR', 'US', 'XI']);
 export const normNif = (n) => { let x = String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); while (x.length > 6 && PREF_PAIS.has(x.slice(0, 2))) x = x.slice(2); return x.replace(/^0+(?=\d)/, ''); };
 // recibidas: una factura con una línea S.NAC.NS del mismo importe que otra línea con IVA (reflejo en el libro) cuenta una sola vez; el SII la declara una vez
 export function espejosNS(lineas) {
