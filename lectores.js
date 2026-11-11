@@ -593,8 +593,11 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const cents = [...cont.entries()].filter(([k]) => sm.has(k)).map(([k, v]) => { const s = sm.get(k); return { fac: v.fac, nif: v.nif, nom: v.nom, bc: v.base, bs: s.base, db: r2n(v.base - s.base), cc: v.cuota, cs: s.cuota, dc: r2n(v.cuota - s.cuota) }; })
     .filter((x) => (Math.abs(x.db) > 0.004 || Math.abs(x.dc) > 0.004) && Math.abs(x.db) <= MARGEN_SII && Math.abs(x.dc) <= MARGEN_SII)
     .sort((a, b) => (Math.abs(b.db) + Math.abs(b.dc)) - (Math.abs(a.db) + Math.abs(a.dc)));
+  // cuadra si los totales (base y cuota) coinciden y ninguna factura emparejada tiene importe distinto: las facturas a cero sin declarar no cuentan, y las pendientes de emparejar cuyos importes se anulan entre sí (suma cero) dan el cuadre por bueno
+  const cuad = Math.abs(r2n(tc.base - ts.base)) <= MARGEN_SII && Math.abs(r2n(tc.cuota - ts.cuota)) <= MARGEN_SII && !C.length;
   return { desde: r.desde, hasta: r.hasta, tc, ts, A, B, C, cents, cods, facDesc, malSii, anuladas: facDesc.filter((x) => x.anula).length, ceros: A.concat(B).filter(cero).length,
-    cuadra: Math.abs(r2n(tc.base - ts.base)) <= MARGEN_SII && Math.abs(r2n(tc.cuota - ts.cuota)) <= MARGEN_SII && A.filter((x) => !x._anul).concat(B).every(cero) && !C.length };
+    comp: cuad ? A.filter((x) => !x._anul).concat(B).filter((x) => !cero(x)).length : 0,
+    cuadra: cuad };
 }
 
 export function conciliarSII(sentido, libro, sii, ej, periodo, tol = 0.005) {
