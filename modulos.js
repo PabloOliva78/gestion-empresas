@@ -4540,9 +4540,15 @@ export function crearModulos(c) {
       const { data: ya } = await q.order('id').limit(1).maybeSingle();
       if (ya) { const { id: nuevoId, ...resto } = fila; existente = ya; fila = resto; }
     }
-    const { error } = existente
-      ? await db.from('registros').update(fila).eq('id', existente.id)
-      : await db.from('registros').insert(fila);
+    // si se corta la conexión (libros grandes, wifi…) se reintenta hasta 3 veces; guardar dos veces lo mismo no duplica nada (misma fila por id)
+    let error;
+    for (let intento = 1; intento <= 3; intento++) {
+      ({ error } = existente
+        ? await db.from('registros').update(fila).eq('id', existente.id)
+        : await db.from('registros').insert(fila));
+      if (!error || !/NetworkError|Failed to fetch|fetch resource|Load failed/i.test(error.message ?? '') || intento === 3) break;
+      await new Promise((r) => setTimeout(r, 1500 * intento));
+    }
     return error?.message;
   }
 
