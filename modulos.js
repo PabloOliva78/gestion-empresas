@@ -12,6 +12,7 @@ import { crearModelos3 } from './modelos3.js?v=4';
 import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
+import { crearFase3 } from './fase3.js?v=1';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=12';
 import { crearEstados } from './estados.js?v=4';
@@ -5387,6 +5388,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M12.tabs);
   const M13 = crearModelo347({ S, esc, render, empresa, grande, normNif }); // Modelo 347 (bloque 4): pestaña nueva que solo lee los libros
   Object.assign(tabs, M13.tabs);
+  const M14 = crearFase3({ S, esc, render, empresa, grande, c303: (...a) => c303(...a), prsVal, calcular349Ops }); // 349 rectificaciones y cuadre 390–303 (bloque 4): pestañas nuevas que solo leen
+  Object.assign(tabs, M14.tabs);
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();
   function saldoCtaPeriodo(k) {
