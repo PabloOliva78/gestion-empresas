@@ -718,7 +718,7 @@ export function crearModelos(c) {
   document.addEventListener('click', (ev) => {
     const a = ev.target.closest?.('[data-gofac]'); if (!a) return;
     ev.preventDefault(); ev.stopPropagation();
-    document.dispatchEvent(new CustomEvent('ir-factura', { detail: { s: a.dataset.gofac, fac: a.dataset.fac } }));
+    document.dispatchEvent(new CustomEvent('ir-factura', { detail: { s: a.dataset.gofac, fac: a.dataset.fac, dest: a.dataset.dest || '' } }));
   }, true);
   function vistaIntraConc() {
     if (!S.sel) return sinEmpresa;

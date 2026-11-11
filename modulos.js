@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=332';
+import { crearModelos } from './modelos.js?v=350';
 import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { crearCierre } from './cierre.js?v=2';
@@ -1168,10 +1168,15 @@ export function crearModulos(c) {
   const TABS_NOMBRE = (id) => tabs[id]?.[0] ?? 'la pestaña anterior';
   // desde «Conciliación 349 - Intrastat»: abre la factura en Emitidas o Recibidas (buscada por su número, en todo el ejercicio) y recuerda de dónde vienes
   document.addEventListener('ir-factura', (ev) => {
-    const { s, fac } = ev.detail ?? {}; if (!s || !fac) return;
+    const { s, fac, dest } = ev.detail ?? {}; if (!s || !fac) return;
     S.vuelta = { tab: S.tab, periodo: S.periodo, fac };
+    if (dest === 'sii') { // registro del SII (SII emitidas / SII recibidas) buscado por nº de factura, en el mismo periodo
+      siiFil[s] = { fac }; siiTodos[s] = false; siiN[s] = 150;
+      S.tab = s === 'R' ? 'siir' : 'siie'; S.grp = -1; render(); return;
+    }
     fcQ = fac; fcCod = ''; fcPais = ''; Object.keys(fcF).forEach((k) => { fcF[k] = ''; }); fcLim = 300;
-    S.periodo = ''; S.tab = s === 'R' ? 'fr' : 'fe'; S.grp = -1; render();
+    if (!dest) S.periodo = ''; // desde la conciliación 349-Intrastat se busca en todo el ejercicio; desde la del SII se conserva el periodo
+    S.tab = s === 'R' ? 'fr' : 'fe'; S.grp = -1; render();
   });
   // Causas de exención (arts. 20 a 25 de la Ley 37/1992) y operaciones no sujetas que se enseñan en la columna «Exención» de las emitidas
   const EXENCIONES = [['E1', 'Exenta por el art. 20 (operaciones interiores exentas: sanitarias, educativas, sociales…)'], ['E2', 'Exenta por el art. 21 (exportaciones de bienes fuera de la UE)'],
@@ -1598,7 +1603,8 @@ export function crearModulos(c) {
       <td class="c">${ok(x) ? 'VERDADERO' : 'FALSO'}</td><td class="c">${ed ? `<button class="small" data-act="m-siidel" data-s="${s}" data-i="${idx.get(x)}" title="Quitar este registro del SII">✖</button>` : ''}</td></tr>`).join('');
     const quitados = Q.length ? `<div class="aviso"><b>Facturas quitadas del SII (${Q.length})</b> ${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${Q.length - 1}">↩ Deshacer la última (${esc(Q[Q.length - 1].factura)})</button> <button class="small" data-act="m-siirec" data-s="${s}" data-i="todas">Recuperar todas</button>` : ''}
       <table class="tprs tnom" style="width:auto;margin-top:.4em"><tbody>${Q.map((q, i) => `<tr><td>${esc(q.factura)}</td><td>${esc(q.nif)}</td><td>${esc(q.nombre)}</td><td class="num">${fnum(q.base)}</td><td class="num">${fnum(q.cuota)}</td><td>${ed ? `<button class="small" data-act="m-siirec" data-s="${s}" data-i="${i}">↩ Recuperar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
-    return `<div class="sii-vista"><div class="sii-fijo">${dropz}${aviso}
+    const vuelta = S.vuelta && F.fac && S.vuelta.fac === F.fac ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige el registro aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
+    return `<div class="sii-vista"><div class="sii-fijo">${vuelta}${dropz}${aviso}
       <section class="prs-card sii-cab"><div class="prs-h">SII - LIBRO REGISTRO DE FACTURAS ${emit ? 'EMITIDAS (LRFE)' : 'RECIBIDAS (LRFR)'}</div>
       <p class="hint" style="margin:.4em 1em">Consulta de facturas ${emit ? 'emitidas' : 'recibidas'} de la Sede Electrónica de la AEAT · Se muestran las ${cols.length} columnas de la descarga (desliza la tabla hacia los lados para verlas todas)</p>
       <div class="css-flex" style="gap:2em;flex-wrap:wrap;padding-bottom:.2em"><table class="tprs tnom" style="width:auto"><tbody>
@@ -1672,8 +1678,10 @@ export function crearModulos(c) {
     const nomC = e ? 'Contabilizado (IVA repercutido)' : 'Contabilizado (IVA soportado)', nomS = e ? 'Declarado SII (SII-LRFE)' : 'Declarado SII (SII-LRFR)';
     const TOPE_C = siiTodo ? 1e9 : 200;
     const mas = (n, cs) => (n > TOPE_C ? `<tr><td colspan="${cs}" class="c"><button class="small" data-act="m-siitodo">Se ven ${TOPE_C} de ${n} · mostrar todas</button></td></tr>` : '');
-    const lst = (arr, cols) => `<div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr>${cols.map((c) => `<th>${c[0]}</th>`).join('')}</tr></thead>
-      <tbody>${arr.slice(0, TOPE_C).map((q) => `<tr>${cols.map((c) => `<td class="${c[2] === 'n' ? 'num' : ''}">${c[2] === 'n' ? fnum(q[c[1]] || 0) : esc(q[c[1]] || '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="vacio">Ninguna</td></tr>`}
+    const lk = (q, texto, dst) => (q.fac ? `<a href="#" class="lnk-fac" data-gofac="${s}" data-dest="${dst}" data-fac="${esc(q.fac)}" title="${dst === 'sii' ? 'Abrir el registro del SII' : 'Abrir la factura en '+(e ? 'Emitidas' : 'Recibidas')} para corregirla">${texto}</a>` : texto);
+    const celda = (q, c, dest) => (c[1] === 'fac' ? esc(q.fac || '') === '' ? '' : lk(q, esc(q.fac), dest) : c[2] === 'n' ? (c[3] === 'sii' ? lk(q, fnum(q[c[1]] || 0), 'sii') : fnum(q[c[1]] || 0)) : esc(q[c[1]] || ''));
+    const lst = (arr, cols, dest = 'libro') => `<div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr>${cols.map((c) => `<th>${c[0]}</th>`).join('')}</tr></thead>
+      <tbody>${arr.slice(0, TOPE_C).map((q) => `<tr>${cols.map((c) => `<td class="${c[2] === 'n' ? 'num' : ''}">${celda(q, c, dest)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="vacio">Ninguna</td></tr>`}
       ${arr.length ? `<tr class="ttot"><td>TOTAL</td>${cols.slice(1).map((c) => `<td class="num">${c[2] === 'n' ? fnum(rr(arr.reduce((t, q) => t + (q[c[1]] || 0), 0))) : ''}</td>`).join('')}</tr>` : ''}${mas(arr.length, cols.length)}</tbody></table></div>`;
     const fd = D.facDesc.filter((q) => !siiCod[s] || q.cod === siiCod[s]);
     const filasCod = D.cods.map((o) => `<tr class="${siiCod[s] === o.cod ? 'sel-cod' : ''}" data-act="m-siicod" data-t="${s}" data-cod="${esc(o.cod)}" style="cursor:pointer" title="Ver sus facturas que descuadran"><td>${esc(o.cod)}</td><td class="num">${o.n}</td><td class="num">${fnum(o.bc)}</td><td class="num">${fnum(o.bs)}</td>
@@ -1692,19 +1700,19 @@ export function crearModulos(c) {
           <tbody>${filasCod || '<tr><td colspan="8" class="vacio">Sin datos</td></tr>'}${D.cods.length ? `<tr class="ttot"><td>TOTAL</td><td class="num">${D.cods.reduce((t, o) => t + o.n, 0)}</td>${['bc', 'bs', 'db', 'cc', 'cs', 'dc'].map((k) => `<td class="num">${fnum(rr(D.cods.reduce((t, o) => t + o[k], 0)))}</td>`).join('')}</tr>` : ''}</tbody></table></div></div>
         <div><div class="css-4760-t">Facturas que descuadran${siiCod[s] ? ` · ${esc(siiCod[s])} <button class="small" data-act="m-siicod" data-t="${s}" data-cod="">(ver todas)</button>` : ''} · ${fd.filter((q) => !q.anula).length}${D.anuladas ? ` <span class="est-ok" style="font-weight:400">· ${D.anuladas} que se anulan entre sí (cuadran)</span>` : ''}</div>
           <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th><th>Qué pasa / qué hacer</th></tr></thead>
-          <tbody>${fd.slice(0, TOPE_C).map((q) => `<tr${q.anula ? ' class="cf-ok" title="Se anula con otra factura del mismo NIF y código: cuadra"' : ''}><td>${esc(q.cod)}${q.anula ? ' ✓' : ''}</td><td>${esc(q.fac || '')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td class="num">${fnum(q.bc)}</td><td class="num">${fnum(q.bs)}</td>
+          <tbody>${fd.slice(0, TOPE_C).map((q) => `<tr${q.anula ? ' class="cf-ok" title="Se anula con otra factura del mismo NIF y código: cuadra"' : ''}><td>${esc(q.cod)}${q.anula ? ' ✓' : ''}</td><td>${lk(q, esc(q.fac || ''), /^Solo en el SII/.test(q.cod) ? 'sii' : 'libro')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td class="num">${fnum(q.bc)}</td><td class="num">${fnum(q.bs)}</td>
             <td class="num ${q.anula ? 'est-ok' : Math.abs(q.db) > 0.01 ? 'dif-ko' : ''}">${fnum(q.db)}</td><td class="num">${fnum(q.cc)}</td><td class="num">${fnum(q.cs)}</td><td class="num ${q.anula ? 'est-ok' : Math.abs(q.dc) > 0.01 ? 'dif-ko' : ''}">${fnum(q.dc)}</td><td>${esc(q.motivo || '')}</td></tr>`).join('') || '<tr><td colspan="11" class="vacio">Ninguna factura descuadra</td></tr>'}${mas(fd.length, 11)}</tbody></table></div></div></div>
-      ${D.cents.length ? `<div class="css-4760-t" style="margin:.8em 1em 0">Facturas con diferencia de céntimos (cada una dentro del margen de ±0,10 €, pero suman el descuadre del total) · ${D.cents.length}</div>${lst(D.cents, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}` : ''}
+      ${D.cents.length ? `<div class="css-4760-t" style="margin:.8em 1em 0">Facturas con diferencia de céntimos (cada una dentro del margen de ±0,10 €, pero suman el descuadre del total) · ${D.cents.length}</div>${lst(D.cents, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n', 'sii'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}` : ''}
       <div class="css-4760-t" style="margin:.8em 1em 0">Facturas declaradas en el SII de forma distinta a su código de impuesto · ${D.malSii.length}</div>
       <div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código (contabilidad)</th><th>Factura</th><th>${e ? 'NIF' : 'NIF Emisor'}</th><th>Nombre</th><th>Debería estar en el SII como</th><th>Está declarada en el SII como</th></tr></thead>
-        <tbody>${D.malSii.slice(0, TOPE_C).map((q) => `<tr><td>${esc(q.cods)}</td><td>${esc(q.fac || '')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td>${esc(q.esp)}</td><td class="dif-ko">${esc(q.dec)}</td></tr>`).join('') || '<tr><td colspan="6" class="vacio">Todas las facturas están declaradas en el SII como corresponde a su código</td></tr>'}${mas(D.malSii.length, 6)}</tbody></table></div>
+        <tbody>${D.malSii.slice(0, TOPE_C).map((q) => `<tr><td>${esc(q.cods)}</td><td>${lk(q, esc(q.fac || ''), 'libro')}</td><td>${esc(q.nif || '')}</td><td>${esc(q.nom || '')}</td><td>${esc(q.esp)}</td><td class="dif-ko">${esc(q.dec)}</td></tr>`).join('') || '<tr><td colspan="6" class="vacio">Todas las facturas están declaradas en el SII como corresponde a su código</td></tr>'}${mas(D.malSii.length, 6)}</tbody></table></div>
       <p class="hint">${e ? 'R.EX → exenta E2 · R.UE → exenta E5 · R.UE.S → no sujeta por localización · R.NC/R.RC → S1 al tipo del código · R.NC.EX → exenta con causa · R.NAC.NS → no sujeta · R.ISP → S2'
         : 'S.UE → adquisición intracomunitaria (clave de régimen 09) al tipo del código · S.ISP → ISP · S.NC → sin ISP al tipo del código · IN → sin ISP al tipo del código y bien de inversión SÍ'}. Los códigos sin regla (DUA, retenciones…) no se revisan. Así se ve qué factura corregir en el SII para que la predeclaración del 303 salga bien.</p>
       <p class="hint">Pulsa un código para ver solo sus facturas. Cada factura se asigna al código (o combinación de códigos) con que está contabilizada; el SII no trae código, así que las declaradas que no están en la contabilidad salen aparte. Ordenado de mayor a menor descuadre. Margen para dar por cuadrado: ±0,10 €.</p>
       <div class="css-flex" style="align-items:flex-start;flex-wrap:wrap">
         <div><div class="css-4760-t">A. Contabilizadas que no están en el SII · ${D.A.length}</div>${lst(D.A, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base contab.', 'base', 'n'], ['Cuota contab.', 'cuota', 'n']])}</div>
-        <div><div class="css-4760-t">B. Declaradas en el SII que no están contabilizadas · ${D.B.length}</div>${lst(D.B, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base SII', 'base', 'n'], ['Cuota SII', 'cuota', 'n'], ['Qué pasa / qué hacer', 'motivo']])}</div>
-        <div><div class="css-4760-t">C. En ambos con importes distintos · ${D.C.length}</div>${lst(D.C.map((q) => ({ ...q, db: rr(q.bc - q.bs), dc: rr(q.cc - q.cs) })), [['Factura', 'fac'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}</div>
+        <div><div class="css-4760-t">B. Declaradas en el SII que no están contabilizadas · ${D.B.length}</div>${lst(D.B, [['Factura', 'fac'], [e ? 'NIF' : 'NIF Emisor', 'nif'], ['Nombre', 'nom'], ['Base SII', 'base', 'n'], ['Cuota SII', 'cuota', 'n'], ['Qué pasa / qué hacer', 'motivo']], 'sii')}</div>
+        <div><div class="css-4760-t">C. En ambos con importes distintos · ${D.C.length}</div>${lst(D.C.map((q) => ({ ...q, db: rr(q.bc - q.bs), dc: rr(q.cc - q.cs) })), [['Factura', 'fac'], ['Nombre', 'nom'], ['Base contab.', 'bc', 'n'], ['Base SII', 'bs', 'n', 'sii'], ['Dif. base', 'db', 'n'], ['Cuota contab.', 'cc', 'n'], ['Cuota SII', 'cs', 'n'], ['Dif. cuota', 'dc', 'n']])}</div>
       </div></section>`;
   }
 
@@ -4733,7 +4741,7 @@ export function crearModulos(c) {
       'm-esker': () => buscarEsker(d.n),
       'm-siixl': () => excelConcSii(d.s),
       'm-fcnv': () => fcNvAbrir(d.s),
-      'm-fcvuelta': () => { const v = S.vuelta; if (!v) return; S.vuelta = null; fcQ = ''; S.periodo = v.periodo; S.tab = v.tab; S.grp = -1; render(); },
+      'm-fcvuelta': () => { const v = S.vuelta; if (!v) return; S.vuelta = null; fcQ = ''; ['E', 'R'].forEach((x) => { if (siiFil[x].fac === v.fac) siiFil[x].fac = ''; }); S.periodo = v.periodo; S.tab = v.tab; S.grp = -1; render(); },
       'm-fcmas': () => { fcLim = d.t ? 1e9 : fcLim + 500; buscarFc(fcQ, true); },
       'm-fcnvok': () => fcNvOk(),
       'm-fcnvx': () => { fcNueva = null; render(); },

@@ -1297,3 +1297,6 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 .tercero-pag .tercero-top{position:static !important;padding-bottom:.3rem}
 .tercero-pag .tercero-top .m347-fijo{position:static !important;top:auto !important;margin:0 !important;box-shadow:none !important}
 .tercero-pag .tercero-tabla{flex:none;max-height:calc(100vh - var(--tabsH, 64px) / var(--z, 1) - 13rem);min-height:8rem;overflow:auto}
+
+.sii-fijo .vuelta-fac{position:static;margin:0 0 .3rem}
+
