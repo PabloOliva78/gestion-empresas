@@ -11,6 +11,7 @@ import { crearModelos2 } from './modelos2.js?v=5';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
+import { crearModelo347 } from './modelo347.js?v=1';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=12';
 import { crearEstados } from './estados.js?v=4';
@@ -5384,6 +5385,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M11.tabs);
   const M12 = crearSiiPlazo({ db, S, esc, render, empresa }); // Plazo SII de 4 días (bloque 6): pestaña nueva que solo lee
   Object.assign(tabs, M12.tabs);
+  const M13 = crearModelo347({ S, esc, render, empresa, grande, normNif }); // Modelo 347 (bloque 4): pestaña nueva que solo lee los libros
+  Object.assign(tabs, M13.tabs);
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();
   function saldoCtaPeriodo(k) {
