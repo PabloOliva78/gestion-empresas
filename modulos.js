@@ -1686,7 +1686,7 @@ export function crearModulos(c) {
         <tr><td>Base imponible</td><td class="num">${fnum(x.base)}</td><td class="num">${fnum(y.base)}</td><td class="num ${ko(dif(x.base, y.base))}">${fnum(dif(x.base, y.base))}</td></tr>
         <tr><td>Cuota ${e ? 'repercutida' : 'soportada'}</td><td class="num">${fnum(x.cuota)}</td><td class="num">${fnum(y.cuota)}</td><td class="num ${ko(dif(x.cuota, y.cuota))}">${fnum(dif(x.cuota, y.cuota))}</td></tr>
         ${e ? '' : `<tr><td>Cuota deducible declarada (solo SII)</td><td></td><td class="num">${fnum(y.deduc)}</td><td></td></tr>`}
-        <tr class="${D.cuadra ? 'cf-ok' : 'cf-ko'}"><td>Situación</td><td colspan="3"><b>${D.cuadra ? `CUADRA${D.ceros ? ` (hay ${D.ceros} factura(s) a cero solo en un lado: no afectan a los importes)` : ''}` : 'DESCUADRE - revisar el detalle'}</b></td></tr></tbody></table></div>
+        <tr class="${D.cuadra ? 'cf-ok' : 'cf-ko'}"><td>Situación</td><td colspan="3"><b>${D.cuadra ? `CUADRA${D.ceros ? ` (hay ${D.ceros} factura(s) a cero solo en un lado: no afectan a los importes)` : ''}${D.comp ? ` · ${D.comp} factura(s) sin emparejar cuyos importes se anulan entre sí` : ''}` : 'DESCUADRE - revisar el detalle'}</b></td></tr></tbody></table></div>
       <div class="css-flex" style="align-items:flex-start;flex-wrap:wrap">
         <div><div class="css-4760-t">Descuadre por código de impuesto</div><div class="wrap" style="max-height:60vh;overflow:auto"><table class="tprs tnom conc-t"><thead><tr><th>Código de impuesto (contabilidad)</th><th>Nº facturas</th><th>Base contab.</th><th>Base SII</th><th>Dif. base</th><th>Cuota contab.</th><th>Cuota SII</th><th>Dif. cuota</th></tr></thead>
           <tbody>${filasCod || '<tr><td colspan="8" class="vacio">Sin datos</td></tr>'}${D.cods.length ? `<tr class="ttot"><td>TOTAL</td><td class="num">${D.cods.reduce((t, o) => t + o.n, 0)}</td>${['bc', 'bs', 'db', 'cc', 'cs', 'dc'].map((k) => `<td class="num">${fnum(rr(D.cods.reduce((t, o) => t + o[k], 0)))}</td>`).join('')}</tr>` : ''}</tbody></table></div></div>
@@ -1721,7 +1721,7 @@ export function crearModulos(c) {
       ['', 'Contabilizado', 'Declarado SII', 'Diferencia'],
       ['Nº de facturas', I(x.n), I(y.n), I(x.n - y.n)], ['Base imponible', N(x.base), N(y.base), N(rr(x.base - y.base))],
       [`Cuota ${e ? 'repercutida' : 'soportada'}`, N(x.cuota), N(y.cuota), N(rr(x.cuota - y.cuota))],
-      ['Situación', D.cuadra ? `CUADRA${D.ceros ? ` (hay ${D.ceros} factura(s) a cero solo en un lado)` : ''}` : 'DESCUADRE - revisar el detalle']);
+      ['Situación', D.cuadra ? `CUADRA${D.ceros ? ` (hay ${D.ceros} factura(s) a cero solo en un lado)` : ''}${D.comp ? ` · ${D.comp} factura(s) sin emparejar cuyos importes se anulan entre sí` : ''}` : 'DESCUADRE - revisar el detalle']);
     blk('DESCUADRE POR CÓDIGO DE IMPUESTO', ['Código', 'Nº facturas', 'Base contab.', 'Base SII', 'Dif. base', 'Cuota contab.', 'Cuota SII', 'Dif. cuota'], D.cods,
       (o) => [o.cod, I(o.n), N(o.bc), N(o.bs), N(o.db), N(o.cc), N(o.cs), N(o.dc)]);
     blk('FACTURAS QUE DESCUADRAN', ['Código', 'Factura', nif, 'Nombre', 'Base contab.', 'Base SII', 'Dif. base', 'Cuota contab.', 'Cuota SII', 'Dif. cuota', ''], D.facDesc,
