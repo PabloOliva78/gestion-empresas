@@ -14,6 +14,7 @@ import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearFase3 } from './fase3.js?v=1';
 import { crearProveedores } from './proveedores.js?v=2';
+import { crearClientes } from './clientes.js?v=1';
 import { paisDeSiglas } from './paises.js?v=1';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=12';
@@ -5412,6 +5413,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M14.tabs);
   const M15 = crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Proveedores - Clientes: pestaña nueva
   Object.assign(tabs, M15.tabs);
+  const M16 = crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Clientes: pestaña nueva
+  Object.assign(tabs, M16.tabs);
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();
   function saldoCtaPeriodo(k) {

@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=335';
+import { crearModulos } from './modulos.js?v=336';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -82,7 +82,7 @@ const opts = (obj, sel) => Object.entries(obj)
 async function pedirRegistros() {
   const out = [];
   for (let d = 0; ; d += 1000) {
-    const { data, error } = await db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,fact-prov,sii-E,sii-R,may-mov,m592-mov,a22src,intra)')
+    const { data, error } = await db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,fact-prov,fact-cli,sii-E,sii-R,may-mov,m592-mov,a22src,intra)')
       .not('tipo', 'like', 'sii-raw-%').order('id').range(d, d + 999);
     if (error || !data) { if (error) console.warn('registros:', error.message); break; }
     out.push(...data);
@@ -197,7 +197,7 @@ const GRUPOS = [
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
   ['11.- ADMINISTRACIÓN', ['usuarios', 'envio', 'hist', 'copia'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
-  ['12.- PROVEEDORES - CLIENTES', ['prov'], 'conc', 'Listados de proveedores y clientes del ERP con su país.'],
+  ['12.- PROVEEDORES - CLIENTES', ['prov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país.'],
 ];
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
