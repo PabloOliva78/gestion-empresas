@@ -5233,6 +5233,17 @@ export function crearModulos(c) {
       return n === null ? { t: '…' } : n ? { t: `${n} ${u}`, c: 'verde' } : { t: 'Sin datos' };
     };
   });
+  // por qué no «cuadra»: no basta con que la cuota total sea igual; también cuenta la base, las facturas que solo están en un lado y las que tienen importe distinto (aunque se compensen entre sí en el total)
+  const textoDescuadreSii = (D) => {
+    const cero = (x) => Math.abs(x.base || 0) < 0.01 && Math.abs(x.cuota || 0) < 0.01, dc = rr(D.tc.cuota - D.ts.cuota), db = rr(D.tc.base - D.ts.base);
+    const sueltas = D.A.filter((x) => !x._anul).concat(D.B).filter((x) => !cero(x)).length;
+    const p = [];
+    if (Math.abs(dc) > MARGEN_SII) p.push(`Dif. cuota ${fnum(dc)}`);
+    if (Math.abs(db) > MARGEN_SII) p.push(`Dif. base ${fnum(db)}`);
+    if (sueltas) p.push(`${sueltas} sin emparejar`);
+    if (D.C.length) p.push(`${D.C.length} con importe distinto`);
+    return p.length ? p.join(' · ') : 'Descuadre';
+  };
   [['concsiie', 'E'], ['concsiir', 'R']].forEach(([id, s]) => {
     badges[id] = () => {
       if (!S.sel) return { t: 'Por empresa' };
@@ -5280,7 +5291,7 @@ export function crearModulos(c) {
       if (!lib || !sii) return { t: '…' };
       if (!lib.length || !sii.length) return { t: '—' };
       const k = `${S.sel}|${s}|${S.ejercicio}|${S.periodo}|${lib.length}|${sii.length}|${sii[0]?.base}|${lib[0]?.base}`;
-      if (!cacheCs.has(k)) { const D = conciliarSiiCompleta(s, lib, sii, Number(S.ejercicio), S.periodo); cacheCs.set(k, D.cuadra ? { t: 'Cuadra', c: 'verde' } : { t: `Dif. cuota ${fnum(rr(D.tc.cuota - D.ts.cuota))}`, c: 'rojo' }); }
+      if (!cacheCs.has(k)) { const D = conciliarSiiCompleta(s, lib, sii, Number(S.ejercicio), S.periodo); cacheCs.set(k, D.cuadra ? { t: 'Cuadra', c: 'verde' } : { t: textoDescuadreSii(D), c: 'rojo' }); }
       return cacheCs.get(k);
     };
   });
