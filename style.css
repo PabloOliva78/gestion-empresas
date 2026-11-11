@@ -1269,3 +1269,15 @@ a.lnk-fac:hover{color:inherit;text-decoration:none}
 /* nombre del país junto a las siglas en Emitidas/Recibidas */
 .pais-n{color:#556;font-size:.85em;white-space:nowrap}
 
+
+/* Proveedores y Clientes (bloque 12): la parte de arriba queda fija y solo se desplaza la tabla */
+.tercero-pag{display:flex;flex-direction:column;height:calc(100vh - var(--tabsH, 64px) / var(--z, 1) - 3.5rem);min-height:22rem}
+.tercero-pag .tercero-top{flex:none}
+.tercero-pag .tercero-top .m347-fijo{position:static;box-shadow:none;margin-bottom:.3rem}
+.tercero-pag .tercero-top h3{font-size:clamp(.85rem,.5vw + .4rem,1.1rem)}
+.tercero-pag .tercero-top .dropzone{padding:.35rem .7rem;margin:.35rem 0 .2rem;font-size:.78rem}
+.tercero-pag .tercero-tabla{flex:1;min-height:0;overflow:auto;background:#fff;border-radius:6px}
+.tercero-pag .tercero-tabla table{font-size:clamp(.66rem,.4vw + .3rem,.95rem)}
+.tercero-pag .tercero-tabla th{position:sticky;top:0;z-index:2}
+.tercero-pag .tercero-tabla tr.nueva td.in input{width:100%;min-width:5rem}
+.tercero-pag .tercero-nota{flex:none;margin:.25rem 0 0;font-size:.7rem}
