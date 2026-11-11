@@ -13,6 +13,8 @@ import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearFase3 } from './fase3.js?v=1';
+import { crearProveedores } from './proveedores.js?v=2';
+import { paisDeSiglas } from './paises.js?v=1';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=12';
 import { crearEstados } from './estados.js?v=4';
@@ -1268,10 +1270,12 @@ export function crearModulos(c) {
       if (!ed) return `<td class="c">${esc(v)}</td>`;
       return `<td class="in c"><select data-fce="${s}|${idx.get(l)}|exenc" title="${esc(EXENCIONES.find(([k]) => k === v)?.[1] ?? '')}"><option value=""></option>${EXENCIONES.map(([k, t]) => `<option value="${esc(k)}"${k === v ? ' selected' : ''} title="${esc(t)}">${esc(k)}</option>`).join('')}</select></td>`;
     };
+    // país: siglas editables y, al lado, el nombre del país según el listado de códigos de la AEAT
+    const paisCelda = (sent, l, p) => { const pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; return ed ? `<td class="in"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" title="${esc(nom)}"> <small class="pais-n">${esc(nom)}</small></td>` : `<td>${esc(p)} <small class="pais-n">${esc(nom)}</small></td>`; };
     const filas = f.slice(0, fcLim).map((l) => { // por tandas para que no se bloquee (el total y la búsqueda cuentan todas)
       const p = paisL(l);
       return `<tr class="fc">${ci(l, 'fecha', fmt(l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
-        ${ci(l, 'pais', p)}${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
+        ${paisCelda(s, l, p)}${ci(l, 'codigo', l.codigo)}${ci(l, 'base', fnum(l.base), 'num')}${ci(l, 'pct', Number(l.pct).toFixed(2).replace('.', ','), 'num')}${ci(l, 'cuota', fnum(l.cuota), 'num')}
         ${ci(l, 'rec', l.rec !== undefined ? fnum(l.rec) : (/^R\.RC\./.test(l.codigo) ? fnum(l.cuota) : ''), 'num')}${exCell(l)}${ci(l, 'clasif', l.clasif ?? clasif(l.codigo))}<td class="acc">${l.manual ? '<span class="hint">a mano</span> ' : ''}${acc(l)}</td></tr>`;
     }).join('') + (f.length > fcLim ? `<tr><td colspan="15" class="c"><b>Se muestran ${fcLim} de ${f.length} líneas.</b> <button class="pill" data-act="m-fcmas">Mostrar 500 más</button> <button class="pill" data-act="m-fcmas" data-t="1">Mostrar todas</button> <span class="hint">Escribe en el buscador para filtrar entre todas.</span></td></tr>` : '');
     const nv = fcNueva?.s === s && puede() ? (() => {
@@ -5406,6 +5410,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M13.tabs);
   const M14 = crearFase3({ S, esc, render, empresa, grande, c303: (...a) => c303(...a), prsVal, calcular349Ops }); // 349 rectificaciones y cuadre 390–303 (bloque 4): pestañas nuevas que solo leen
   Object.assign(tabs, M14.tabs);
+  const M15 = crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Proveedores - Clientes: pestaña nueva
+  Object.assign(tabs, M15.tabs);
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();
   function saldoCtaPeriodo(k) {
