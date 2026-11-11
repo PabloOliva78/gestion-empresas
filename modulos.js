@@ -13,9 +13,9 @@ import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearFase3 } from './fase3.js?v=1';
-import { crearProveedores } from './proveedores.js?v=4';
-import { crearClientes } from './clientes.js?v=3';
-import { paisDeSiglas } from './paises.js?v=1';
+import { crearProveedores } from './proveedores.js?v=5';
+import { crearClientes } from './clientes.js?v=4';
+import { paisDeSiglas, datalistPaises } from './paises.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=12';
 import { crearEstados } from './estados.js?v=4';
@@ -1276,7 +1276,7 @@ export function crearModulos(c) {
     // si el cliente (Emitidas) o el proveedor (Recibidas) está en el listado del bloque 12, manda el país de ese listado; el escrito a mano en la línea manda sobre todo
     const mapaPais = (arr) => { let m = MAPA_PAIS.get(arr); if (!m) { m = new Map(); (arr ?? []).forEach((x) => { const k = normNif(x.nif), c = paisDeSiglas(x.pais)?.c; if (k && c && !m.has(k)) m.set(k, c); }); MAPA_PAIS.set(arr ?? MAPA_PAIS, m); } return m; };
     const listaTer = s === 'E' ? grande('fact-cli') : grande('fact-prov'), mp = Array.isArray(listaTer) && listaTer.length ? mapaPais(listaTer) : null;
-    const paisCelda = (sent, l, p0) => { const p = l.pais ? p0 : (mp?.get(normNif(l.nif)) ?? p0), pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; const nomM = nom.toUpperCase(); return ed ? `<td class="in pais-1l"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" title="${esc(nom)}"><span class="pais-n">${nomM ? ' - ' + esc(nomM) : ''}</span></td>` : `<td class="pais-1l">${esc(p)}<span class="pais-n">${nomM ? ' - ' + esc(nomM) : ''}</span></td>`; };
+    const paisCelda = (sent, l, p0) => { const p = l.pais ? p0 : (mp?.get(normNif(l.nif)) ?? p0), pa = paisDeSiglas(p), nom = pa ? pa.nombre : ''; const nomM = nom.toUpperCase(); return ed ? `<td class="in pais-1l"><input data-fce="${sent}|${idx.get(l)}|pais" value="${esc(p)}" size="3" list="listaPaises" autocomplete="off" title="${esc(nom)}"><span class="pais-n">${nomM ? ' - ' + esc(nomM) : ''}</span></td>` : `<td class="pais-1l">${esc(p)}<span class="pais-n">${nomM ? ' - ' + esc(nomM) : ''}</span></td>`; };
     const filas = f.slice(0, fcLim).map((l) => { // por tandas para que no se bloquee (el total y la búsqueda cuentan todas)
       const p = paisL(l);
       return `<tr class="fc">${ci(l, 'fecha', fmt(l.fecha))}${ci(l, 'asiento', l.asiento ?? '')}${ci(l, 'fecha2', fmt(l.ff))}${ci(l, 'factura', l.factura)}${ci(l, 'nif', l.nif, p !== 'ES' ? 'nif-ext' : '')}${ci(l, 'nombre', l.nombre)}
@@ -1292,7 +1292,7 @@ export function crearModulos(c) {
     const sinRet = f.filter((l) => !/^(R\.)?I\./.test(l.codigo)); // el total no incluye las retenciones (misma base que la factura)
     const tot = `<tr><td colspan="8"><b>Total (sin retenciones)</b></td>${celdasNum(suma(sinRet, 'base'))}<td></td>${celdasNum(suma(sinRet, 'cuota'))}<td colspan="${s === 'E' ? 4 : 3}"></td></tr>`;
     return { n, html: `<div class="wrap"><table class="tabla tabla-it"><thead><tr><th>Fecha</th><th>Asiento</th><th>Fecha factura</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>País</th><th>Código</th>
-      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th>${s === 'E' ? '<th title="Facturas sin cuota de IVA: E1 a E6 (exenciones), N.S.R.L. (no sujeta por reglas de localización) o Art. 7-14 (no sujeta)">Exención</th>' : ''}<th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}` };
+      <th>Base</th><th>% IVA</th><th>Cuota</th><th>Recargo</th>${s === 'E' ? '<th title="Facturas sin cuota de IVA: E1 a E6 (exenciones), N.S.R.L. (no sujeta por reglas de localización) o Art. 7-14 (no sujeta)">Exención</th>' : ''}<th>Clasificación</th><th></th></tr></thead><tbody>${nv}${filas}${f.length ? tot : ''}</tbody></table></div>${codsDl}${datalistPaises()}` };
   }
 
   function vistaFacturas(s, dzh = '') { // dzh: la zona de soltar del libro; queda dentro de la parte fija de arriba

@@ -10,3 +10,8 @@ export function paisDeSiglas(s) {
   if (!c || !NOMBRE_PAIS[c]) return null;
   return { c, nombre: NOMBRE_PAIS[c], ue: UE.has(c) };
 }
+
+// Lista desplegable de países para las casillas de siglas: al escribir «E» o «FR» salen los países que coinciden (siglas y nombre) para elegir uno
+export function datalistPaises() {
+  return `<datalist id="listaPaises">${Object.entries(NOMBRE_PAIS).sort((a, b) => a[1].localeCompare(b[1], 'es')).map(([c, n]) => `<option value="${c}" label="${n.replace(/"/g, '')}">${c} - ${n.toUpperCase()}</option>`).join('')}</datalist>`;
+}
