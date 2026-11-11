@@ -564,8 +564,11 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   const tc = tot(cont), ts = tot(sm); ts.deduc = r2n([...sm.values()].reduce((s, v) => s + v.deduc, 0));
   // descuadre por código de impuesto: cada factura va al código (o combinación de códigos) con que está contabilizada
   const facDesc = [], porCod = new Map();
+  // factura contabilizada como no sujeta (R.NAC.NS) que el SII lleva con base (p. ej. como exenta E1): está en la contabilidad, pero el tratamiento no coincide
+  const motivoNs = (c, s) => (c && c.cods && c.cods.has('R.NAC.NS') && Math.abs(s.base || 0) > 0.005 && Math.abs(c.base || 0) < 0.005
+    ? `Sí está en la contabilidad, pero como no sujeta (R.NAC.NS: el SII no la lleva en base imponible) y el SII la declara como ${Object.keys(s.cats ?? {}).map((d) => `${txtCatSii(d)} ${Number(s.cats[d]).toFixed(2)}`).join(' · ') || 'operación con base'}: corrige el código en la contabilidad (p. ej. exenta) o su tratamiento en el SII para que coincidan` : '');
   const add = (cod, c, s) => {
-    if (Math.abs(r2n(c.base - s.base)) > MARGEN_SII || Math.abs(r2n(c.cuota - s.cuota)) > MARGEN_SII) facDesc.push({ cod, fac: c.fac || s.fac, nif: c.nif || s.nif, nom: c.nom || s.nom, bc: c.base, bs: s.base, db: r2n(c.base - s.base), cc: c.cuota, cs: s.cuota, dc: r2n(c.cuota - s.cuota), motivo: c.motivo || '', _c: c });
+    if (Math.abs(r2n(c.base - s.base)) > MARGEN_SII || Math.abs(r2n(c.cuota - s.cuota)) > MARGEN_SII) facDesc.push({ cod, fac: c.fac || s.fac, nif: c.nif || s.nif, nom: c.nom || s.nom, bc: c.base, bs: s.base, db: r2n(c.base - s.base), cc: c.cuota, cs: s.cuota, dc: r2n(c.cuota - s.cuota), motivo: c.motivo || motivoNs(c, s), _c: c });
     const o = porCod.get(cod) ?? { cod, n: 0, bc: 0, bs: 0, cc: 0, cs: 0 };
     o.n++; o.bc = r2n(o.bc + c.base); o.cc = r2n(o.cc + c.cuota); o.bs = r2n(o.bs + s.base); o.cs = r2n(o.cs + s.cuota); porCod.set(cod, o);
   };
