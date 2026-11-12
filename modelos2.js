@@ -291,7 +291,9 @@ export function crearModelos2(c) {
       else rect.push({ o, rej, rper, ant, nue });
     });
     if (!c.per) err.push('Elige el periodo del fichero');
-    if (c.tel && !/^\d{9}$/.test(c.tel)) err.push('Teléfono: 9 dígitos');
+    if (!c.tel) err.push('Teléfono de contacto obligatorio (9 dígitos): la AEAT rechaza el teléfono en blanco (error E010070)');
+    else if (!/^\d{9}$/.test(c.tel)) err.push('Teléfono de contacto: 9 dígitos, sin espacios ni prefijo');
+    if (!c.cont) err.push('Persona de contacto obligatoria (apellidos y nombre)');
     if (c.just && !/^349\d{10}$/.test(c.just)) err.push('Nº justificante: 349 + 10 dígitos');
     if (c.comp && !/^349\d{10}$/.test(c.ant)) err.push('Nº justificante anterior obligatorio en complementaria/sustitutiva');
     if (err.length) { alert(`No se genera el fichero:\n- ${err.join('\n- ')}`); return; }

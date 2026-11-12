@@ -7,7 +7,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
 import { crearModelos } from './modelos.js?v=350';
-import { crearModelos2 } from './modelos2.js?v=5';
+import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
@@ -906,7 +906,7 @@ export function crearModulos(c) {
     siie: ['SII-LRFE', 'SII emitidas', () => vistaSII('E')],
     siir: ['SII-LRFR', 'SII recibidas', () => vistaSII('R')],
     concsiie: ['ConcSII-E', 'SII vs contabilidad', () => vistaConcSII('E')],
-    concsiir: ['ConsSII-R', 'SII vs contabilidad', () => vistaConcSII('R')],
+    concsiir: ['ConcSII-R', 'SII vs contabilidad', () => vistaConcSII('R')],
     fe: ['Emitidas', 'Facturas emitidas', () => dz('emitidas', 'Suelta aquí el libro de IVA repercutido', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('E')],
     fr: ['Recibidas', 'Facturas recibidas', () => dz('recibidas', 'Suelta aquí el libro de IVA soportado', '(Excel del ERP) o haz clic para elegirlo') + vistaFacturas('R')],
     dreg: ['Datos Registrales', 'NIF, IRUS, CNAE, Registro', () => vistaFichaDatos('dreg')],
@@ -1765,7 +1765,7 @@ export function crearModulos(c) {
     blk('C. EN AMBOS CON IMPORTES DISTINTOS', ['Factura', 'Nombre', 'Base contab.', 'Base SII', 'Cuota contab.', 'Cuota SII'], D.C, (q) => [q.fac || '', q.nom || '', N(q.bc), N(q.bs), N(q.cc), N(q.cs)]);
     const ws = X.utils.aoa_to_sheet(rows), wb = X.utils.book_new();
     ws['!cols'] = [34, 16, 16, 34, 16, 16, 16, 16, 16, 16, 28].map((wch) => ({ wch }));
-    X.utils.book_append_sheet(wb, ws, e ? 'ConcSII-E' : 'ConsSII-R');
+    X.utils.book_append_sheet(wb, ws, e ? 'ConcSII-E' : 'ConcSII-R');
     X.writeFile(wb, `ConcSII-${e ? 'E' : 'R'}_${em?.cif ?? ''}_${ej}-${S.periodo || 'anual'}.xlsx`);
   }
 
