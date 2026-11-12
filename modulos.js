@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=307';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=308';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
@@ -17,7 +17,7 @@ import { crearProveedores } from './proveedores.js?v=5';
 import { crearClientes } from './clientes.js?v=4';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=12';
+import { crearConciliaciones } from './conciliaciones.js?v=14';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=9';
 
@@ -1073,9 +1073,10 @@ export function crearModulos(c) {
       const partes = [];
       // Libro del mes que deja la tarea semanal de D365 (D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx): cada semana trae el mes acumulado,
       // así que primero se quitan las líneas que aportó la carga anterior de ese mismo archivo (facturas corregidas o anuladas) y luego se añaden las nuevas: nunca se duplican.
-      if (/^D365_[^_]+_(Repercutido|Soportado)_\d{4}-\d{2}/i.test(f.name)) for (const t of ['fact-E', 'fact-R']) await quitarDatosArchivo(t, f.name, empresaId);
+      const marcasNsl = new Set(); // las R.NAC.NS marcadas «NS localización» a mano se conservan al recargar el archivo
+      if (/^D365_[^_]+_(Repercutido|Soportado)_\d{4}-\d{2}/i.test(f.name)) for (const t of ['fact-E', 'fact-R']) (await quitarDatosArchivo(t, f.name, empresaId)).forEach((q) => { if (q.nsl) marcasNsl.add(`${q.factura}|${q.nif}`); });
       for (const s of ['E', 'R']) {
-        const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name }));
+        const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name, ...(s === 'E' && l.codigo === 'R.NAC.NS' && marcasNsl.has(`${l.factura}|${l.nif}`) ? { nsl: true } : {}) }));
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
       }
       const nIsp = await moverIspA(empresaId); // las S.NC.ISP.A que hubieran quedado en el soportado pasan al repercutido
@@ -1271,7 +1272,8 @@ export function crearModulos(c) {
       const lupa = s === 'R' && l.factura ? `<button class="pill" data-act="m-esker" data-n="${esc(l.factura)}" title="Buscar esta factura en Esker">🔎</button>` : '';
       if (!puede()) return lupa;
       const a = (op, t) => `<button class="pill" data-act="m-fc" data-op="${op}" data-s="${s}" data-k="${esc(claveL(l))}">${t}</button>`;
-      return `${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}${lupa}`;
+      const nsl = s === 'E' && l.codigo === 'R.NAC.NS' ? `<button class="pill" data-act="m-fc" data-op="nsl" data-s="${s}" data-k="${esc(claveL(l))}" title="Márcala si el SII la declara como no sujeta por reglas de localización (la lleva en base): la conciliación la da por buena">${l.nsl ? '☑' : '☐'} NS localización</button>` : '';
+      return `${nsl}${a('signo', '± signo')}${a('mover', `→ ${otro}`)}${a('linea', '✕ línea')}${a('factura', '✕ factura')}${lupa}`;
     };
     // cada campo del libro es editable (se guarda en el propio libro de la empresa)
     const ed = puede(), idx = new Map(datos.map((l, i) => [l, i]));
@@ -1474,6 +1476,7 @@ export function crearModulos(c) {
     const l = arr[i];
     let nuevo = arr;
     if (op === 'signo') nuevo = arr.map((x, j) => (j === i ? { ...x, base: -x.base, cuota: -x.cuota } : x));
+    else if (op === 'nsl') nuevo = arr.map((x, j) => (j === i ? { ...x, nsl: !x.nsl } : x)); // R.NAC.NS que el SII declara como no sujeta por localización
     else if (op === 'linea') { if (!confirm('¿Borrar esta línea del libro?')) return; nuevo = arr.filter((_, j) => j !== i); }
     else if (op === 'factura') {
       if (!confirm(`¿Borrar todas las líneas de la factura ${l.factura}?`)) return;

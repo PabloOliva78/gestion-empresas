@@ -531,9 +531,9 @@ export function conciliarSiiCompleta(sentido, libro, sii, ej, periodo) {
   for (const l of lc) {
     const k = clave(l.factura, l.nif);
     const o = cont.get(k) ?? { fac: l.factura, nif: l.nif, nom: l.nombre, base: 0, cuota: 0, cods: new Set(), esp: {}, txt: {}, sinRegla: false };
-    o.base = r2n(o.base + (l.codigo === 'R.NAC.NS' ? 0 : l.base)); o.cuota = r2n(o.cuota + l.cuota); // las no sujetas (art. 7-14) el SII no las lleva en base imponible sino en «Importe no sujeto»; se comparan en su categoría (esp.NS)
+    o.base = r2n(o.base + (l.codigo === 'R.NAC.NS' && !l.nsl ? 0 : l.base)); o.cuota = r2n(o.cuota + l.cuota); // las no sujetas (art. 7-14) el SII no las lleva en base imponible sino en «Importe no sujeto»; se comparan en su categoría (esp.NS)
     o.cods.add(String(l.codigo || '').trim().toUpperCase() || '(sin código)');
-    const e = catEsperadaSii(sentido, l.codigo);
+    const e = l.nsl && l.codigo === 'R.NAC.NS' ? { k: 'NSL', txt: 'no sujeta por reglas de localización' } : catEsperadaSii(sentido, l.codigo); // marcada a mano: el SII la lleva como no sujeta por localización
     if (e) { o.esp[e.k] = r2n((o.esp[e.k] || 0) + l.base); o.txt[e.k] = e.txt; } else o.sinRegla = true;
     cont.set(k, o);
   }
