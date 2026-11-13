@@ -8,7 +8,7 @@ import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
 import { crearModelos } from './modelos.js?v=352';
 import { crearModelos2 } from './modelos2.js?v=6';
-import { crearModelos3 } from './modelos3.js?v=4';
+import { crearModelos3 } from './modelos3.js?v=5';
 import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
@@ -5490,7 +5490,7 @@ export function crearModulos(c) {
   };
   const M5 = crearModelos2({ S, esc, render, nombreEmp, empresa, grande, calcularRet: calcularRetOv, calcular349, c303, nomPer, totalRet });
   Object.assign(tabs, M5.tabs);
-  const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS, urlPdf: async (path) => { const { data } = await db.storage.from('documentos').createSignedUrl(path, 300); return data?.signedUrl ?? null; } });
+  const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS, empOrden, urlPdf: async (path) => { const { data } = await db.storage.from('documentos').createSignedUrl(path, 300); return data?.signedUrl ?? null; } });
   Object.assign(tabs, M6.tabs);
   Object.assign(badges, M6.badges);
   const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303: (...a) => c303(...a), calc349: calcular349, extra: M4.adif });

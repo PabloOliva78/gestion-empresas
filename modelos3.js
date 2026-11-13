@@ -5,7 +5,7 @@ import { casLiquidacion200 } from './pdf200.js?v=1';
 import { EF_BAL,EF_PYG, EF_ND, EF_FALLBACK_DEU, EF_FALLBACK_ACR, EF_FALLBACK_PYG } from './efdatos.js?v=1';
 
 export function crearModelos3(c) {
-  const { db, S, esc, render, empresa, puede, grande, prsVal, casaCta } = c;
+  const { db, S, esc, render, empresa, puede, grande, prsVal, casaCta } = c; // c.empOrden: empresas en el orden del grupo
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
   const nf = new Intl.NumberFormat('es-ES', { useGrouping: 'always', maximumFractionDigits: 2 });
@@ -723,6 +723,7 @@ export function crearModelos3(c) {
 
   // ================= Eventos propios =================
   const acciones = {
+    'm-c202mayor': () => { mayorPedido = true; render(); },
     'm-pag200': (d) => { pag200 = +d.i || 0; render(); },
     'm-202usar': async (d) => { const st = JSON.parse(JSON.stringify(datos202())), R = calc202(); if (st[R.cl]) delete st[R.cl][d.k]; await guardar202(st); render(); },
     'm-202ver': (d) => { per202 = d.c.split('-')[1]; render(); },
@@ -765,10 +766,45 @@ export function crearModelos3(c) {
     mod200: () => { if (!S.sel) return { t: 'Por empresa' }; if (!efLineas(ejercicio200()).length) return { t: 'Sin sumas y saldos' }; try { return chipImp(calc200().D[52]); } catch { return { t: '-' }; } },
     mod202: () => { if (!S.sel) return { t: 'Por empresa' }; try { const R = calc202(); return chipImp(R.pres !== null && R.pres !== undefined ? R.pres : R.C['34'], 'Art. ' + R.modal); } catch { return { t: '-' }; } },
   };
+  // ================= Conciliación mod 202: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
+  // para cada empresa y periodo (1P, 2P, 3P) se usa el mismo cálculo de la pestaña «Modelo 202»; el estado de la pantalla (empresa y periodo) se restaura al terminar
+  function filas202() {
+    const ej = ejPanel(), selAnt = S.sel, perAnt = per202, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas];
+    try {
+      for (const e of lista) {
+        for (const p of ['1P', '2P', '3P']) {
+          S.sel = e.id; per202 = p;
+          let R = null; try { R = calc202(); } catch { /* sin datos */ }
+          const pres = presDe(ej, '202', p, 'res'), manual = !!R && Object.keys(R.P ?? {}).some((k) => k !== 'modal' && R.P[k] !== '' && R.P[k] !== undefined);
+          if (e.tipo === 'PYME' && pres === null && !manual) continue; // una pyme solo sale si tiene presentado o datos propios
+          const calculable = !!R && (R.modal === '40.2' ? (R.cuotaIS !== null && R.cuotaIS !== undefined) || manual : !!R.pyg || manual);
+          const calc = R && calculable ? R.C['34'] : null, dif = calc !== null && pres !== null ? r2(calc - pres) : null;
+          const est = pres === null ? (calculable ? ['aviso', 'Pendiente de presentar'] : ['nd', 'Sin datos para calcular ni presentado'])
+            : !calculable ? ['aviso', 'Presentado; faltan datos para calcular (PyG o 200 del año anterior)'] : Math.abs(dif) <= 1 ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
+          const nota = R && R.modal === '40.3' && !mayorPedido ? 'Retenciones (casilla 28) sin extracto cargado' : '';
+          out.push({ e, p, modal: R?.modal ?? '', calc, pres, dif, est, nota });
+        }
+      }
+    } finally { S.sel = selAnt; per202 = perAnt; }
+    return out;
+  }
+  function vistaC202() {
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const ej = ejPanel(), F = filas202(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' };
+    const n = (k) => F.filter((x) => x.est[0] === k).length;
+    return `<section class="dsec"><h3>Conciliación mod 202 · pagos fraccionados del Impuesto sobre Sociedades · ${ej}</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${n('ok')} cuadran · ${ic.ko} ${n('ko')} con diferencia · ${ic.aviso} ${n('aviso')} pendientes o sin datos para calcular · ${ic.nd} ${n('nd')} sin datos</p>
+      <p class="no-print"><button class="small" data-act="m-c202mayor"${mayorPedido ? ' disabled' : ''}>${mayorPedido ? '✓ Extractos cargados (retenciones de la casilla 28)' : 'Cargar los extractos de todas las empresas (retenciones de la casilla 28)'}</button></p>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Periodo</th><th>Modalidad</th><th>Calculado (34)</th><th>Presentado (34)</th><th>Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
+      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td>${x.p} ${ej}</td><td style="text-align:center">${x.modal ? 'Art. ' + esc(x.modal) : ''}</td><td class="n">${x.calc === null ? '—' : money(x.calc)}</td><td class="n">${x.pres === null ? '—' : money(x.pres)}</td><td class="n">${x.dif === null ? '—' : money(x.dif)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}${x.nota ? ` <span class="hint">· ${esc(x.nota)}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="vacio">Ninguna empresa con 202 en este ejercicio.</td></tr>'}
+      </tbody></table></div>
+      <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 202» de cada empresa (modalidad 40.2 con el 200 presentado del año anterior; 40.3 con la PyG o el sumas y saldos del periodo que hayas soltado allí). Presentado = la casilla 34 del 202 en «Impuestos presentados». Cuadra si la diferencia es de 1 € o menos. Las pymes solo salen si tienen 202 presentado o datos propios. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
+  }
   const kinds = { m202pyg: cargarPyg202 };
   const tabs = {
     mod200: ['Modelo 200', 'IS desde balance y PyG', vista200],
     mod202: ['Modelo 202', 'Pagos fraccionados IS', vista202],
+    c202: ['Conciliación mod 202', 'Calculado frente a presentado', vistaC202],
   };
   return { tabs, kinds, acciones, badges };
 }
