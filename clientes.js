@@ -1,7 +1,7 @@
 // Bloque 12 · Proveedores - Clientes. Pestaña «Clientes»: listado de clientes del ERP; el Excel ya trae el país de cada cliente.
 // Se guarda un solo registro por empresa con el tipo «fact-cli» (como los libros grandes: no se carga con el resto de datos).
 import { paisDeSiglas } from './paises.js?v=2';
-import { crearVistaTercero } from './terceros-vista.js?v=3';
+import { crearVistaTercero } from './terceros-vista.js?v=4';
 export function crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }) {
   const TIPO = 'fact-cli';
   const esNifEsp = (n) => /^[0-9]{8}[A-Z]$/.test(n) || /^[XYZKLM][0-9]{7}[A-Z]$/.test(n) || /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n);

@@ -27,14 +27,16 @@ export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reem
       const b = sinAc(`${x.cuenta} ${x.nif} ${x.nombre} ${extras.map(([c]) => x[c] ?? '').join(' ')}`), pd = paisDeSiglas(x.p);
       const celdaPais = ed ? `<td class="in"><input data-tve="${clave}|${x.i}|pais" value="${esc(x.p || '')}" size="4" maxlength="3" list="listaPaises" autocomplete="off" style="text-transform:uppercase" title="Siglas del país: al escribir salen los países que coinciden"> <small class="pais-n">${x.p ? esc(pd ? pd.nombre : 'sigla desconocida') : '<span class="d-ko">sin país</span>'}${x.inf ? ' <span class="hint" title="No viene en el listado: se deduce del prefijo del NIF">(por NIF)</span>' : ''}</small></td>`
         : `<td>${x.p ? `${esc(nombrePais(x.p))}${x.inf ? ' (por NIF)' : ''}` : '<span class="d-ko">sin país</span>'}</td>`;
-      return `<tr data-b="${esc(b)}"${q && !b.includes(q) ? ' style="display:none"' : ''}>${ce(x, 'cuenta', x.cuenta)}${ce(x, 'nif', x.nif)}${ce(x, 'nombre', x.nombre)}${celdaPais}<td style="text-align:center">${pd?.ue ? '✓' : ''}</td>
+      return `<tr class="${x.p ? 'pok' : 'pko'}" data-b="${esc(b)}"${q && !b.includes(q) ? ' style="display:none"' : ''}>${ce(x, 'cuenta', x.cuenta)}${ce(x, 'nif', x.nif)}${ce(x, 'nombre', x.nombre)}${celdaPais}<td style="text-align:center">${pd?.ue ? '✓' : ''}</td>
         ${extras.map(([c]) => ce(x, c, x[c])).join('')}<td class="acc no-print">${x.manual ? '<span class="hint">a mano</span> ' : ''}${ed && x.manual ? `<button class="pill" data-tvact="${clave}|del|${x.i}">Quitar</button>` : ''}</td></tr>`;
     }).join('');
-    return `<div class="inicio m347 tercero ${clave} tercero-pag"><div class="tercero-top"><section class="dsec m347-fijo"><h3>${titulo} · ${esc(e?.nombre ?? '')} · ${L.length} ${titulo.toLowerCase()} · ${sinPais ? `<span class="d-ko">${sinPais} sin país</span>` : '<span class="d-ok">todos con país</span>'}</h3>
+    const nUE = filas.filter((x) => paisDeSiglas(x.p)?.ue).length, kp = (t, v, c = '') => `<div class="tt-k"><div class="tt-kt">${t}</div><div class="tt-kv ${c}">${v}</div></div>`;
+    const tarjetas = `<div class="tt-kg tv-kg">${kp(titulo, L.length)}${kp('Con país', L.length - sinPais, 'ok')}${kp('Sin país', sinPais, sinPais ? 'neg' : '')}${kp('Estados miembro UE', nUE)}</div>`;
+    return `<div class="inicio m347 tercero ${clave} tercero-pag ttv ttp"><div class="tercero-top"><section class="dsec m347-fijo"><h3>${titulo} · ${esc(e?.nombre ?? '')} · ${L.length} ${titulo.toLowerCase()} · ${sinPais ? `<span class="d-ko">${sinPais} sin país</span>` : '<span class="d-ok">todos con país</span>'}</h3>
       <div class="m347-bar"><select data-tvpais="${clave}"><option value="">Todos los países</option>${sinPais ? `<option value="__sin"${P.pais === '__sin' ? ' selected' : ''}>(sin país) · ${sinPais}</option>` : ''}${paises.map((p) => `<option value="${p}"${P.pais === p ? ' selected' : ''}>${esc(nombrePais(p))} · ${cuenta[p]}</option>`).join('')}</select>
-      <input type="search" data-tvq="${clave}" placeholder="🔍 Buscar por nombre, NIF, cuenta…" value="${esc(P.q)}" autocomplete="off">
+      <input type="search" data-tvq="${clave}" placeholder="Buscar por nombre, NIF, cuenta…" value="${esc(P.q)}" autocomplete="off">
       ${ed ? `<button class="small primary no-print" data-tvact="${clave}|add">＋ Añadir ${singular} a mano</button>` : ''}</div>
-      ${zona()}${P.msg ? `<p class="dash-s" style="font-size:.8rem;margin:.2rem 0 0">${esc(P.msg)}</p>` : ''}</section></div>
+      ${tarjetas}${zona()}${P.msg ? `<p class="dash-s" style="font-size:.8rem;margin:.2rem 0 0">${esc(P.msg)}</p>` : ''}</section></div>
       <div class="tercero-tabla"><table class="tabla"><thead>${cab}</thead><tbody>${filaNueva}${cuerpo || (L.length ? '' : `<tr><td colspan="${6 + extras.length}">Sin ${titulo.toLowerCase()} cargados: suelta el Excel arriba o añade uno a mano.</td></tr>`)}</tbody></table></div>
       <p class="hint tercero-nota">${nota}</p>${datalistPaises()}</div>`;
   }

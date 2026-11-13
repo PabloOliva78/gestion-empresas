@@ -2,7 +2,7 @@
 // Se cargan dos Excel del ERP (PROVEEDORES: Id. de parte, Cuenta, NIF, Nombre… · DIRECCIONES: Id. de parte, Ciudad, CP, País…) y se cruzan por «Id. de parte».
 // Se guarda un solo registro por empresa con el tipo «fact-prov» (así comparte las protecciones de los libros grandes: no se carga con el resto de datos).
 import { paisDeSiglas } from './paises.js?v=2';
-import { crearVistaTercero } from './terceros-vista.js?v=3';
+import { crearVistaTercero } from './terceros-vista.js?v=4';
 export function crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }) {
   const TIPO = 'fact-prov';
   const esNifEsp = (n) => /^[0-9]{8}[A-Z]$/.test(n) || /^[XYZKLM][0-9]{7}[A-Z]$/.test(n) || /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n);
