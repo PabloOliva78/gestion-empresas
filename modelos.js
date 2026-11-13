@@ -248,7 +248,7 @@ export function crearModelos(c) {
       const calc = {}; let pagos = 0;
       // menos de 500.000 €: el 3T y el 0A son periodos propios con su retribución acumulada (3T = enero–septiembre, 0A = enero–diciembre) y no la suma de los trimestres; el 0A resta lo pagado en el 3T
       const acum = (c) => (I[c] !== '' && I[c] !== undefined && I[c] !== null && !Number.isNaN(+I[c]) ? +I[c] : null);
-      pers.forEach((p) => { const ac = grandeV ? null : acum(p === '3T' ? 'a3' : 'a0'), base = r2(ac !== null ? ac * m583Pct(ej, nQ[p] - 1) : q.slice(0, nQ[p]).reduce((s, x, i) => s + x * m583Pct(ej, i), 0)), cuota = r2(base * tipo / 100), dif = p === '0A' ? r2(cuota - pagos) : r2(Math.max(0, cuota - pagos));
+      pers.forEach((p) => { const ac = p === '3T' || p === '0A' ? acum(p === '3T' ? 'a3' : 'a0') : null, base = r2(ac !== null ? ac * m583Pct(ej, nQ[p] - 1) : q.slice(0, nQ[p]).reduce((s, x, i) => s + x * m583Pct(ej, i), 0)), cuota = r2(base * tipo / 100), dif = p === '0A' ? r2(cuota - pagos) : r2(Math.max(0, cuota - pagos));
         calc[p] = { base, cuota, pagos: r2(pagos), dif }; if (p !== '0A') pagos += dif; });
       return { I, q, calc, tiene: q.some((v) => v) || acum('a3') !== null || acum('a0') !== null };
     });
@@ -261,12 +261,12 @@ export function crearModelos(c) {
     const R = calc583(ejercicio(), M), p = R.per, PI = M583_PER.find((x) => x[0] === p), ed = puede(), dis = ed ? '' : ' disabled', e = empresa();
     const L = (t, n, v) => `<div class="f-row l1"><span class="lb">${t}</span><span class="bx"><b>${n}</b><span class="v">${v}</span></span></div>`;
     const pctTxt = [0, 1, 2, 3].map((i) => `${Math.round(m583Pct(R.ej, i) * 100)} %`).join(' · ');
-    const filasRet = (R, y) => R.inst.map((x, k) => `<tr><td><input class="facin" data-m583i="${k}|reg" value="${esc(x.I.reg || '')}" placeholder="RO/RE o CIL" size="16"${dis}></td><td><input class="facin" data-m583i="${k}|deleg" value="${esc(x.I.deleg || '')}" size="6"${dis}></td>
-      ${R.grande ? [0, 1, 2, 3].map((i) => { const man = x.I.q && x.I.q[i] !== '' && x.I.q[i] !== undefined; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|q${i}" value="${man ? fmtIn(+x.I.q[i]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto[i]) : '0,00'}" size="13"${dis}></td>`; }).join('')
+    const filasRet = (R, y, fz) => R.inst.map((x, k) => `<tr><td><input class="facin" data-m583i="${k}|reg" value="${esc(x.I.reg || '')}" placeholder="RO/RE o CIL" size="16"${dis}></td><td><input class="facin" data-m583i="${k}|deleg" value="${esc(x.I.deleg || '')}" size="6"${dis}></td>
+      ${R.grande && !fz ? [0, 1, 2, 3].map((i) => { const man = x.I.q && x.I.q[i] !== '' && x.I.q[i] !== undefined; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|q${i}" value="${man ? fmtIn(+x.I.q[i]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto[i]) : '0,00'}" size="13"${dis}></td>`; }).join('')
       : [['a3', 3], ['a0', 4]].map(([c, n]) => { const man = x.I[c] !== '' && x.I[c] !== undefined && x.I[c] !== null; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|${c}" value="${man ? fmtIn(+x.I[c]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto.slice(0, n).reduce((a, b) => a + b, 0)) : '0,00'}" size="15"${dis}></td>`; }).join('')}
       <td><input class="facin" data-m583i="${k}|mwh" value="${esc(x.I.mwh || '')}" size="10"${dis}></td><td>${ed && R.inst.length > 1 && y === undefined ? `<button class="small" data-act="m-583del" data-k="${k}">✕</button>` : ''}</td></tr>`).join('').replaceAll('data-m583i=', y === undefined ? 'data-m583i=' : `data-m583y="${y}" data-m583i=`);
     const ret = filasRet(R);
-    const cabRet = (RX) => `<tr><th>Nº registro / CIL</th><th>Delegación</th>${RX.grande ? '<th>1er trimestre</th><th>2º trimestre</th><th>3er trimestre</th><th>4º trimestre</th>' : '<th>3T · acumulado enero–septiembre</th><th>0A · acumulado enero–diciembre</th>'}<th>MWh (anual)</th><th></th></tr>`;
+    const cabRet = (RX, fz) => `<tr><th>Nº registro / CIL</th><th>Delegación</th>${RX.grande && !fz ?'<th>1er trimestre</th><th>2º trimestre</th><th>3er trimestre</th><th>4º trimestre</th>' : '<th>3T · acumulado enero–septiembre</th><th>0A · acumulado enero–diciembre</th>'}<th>MWh (anual)</th><th></th></tr>`;
     // el 0A del ejercicio anterior (se presenta en noviembre de este ejercicio): sus datos se escriben aquí y se guardan en el ejercicio anterior
     const bloque0A = () => {
       const y = R.ej - 1, R1 = calc583(y, M);
@@ -281,8 +281,7 @@ export function crearModelos(c) {
       ${L(`g) Pagos fraccionados realizados en ${y}`, 'g', eur(cc.pagos))}
       ${L('h) Cuota diferencial [f − g] (negativa: a devolver)', 'h', eur(cc.dif))}</div>`; }).join('');
       return `<div class="f303-sec">0A ${y} · anual ${y}, se presenta en noviembre de ${R.ej}</div>
-      <label class="f583-chk"><input type="checkbox" data-m583chk="grande" data-m583y="${y}"${R1.grande ? ' checked' : ''}${dis}> Valor de la producción del año anterior a ${y} superior a 500.000 € (cuatro trimestres; si no, 3T y 0A acumulados)</label>
-      <div class="wrap" style="padding:0 1rem"><table class="tabla" style="width:auto;margin-top:6px"><thead>${cabRet(R1)}</thead><tbody>${filasRet(R1, y)}</tbody></table></div>
+      <div class="wrap" style="padding:0 1rem"><table class="tabla" style="width:auto;margin-top:6px"><thead>${cabRet(R1, true)}</thead><tbody>${filasRet(R1, y, true)}</tbody></table></div>
       <div class="f303-sec">Liquidación 0A ${y}</div>${liq1}
       <div class="f-row l1"><span class="lb"><b>i) Cuota diferencial total del 0A ${y} (a ingresar o, si es negativa, a devolver)</b></span><span class="bx final"><b>i</b><span class="v"><b>${eur(R1.tot('0A'))}</b></span></span></div>
       <div class="hint" style="padding:.3rem 1rem">Estos datos se guardan en el ejercicio ${y}: también los verás cambiando el ejercicio a ${y} y eligiendo el periodo 0A.</div>`;
