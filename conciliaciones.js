@@ -100,7 +100,7 @@ export function crearConciliaciones(c) {
       const dentro = (x, campo) => x[campo] >= a[0] && x[campo] < a[1];
       const seP = SE.filter((s) => dentro(s, 'fecha')), nfac = (v) => String(v ?? '').toUpperCase().replace(/\s+/g, ''), enSii = new Set(seP.map((s) => nfac(s.factura)));
       // el periodo sale del campo «fecha» del libro; las no sujetas (R.NAC.NS, arts. 7-14) solo cuentan si la factura está declarada en el SII
-      const libE = LE.filter((l) => dentro(l, 'fecha') && !/^(R\.)?I\./.test(l.codigo) && (l.codigo !== 'R.NAC.NS' || enSii.has(nfac(l.factura))) && !/^R\.RC\./.test(l.codigo));
+      const libE = LE.filter((l) => dentro(l, 'fecha') && !/^(R\.)?I\./.test(l.codigo) && l.codigo !== 'R.UE.VA' && (l.codigo !== 'R.NAC.NS' || enSii.has(nfac(l.factura))) && !/^R\.RC\./.test(l.codigo));
       f.e.t = suma(libE.map((l) => (l.codigo === 'R.NAC.NS' && !l.nsl ? { ...l, base: 0 } : l))); // las no sujetas (art. 7-14): el SII las lleva como «importe no sujeto», no en base imponible
       f.e.a = suma(libE.filter((l) => AUTO_E.includes(l.codigo))); f.e.k = { b: r2(f.e.t.b - f.e.a.b), c: r2(f.e.t.c - f.e.a.c) };
       f.e.s = suma(seP);

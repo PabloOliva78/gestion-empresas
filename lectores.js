@@ -511,7 +511,7 @@ export function rangoPeriodo(ej, periodo) {
 }
 
 // Reglas copiadas del Excel «INFORMACION CONCILIACION IMPUESTOS» (hojas ConcSII-E y ConsSII-R)
-export const EXC_EMITIDAS = ['R.ISP.NR', 'R.ISP.RD', 'S.NC.ISP.A', 'R.UE.NR', 'R.UE.RD', 'R.UE.NR.SR', 'R.UE.RD.SR', 'R.RC.NR', 'R.RC.RD', 'R.RC.SR']; // líneas fuera del SII
+export const EXC_EMITIDAS = ['R.ISP.NR', 'R.ISP.RD', 'S.NC.ISP.A', 'R.UE.NR', 'R.UE.RD', 'R.UE.NR.SR', 'R.UE.RD.SR', 'R.RC.NR', 'R.RC.RD', 'R.RC.SR', 'R.UE.VA']; // líneas fuera del SII (R.UE.VA: anticipos intracomunitarios sin producto y su anulación; solo control, no cuentan en 303, 349 ni 390)
 export const FACT_FUERA_E = ['R.NAC.NS', 'R.I.INT', 'R.I.ALQ'];  // si una línea es de estos códigos, la factura entera queda fuera
 export const EXC_RECIBIDAS = ['I.PR.GN', 'I.PR.PRA', 'I.PR.SR', 'I.ALQ', 'I.INT', 'I.DV', 'I.DV.E']; // códigos «no IVA»
 
