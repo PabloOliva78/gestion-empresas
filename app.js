@@ -288,7 +288,7 @@ function tabsNav() {
   }
   // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
   const c = abierto ? tpCfg(abierto.i) : null, rz = '<span class="tp-rz w" data-tprz="w" title="Arrastra para cambiar el ancho de todas las pestañas del bloque (doble clic: restablecer)"></span><span class="tp-rz t" data-tprz="t" title="Arrastra para cambiar el tamaño del texto de todas las pestañas del bloque (doble clic: restablecer)"></span>';
-  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}${c.w ? ' fijo' : ''}" data-g="${abierto.i}" style="${c.w ? `--pw:${c.w}px;` : ''}--pt:${c.t}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
+  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}${c.w ? ' fijo' : ''}" data-g="${abierto.i}" style="${c.w ? `--pw:${c.w}px;` : ''}--pt:${c.t};--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}${rz}</button>`).join('')}</div>` : ''}</div>`;
 }
 

@@ -1417,3 +1417,7 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 
 /* logo fijo de Herogra Group arriba a la derecha (no cambia con la empresa) */
 header.doc img.logo-cab.logo-hg { height: 46px; max-width: 160px; padding: 3px 7px; }
+
+/* pestañas: borde grueso con el color de la empresa elegida */
+.tpill { border: 3px solid var(--emp, #d6def0); }
+.tpill.on { border-color: var(--emp, #1e3a8a); }
