@@ -279,6 +279,8 @@ export function crearModulos(c) {
   const RX_592 = /herogra\s+fertiliz|herogra\s+especiales|lys\s+del\s+sur|lysur/i, RX_583 = /herogra\s+fertiliz|lys\s+del\s+sur|lysur|gesti[oó]n\s+unificada|gesufer|hispalense/i;
   const obl592 = (e) => SIG_592.includes(String(e.siglas ?? '').toUpperCase()) || RX_592.test(e.nombre ?? '');
   const obl583 = (e) => SIG_583.includes(String(e.siglas ?? '').toUpperCase()) || RX_583.test(e.nombre ?? '');
+  // Lysur: el 583 (3T del año y anual del anterior) va en el 4T, y el 115 y el 592 son siempre obligatorios
+  const esLys = (e) => String(e?.siglas ?? '').toUpperCase() === 'LYS' || /lys\s*del\s*sur|lysur/i.test(e?.nombre ?? '');
   // Intrastat: solo Herogra Fertilizantes (HER), Herogra Especiales (ESP) e Hispalense (HIS), y va por meses
   const SIG_INT = ['HER', 'ESP', 'HIS'], RX_INT = /herogra\s+fertiliz|herogra\s+especiales|hispalense/i;
   const oblInt = (e) => SIG_INT.includes(String(e.siglas ?? '').toUpperCase()) || RX_INT.test(e.nombre ?? '');
@@ -305,7 +307,7 @@ export function crearModulos(c) {
   const colMes = (per) => (per === '0A' || per === 'A' ? 12 : /^\d\d$/.test(per) ? +per - 1 : /^[1-4]T$/.test(per) ? +per[0] * 3 - 1 : ({ 1: 2, 2: 8, 3: 10 })[per[0]] ?? 12);
   // ¿el periodo de la obligación (mes, trimestre, pago fraccionado) cae dentro del periodo p elegido?
   // gran empresa: el 583 del 3T del ejercicio y el 0A del anterior van siempre en octubre, aunque se presenten en septiembre
-  const en583Oct = (o) => o.mod === '583' && o.e && o.e.tipo !== 'PYME' && (o.per === '3T' || o.per === '0A');
+  const en583Oct = (o) => o.mod === '583' && o.e && (o.e.tipo !== 'PYME' || esLys(o.e)) && (o.per === '3T' || o.per === '0A');
   const enPeriodo = (o, p) => {
     if (!p) return true;
     if (en583Oct(o)) return (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10);
@@ -386,7 +388,7 @@ export function crearModulos(c) {
   function ltModoAuto(e, ej, mod) {
     if (['111', '303', '200', '390', '190'].includes(mod)) return 'S';
     if (mod === '202') return e.tipo === 'PYME' ? 'D' : 'S';
-    if (mod === '115') return alta115(e, ej, '12') ? 'S' : 'D';
+    if (mod === '115') return esLys(e) || alta115(e, ej, '12') ? 'S' : 'D';
     if (mod === '592') return obl592(e) ? 'S' : 'D';
     if (mod === '583') return obl583(e) ? 'S' : 'D';
     if (mod === 'Intrastat') return oblInt(e) ? 'S' : 'D';
@@ -425,7 +427,7 @@ export function crearModulos(c) {
   function ltMarks(e, ej, ix, cfg) {
     const m = new Set();
     LT_MODELOS.forEach(([mod, tipo]) => {
-      const modo = cfg.o[mod] ?? 'M', slots = ltSlots(mod, tipo, ltFreq(e, cfg, mod), ej);
+      const modo = esLys(e) && ['115', '592', '583'].includes(mod) ? 'S' : (cfg.o[mod] ?? 'M'), slots = ltSlots(mod, tipo, ltFreq(e, cfg, mod), ej);
       if (modo === 'S') slots.forEach((s) => m.add(`${mod}|${s.per}`));
       else if (modo === 'D') slots.forEach((s) => { if (ltConDatos(e, ej, ix, mod, s.per)) m.add(`${mod}|${s.per}`); });
       else cfg.m.forEach((k) => { if (k.startsWith(mod + '|')) m.add(k); });
@@ -446,7 +448,7 @@ export function crearModulos(c) {
       out.push({ e, mod, per, yP, yPres, clave, pk, fin: plazoMod(mod, yP, per), pres: ix.hecho.has(`${e.id}|${yPres}|${clave}|${pk}`), imp: valPres(e.id, yPres, clave, pk) });
     };
     const R115 = GR.get(`fact-R|${e.id}`); // 115: obligatorio si está de alta en el censo y, aunque no, en los periodos con retenciones de alquileres
-    pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (alta115(e, ej, p) || ix.hecho.has(`${e.id}|${ej}|115|${p}`) || (Array.isArray(R115) && R115.length && tieneRet('115', R115, ej, p))) add('115', p, ej, ej, '115'); });
+    pers.forEach((p) => { add('303', p, ej, ej, '303'); add('111', p, ej, ej, '111'); if (esLys(e) || alta115(e, ej, p) || ix.hecho.has(`${e.id}|${ej}|115|${p}`) || (Array.isArray(R115) && R115.length && tieneRet('115', R115, ej, p))) add('115', p, ej, ej, '115'); });
     // 123: solo los periodos con datos (presentado o retenciones de capital en el libro cargado)
     const R123 = GR.get(`fact-R|${e.id}`);
     pers.forEach((p) => { if (ix.hecho.has(`${e.id}|${ej}|123|${p}`) || (Array.isArray(R123) && R123.length && tieneRet('123', R123, ej, p))) add('123', p, ej, ej, '123'); });
