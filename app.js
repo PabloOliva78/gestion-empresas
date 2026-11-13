@@ -283,7 +283,7 @@ function tabsNav() {
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div></div>` : ''}</div>`;
   }
   // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
-  const n = abierto ? abierto.ids.length : 0, filas = Math.ceil(n / 8) || 1, cols = Math.ceil(n / filas); // como la fila de bloques de antes, pero hasta 8 por fila y todas del mismo ancho
+  const n = abierto ? abierto.ids.length : 0, filas = Math.ceil(n / 6) || 1, cols = Math.ceil(n / filas); // como la fila de bloques de antes, pero hasta 6 por fila (texto grande) y todas del mismo ancho
   return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${filas > 1 ? ' compacto' : ''}" style="--tc:${cols}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div>` : ''}</div>`;
 }
