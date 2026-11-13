@@ -361,6 +361,12 @@ export function crearModelos(c) {
     const cuota = r2(r2(suma(hasta, 'kgnr') * tipo) - r2(suma(antes, 'kgnr') * tipo)), ded = r2(dedKg * tipo), comp = +((d.comp ?? {})[`${ej}-${per}`]) || 0, res = r2(cuotaAc - dedAc - comp);
     return { ej, per, tipo, kg, base, cuota, dedKg, ded, comp, res, kgAc, baseAc, cuotaAc, dedAc, fab, aic, nFab: mov.fab.length, nAic: mov.aic.length };
   }
+  // importe a ingresar del 592 del periodo (casilla 8), con los registros ya cargados en su pestaña; null si no aplica o aún no hay datos cargados
+  function importe592(ej, per) {
+    if (!per || !obl592(empresa())) return null;
+    const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return null;
+    return calc592De(datos592(), { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, String(ej), per).res;
+  }
   // importar los registros desde un Excel (como las tablas D y E de la hoja Mod592, o un listado con esas columnas)
   async function cargar592(files) {
     const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return;
@@ -985,5 +991,5 @@ export function crearModelos(c) {
       return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
     },
   };
-  return { tabs, kinds, acciones, adif, badges, intraIngesta, oblIntE, intraImportes };
+  return { tabs, kinds, acciones, adif, badges, intraIngesta, oblIntE, intraImportes, importe592 };
 }

@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=350';
+import { crearModelos } from './modelos.js?v=351';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=4';
 import { crearCierre } from './cierre.js?v=2';
@@ -515,6 +515,7 @@ export function crearModulos(c) {
       if (o.mod === '303') return calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) }).c71;
       if (o.mod === '349') return calcular349(E, R, ej, p).total;
       if (o.mod === 'Intrastat') { const im = M4.intraImportes(ej, [+p], E, R); return im ? rr(im.exp + im.int) : null; } // solo del Intrastat cargado; nunca de los libros
+      if (o.mod === '592') return M4.importe592(ej, p); // cuota a ingresar (casilla 8) con los registros de su pestaña
     } catch (err) { /* sin libros */ }
     return null;
   }  function tablaOb(titulo, pago) {
@@ -3632,9 +3633,10 @@ export function crearModulos(c) {
           // (el Intrastat ya no se calcula desde los libros: solo cuenta lo que sea del propio Intrastat)
         }
       } catch (err) { /* sin libros: solo se muestra lo presentado */ }
+      try { const v592 = M4.importe592(ej, p); if (v592 !== null && v592 !== undefined) calc['592'] = v592; } catch (err) { /* sin registros del 592 */ } // el 592 es a pagar: sale su cuota a ingresar (casilla 8) como el resto
     }
     const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
-      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */ };
+      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */, 592: pv('592', 'res') ?? null };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
     const ii = M4.intraImportes(ej, meses.map(Number), E, R, true); // Intrastat cargado (bloque 4): expediciones e introducciones del periodo; null si no hay
@@ -3646,7 +3648,7 @@ export function crearModulos(c) {
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
       const c = calc[m], pr = pres[m], o = obP.find((x) => x.mod === m), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
       if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(intr ? rr(intr.exp + intr.int) : null)}</div><div class="dash-s">Informativa${intr ? ` · Exp. ${g(intr.exp)} · Imp. ${g(intr.int)}${ii ? '' : ' (presentado)'}` : ' · sin Intrastat este mes'}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
-      if (!['111', '115', '123', '303', '349'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
+      if (!['111', '115', '123', '303', '349', '592'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!o && c === undefined && pr === null) return '';
       if (!o && !(Math.abs(c || 0) >= 0.005) && !(Math.abs(pr || 0) >= 0.005) && m !== '111' && m !== '303') return ''; // fuera de lo obligatorio, solo con datos
       const est = c === undefined ? '' : m === '349' ? 'Informativa' : c > 0.005 ? 'A ingresar' : c < -0.005 ? 'A compensar' : 'Cero';
