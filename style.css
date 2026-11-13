@@ -1421,3 +1421,52 @@ header.doc img.logo-cab.logo-hg { height: 46px; max-width: 160px; padding: 3px 7
 /* pestañas: borde grueso con el color de la empresa elegida */
 .tpill { border: 3px solid var(--emp, #d6def0); }
 .tpill.on { border-color: var(--emp, #1e3a8a); }
+
+/* Selectores de ejercicio, periodo y empresa en la cabecera; título de la botonera en una línea */
+header.doc { position: relative; z-index: 40; }
+.doc-sel { display: flex; gap: .6rem; align-items: flex-end; }
+.doc-sel .two { display: grid; grid-template-columns: 70px 150px; gap: .5rem; }
+.doc-sel label, .doc-sel .lbl { color: #b9c8ee; display: grid; gap: .15rem; font-size: .62rem; text-align: left; }
+.doc-sel .lbl { width: 210px; }
+.doc-sel select { background: #fff; color: #1d2330; border: 0; border-radius: 8px; font-size: .74rem; padding: .3rem .4rem; width: 100%; }
+.doc-sel .sel-btn { background: #fff; color: #1d2330; min-width: 0; width: 100%; border-radius: 8px; padding: .3rem .6rem; }
+.doc-sel .sel-btn span { font-size: .72rem; line-height: 1.15; }
+.doc-sel .sel-menu { color: var(--text); min-width: 280px; left: auto; right: 0; }
+.doc-sel .sel-op, .doc-sel .sel-op span { font-size: .78rem; }
+.lat h1 { font-size: 12.5px; white-space: nowrap; letter-spacing: 0; }
+@media (max-width: 1500px) { header.doc { grid-template-columns: 1fr; } header.doc .doc-r { flex-wrap: wrap; justify-content: flex-start; } }
+
+/* Cabecera: los tres cuadros en una sola linea */
+header.doc { grid-template-columns: auto 1fr auto; }
+.doc-sel { flex-wrap: nowrap; }
+.doc-sel .two { grid-template-columns: 64px 130px; }
+.doc-sel .lbl { width: 190px; }
+.doc-sel .sel-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1500px) { header.doc { grid-template-columns: 1fr; } }
+header.doc .doc-r > .doc-sel { display: flex !important; flex-direction: row; align-items: flex-end; text-align: left; }
+header.doc .doc-sel > * { flex: none; }
+header.doc h2 { font-size: clamp(1rem, 1.45vw, 1.8rem); }
+.doc-sel .two { grid-template-columns: 60px 120px; }
+.doc-sel .lbl { width: 170px; }
+header.doc .doc-r { gap: .6rem; }
+header.doc { position: sticky; top: 0; z-index: 60; grid-template-columns: auto 1fr auto; }
+header.doc h2 { text-align: left; padding-left: 1.5rem; }
+header.doc .doc-r > * { flex: none; }
+.tabs-wrap, .tabs-wrap.tw-nuevo { top: var(--hh, 0px); }
+.doc-sel .lbl { width: 190px; }
+.doc-sel .sel, .doc-sel .sel-btn { width: 100%; max-width: 190px; box-sizing: border-box; }
+.doc-sel .sel-btn span { min-width: 0; flex: 1; }
+header.doc img.logo-hg { margin-left: .8rem; }
+.doc-sel .lbl { order: -1; }
+.doc-sel .lbl { width: 270px; }
+.doc-sel .sel, .doc-sel .sel-btn { max-width: none; }
+.doc-sel .sel-btn span { white-space: nowrap; overflow: visible; text-overflow: clip; }
+.doc-sel .two { grid-template-columns: 70px 185px; }
+.doc-sel select { padding-right: .2rem; }
+header.doc h2 { font-size: clamp(.9rem, 1.3vw, 1.6rem); padding-left: .8rem; }
+.doc-sel .lbl { width: 215px; }
+.doc-sel .two { grid-template-columns: 62px 150px; }
+.doc-sel select { font-size: .7rem; }
+header.doc h2 { text-wrap: balance; line-height: 1.1; }
+header.doc .doc-r, .doc-sel { gap: .4rem; }
+header.doc img.logo-hg { height: 40px; max-width: 130px; margin-left: .3rem; }

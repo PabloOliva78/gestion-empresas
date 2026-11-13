@@ -315,12 +315,6 @@ function render() {
   root.innerHTML = `<div class="layout">
     <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}">
       <div>${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1></div>
-      <div class="two">
-        <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
-    `<option${y === Number(S.ejercicio) ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
-        <label>Periodo<select data-glob="periodo">${periodosDe(e).map((p) => `<option value="${p}"${p === S.periodo ? ' selected' : ''}>${etiquetaPeriodo(p)}</option>`).join('')}<option value=""${S.periodo ? '' : ' selected'}>Anual (todo el ejercicio)</option></select></label>
-      </div>
-      <div class="lbl">Empresa${empresaSelector()}</div>
       ${bloquesLat()}
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
@@ -342,11 +336,19 @@ function render() {
         <p class="doc-sub">Inicio · grupos de pestañas</p>
         <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div></div>
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
-        <div class="doc-r"><img class="logo-cab logo-hg" src="logos/herogra-group.jpg?v=1" alt="Herogra Group"><div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
+        <div class="doc-r"><div class="doc-sel no-print">
+          <div class="two">
+            <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
+    `<option${y === Number(S.ejercicio) ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
+            <label>Periodo<select data-glob="periodo">${periodosDe(e).map((p) => `<option value="${p}"${p === S.periodo ? ' selected' : ''}>${etiquetaPeriodo(p)}</option>`).join('')}<option value=""${S.periodo ? '' : ' selected'}>Anual (todo el ejercicio)</option></select></label>
+          </div>
+          <div class="lbl">Empresa${empresaSelector()}</div></div><img class="logo-cab logo-hg" src="logos/herogra-group.jpg?v=1" alt="Herogra Group"><div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
       <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
+  const cab = root.querySelector('header.doc');
+  if (cab) root.querySelector('.layout').style.setProperty('--hh', `${cab.offsetHeight}px`); // la cabecera queda fija y las pestañas se pegan debajo
   alinearPanel();
   ajustarInicio();
   restaurarFoco();
