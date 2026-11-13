@@ -26,12 +26,31 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
     st.textContent = `.ttp .tt-dk { table-layout: fixed; width: ${CAB.reduce((s, _, i) => s + cw(i), 0)}px; min-width: 0; }` + CAB.map((_, i) => `.ttp .tt-dk th:nth-child(${i + 1}) { width: ${cw(i)}px; }`).join('');
   }
   try { aplicarCw(); } catch { /* sin documento */ }
-  let arr = null;
+  // columnas de la tabla de proveedores (las tarjetas): se arrastra el borde derecho de la cabecera y el ancho vale para todas las filas; el nombre se lleva el espacio que sobra
+  const MCAB = ['', 'Código', 'Proveedor', 'Abiertas', 'Débito', 'Crédito', 'Saldo', 'Vencido', 'Estado'];
+  let MW = {}; try { MW = JSON.parse(localStorage.getItem('tprov-mw') || '{}') ?? {}; } catch { MW = {}; }
+  const guardaMw = () => { try { if (Object.keys(MW).length) localStorage.setItem('tprov-mw', JSON.stringify(MW)); else localStorage.removeItem('tprov-mw'); } catch { /* */ } };
+  function aplicarMw() {
+    let st = document.getElementById('tt-mw-st'); if (!st) { st = document.createElement('style'); st.id = 'tt-mw-st'; document.head.appendChild(st); }
+    const ks = Object.keys(MW);
+    st.textContent = ks.length ? '.ttp .tt-main { table-layout: fixed !important; width: 100% !important; }' + ks.map((k) => `.ttp .tt-main > thead th:nth-child(${+k + 1}) { width: ${MW[k]}px !important; min-width: 0 !important; }.ttp .tt-main > tbody > tr.tt-r > td:nth-child(${+k + 1}) { min-width: 0 !important; width: auto !important; }`).join('') + '.ttp .tt-main > thead th:nth-child(3), .ttp .tt-main > tbody > tr.tt-r > td:nth-child(3) { min-width: 0 !important; }' : '';
+  }
+  try { aplicarMw(); } catch { /* sin documento */ }
+  let marr = null;
+  document.addEventListener('mousedown', (ev) => {
+    const h = ev.target.closest?.('[data-ttmrz]'); if (!h) return; ev.preventDefault();
+    const th = h.closest('th'), tr = th.parentElement, i = +h.dataset.ttmrz, z = th.getBoundingClientRect().width / (th.offsetWidth || 1) || 1;
+    [...tr.children].forEach((c, j) => { if (j !== 2 && MW[j] === undefined) MW[j] = Math.max(30, Math.round(c.offsetWidth)); }); // se fijan las demás como están: solo cambia la que arrastras
+    marr = { i, x: ev.clientX, w: MW[i] ?? Math.round(th.offsetWidth), z }; document.body.style.cursor = 'col-resize';
+  });
+  document.addEventListener('mousemove', (ev) => { if (!marr) return; MW[marr.i] = Math.max(30, Math.round(marr.w + (ev.clientX - marr.x) / marr.z)); aplicarMw(); });
+  document.addEventListener('mouseup', () => { if (!marr) return; marr = null; document.body.style.cursor = ''; guardaMw(); });
+  document.addEventListener('dblclick', (ev) => { if (!ev.target.closest?.('[data-ttmrz]')) return; MW = {}; aplicarMw(); guardaMw(); });  let arr = null;
   document.addEventListener('mousedown', (ev) => { const h = ev.target.closest?.('[data-ttrz]'); if (!h) return; ev.preventDefault(); const i = +h.dataset.ttrz; arr = { i, x: ev.clientX, w: cw(i) }; document.body.style.cursor = 'col-resize'; });
   document.addEventListener('mousemove', (ev) => { if (!arr) return; CW[arr.i] = Math.max(40, Math.round(arr.w + ev.clientX - arr.x)); aplicarCw(); });
   document.addEventListener('mouseup', () => { if (!arr) return; arr = null; document.body.style.cursor = ''; try { localStorage.setItem('tprov-cw', JSON.stringify(CW)); } catch { /* sin almacenamiento */ } });
   document.addEventListener('dblclick', (ev) => { const h = ev.target.closest?.('[data-ttrz]'); if (!h) return; delete CW[h.dataset.ttrz]; aplicarCw(); try { localStorage.setItem('tprov-cw', JSON.stringify(CW)); } catch { /* */ } });
-  const restablecerCw = () => { CW = {}; aplicarCw(); try { localStorage.removeItem('tprov-cw'); } catch { /* */ } };
+  const restablecerCw = () => { CW = {}; MW = {}; aplicarCw(); aplicarMw(); try { localStorage.removeItem('tprov-cw'); localStorage.removeItem('tprov-mw'); } catch { /* */ } };
 
   // ---------- lectura del Excel ----------
   const iso = (v) => {
@@ -252,7 +271,7 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
         <span class="tt-sp"></span><button class="tt-chip no-print" data-ttact="hist|">${P.hist ? 'Ocultar' : 'Ver'} cargas y movimientos</button><button class="tt-chip no-print" data-ttact="xls|">Descargar Excel</button><button class="tt-chip no-print" data-ttact="pdf|">Descargar PDF</button></div>
       <div class="tt-kg">${tarj('Proveedores', todas.length, '', `${conAb} con partidas abiertas`)}${tarj('Saldo abierto', fm(sAb), '', `al inicio: ${fm(sIni)}`)}${tarj('De ello vencido', fm(vencTot), vencTot ? 'neg' : '')}${tarj('Subsanadas', `${sub} de ${tot}`, 'ok', tot ? `${Math.round((sub / tot) * 100)} % resuelto` : '')}${tarj('Por confirmar', porConf.length, porConf.length ? 'warn' : '')}</div>
       ${banner}${zona()}${P.msg ? `<p class="tt-msg">${esc(P.msg)}</p>` : ''}${histCargas}
-      <div class="tt-box"><table class="tt-t tt-main"><thead><tr><th></th><th>Código</th><th>Proveedor</th><th class="n">Abiertas</th><th class="n">Débito</th><th class="n">Crédito</th><th class="n">Saldo</th><th class="n">Vencido</th><th>Estado</th></tr></thead>
+      <div class="tt-box"><table class="tt-t tt-main"><thead><tr>${MCAB.map((c, i) => `<th${i > 2 && i < 8 ? ' class="n"' : ''}>${c}<span class="tt-rz" data-ttmrz="${i}" title="Arrastra para cambiar el ancho de esta columna en todos los proveedores (doble clic: restablecer)"></span></th>`).join('')}</tr></thead>
         <tbody>${cuerpo || `<tr><td colspan="9">${tot ? 'Nada con ese filtro.' : 'Sin transacciones cargadas: suelta el Excel arriba.'}</td></tr>`}${cuerpo ? `<tr class="tt-tot"><td></td><td colspan="2">Total (${filas.length} proveedores)</td><td class="n">${tot2.n}</td><td class="n">${fm(r2(tot2.deb))}</td><td class="n">${fm(r2(tot2.cre))}</td><td class="n">${fm(r2(tot2.saldo))}</td><td class="n">${fm(r2(tot2.venc))}</td><td></td></tr>` : ''}</tbody></table></div>
       <p class="tt-nota">Saldo = débito − crédito de las partidas abiertas (negativo: se le debe al proveedor; positivo: pagos sin factura o saldo a nuestro favor). «Vencido» = crédito con vencimiento anterior a la fecha del listado. Las partidas nunca se borran: las subsanadas quedan con su fecha, quién las marcó y su nota.</p></div>`;
   }

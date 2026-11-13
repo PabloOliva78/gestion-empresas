@@ -1412,3 +1412,6 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 .ttp .tt-main > tbody > tr.tt-r > td:nth-child(3), .ttp .tt-main > thead th:nth-child(3) { min-width: 0; width: 100%; }
 .ttp .tt-main > tbody > tr.tt-r > td:nth-child(n+4), .ttp .tt-main > thead th:nth-child(n+4) { padding-left: 1.6em; padding-right: 1.6em; }
 .ttp .tt-main > tbody > tr.tt-tot > td { white-space: nowrap; }
+
+/* Transacciones: columnas de la tabla de proveedores redimensionables */
+.ttp .tt-main > thead th { position: relative; }
