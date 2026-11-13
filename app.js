@@ -196,7 +196,7 @@ const GRUPOS = [
   ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cva', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
-  ['11.- ADMINISTRACIÓN', ['usuarios', 'envio', 'hist', 'copia'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
+  ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
   ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
 ];
 const TABS = {
@@ -215,6 +215,7 @@ const TABS = {
   ssconc: ['Nóminas y Seguridad Social', '476 · 465 · 640 · 642', () => vistaConciliaciones(['476', '465', '640', '642'])],
   ssobl: ['Obligaciones laborales', 'RLC/RNT y nóminas', () => vistaObligaciones({ area: 'laboral' })],
   concall: ['Todas las conciliaciones', 'Todas las cuentas', () => vistaConciliaciones()],
+  vistas: ['Vistas', 'Menú: bloques arriba o a la izquierda', () => vistaVistas()],
   usuarios: ['Usuarios y roles', 'Accesos y empresas', () => vistaUsuarios(), true],
 };
 const AREA_TAB = { chkf: 'fiscal', rmobl: 'mercantil', ssobl: 'laboral' };
@@ -248,17 +249,41 @@ const ICONOS = { aeat: 'png', rm: 'png', pgc: 'jpg', sii: 'png', tgss: 'png', em
 const iconoGrupo = (k) => (k === 'emp' && S.sel ? logoHtml(S.empresas.find((x) => x.id === S.sel), 'gico') // «Información empresa»: el logo de la empresa elegida
   : k ?`<img class="gico" src="logos/grupo-${k}.${ICONOS[k]}?v=11" alt="" onerror="this.remove()">` : '');
 
-function tabsNav() {
-  const grupos = GRUPOS.map(([tit, ids, ico, sub], i) => ({ i, tit, ico, sub, ids: ids.filter((id) => (!TABS[id][3] || esAdmin()) && (!TABS[id][4] || TABS[id][4]())) }))
+// Bloques: píldoras en la barra izquierda (no se despliegan); al pulsar uno, sus pestañas salen en un panel arriba, centrado, donde antes estaba la fila de bloques
+function gruposVisibles() {
+  return GRUPOS.map(([tit, ids, ico, sub], i) => ({ i, tit, ico, sub, ids: ids.filter((id) => (!TABS[id][3] || esAdmin()) && (!TABS[id][4] || TABS[id][4]())) }))
     .filter((g) => g.ids.length);
-  const abierto = grupos.find((g) => g.i === S.grp);
-  const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
-  return `<div class="tabs-wrap"><nav class="tabs" style="--ng:${grupos.length}">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
+}
+function vistaVistas() {
+  const on = menuNuevo();
+  return `<section class="dsec"><h3>Vista del menú</h3>
+    <label class="vistas-chk"><input type="checkbox" data-menunuevo${on ? ' checked' : ''}> <b>Usar la vista nueva</b></label>
+    <p class="hint"><b>Marcada:</b> los bloques van como píldoras en la barra izquierda y, al pulsar uno, sus pestañas salen arriba, centradas, también como píldoras.</p>
+    <p class="hint"><b>Sin marcar:</b> la vista de siempre, con los bloques en la fila de arriba y su panel de pestañas debajo.</p>
+    <p class="hint">La elección se recuerda en este navegador.</p></section>`;
+}
+// Vista del menú (se elige en Administración › Vistas): false = la de siempre (bloques arriba); true = bloques a la izquierda y pestañas en píldoras arriba
+const menuNuevo = () => { try { return localStorage.getItem('imp-menuNuevo') === '1'; } catch { return false; } };
+function bloquesLat() {
+  if (!menuNuevo()) return '';
+  return `<nav class="bl-wrap"><div class="bl-nav">${gruposVisibles().map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
+      ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)}</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</div></nav>`;
+}
+function tabsNav() {
+  const grupos = gruposVisibles(), abierto = grupos.find((g) => g.i === S.grp);
+  if (!menuNuevo()) { // vista de siempre: fila de bloques arriba y su panel de pestañas debajo
+    const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
+    return `<div class="tabs-wrap"><nav class="tabs" style="--ng:${grupos.length}">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
       ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)} ▾</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</nav>
     ${abierto ? `<div class="gpanel" style="--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}"><div class="gpanel-h"><span class="gpanel-ico">${iconoGrupo(abierto.ico)}</span>
       <div><b>${esc(nombre(abierto.tit))}</b><small>${esc(abierto.sub)}</small></div></div>
       <div class="tiles">${abierto.ids.map((id) => `<button class="tile${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div></div>` : ''}</div>`;
+  }
+  // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
+  const n = abierto ? abierto.ids.length : 0, filas = Math.ceil(n / 8) || 1, cols = Math.ceil(n / filas); // como la fila de bloques de antes, pero hasta 8 por fila y todas del mismo ancho
+  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills" style="--tc:${cols}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
+        <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div>` : ''}</div>`;
 }
 
 // Años del desplegable de ejercicio: el actual más 1 y los 7 anteriores (y el elegido, si queda fuera).
@@ -290,6 +315,7 @@ function render() {
         <label>Periodo<select data-glob="periodo">${periodosDe(e).map((p) => `<option value="${p}"${p === S.periodo ? ' selected' : ''}>${etiquetaPeriodo(p)}</option>`).join('')}<option value=""${S.periodo ? '' : ' selected'}>Anual (todo el ejercicio)</option></select></label>
       </div>
       <div class="lbl">Empresa${empresaSelector()}</div>
+      ${bloquesLat()}
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>` : ''}
@@ -376,13 +402,14 @@ root.addEventListener('keydown', (ev) => {
 });
 
 function refrescarTabs() {
-  const w = root.querySelector('.tabs-wrap');
+  const w = root.querySelector('.tabs-wrap'), b = root.querySelector('.bl-wrap');
   if (!w) return;
   w.outerHTML = tabsNav();
+  if (b) b.outerHTML = bloquesLat();
   alinearPanel();
 }
 
-// El panel de pestañas se abre justo debajo de la pastilla de su grupo (sin salirse por la derecha)
+// El panel de pestañas sale arriba, centrado en la pantalla (donde antes estaba la fila de bloques)
 function alinearPanel() {
   const p = root.querySelector('.gpanel'), pill = root.querySelector('.gpill.abierto'), wrap = root.querySelector('.tabs-wrap');
   if (wrap) { const h = () => document.documentElement?.style?.setProperty('--tabsH', `${wrap.offsetHeight}px`); h(); window.addEventListener?.('resize', h, { once: true }); }
@@ -779,8 +806,8 @@ document.addEventListener('keydown', (ev) => {
 
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
-  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap'));
-  if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap')) S.grp = -1; render(); }
+  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap, .bl-wrap'));
+  if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap, .bl-wrap')) S.grp = -1; render(); }
   const dz = ev.target.closest('.dropzone');
   if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
   if (ev.target.closest('.logo-aside')) { S.tab = 'ini'; S.grp = -1; return render(); }
@@ -805,7 +832,7 @@ root.addEventListener('click', (ev) => {
   }
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
   if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
-  if (t.dataset.grp !== undefined) { S.grp = Number(t.dataset.grp); return refrescarTabs(); }
+  if (t.dataset.grp !== undefined) { S.grp = menuNuevo() && S.grp === Number(t.dataset.grp) ? -1 : Number(t.dataset.grp); return refrescarTabs(); }
   if (t.id === 'out') return void db.auth.signOut();
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.grp = -1; return render(); }
   if (t.dataset.act?.startsWith('m-')) return void M.accion(t.dataset);
@@ -850,6 +877,7 @@ async function conProgreso(fn, files) {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
+  if (t.dataset?.menunuevo !== undefined) { try { localStorage.setItem('imp-menuNuevo', t.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } S.grp = -1; return render(); }
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void conProgreso(M.cargarPdfs, fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
@@ -916,14 +944,16 @@ root.addEventListener('input', (ev) => {
 
 // Soltar PDF sobre la franja punteada de datos censales
 // Menú de bloques: al pasar el ratón por un bloque se abre su panel (superpuesto, sin mover nada); al salir se cierra
+// Vista de siempre: al pasar el ratón por un bloque se abre su panel; en la vista nueva (píldoras a la izquierda) solo se abre al pulsar
 let cierraGrp;
 root.addEventListener('mouseover', (ev) => {
+  if (menuNuevo()) return;
   const p = ev.target.closest?.('.gpill');
   if (ev.target.closest?.('.tabs-wrap')) clearTimeout(cierraGrp);
   if (p && S.grp !== Number(p.dataset.grp)) { S.grp = Number(p.dataset.grp); refrescarTabs(); }
 });
 root.addEventListener('mouseout', (ev) => {
-  if (S.grp < 0 || !ev.target.closest?.('.tabs-wrap') || ev.relatedTarget?.closest?.('.tabs-wrap')) return;
+  if (menuNuevo() || S.grp < 0 || !ev.target.closest?.('.tabs-wrap') || ev.relatedTarget?.closest?.('.tabs-wrap')) return;
   cierraGrp = setTimeout(() => { S.grp = -1; refrescarTabs(); }, 250);
 });
 // Ctrl+V sobre el recuadro de Entrada Información: captura de pantalla o texto copiado de Excel
