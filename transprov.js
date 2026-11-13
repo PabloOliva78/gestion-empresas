@@ -18,7 +18,7 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
   const nEst = (e) => ESTADOS.find((x) => x[0] === e)?.[1] ?? e;
   // ---------- ancho de las columnas del desplegable: se arrastra en la cabecera y vale para TODOS los proveedores (se recuerda en este navegador) ----------
   const CAB = ['Conciliado', 'Revisado', 'Fecha', 'Asiento', 'Factura', 'Fecha de documento', 'Descripción', 'Fecha de vencimiento', 'Fecha de vto. pagaré', 'Débito', 'Crédito', 'Saldo', 'Divisa', 'Forma de pago', 'Estado conciliación', 'Observaciones'];
-  const CW0 = [78, 74, 96, 100, 110, 112, 300, 112, 112, 92, 92, 92, 62, 200, 150, 280];
+  const CW0 = [100, 90, 104, 112, 124, 126, 320, 128, 128, 104, 104, 104, 72, 210, 170, 300];
   let CW = {}; try { CW = JSON.parse(localStorage.getItem('tprov-cw') || '{}') ?? {}; } catch { CW = {}; }
   const cw = (i) => Math.max(40, +CW[i] || CW0[i]);
   function aplicarCw() {

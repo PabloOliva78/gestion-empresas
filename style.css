@@ -1399,3 +1399,10 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 .ttp .tt-main > thead th:nth-child(2), .ttp .tt-main > tbody > tr.tt-r > td:nth-child(2) { width: 7.5em !important; min-width: 7.5em !important; max-width: none !important; white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; }
 .ttp .tt-main > thead th:first-child, .ttp .tt-main > tbody > tr.tt-r > td:first-child { width: 2.2em !important; min-width: 2.2em !important; }
 .ttp .tt-main > thead th, .ttp .tt-main > tbody > tr.tt-r > td { max-width: none !important; }
+
+/* Transacciones: nada se pisa (cabeceras que se parten en dos líneas en vez de cortarse, columnas con ancho mínimo) */
+.ttp .tt-main { table-layout: auto; }
+.ttp .tt-main > thead th { white-space: nowrap; }
+.ttp .tt-main > tbody > tr.tt-r > td:nth-child(3) { min-width: 14em; }
+.ttp .tt-main > thead th:nth-child(3) { min-width: 14em; }
+.ttp .tt-dk th { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
