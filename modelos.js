@@ -946,6 +946,7 @@ export function crearModelos(c) {
           const est = !P ? ['aviso', 'Pendiente de presentar'] : !hayDatos ? ['aviso', 'Presentado; faltan las retribuciones para calcular'] : pRes === null ? ['aviso', 'Presentado; no se leyó el importe del PDF'] : Math.abs(dif) <= 1 ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
           out.push({ e, p, base: tB, cuota: tC, calc, pRes, dif, est });
         }
+        if (!out.some((x) => x.e === e)) out.push({ e, p: '—', base: null, cuota: null, calc: null, pRes: null, dif: null, est: ['nd', 'Sin retribuciones cargadas ni 583 presentado en ' + ej] });
       }
     } finally { S.sel = selAnt; }
     return { filas: out, cargando };
@@ -956,7 +957,7 @@ export function crearModelos(c) {
     return `<section class="dsec"><h3>Conciliación mod 583 · impuesto sobre el valor de la producción de energía eléctrica · ${ej}</h3>
       <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia · ${ic.aviso} ${k('aviso')} pendientes o sin datos para calcular${cargando ? ' · ⏳ cargando el mayor de alguna empresa…' : ''}</p>
       <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Periodo</th><th>Base calculada</th><th>Cuota íntegra calculada</th><th>Cuota diferencial calculada</th><th>Cuota diferencial presentada</th><th>Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
-      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td>${x.p} ${ej}</td><td class="n">${num(x.base)}</td><td class="n">${num(x.cuota)}</td><td class="n">${num(x.calc)}</td><td class="n">${num(x.pRes)}</td><td class="n">${num(x.dif)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || '<tr><td colspan="9" class="vacio">Sin periodos del 583 en este ejercicio (empresas con 583: Herogra Fertilizantes, Lysur, Gesufer e Hispalense).</td></tr>'}</tbody></table></div>
+      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td>${x.p === '—' ? '—' : x.p + ' ' + ej}</td><td class="n">${num(x.base)}</td><td class="n">${num(x.cuota)}</td><td class="n">${num(x.calc)}</td><td class="n">${num(x.pRes)}</td><td class="n">${num(x.dif)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || '<tr><td colspan="9" class="vacio">Sin periodos del 583 en este ejercicio (empresas con 583: Herogra Fertilizantes, Lysur, Gesufer e Hispalense).</td></tr>'}</tbody></table></div>
       <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 583» con las retribuciones de cada trimestre (escritas a mano o tomadas del mayor). Presentado = la cuota diferencial del 583 en «Impuestos presentados». Cuadra si difiere en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
   }
   function filas592() {
