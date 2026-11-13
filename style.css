@@ -1300,3 +1300,8 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 
 .sii-fijo .vuelta-fac{position:static;margin:0 0 .3rem}
 
+
+/* Emitidas y Recibidas: lo de arriba (zona de soltar, listas y filtros) se queda en su sitio y solo se desplazan las facturas, con la cabecera de la tabla fija */
+.vista #fcTabla{max-height:calc(100vh - var(--tabsH, 64px) / var(--z, 1) - 15rem);min-height:10rem;overflow:auto}
+.vista #fcTabla .wrap{overflow:visible}
+.vista #fcTabla table.tabla-it th{position:sticky;top:0;z-index:3}
