@@ -270,7 +270,9 @@ function bloquesLat() {
       ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)}</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</div></nav>`;
 }
 function tabsNav() {
-  const grupos = gruposVisibles(), abierto = grupos.find((g) => g.i === S.grp);
+  const grupos = gruposVisibles();
+  // vista nueva: las pestañas quedan fijas arriba y siempre visibles (las del bloque pulsado o, si no, las del bloque de la pestaña abierta)
+  const abierto = grupos.find((g) => g.i === S.grp) ?? (menuNuevo() ? grupos.find((g) => g.ids.includes(S.tab)) : null);
   if (!menuNuevo()) { // vista de siempre: fila de bloques arriba y su panel de pestañas debajo
     const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
     return `<div class="tabs-wrap"><nav class="tabs" style="--ng:${grupos.length}">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
@@ -282,7 +284,7 @@ function tabsNav() {
   }
   // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
   const n = abierto ? abierto.ids.length : 0, filas = Math.ceil(n / 8) || 1, cols = Math.ceil(n / filas); // como la fila de bloques de antes, pero hasta 8 por fila y todas del mismo ancho
-  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills" style="--tc:${cols}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
+  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${filas > 1 ? ' compacto' : ''}" style="--tc:${cols}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div>` : ''}</div>`;
 }
 
@@ -307,7 +309,7 @@ function render() {
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   const scrollTablas = [...root.querySelectorAll('.wrap')].map((w) => [w.scrollLeft, w.scrollTop]); // al redibujar, las tablas anchas no vuelven al principio
   root.innerHTML = `<div class="layout">
-    <aside class="lat">
+    <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}">
       <div>${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1></div>
       <div class="two">
         <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
@@ -319,11 +321,13 @@ function render() {
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>` : ''}
+      <div class="lat-ctl">
       <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
       ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
       <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
       <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
       <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> <button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button></div>
+      </div>
       <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
         <button id="out" class="small">Salir</button></div>
     </aside>
@@ -806,8 +810,8 @@ document.addEventListener('keydown', (ev) => {
 
 // ---------- Eventos ----------
 root.addEventListener('click', (ev) => {
-  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !ev.target.closest('.tabs-wrap, .bl-wrap'));
-  if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap, .bl-wrap')) S.grp = -1; render(); }
+  const fuera = (S.menu && !ev.target.closest('.sel')) || (S.grp >= 0 && !menuNuevo() && !ev.target.closest('.tabs-wrap, .bl-wrap'));
+  if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap, .bl-wrap') && !menuNuevo()) S.grp = -1; render(); }
   const dz = ev.target.closest('.dropzone');
   if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
   if (ev.target.closest('.logo-aside')) { S.tab = 'ini'; S.grp = -1; return render(); }
@@ -832,7 +836,7 @@ root.addEventListener('click', (ev) => {
   }
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
   if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
-  if (t.dataset.grp !== undefined) { S.grp = menuNuevo() && S.grp === Number(t.dataset.grp) ? -1 : Number(t.dataset.grp); return refrescarTabs(); }
+  if (t.dataset.grp !== undefined) { S.grp = Number(t.dataset.grp); return refrescarTabs(); }
   if (t.id === 'out') return void db.auth.signOut();
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.grp = -1; return render(); }
   if (t.dataset.act?.startsWith('m-')) return void M.accion(t.dataset);
