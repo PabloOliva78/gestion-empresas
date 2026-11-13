@@ -246,9 +246,11 @@ export function crearModelos(c) {
     const inst = E.inst.map((I, k) => {
       const q = [0, 1, 2, 3].map((i) => { const v = I.q?.[i]; return v !== '' && v !== undefined && v !== null ? +v : k === 0 && auto ? auto[i] : 0; });
       const calc = {}; let pagos = 0;
-      pers.forEach((p) => { const base = r2(q.slice(0, nQ[p]).reduce((s, x, i) => s + x * m583Pct(ej, i), 0)), cuota = r2(base * tipo / 100), dif = p === '0A' ? r2(cuota - pagos) : r2(Math.max(0, cuota - pagos));
+      // menos de 500.000 €: el 3T y el 0A son periodos propios con su retribución acumulada (3T = enero–septiembre, 0A = enero–diciembre) y no la suma de los trimestres; el 0A resta lo pagado en el 3T
+      const acum = (c) => (I[c] !== '' && I[c] !== undefined && I[c] !== null && !Number.isNaN(+I[c]) ? +I[c] : null);
+      pers.forEach((p) => { const ac = grandeV ? null : acum(p === '3T' ? 'a3' : 'a0'), base = r2(ac !== null ? ac * m583Pct(ej, nQ[p] - 1) : q.slice(0, nQ[p]).reduce((s, x, i) => s + x * m583Pct(ej, i), 0)), cuota = r2(base * tipo / 100), dif = p === '0A' ? r2(cuota - pagos) : r2(Math.max(0, cuota - pagos));
         calc[p] = { base, cuota, pagos: r2(pagos), dif }; if (p !== '0A') pagos += dif; });
-      return { I, q, calc };
+      return { I, q, calc, tiene: q.some((v) => v) || acum('a3') !== null || acum('a0') !== null };
     });
     return { ej, E, auto, tipo, grande: grandeV, per: pers.includes(per) ? per : pers[0], pers, inst, tot: (p) => r2(inst.reduce((s, x) => s + (x.calc[p] ? x.calc[p].dif : 0), 0)) };
   }
@@ -260,7 +262,8 @@ export function crearModelos(c) {
     const L = (t, n, v) => `<div class="f-row l1"><span class="lb">${t}</span><span class="bx"><b>${n}</b><span class="v">${v}</span></span></div>`;
     const pctTxt = [0, 1, 2, 3].map((i) => `${Math.round(m583Pct(R.ej, i) * 100)} %`).join(' · ');
     const ret = R.inst.map((x, k) => `<tr><td><input class="facin" data-m583i="${k}|reg" value="${esc(x.I.reg || '')}" placeholder="RO/RE o CIL" size="16"${dis}></td><td><input class="facin" data-m583i="${k}|deleg" value="${esc(x.I.deleg || '')}" size="6"${dis}></td>
-      ${[0, 1, 2, 3].map((i) => { const man = x.I.q && x.I.q[i] !== '' && x.I.q[i] !== undefined; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|q${i}" value="${man ? fmtIn(+x.I.q[i]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto[i]) : '0,00'}" size="13"${dis}></td>`; }).join('')}
+      ${R.grande ? [0, 1, 2, 3].map((i) => { const man = x.I.q && x.I.q[i] !== '' && x.I.q[i] !== undefined; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|q${i}" value="${man ? fmtIn(+x.I.q[i]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto[i]) : '0,00'}" size="13"${dis}></td>`; }).join('')
+      : [['a3', 3], ['a0', 4]].map(([c, n]) => { const man = x.I[c] !== '' && x.I[c] !== undefined && x.I[c] !== null; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|${c}" value="${man ? fmtIn(+x.I[c]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto.slice(0, n).reduce((a, b) => a + b, 0)) : '0,00'}" size="15"${dis}></td>`; }).join('')}
       <td><input class="facin" data-m583i="${k}|mwh" value="${esc(x.I.mwh || '')}" size="10"${dis}></td><td>${ed && R.inst.length > 1 ? `<button class="small" data-act="m-583del" data-k="${k}">✕</button>` : ''}</td></tr>`).join('');
     const liq = R.inst.map((x, k) => { const cc = x.calc[p] ?? { base: 0, cuota: 0, pagos: 0, dif: 0 }; return `<div class="f583-inst">
       ${R.inst.length > 1 ? `<div class="f303-sec">Instalación ${esc(x.I.reg || String(k + 1))}</div>` : ''}
@@ -286,7 +289,7 @@ export function crearModelos(c) {
       ${L('Plazo de presentación', '', esc(PI[2]))}
       <div class="f303-sec">Retribuciones por la electricidad incorporada al sistema</div>
       <div class="f-row l1"><span class="lb">Cuenta de ventas de electricidad (para tomar las retribuciones del mayor por trimestres; opcional)</span><span class="bx"><b></b><input data-m583sel="cta" value="${esc(R.E.cta || '')}" placeholder="p. ej. 7050.01"${dis}></span></div>
-      <div class="wrap" style="padding:0 1rem"><table class="tabla" style="width:auto;margin-top:6px"><thead><tr><th>Nº registro / CIL</th><th>Delegación</th><th>1er trimestre</th><th>2º trimestre</th><th>3er trimestre</th><th>4º trimestre</th><th>MWh (anual)</th><th></th></tr></thead><tbody>${ret}</tbody></table></div>
+      <div class="wrap" style="padding:0 1rem"><table class="tabla" style="width:auto;margin-top:6px"><thead><tr><th>Nº registro / CIL</th><th>Delegación</th>${R.grande ? '<th>1er trimestre</th><th>2º trimestre</th><th>3er trimestre</th><th>4º trimestre</th>' : '<th>3T · acumulado enero–septiembre</th><th>0A · acumulado enero–diciembre</th>'}<th>MWh (anual)</th><th></th></tr></thead><tbody>${ret}</tbody></table></div>
       ${ed ? '<div style="padding:.5rem 1rem"><button class="small no-print" data-act="m-583add">Añadir instalación</button></div>' : ''}
       <div class="f303-sec">Liquidación (6)</div>${liq}
       <div class="f-row l1"><span class="lb"><b>i) Cuota diferencial total${p === '0A' ? ' (a ingresar o, si es negativa, a devolver)' : ' · a ingresar'}</b></span><span class="bx final"><b>i</b><span class="v"><b>${eur(R.tot(p))}</b></span></span></div>
@@ -371,7 +374,7 @@ export function crearModelos(c) {
   function importe583(ej, per) {
     if (!per || !(c.obl583 ? c.obl583(empresa()) : false)) return null;
     const R = calc583(Number(ej), grande('may-mov'));
-    return R.inst.some((x) => x.q.some((v) => v)) && R.pers.includes(per) ? R.tot(per) : null;
+    return R.inst.some((x) => x.tiene) && R.pers.includes(per) ? R.tot(per) : null;
   }  // importar los registros desde un Excel (como las tablas D y E de la hoja Mod592, o un listado con esas columnas)
   async function cargar592(files) {
     const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return;
@@ -924,7 +927,7 @@ export function crearModelos(c) {
       else C[k] = k === 'tipo' ? (parseNum(t.value) || 0.45) : t.value.trim();
       D.cfg = C; await a22Guardar(D); return void render();
     }
-    if (d.m583i) { const [k, cmp] = d.m583i.split('|'); m583Guardar((E) => { const I = E.inst[+k]; if (/^q\d$/.test(cmp)) { I.q = I.q ?? ['', '', '', '']; const v = parseNum(t.value); I.q[+cmp[1]] = v === null ? '' : v; } else I[cmp] = t.value.trim(); }); }
+    if (d.m583i) { const [k, cmp] = d.m583i.split('|'); m583Guardar((E) => { const I = E.inst[+k]; if (/^q\d$/.test(cmp)) { I.q = I.q ?? ['', '', '', '']; const v = parseNum(t.value); I.q[+cmp[1]] = v === null ? '' : v; } else if (cmp === 'a3' || cmp === 'a0') { const v = parseNum(t.value); I[cmp] = v === null ? '' : v; } else I[cmp] = t.value.trim(); }); }
     else if (d.m583sel) m583Guardar((E) => { E[d.m583sel] = t.value.trim(); });
     else if (d.m583chk) m583Guardar((E) => { E[d.m583chk] = t.checked; });
   });
@@ -986,7 +989,7 @@ export function crearModelos(c) {
         if (!(c.obl583 ? c.obl583(e) : false)) continue;
         S.sel = e.id;
         const M = grande('may-mov'); if (M === null) cargando = true; // el mayor sirve para tomar las retribuciones de la cuenta de ventas de electricidad
-        const R = calc583(ej, M), prs = S.registros.find((x) => x.tipo === 'prs' && x.empresa_id === e.id && x.ejercicio === ej)?.datos ?? {}, hayDatos = R.inst.some((x) => x.q.some((v) => v));
+        const R = calc583(ej, M), prs = S.registros.find((x) => x.tipo === 'prs' && x.empresa_id === e.id && x.ejercicio === ej)?.datos ?? {}, hayDatos = R.inst.some((x) => x.tiene);
         for (const p of R.pers) {
           const P = prs[`583|${p}`] ?? null, n = (v) => (v === undefined || v === null || v === '' ? null : Number(v)), pRes = P ? n(P.res) : null;
           if (!P && !hayDatos) continue;
@@ -1083,11 +1086,11 @@ export function crearModelos(c) {
       if (!S.sel) return { t: 'Por empresa' };
       const R = calc583(ejercicio(), null);
       if (S.periodo === '10' || S.periodo === '4T') { // en octubre (4T en las trimestrales) se presentan dos 583: el 3T del año y el anual (0A) del anterior; la pastilla enseña los dos importes, en la misma línea, si los hay
-        const A = calc583(ejercicio() - 1, null), hay = (X) => X.inst.some((x) => x.q.some((v) => v)),
+        const A = calc583(ejercicio() - 1, null), hay = (X) => X.inst.some((x) => x.tiene),
           a = hay(R) && R.pers.includes('3T') ? R.tot('3T') : null, b = hay(A) && A.pers.includes('0A') ? A.tot('0A') : null;
         if (a !== null || b !== null) return { t: `3T/${ejercicio()} ${a === null ? '—' : eur(a)} · 0A/${ejercicio() - 1} ${b === null ? '—' : eur(b)}`, c: (a > 0.005 || b > 0.005) ? 'rojo' : 'verde' };
       }
-      return R.inst.some((x) => x.q.some((v) => v)) ? chipImp(R.tot(R.per), R.per) : { t: 'Sin datos' };
+      return R.inst.some((x) => x.tiene) ? chipImp(R.tot(R.per), R.per) : { t: 'Sin datos' };
     },
     mod592: () => {
       if (!S.sel) return { t: 'Por empresa' };
