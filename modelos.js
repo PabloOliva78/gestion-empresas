@@ -228,7 +228,7 @@ export function crearModelos(c) {
   };
   const inst0 = () => ({ reg: '', deleg: '', mwh: '', q: ['', '', '', ''] });
   const m583Datos = (ej) => { const r = regDe('m583', S.sel, ej); const E = r ? { ...r.datos } : {}; if (!E.inst?.length) E.inst = [inst0()]; return E; };
-  const m583Guardar = async (f) => { const ej = ejercicio(), E = m583Datos(ej); f(E); await guardar('m583', S.sel, ej, E); render(); };
+  const m583Guardar = async (f, y) => { const ej = y ?? ejercicio(), E = m583Datos(ej); f(E); await guardar('m583', S.sel, ej, E); render(); };
   // retribuciones del trimestre desde el mayor de la cuenta de ventas de electricidad (si se indica)
   function m583Auto(cta, ej, M) {
     if (!cta || !M) return null;
@@ -261,10 +261,22 @@ export function crearModelos(c) {
     const R = calc583(ejercicio(), M), p = R.per, PI = M583_PER.find((x) => x[0] === p), ed = puede(), dis = ed ? '' : ' disabled', e = empresa();
     const L = (t, n, v) => `<div class="f-row l1"><span class="lb">${t}</span><span class="bx"><b>${n}</b><span class="v">${v}</span></span></div>`;
     const pctTxt = [0, 1, 2, 3].map((i) => `${Math.round(m583Pct(R.ej, i) * 100)} %`).join(' · ');
-    const ret = R.inst.map((x, k) => `<tr><td><input class="facin" data-m583i="${k}|reg" value="${esc(x.I.reg || '')}" placeholder="RO/RE o CIL" size="16"${dis}></td><td><input class="facin" data-m583i="${k}|deleg" value="${esc(x.I.deleg || '')}" size="6"${dis}></td>
+    const filasRet = (R, y) => R.inst.map((x, k) => `<tr><td><input class="facin" data-m583i="${k}|reg" value="${esc(x.I.reg || '')}" placeholder="RO/RE o CIL" size="16"${dis}></td><td><input class="facin" data-m583i="${k}|deleg" value="${esc(x.I.deleg || '')}" size="6"${dis}></td>
       ${R.grande ? [0, 1, 2, 3].map((i) => { const man = x.I.q && x.I.q[i] !== '' && x.I.q[i] !== undefined; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|q${i}" value="${man ? fmtIn(+x.I.q[i]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto[i]) : '0,00'}" size="13"${dis}></td>`; }).join('')
       : [['a3', 3], ['a0', 4]].map(([c, n]) => { const man = x.I[c] !== '' && x.I[c] !== undefined && x.I[c] !== null; return `<td><input class="facin num${man ? ' editado' : ''}" data-m583i="${k}|${c}" value="${man ? fmtIn(+x.I[c]) : ''}" placeholder="${!man && k === 0 && R.auto ? eur(R.auto.slice(0, n).reduce((a, b) => a + b, 0)) : '0,00'}" size="15"${dis}></td>`; }).join('')}
-      <td><input class="facin" data-m583i="${k}|mwh" value="${esc(x.I.mwh || '')}" size="10"${dis}></td><td>${ed && R.inst.length > 1 ? `<button class="small" data-act="m-583del" data-k="${k}">✕</button>` : ''}</td></tr>`).join('');
+      <td><input class="facin" data-m583i="${k}|mwh" value="${esc(x.I.mwh || '')}" size="10"${dis}></td><td>${ed && R.inst.length > 1 && y === undefined ? `<button class="small" data-act="m-583del" data-k="${k}">✕</button>` : ''}</td></tr>`).join('').replaceAll('data-m583i=', y === undefined ? 'data-m583i=' : `data-m583y="${y}" data-m583i=`);
+    const ret = filasRet(R);
+    const cabRet = (RX) => `<tr><th>Nº registro / CIL</th><th>Delegación</th>${RX.grande ? '<th>1er trimestre</th><th>2º trimestre</th><th>3er trimestre</th><th>4º trimestre</th>' : '<th>3T · acumulado enero–septiembre</th><th>0A · acumulado enero–diciembre</th>'}<th>MWh (anual)</th><th></th></tr>`;
+    // el 0A del ejercicio anterior (se presenta en noviembre de este ejercicio): sus datos se escriben aquí y se guardan en el ejercicio anterior
+    const bloque0A = () => {
+      const y = R.ej - 1, R1 = calc583(y, M), c0 = (k) => r2(R1.inst.reduce((s, x) => s + (x.calc['0A']?.[k] ?? 0), 0));
+      return `<div class="f303-sec">0A ${y} · anual ${y}, se presenta en noviembre de ${R.ej}</div>
+      <label class="f583-chk"><input type="checkbox" data-m583chk="grande" data-m583y="${y}"${R1.grande ? ' checked' : ''}${dis}> Valor de la producción del año anterior a ${y} superior a 500.000 € (cuatro trimestres; si no, 3T y 0A acumulados)</label>
+      <div class="wrap" style="padding:0 1rem"><table class="tabla" style="width:auto;margin-top:6px"><thead>${cabRet(R1)}</thead><tbody>${filasRet(R1, y)}</tbody></table></div>
+      ${L(`d) Base imponible del 0A ${y}`, 'd', eur(c0('base')))}${L('f) Cuota íntegra', 'f', eur(c0('cuota')))}${L(`g) Pagos fraccionados realizados en ${y} (3T)`, 'g', eur(c0('pagos')))}
+      <div class="f-row l1"><span class="lb"><b>Cuota diferencial del 0A ${y} (a ingresar o, si es negativa, a devolver)</b></span><span class="bx final"><b>h</b><span class="v"><b>${eur(R1.tot('0A'))}</b></span></span></div>
+      <div class="hint" style="padding:.3rem 1rem">Estos datos se guardan en el ejercicio ${y}: también los verás cambiando el ejercicio a ${y} y eligiendo el periodo 0A.</div>`;
+    };
     const liq = R.inst.map((x, k) => { const cc = x.calc[p] ?? { base: 0, cuota: 0, pagos: 0, dif: 0 }; return `<div class="f583-inst">
       ${R.inst.length > 1 ? `<div class="f303-sec">Instalación ${esc(x.I.reg || String(k + 1))}</div>` : ''}
       ${L('a) Número de registro (RO/RE) o CIL de la instalación', 'a', esc(x.I.reg || '—'))}
@@ -293,7 +305,8 @@ export function crearModelos(c) {
       ${ed ? '<div style="padding:.5rem 1rem"><button class="small no-print" data-act="m-583add">Añadir instalación</button></div>' : ''}
       <div class="f303-sec">Liquidación (6)</div>${liq}
       <div class="f-row l1"><span class="lb"><b>i) Cuota diferencial total${p === '0A' ? ' (a ingresar o, si es negativa, a devolver)' : ' · a ingresar'}</b></span><span class="bx final"><b>i</b><span class="v"><b>${eur(R.tot(p))}</b></span></span></div>
-      <div class="f303-sec">Calendario del ejercicio ${R.ej}</div>${resumen}</div>`;
+      <div class="f303-sec">Calendario del ejercicio ${R.ej}</div>${resumen}
+      ${bloque0A()}</div>`;
   }
 
   // ---------- Registros grandes (se piden aparte, solo al abrir la pestaña) ----------
@@ -927,9 +940,9 @@ export function crearModelos(c) {
       else C[k] = k === 'tipo' ? (parseNum(t.value) || 0.45) : t.value.trim();
       D.cfg = C; await a22Guardar(D); return void render();
     }
-    if (d.m583i) { const [k, cmp] = d.m583i.split('|'); m583Guardar((E) => { const I = E.inst[+k]; if (/^q\d$/.test(cmp)) { I.q = I.q ?? ['', '', '', '']; const v = parseNum(t.value); I.q[+cmp[1]] = v === null ? '' : v; } else if (cmp === 'a3' || cmp === 'a0') { const v = parseNum(t.value); I[cmp] = v === null ? '' : v; } else I[cmp] = t.value.trim(); }); }
+    if (d.m583i) { const [k, cmp] = d.m583i.split('|'); m583Guardar((E) => { const I = E.inst[+k]; if (/^q\d$/.test(cmp)) { I.q = I.q ?? ['', '', '', '']; const v = parseNum(t.value); I.q[+cmp[1]] = v === null ? '' : v; } else if (cmp === 'a3' || cmp === 'a0') { const v = parseNum(t.value); I[cmp] = v === null ? '' : v; } else I[cmp] = t.value.trim(); }, d.m583y ? +d.m583y : undefined); }
     else if (d.m583sel) m583Guardar((E) => { E[d.m583sel] = t.value.trim(); });
-    else if (d.m583chk) m583Guardar((E) => { E[d.m583chk] = t.checked; });
+    else if (d.m583chk) m583Guardar((E) => { E[d.m583chk] = t.checked; }, d.m583y ? +d.m583y : undefined);
   });
 
   document.addEventListener('input', (ev) => { const k = ev.target.dataset?.intrafil; if (!k) return; intraF = { ...intraF, [k]: ev.target.value }; intraFiltrar(); });
