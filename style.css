@@ -1378,3 +1378,19 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 .tpills.compacto .tpill { border-radius: 30px; padding: .45rem .3rem; min-width: 84px; }
 .tpills.compacto .tpill b { font-size: calc(.82rem * var(--pt, 1)); }
 .tpills.compacto .tpill .badge { font-size: calc(.72rem * var(--pt, 1)); padding: .1rem .3rem; border-radius: 12px; }
+
+/* barra izquierda de la vista nueva: sin desplazamiento, todo ajustado a la altura de la pantalla */
+.lat.lat-nuevo { overflow: hidden; height: 100vh; padding: 1.6vh 16px; gap: 1.2vh; }
+.lat.lat-nuevo h1 { margin: 0; font-size: clamp(.8rem, 1.9vh, 1.1rem); line-height: 1.15; }
+.lat.lat-nuevo .lat-ctl { gap: 1vh; }
+.lat.lat-nuevo .bl-wrap { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.lat.lat-nuevo .bl-nav { flex: 1 1 0; min-height: 0; gap: .7vh; }
+.lat.lat-nuevo .bl-nav .gpill { flex: 1 1 0; min-height: 0; max-height: 66px; padding-top: 0; padding-bottom: 0; }
+.lat.lat-nuevo .bl-nav .gpill b { font-size: clamp(.5rem, 1.55vh, .86rem); -webkit-line-clamp: 2; line-height: 1.12; }
+.lat.lat-nuevo .bl-nav .gpill small { font-size: clamp(.45rem, 1.3vh, .76rem); }
+.lat.lat-nuevo .bl-nav .gpill .gico { height: min(44px, 3.3vh); width: min(70px, 5.3vh); }
+.lat.lat-nuevo .lat-pie { font-size: clamp(.6rem, 1.5vh, .85rem); gap: .3vh; }
+/* Transacciones: ocupa todo el ancho, alineada a la izquierda y sin cortarse a la derecha */
+.vista .ttp { width: 100%; max-width: none; margin: 0; align-self: stretch; box-sizing: border-box; }
+.ttp .tt-box { overflow-x: auto; }
+.ttp .dropzone { width: 100%; box-sizing: border-box; }
