@@ -15,6 +15,7 @@ import { crearModelo347 } from './modelo347.js?v=2';
 import { crearFase3 } from './fase3.js?v=2';
 import { crearProveedores } from './proveedores.js?v=5';
 import { crearClientes } from './clientes.js?v=4';
+import { crearTransProv } from './transprov.js?v=1';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=15';
@@ -5516,6 +5517,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M15.tabs);
   const M16 = crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Clientes: pestaña nueva
   Object.assign(tabs, M16.tabs);
+  const M17 = crearTransProv({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Transacciones de proveedores: seguimiento de partidas pendientes
+  Object.assign(tabs, M17.tabs);
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();
   function saldoCtaPeriodo(k) {
