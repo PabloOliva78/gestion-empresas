@@ -63,8 +63,42 @@ export function crearFase3({ S, esc, render, empresa, grande, c303, prsVal, calc
       <p class="dash-s" style="margin-top:.5rem">${difA === null ? '<span class="d-nd">• No hay Modelo 390 presentado cargado: cuando lo cargues en «Impuestos presentados» se compara aquí.</span>' : Math.abs(difA) <= 1 ? `<span class="d-ok">✓ El resultado de los libros coincide con el 390 presentado (${money(Number(p390))})</span>` : `<span class="d-ko">✖ El 390 presentado (${money(Number(p390))}) difiere de los libros en ${money(difA)}</span>`}</p>
       <p class="hint">«71 presentado» es el resultado de la liquidación (con compensaciones y otros ajustes), por lo que puede diferir del 46 sin que haya error. La comparación se hace con el 46.</p></section></div>`;
   }
+  // ---------- Anticipos intracomunitarios (R.UE.VA) · Conciliaciones ----------
+  // Facturas de anticipo sin producto (derecho) y líneas que lo anulan cuando se factura con el producto: llevan el código R.UE.VA y no cuentan en 303, 349 ni 390.
+  // Aquí se controla que cada anticipo quede anulado (saldo 0 por cliente) y se avisa de los que llevan más de 2 meses abiertos.
+  function vistaVA() {
+    if (!S.sel) return '<p class="vacio">Elige una empresa en el desplegable de la izquierda.</p>';
+    const L = grande('fact-E');
+    if (!L) return '<p class="vacio">Cargando datos…</p>';
+    const ej = Number(S.ejercicio), fin = `${ej}-12-31`, tit = `<h3>Anticipos intracomunitarios (R.UE.VA) · ${esc(empresa()?.nombre ?? '')} · ${ej}</h3>`;
+    const intro = '<p class="dash-s" style="font-size:.8rem">Facturas de anticipo sin producto (el derecho) y líneas que lo anulan al facturar con el producto: llevan el código R.UE.VA y no cuentan en el 303, el 349 ni el 390, ni van al SII. Cada cliente debe quedar con saldo 0 cuando se factura con el producto.</p>';
+    const va = L.filter((l) => l.codigo === 'R.UE.VA' && String(l.fecha || '') <= fin);
+    if (!va.length) return `<div class="inicio"><section class="dsec">${tit}${intro}<p class="dash-s"><span class="d-nd">• No hay líneas con el código R.UE.VA hasta el 31/12/${ej}</span></p></section></div>`;
+    const fd = (f) => String(f || '').slice(0, 10).split('-').reverse().join('/');
+    const G = new Map();
+    va.forEach((l) => {
+      const k = String(l.nif || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || String(l.nombre || '');
+      const g = G.get(k) ?? G.set(k, { nif: l.nif, nombre: l.nombre, lineas: [], saldo: 0 }).get(k);
+      g.lineas.push(l); g.saldo = r2(g.saldo + (Number(l.base) || 0));
+    });
+    const hoy = new Date(), limite = new Date(hoy.getFullYear(), hoy.getMonth() - 2, hoy.getDate()).toISOString().slice(0, 10);
+    const clientes = [...G.values()].map((g) => {
+      g.lineas.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+      g.abierto = Math.abs(g.saldo) > 0.005;
+      g.viejo = g.abierto && String(g.lineas[0].fecha) <= limite; // abierto desde hace más de 2 meses
+      return g;
+    }).sort((a, b) => Number(b.viejo) - Number(a.viejo) || Number(b.abierto) - Number(a.abierto) || String(a.nombre).localeCompare(String(b.nombre)));
+    const nAb = clientes.filter((g) => g.abierto).length, nViejo = clientes.filter((g) => g.viejo).length, totAb = r2(clientes.reduce((s, g) => s + (g.abierto ? g.saldo : 0), 0));
+    const filas = clientes.map((g) => `<tr class="totano"><td colspan="4"><b>${esc(g.nombre)}</b> · ${esc(g.nif)}</td><td style="text-align:right"><b>${money(g.saldo)}</b></td>
+        <td>${g.abierto ? `<span class="d-ko">✖ Anticipo abierto${g.viejo ? ' desde hace más de 2 meses' : ''}</span>` : '<span class="d-ok">✓ Anulado (saldo 0)</span>'}</td></tr>
+      ${g.lineas.map((l) => `<tr><td>${fd(l.fecha)}</td><td>${esc(l.factura)}</td><td>${Number(l.base) >= 0 ? 'Anticipo (derecho)' : 'Anulación del derecho'}</td><td>${esc(l.asiento ?? '')}</td><td style="text-align:right">${money(l.base)}</td><td></td></tr>`).join('')}`).join('');
+    return `<div class="inicio"><section class="dsec">${tit}${intro}
+      <p class="dash-s">${nAb ? `<span class="d-ko">${nAb} cliente(s) con anticipo abierto por ${money(totAb)}${nViejo ? ` · ${nViejo} desde hace más de 2 meses` : ''}</span>` : '<span class="d-ok">✓ Todos los anticipos están anulados</span>'}</p>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Fecha</th><th>Factura</th><th>Tipo</th><th>Asiento</th><th>Base</th><th>Situación</th></tr></thead><tbody>${filas}</tbody></table></div>
+      <p class="hint">El saldo es la suma de las bases del cliente: el anticipo en positivo y su anulación en negativo. Se muestran las líneas hasta el 31/12/${ej}, incluidas las de años anteriores que sigan abiertas.</p></section></div>`;
+  }
   return { tabs: {
-    mod349r: ['349 · Rectificaciones', 'Abonos de periodos anteriores', vista349r],
     mod390c: ['390 · Cuadre con 303', 'Año frente a los 303', vista390c],
+    cva: ['Anticipos R.UE.VA', 'Anticipos intracomunitarios', vistaVA],
   } };
 }
