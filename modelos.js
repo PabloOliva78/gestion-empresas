@@ -641,21 +641,28 @@ export function crearModelos(c) {
     const nif = (o.flujoF === 'Introducción' && C.nifIntro !== 'Sí') ? '' : o.nifExp;
     return `${[o.em, prov, intraTx(C.incoterm), nat, intraTx(o.r[5]), '', intraTx(o.nc), o.em, intraTx(C.regimen), nf(o.r[7], 3), '', nf(o.r[8], 2), nf(o.r[9], 2), nif].join(';')};`;
   }
-  // Excel de Business Central (Fertinova): columnas Tipo, Fecha, N.º documento, N.º producto, Cód. arancelario, Código país/región, CIF/NIF, Naturaleza de la transacción, Modo transporte, Peso neto, Importe, Valor estadístico…
-  // Se pasa a las 14 columnas del Intrastat de Dynamics: «Envío» (albarán de venta) = expedición; «Albarán» (albarán de compra) = llegada. La provincia sale del CIF de la empresa (B18… = 18).
+  // Excel de Business Central (Fertinova): columnas Tipo, Fecha, N.º documento, N.º producto, Nombre, Cód. arancelario, …, Código país/región, CIF/NIF, …, Naturaleza de la transacción, Modo transporte, …, Peso neto, Peso total, Importe, Valor estadístico…
+  // Vale el Excel entero (con cabecera) o las filas copiadas y pegadas (con o sin cabecera, con números en formato español). Se pasa a las 14 columnas del Intrastat de Dynamics:
+  // «Envío» (albarán de venta) = expedición; «Albarán» (albarán de compra) = llegada. La provincia sale del CIF de la empresa (B18… = 18).
   function intraDeBC(filas, e) {
+    const cn = (v) => { if (v === null || v === undefined || v === '') return null; if (typeof v === 'number') return v; const n = parseFloat(String(v).trim().replace(/\./g, '').replace(',', '.')); return Number.isNaN(n) ? null : n; };
+    let c, ini;
     const hi = filas.findIndex((r) => r && r.some((x) => norm(x) === 'cod arancelario') && r.some((x) => norm(x) === 'tipo') && r.some((x) => norm(x) === 'valor estadistico'));
-    if (hi < 0) return null;
-    const H = filas[hi].map((x) => norm(x)), ix = (n) => H.indexOf(norm(n));
-    const c = { tipo: ix('Tipo'), fecha: ix('Fecha'), doc: ix('N.º documento'), prod: ix('N.º producto'), nc: ix('Cód. arancelario'), pais: ix('Código país/región'), nif: ix('CIF/NIF'), nat: ix('Naturaleza de la transacción'), mt: ix('Modo transporte'), peso: ix('Peso neto'), imp: ix('Importe'), est: ix('Valor estadístico') };
+    if (hi >= 0) {
+      const H = filas[hi].map((x) => norm(x)), ix = (n) => H.indexOf(norm(n));
+      c = { tipo: ix('Tipo'), fecha: ix('Fecha'), doc: ix('N.º documento'), prod: ix('N.º producto'), nc: ix('Cód. arancelario'), pais: ix('Código país/región'), nif: ix('CIF/NIF'), nat: ix('Naturaleza de la transacción'), mt: ix('Modo transporte'), peso: ix('Peso neto'), imp: ix('Importe'), est: ix('Valor estadístico') }; ini = hi + 1;
+    } else { // filas pegadas sin cabecera: se reconocen por su forma (Tipo · Fecha · … · código arancelario de 8 cifras en la 6.ª columna)
+      const j = filas.findIndex((r) => r && /^(albaran|envio|recepcion)/.test(norm(r[0])) && fechaUtc(r[1]) && /^\d{8}$/.test(String(r[5] ?? '').trim()));
+      if (j < 0) return null;
+      c = { tipo: 0, fecha: 1, doc: 2, prod: 3, nc: 5, pais: 7, nif: 8, nat: 10, mt: 11, peso: 14, imp: 16, est: 17 }; ini = j;
+    }
     const cif = String(e?.cif ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''), prov = /^[A-Z]\d{2}/.test(cif) ? cif.slice(1, 3) : '';
     const g = (r, k) => (c[k] >= 0 ? r[c[k]] : null);
-    return filas.slice(hi + 1).filter((r) => r && r.some((v) => v !== null && v !== '') && fechaUtc(g(r, 'fecha'))).map((r) => {
+    return filas.slice(ini).filter((r) => r && r.some((v) => v !== null && v !== '') && fechaUtc(g(r, 'fecha'))).map((r) => {
       let nif = String(g(r, 'nif') ?? '').trim().toUpperCase().replace(/[\s.-]/g, ''); if (/^[A-Z]{2}/.test(nif) && nif.slice(0, 2) === nif.slice(2, 4)) nif = nif.slice(2); // PTPT517637260 → PT517637260
-      return [g(r, 'fecha'), /^env/.test(norm(g(r, 'tipo'))) ? 'Expedición' : 'Llegada', String(g(r, 'pais') ?? '').trim(), prov, g(r, 'nat'), g(r, 'mt'), g(r, 'nc'), g(r, 'peso'), g(r, 'imp'), g(r, 'est'), nif, g(r, 'prod'), '', g(r, 'doc')];
+      return [g(r, 'fecha'), /^env/.test(norm(g(r, 'tipo'))) ? 'Expedición' : 'Llegada', String(g(r, 'pais') ?? '').trim(), prov, g(r, 'nat'), g(r, 'mt'), String(g(r, 'nc') ?? '').trim(), cn(g(r, 'peso')), cn(g(r, 'imp')), cn(g(r, 'est')), nif, g(r, 'prod'), '', g(r, 'doc')];
     });
-  }
-  async function intraAnadirFilas(filas) {
+  }  async function intraAnadirFilas(filas) {
     const bc = intraDeBC(filas, empresa()); if (bc) filas = bc;
     const D = datosIntra(); if (!D) return; let n = 0;
     filas.forEach((r) => {
