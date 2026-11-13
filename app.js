@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=363';
+import { crearModulos } from './modulos.js?v=364';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=10';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -193,7 +193,7 @@ const GRUPOS = [
   ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
-  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'cva', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
+  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'cva', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
   ['11.- ADMINISTRACIÓN', ['usuarios', 'envio', 'hist', 'copia'], 'adm', 'Usuarios, roles y acceso a las empresas.'],

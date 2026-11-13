@@ -928,6 +928,37 @@ export function crearModelos(c) {
   const kinds = { m232: cargar232, m592: cargar592, a22: a22Cargar, intra: cargarIntra };
   // ================= Conciliación mod 592: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
   // mismo cálculo que la pestaña «Modelo 592» con los movimientos cargados de cada empresa (HER, ESP y LYS); presentado = el 592 de «Impuestos presentados»
+  const nfm = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  // ================= Conciliación mod 583: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
+  // mismo cálculo que la pestaña «Modelo 583» (retribuciones por trimestre a mano o desde el mayor); presentado = el 583 de «Impuestos presentados» del mismo ejercicio
+  function filas583() {
+    const ej = ejercicio(), selAnt = S.sel, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas]; let cargando = false;
+    try {
+      for (const e of lista) {
+        if (!(c.obl583 ? c.obl583(e) : false)) continue;
+        S.sel = e.id;
+        const M = grande('may-mov'); if (M === null) cargando = true; // el mayor sirve para tomar las retribuciones de la cuenta de ventas de electricidad
+        const R = calc583(ej, M), prs = S.registros.find((x) => x.tipo === 'prs' && x.empresa_id === e.id && x.ejercicio === ej)?.datos ?? {}, hayDatos = R.inst.some((x) => x.q.some((v) => v));
+        for (const p of R.pers) {
+          const P = prs[`583|${p}`] ?? null, n = (v) => (v === undefined || v === null || v === '' ? null : Number(v)), pRes = P ? n(P.res) : null;
+          if (!P && !hayDatos) continue;
+          const calc = R.tot(p), tB = r2(R.inst.reduce((s, x) => s + x.calc[p].base, 0)), tC = r2(R.inst.reduce((s, x) => s + x.calc[p].cuota, 0)), dif = pRes !== null ? r2(calc - pRes) : null;
+          const est = !P ? ['aviso', 'Pendiente de presentar'] : !hayDatos ? ['aviso', 'Presentado; faltan las retribuciones para calcular'] : pRes === null ? ['aviso', 'Presentado; no se leyó el importe del PDF'] : Math.abs(dif) <= 1 ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
+          out.push({ e, p, base: tB, cuota: tC, calc, pRes, dif, est });
+        }
+      }
+    } finally { S.sel = selAnt; }
+    return { filas: out, cargando };
+  }
+  function vistaC583() {
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const { filas: F, cargando } = filas583(), ej = ejercicio(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length, num = (v) => (v === null || v === undefined ? '—' : nfm(v));
+    return `<section class="dsec"><h3>Conciliación mod 583 · impuesto sobre el valor de la producción de energía eléctrica · ${ej}</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia · ${ic.aviso} ${k('aviso')} pendientes o sin datos para calcular${cargando ? ' · ⏳ cargando el mayor de alguna empresa…' : ''}</p>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Periodo</th><th>Base calculada</th><th>Cuota íntegra calculada</th><th>Cuota diferencial calculada</th><th>Cuota diferencial presentada</th><th>Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
+      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td>${x.p} ${ej}</td><td class="n">${num(x.base)}</td><td class="n">${num(x.cuota)}</td><td class="n">${num(x.calc)}</td><td class="n">${num(x.pRes)}</td><td class="n">${num(x.dif)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || '<tr><td colspan="9" class="vacio">Sin periodos del 583 en este ejercicio (empresas con 583: Herogra Fertilizantes, Lysur, Gesufer e Hispalense).</td></tr>'}</tbody></table></div>
+      <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 583» con las retribuciones de cada trimestre (escritas a mano o tomadas del mayor). Presentado = la cuota diferencial del 583 en «Impuestos presentados». Cuadra si difiere en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
+  }
   function filas592() {
     const ej = String(ejercicio()), selAnt = S.sel, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas]; let cargando = false;
     try {
@@ -943,9 +974,9 @@ export function crearModelos(c) {
           const L = calc592De(d, mov, ej, per), P = prs[`592|${per}`] ?? null, hayMov = L.fab.length > 0 || L.aic.length > 0;
           if (!P && !hayMov) continue;
           const n = (v) => (v === undefined || v === null || v === '' ? null : Number(v)), pRes = P ? n(P.res) : null, pCuota = P ? n(P.cuota) : null;
-          const dRes = pRes !== null ? r2(L.res - pRes) : null;
-          const est = !P ? ['aviso', 'Pendiente de presentar'] : !hayMov ? ['aviso', 'Presentado; sin movimientos cargados para calcular'] : dRes !== null && Math.abs(dRes) <= 1 ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
-          out.push({ e, per, calcCuota: L.cuota, pCuota, calcRes: L.res, pRes, dRes, est, mov: L.fab.length + L.aic.length });
+          const dRes = pRes !== null ? r2(L.res - pRes) : null, dCuota = pCuota !== null ? r2(L.cuotaAc - pCuota) : null, difs = [dRes, dCuota].filter((v) => v !== null); // la cuota del 592 presentado es la acumulada del año
+          const est = !P ? ['aviso', 'Pendiente de presentar'] : !hayMov ? ['aviso', 'Presentado; sin movimientos cargados para calcular'] : !difs.length ? ['aviso', 'Presentado; no se leyeron importes del PDF'] : difs.every((v) => Math.abs(v) <= 1) ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
+          out.push({ e, per, calcCuota: L.cuotaAc, pCuota, calcRes: L.res, pRes, dRes, dCuota, est, mov: L.fab.length + L.aic.length });
         }
       }
     } finally { S.sel = selAnt; }
@@ -953,10 +984,10 @@ export function crearModelos(c) {
   }
   function vistaC592() {
     if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
-    const { filas: F, cargando } = filas592(), ej = ejercicio(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length, num = (v) => (v === null || v === undefined ? '—' : nf2(v));
+    const { filas: F, cargando } = filas592(), ej = ejercicio(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length, num = (v) => (v === null || v === undefined ? '—' : nfm(v));
     return `<section class="dsec"><h3>Conciliación mod 592 · impuesto de envases de plástico no reutilizables · ${ej}</h3>
       <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia · ${ic.aviso} ${k('aviso')} pendientes o sin movimientos${cargando ? ' · ⏳ cargando los movimientos de alguna empresa…' : ''}</p>
-      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Periodo</th><th>Movimientos</th><th>Cuota calculada</th><th>Cuota presentada</th><th>A ingresar calculado</th><th>A ingresar presentado</th><th>Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Periodo</th><th>Movimientos</th><th>Cuota acumulada calculada</th><th>Cuota acumulada presentada</th><th>A ingresar calculado</th><th>A ingresar presentado</th><th>Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
       ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td>${x.per} ${ej}</td><td class="n">${x.mov}</td><td class="n">${num(x.calcCuota)}</td><td class="n">${num(x.pCuota)}</td><td class="n">${num(x.calcRes)}</td><td class="n">${num(x.pRes)}</td><td class="n">${num(x.dRes)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || '<tr><td colspan="10" class="vacio">Sin periodos del 592 en este ejercicio (el modelo solo está activado para Herogra Fertilizantes, Herogra Especiales y Lysur).</td></tr>'}</tbody></table></div>
       <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 592» con el libro registro AIC y la contabilidad de fabricantes cargados de cada empresa. Presentado = la cuota y el total a ingresar del 592 en «Impuestos presentados». Cuadra si el total a ingresar difiere en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
   }
@@ -965,6 +996,7 @@ export function crearModelos(c) {
     c349i: ['Conciliación 349 - Intrastat', 'Bienes · por mes y factura', vistaIntraConc],
     mod592: ['Modelo 592', 'Envases de plástico', vista592],
     c592: ['Conciliación mod 592', 'Calculado frente a presentado', vistaC592],
+    c583: ['Conciliación mod 583', 'Calculado frente a presentado', vistaC583],
     moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
