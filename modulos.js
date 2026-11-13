@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=376';
+import { crearModelos } from './modelos.js?v=377';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=2';
@@ -282,7 +282,7 @@ export function crearModulos(c) {
   // Lysur: el 583 (3T del año y anual del anterior) va en el 4T, y el 115 y el 592 son siempre obligatorios
   const esLys = (e) => String(e?.siglas ?? '').toUpperCase() === 'LYS' || /lys\s*del\s*sur|lysur/i.test(e?.nombre ?? '');
   // Intrastat: solo Herogra Fertilizantes (HER), Herogra Especiales (ESP) e Hispalense (HIS), y va por meses
-  const SIG_INT = ['HER', 'ESP', 'HIS'], RX_INT = /herogra\s+fertiliz|herogra\s+especiales|hispalense/i;
+  const SIG_INT = ['HER', 'ESP', 'HIS', 'FER'], RX_INT = /herogra\s+fertiliz|herogra\s+especiales|hispalense|fertinova/i;
   const oblInt = (e) => SIG_INT.includes(String(e.siglas ?? '').toUpperCase()) || RX_INT.test(e.nombre ?? '');
   const MODS_PAGO = ['303', '111', '115', '123', '202', '200', '592', '583'];
   const hoyUtc = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };

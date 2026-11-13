@@ -357,7 +357,7 @@ export function crearModelos(c) {
   const fdmy = (d) => (d ? `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` : '');
   const nf3 = (n) => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   const k3 = (v) => (+v).toLocaleString('es-ES', { maximumFractionDigits: 3 });
-  const oblIntE = (e) => ['HER', 'ESP', 'HIS'].includes(String(e?.siglas ?? '').toUpperCase()) || /herogra\s+fertiliz|herogra\s+especiales|hispalense/i.test(e?.nombre ?? ''); // Intrastat: solo Herogra, Especiales e Hispalense
+  const oblIntE = (e) => ['HER', 'ESP', 'HIS', 'FER'].includes(String(e?.siglas ?? '').toUpperCase()) || /herogra\s+fertiliz|herogra\s+especiales|hispalense|fertinova/i.test(e?.nombre ?? ''); // Intrastat: solo Herogra, Especiales e Hispalense
   const MES_L = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
   // ================= Modelo 592 · impuesto especial sobre los envases de plástico no reutilizables =================
@@ -641,7 +641,22 @@ export function crearModelos(c) {
     const nif = (o.flujoF === 'Introducción' && C.nifIntro !== 'Sí') ? '' : o.nifExp;
     return `${[o.em, prov, intraTx(C.incoterm), nat, intraTx(o.r[5]), '', intraTx(o.nc), o.em, intraTx(C.regimen), nf(o.r[7], 3), '', nf(o.r[8], 2), nf(o.r[9], 2), nif].join(';')};`;
   }
+  // Excel de Business Central (Fertinova): columnas Tipo, Fecha, N.º documento, N.º producto, Cód. arancelario, Código país/región, CIF/NIF, Naturaleza de la transacción, Modo transporte, Peso neto, Importe, Valor estadístico…
+  // Se pasa a las 14 columnas del Intrastat de Dynamics: «Envío» (albarán de venta) = expedición; «Albarán» (albarán de compra) = llegada. La provincia sale del CIF de la empresa (B18… = 18).
+  function intraDeBC(filas, e) {
+    const hi = filas.findIndex((r) => r && r.some((x) => norm(x) === 'cod arancelario') && r.some((x) => norm(x) === 'tipo') && r.some((x) => norm(x) === 'valor estadistico'));
+    if (hi < 0) return null;
+    const H = filas[hi].map((x) => norm(x)), ix = (n) => H.indexOf(norm(n));
+    const c = { tipo: ix('Tipo'), fecha: ix('Fecha'), doc: ix('N.º documento'), prod: ix('N.º producto'), nc: ix('Cód. arancelario'), pais: ix('Código país/región'), nif: ix('CIF/NIF'), nat: ix('Naturaleza de la transacción'), mt: ix('Modo transporte'), peso: ix('Peso neto'), imp: ix('Importe'), est: ix('Valor estadístico') };
+    const cif = String(e?.cif ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''), prov = /^[A-Z]\d{2}/.test(cif) ? cif.slice(1, 3) : '';
+    const g = (r, k) => (c[k] >= 0 ? r[c[k]] : null);
+    return filas.slice(hi + 1).filter((r) => r && r.some((v) => v !== null && v !== '') && fechaUtc(g(r, 'fecha'))).map((r) => {
+      let nif = String(g(r, 'nif') ?? '').trim().toUpperCase().replace(/[\s.-]/g, ''); if (/^[A-Z]{2}/.test(nif) && nif.slice(0, 2) === nif.slice(2, 4)) nif = nif.slice(2); // PTPT517637260 → PT517637260
+      return [g(r, 'fecha'), /^env/.test(norm(g(r, 'tipo'))) ? 'Expedición' : 'Llegada', String(g(r, 'pais') ?? '').trim(), prov, g(r, 'nat'), g(r, 'mt'), g(r, 'nc'), g(r, 'peso'), g(r, 'imp'), g(r, 'est'), nif, g(r, 'prod'), '', g(r, 'doc')];
+    });
+  }
   async function intraAnadirFilas(filas) {
+    const bc = intraDeBC(filas, empresa()); if (bc) filas = bc;
     const D = datosIntra(); if (!D) return; let n = 0;
     filas.forEach((r) => {
       if (!r || !r.some((v) => v !== null && v !== '')) return; if (String(r[0] ?? '').trim().toLowerCase() === 'fecha') return; // cabecera
@@ -656,7 +671,8 @@ export function crearModelos(c) {
   // «Recoger ahora» (descarga semanal de D365): carga un Intrastat en la empresa del fichero (no tiene por qué ser la elegida), sin duplicar lo que ya está.
   // Se compara por contenido y por número de veces, así dos líneas iguales del mismo archivo (mismas mercancías y factura) se conservan.
   async function intraIngesta(empId, file) {
-    const sh = await hojasExcel(file), filas = (sh.find((h) => h.rows.some((r) => r && String(r[0] ?? '').trim().toLowerCase() === 'fecha')) ?? sh[0])?.rows ?? [];
+    const sh = await hojasExcel(file), filas0 = (sh.find((h) => h.rows.some((r) => r && String(r[0] ?? '').trim().toLowerCase() === 'fecha')) ?? sh[0])?.rows ?? [];
+    const filas = intraDeBC(sh[0]?.rows ?? [], S.empresas.find((x) => x.id === empId)) ?? filas0; // Excel de Business Central: se convierte al formato del Intrastat de Dynamics
     const { data, error: e0 } = await db.from('registros').select('id,datos').eq('empresa_id', empId).eq('tipo', 'intra').maybeSingle();
     if (e0) throw new Error(e0.message);
     const d = data?.datos ?? { rows: [], serv: [], cfg: {}, exp: {} }, rows = d.rows ?? [];
