@@ -1470,3 +1470,44 @@ header.doc h2 { font-size: clamp(.9rem, 1.3vw, 1.6rem); padding-left: .8rem; }
 header.doc h2 { text-wrap: balance; line-height: 1.1; }
 header.doc .doc-r, .doc-sel { gap: .4rem; }
 header.doc img.logo-hg { height: 40px; max-width: 130px; margin-left: .3rem; }
+
+/* Cabecera mas alta y con letra mas grande */
+header.doc { min-height: 84px; padding: .9rem 1.5rem; }
+header.doc .doc-emp { font-size: .95rem; }
+header.doc .doc-sub { font-size: .8rem; }
+header.doc .doc-per { font-size: 1rem; }
+header.doc h2 { font-size: clamp(1.1rem, 1.55vw, 2.1rem); }
+header.doc img.logo-prog { height: 52px; }
+header.doc img.logo-hg { height: 54px; max-width: 170px; }
+header.doc .doc-r > div:last-child { font-size: .8rem; }
+header.doc .doc-r b { font-size: .95rem; }
+.doc-sel label, .doc-sel .lbl { font-size: .74rem; }
+.doc-sel select, .doc-sel .sel-btn span { font-size: .85rem; }
+.doc-sel select, .doc-sel .sel-btn { padding-top: .45rem; padding-bottom: .45rem; }
+.doc-sel .lbl { width: 270px; }
+.doc-sel .two { grid-template-columns: 76px 190px; }
+
+header.doc { min-height: 78px; padding: .8rem 1.3rem; }
+header.doc .doc-emp { font-size: clamp(.7rem, .62vw, .9rem); white-space: nowrap; }
+header.doc .doc-sub { font-size: clamp(.62rem, .52vw, .78rem); white-space: nowrap; }
+header.doc .doc-per { font-size: clamp(.75rem, .66vw, .95rem); white-space: nowrap; }
+header.doc h2 { font-size: clamp(1rem, 1.2vw, 1.8rem); }
+.doc-sel .lbl { width: clamp(190px, 13vw, 260px); }
+.doc-sel .two { grid-template-columns: clamp(64px, 4vw, 76px) clamp(140px, 9.5vw, 185px); }
+.doc-sel select, .doc-sel .sel-btn span { font-size: clamp(.72rem, .62vw, .85rem); }
+header.doc img.logo-hg { height: 50px; }
+
+/* Logo de la empresa: ocupa todo el ancho de la botonera y se ajusta a su espacio */
+img.logo-aside, span.logo-aside { width: 100%; height: clamp(54px, 8.5vh, 96px); max-height: none; object-fit: contain; box-sizing: border-box; padding: 5px 8px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+img.logo-aside { display: block; max-width: 100%; }
+
+/* Desplegable de empresa en la cabecera: fondo blanco, texto oscuro y la opcion marcada se distingue */
+.doc-sel .sel-menu { background: #fff; color: #1d2330; border: 1px solid #c8d3ea; box-shadow: 0 8px 24px rgba(11,31,77,.35); border-radius: 12px; padding: .3rem; z-index: 80; }
+.doc-sel .sel-op, .doc-sel .sel-op span, .doc-sel .sel-op b { color: #14286a; background: transparent; }
+.doc-sel .sel-op { padding: .5rem .7rem; border-radius: 8px; }
+.doc-sel .sel-op:hover { background: #e3ecff; }
+.doc-sel .sel-op.on { background: #1e3a8a; }
+.doc-sel .sel-op.on, .doc-sel .sel-op.on span, .doc-sel .sel-op.on b { color: #fff; }
+.doc-sel .sel-menu .sel-op:not(.on), .doc-sel .sel-menu .sel-op:not(.on) * { color: #14286a !important; }
+.doc-sel .sel-menu .sel-op.on, .doc-sel .sel-menu .sel-op.on * { color: #fff !important; }
+.doc-sel .sel-menu .sel-op { font-weight: 600; }
