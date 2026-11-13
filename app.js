@@ -264,6 +264,10 @@ function vistaVistas() {
 }
 // Vista del menú (se elige en Administración › Vistas): false = la de siempre (bloques arriba); true = bloques a la izquierda y pestañas en píldoras arriba
 const menuNuevo = () => { try { return localStorage.getItem('imp-menuNuevo') === '1'; } catch { return false; } };
+// Tamaño de las pestañas (vista nueva): ancho y texto, común a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
+let TP = {}; try { TP = JSON.parse(localStorage.getItem('imp-tpill') || '{}') ?? {}; } catch { TP = {}; }
+const tpCfg = (i) => ({ w: 210, t: 1, ...(TP[i] ?? {}) });
+const tpGuarda = () => { try { localStorage.setItem('imp-tpill', JSON.stringify(TP)); } catch { /* sin almacenamiento */ } };
 function bloquesLat() {
   if (!menuNuevo()) return '';
   return `<nav class="bl-wrap"><div class="bl-nav">${gruposVisibles().map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
@@ -283,9 +287,9 @@ function tabsNav() {
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div></div>` : ''}</div>`;
   }
   // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
-  const n = abierto ? abierto.ids.length : 0, filas = Math.ceil(n / 6) || 1, cols = Math.ceil(n / filas); // como la fila de bloques de antes, pero hasta 6 por fila (texto grande) y todas del mismo ancho
-  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${filas > 1 ? ' compacto' : ''}" style="--tc:${cols}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
-        <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div>` : ''}</div>`;
+  const c = abierto ? tpCfg(abierto.i) : null, rz = '<span class="tp-rz w" data-tprz="w" title="Arrastra para cambiar el ancho de todas las pestañas del bloque (doble clic: restablecer)"></span><span class="tp-rz t" data-tprz="t" title="Arrastra para cambiar el tamaño del texto de todas las pestañas del bloque (doble clic: restablecer)"></span>';
+  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}" data-g="${abierto.i}" style="--pw:${c.w}px;--pt:${c.t}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
+        <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}${rz}</button>`).join('')}</div>` : ''}</div>`;
 }
 
 // Años del desplegable de ejercicio: el actual más 1 y los 7 anteriores (y el elegido, si queda fuera).
@@ -948,6 +952,26 @@ root.addEventListener('input', (ev) => {
 
 // Soltar PDF sobre la franja punteada de datos censales
 // Menú de bloques: al pasar el ratón por un bloque se abre su panel (superpuesto, sin mover nada); al salir se cierra
+// Pestañas de la vista nueva: arrastrar el borde derecho cambia el ancho y el inferior el tamaño del texto, de todas las pestañas del bloque
+let tpArr = null, tpUlt = 0;
+root.addEventListener('mousedown', (ev) => {
+  const h = ev.target.closest?.('[data-tprz]'); if (!h) return;
+  ev.preventDefault(); const el = h.closest('.tpills'), i = Number(el.dataset.g), c = tpCfg(i);
+  tpArr = { i, k: h.dataset.tprz, x: ev.clientX, y: ev.clientY, w: c.w, t: c.t, el };
+});
+document.addEventListener('mousemove', (ev) => {
+  if (!tpArr) return;
+  const a = tpArr, c = (TP[a.i] ??= {});
+  if (a.k === 'w') c.w = Math.round(Math.min(560, Math.max(110, a.w + ev.clientX - a.x)));
+  else c.t = Math.round(Math.min(2.4, Math.max(0.7, a.t + (ev.clientY - a.y) / 120)) * 100) / 100;
+  a.el.style.setProperty('--pw', `${tpCfg(a.i).w}px`); a.el.style.setProperty('--pt', tpCfg(a.i).t);
+});
+document.addEventListener('mouseup', () => { if (!tpArr) return; tpArr = null; tpUlt = Date.now(); tpGuarda(); alinearPanel(); });
+root.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-tprz]') || Date.now() - tpUlt < 350) { ev.stopImmediatePropagation(); ev.preventDefault(); } }, true); // soltar tras arrastrar no abre la pestaña
+root.addEventListener('dblclick', (ev) => {
+  const h = ev.target.closest?.('[data-tprz]'); if (!h) return;
+  const i = Number(h.closest('.tpills').dataset.g); if (TP[i]) { delete TP[i][h.dataset.tprz]; tpGuarda(); } refrescarTabs();
+});
 // Vista de siempre: al pasar el ratón por un bloque se abre su panel; en la vista nueva (píldoras a la izquierda) solo se abre al pulsar
 let cierraGrp;
 root.addEventListener('mouseover', (ev) => {
