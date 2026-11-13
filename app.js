@@ -336,7 +336,7 @@ function render() {
         <button id="out" class="small">Salir</button></div>
     </aside>
     <main class="princ">
-      <header class="doc"><div class="doc-l"><img class="logo-prog" src="logos/asesoria.svg?v=3" alt=""><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
+      <header class="doc"><div class="doc-l"><img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO Asesoría"><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
         <div>
         <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
         <p class="doc-sub">Inicio · grupos de pestañas</p>
