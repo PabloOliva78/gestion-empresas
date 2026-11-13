@@ -739,6 +739,9 @@ export function crearModelos(c) {
     const est = (a, b, d) => (Math.abs(a) < 0.005 && Math.abs(b) < 0.005 ? '<span class="sinp">Sin operaciones</span>' : Math.abs(d) <= tol
       ? '<b class="ok" style="color:#0a6;background:#e6f6ec;padding:1px 8px;border-radius:3px">Cuadra</b>' : '<b class="dif-ko" style="color:#a4161a;background:#fde7e7;padding:1px 8px;border-radius:3px">Revisar</b>');
     const tot = [0, 0, 0, 0, 0, 0];
+    // regla: en cada mes el Intrastat no debe ser mayor que el 349 del mismo mes (más la tolerancia)
+    let nMayor = 0;
+    const mayor = '<b class="dif-ko" style="color:#a4161a;background:#fde7e7;padding:1px 6px;border-radius:3px;display:block;margin-top:2px" title="En este mes el Intrastat supera al 349">Intrastat &gt; 349</b>';
     const filasRes = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
       const iE = r2(O.filter((o) => o.anio === ej && o.mes === m && o.flujoConc === 'Expedición').reduce((s, o) => s + o.impConc, 0));
@@ -749,10 +752,12 @@ export function crearModelos(c) {
       const mI = r2(sop.filter((l) => mesDe(l) === m && bienA(l)).reduce((s, l) => s + (+l.base || 0), 0));
       const dE = r2(iE - mE), dI = r2(iI - mI);
       [iE, mE, dE, iI, mI, dI].forEach((v, k) => { tot[k] = r2(tot[k] + v); });
-      return `<tr><td>${MES_L[i].toUpperCase()}</td><td class="n">${guion(iE)}</td><td class="n">${guion(mE)}</td><td class="n ${Math.abs(dE) > tol ? 'dif-ko' : ''}">${guion(dE)}</td><td class="c">${est(iE, mE, dE)}</td>
-        <td class="n">${guion(iI)}</td><td class="n">${guion(mI)}</td><td class="n ${Math.abs(dI) > tol ? 'dif-ko' : ''}">${guion(dI)}</td><td class="c">${est(iI, mI, dI)}</td></tr>`;
+      const exE = dE > tol, exI = dI > tol; if (exE) nMayor++; if (exI) nMayor++;
+      return `<tr><td>${MES_L[i].toUpperCase()}</td><td class="n">${guion(iE)}</td><td class="n">${guion(mE)}</td><td class="n ${Math.abs(dE) > tol ? 'dif-ko' : ''}">${guion(dE)}</td><td class="c">${est(iE, mE, dE)}${exE ? mayor : ''}</td>
+        <td class="n">${guion(iI)}</td><td class="n">${guion(mI)}</td><td class="n ${Math.abs(dI) > tol ? 'dif-ko' : ''}">${guion(dI)}</td><td class="c">${est(iI, mI, dI)}${exI ? mayor : ''}</td></tr>`;
     }).join('');
-    const resumen = `<table class="aud mov it-t"><thead><tr><th rowspan="2">Mes</th><th colspan="4">EXPEDICIONES / ENTREGAS (clave E)</th><th colspan="4">INTRODUCCIONES / ADQUISICIONES (clave A)</th></tr>
+    const avisoMayor = nMayor ? `<div class="aviso"><p>✖ El Intrastat supera al 349 en ${nMayor} comprobación(es) mensual(es) (marcadas «Intrastat &gt; 349»). Cada mes el Intrastat no debe ser mayor que el 349: revisa facturas sin declarar en el 349, anticipos (R.UE.VA) o líneas del Intrastat de más.</p></div>` : '<p class="hint" style="color:#1a7f37">✓ En ningún mes el Intrastat supera al 349.</p>';
+    const resumen = `${avisoMayor}<table class="aud mov it-t"><thead><tr><th rowspan="2">Mes</th><th colspan="4">EXPEDICIONES / ENTREGAS (clave E)</th><th colspan="4">INTRODUCCIONES / ADQUISICIONES (clave A)</th></tr>
       <tr><th>Intrastat (valor facturado)</th><th>Modelo 349 clave E (entregas de bienes)</th><th>Diferencia</th><th>Estado</th><th>Intrastat (valor facturado)</th><th>Modelo 349 clave A (adquisiciones de bienes)</th><th>Diferencia</th><th>Estado</th></tr></thead>
       <tbody>${filasRes}<tr class="tot200"><td>TOTAL ${ej}</td>${tot.map((v, k) => `<td class="n">${nf2(v)}</td>${k === 2 || k === 5 ? '<td></td>' : ''}`).join('')}</tr></tbody></table>`;
     const serv = `<table class="aud mov it-t"><thead><tr><th>Factura</th><th>Fecha</th><th>NIF</th><th>Nombre</th><th>País</th><th>Base 349 (€)</th><th></th></tr></thead><tbody>
@@ -987,6 +992,9 @@ export function crearModelos(c) {
       const ej = ejercicio(), n = (cur.datos.rows ?? []).filter((r) => fechaUtc(r[0])?.getUTCFullYear() === ej).length;
       // importe del periodo elegido: suma de expediciones e introducciones (informativo, no se paga)
       const ms = /^\d\d$/.test(S.periodo ?? '') ? [+S.periodo] : /^[1-4]T$/.test(S.periodo ?? '') ? [0, 1, 2].map((i) => (+S.periodo[0] - 1) * 3 + i + 1) : Array.from({ length: 12 }, (_, i) => i + 1), im = intraImportes(ej, ms, grande('fact-E') ?? [], grande('fact-R') ?? []);
+      // la píldora dice lo que dice el modelo: los importes de las dos declaraciones (expedición e introducción) de los ficheros, sin sumarlas (son declaraciones distintas)
+      const Dp = datosIntra(), Op = Dp ? calcIntra(Dp, grande('fact-E') ?? [], grande('fact-R') ?? []).filter((o) => o.anio === ej && ms.includes(o.mes) && o.incluir === 1) : [];
+      if (Op.length) { const fv = (o) => (o.flujoF !== o.flujo ? Math.abs(o.valor) : o.valor), sf = (fl) => r2(Op.filter((o) => o.flujoF === fl).reduce((a, o) => a + fv(o), 0)); return { t: `E ${eur(sf('Expedición'))} · I ${eur(sf('Introducción'))}`, c: 'amar' }; }
       if (im) return { t: eur(r2(im.exp + im.int)), c: 'amar' };
       return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
     },
