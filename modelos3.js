@@ -800,11 +800,43 @@ export function crearModelos3(c) {
       </tbody></table></div>
       <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 202» de cada empresa (modalidad 40.2 con el 200 presentado del año anterior; 40.3 con la PyG o el sumas y saldos del periodo que hayas soltado allí). Presentado = la casilla 34 del 202 en «Impuestos presentados». Cuadra si la diferencia es de 1 € o menos. Las pymes solo salen si tienen 202 presentado o datos propios. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
   }
+  // ================= Conciliación mod 200: calculado frente a presentado, por empresa (resumen de control; solo lee) =================
+  // el 200 que se presenta en el ejercicio elegido es el del anterior (en 2026, el IS de 2025); se usa el mismo cálculo de la pestaña «Modelo 200» con el sumas y saldos de cada empresa
+  function filas200() {
+    const selAnt = S.sel, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas];
+    try {
+      for (const e of lista) {
+        S.sel = e.id;
+        const ej = ejercicio200(), hayBal = efLineas(ej).length > 0;
+        let R = null; if (hayBal) { try { R = calc200(); } catch { /* sin datos */ } }
+        const pr = { ci: presDe(ej + 1, '200', 'A', 'cuota'), res: presDe(ej + 1, '200', 'A', 'res') };
+        const pres = R?.pres ?? pr;
+        const calcCi = R ? R.D[41] : null, calcRes = R ? R.D[52] : null;
+        const dCi = calcCi !== null && pres.ci !== null ? r2(calcCi - pres.ci) : null, dRes = calcRes !== null && pres.res !== null ? r2(calcRes - pres.res) : null;
+        const hayPres = pres.ci !== null || pres.res !== null;
+        const est = !R ? (hayPres ? ['aviso', 'Presentado; falta el balance de sumas y saldos de ' + ej + ' para calcular'] : ['nd', 'Sin sumas y saldos ni 200 presentado'])
+          : !hayPres ? ['aviso', 'Pendiente de presentar'] : (dCi === null || Math.abs(dCi) <= 1) && (dRes === null || Math.abs(dRes) <= 1) ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
+        out.push({ e, ej, calcCi, calcRes, pres, dCi, dRes, est });
+      }
+    } finally { S.sel = selAnt; }
+    return out;
+  }
+  function vistaC200() {
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const F = filas200(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, n = (k) => F.filter((x) => x.est[0] === k).length, num = (v) => (v === null || v === undefined ? '—' : money(v));
+    return `<section class="dsec"><h3>Conciliación mod 200 · Impuesto sobre Sociedades del ejercicio ${F[0]?.ej ?? ejPanel() - 1}</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${n('ok')} cuadran · ${ic.ko} ${n('ko')} con diferencia · ${ic.aviso} ${n('aviso')} pendientes o sin datos para calcular · ${ic.nd} ${n('nd')} sin datos</p>
+      <div class="wrap"><table class="tabla"><thead><tr><th rowspan="2">Empresa</th><th colspan="3">Cuota íntegra (00562)</th><th colspan="3">Resultado de la liquidación (00621)</th><th rowspan="2"></th><th rowspan="2">Estado</th></tr>
+      <tr><th>Calculada</th><th>Presentada</th><th>Dif.</th><th>Calculado</th><th>Presentado</th><th>Dif.</th></tr></thead><tbody>
+      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td class="n">${num(x.calcCi)}</td><td class="n">${num(x.pres.ci)}</td><td class="n">${num(x.dCi)}</td><td class="n">${num(x.calcRes)}</td><td class="n">${num(x.pres.res)}</td><td class="n">${num(x.dRes)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('')}</tbody></table></div>
+      <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 200» de cada empresa, a partir del balance de sumas y saldos del ejercicio del impuesto. Presentado = las casillas del 200 que hay en «Impuestos presentados» (el 200 de un ejercicio se guarda en el año siguiente). Cuadra si las dos diferencias son de 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
+  }
   const kinds = { m202pyg: cargarPyg202 };
   const tabs = {
     mod200: ['Modelo 200', 'IS desde balance y PyG', vista200],
     mod202: ['Modelo 202', 'Pagos fraccionados IS', vista202],
     c202: ['Conciliación mod 202', 'Calculado frente a presentado', vistaC202],
+    c200: ['Conciliación mod 200', 'Calculado frente a presentado', vistaC200],
   };
   return { tabs, kinds, acciones, badges };
 }
