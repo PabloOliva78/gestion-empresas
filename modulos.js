@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=352';
+import { crearModelos } from './modelos.js?v=363';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=2';
@@ -5477,7 +5477,7 @@ export function crearModulos(c) {
   };
   const R2 = crearRegistral({ db, S, esc, render, cargar, empresa, puede, eur, subir, docs: DOCS, leerPdf: (f) => leerPdf(f), filasExcel: (f) => filasExcel(f), ocrPdf: (f, cb) => ocrPdf(f, cb) });
   Object.assign(tabs, R2.tabs);
-  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, leerPdf: (f) => leerPdf(f), calc303: (...a) => c303(...a), calc349: calcular349, calc349Ops: calcular349Ops });
+  const M4 = crearModelos({ db, S, esc, render, empresa, puede, eur, grande, obl592, bancoDe, empOrden, leerPdf: (f) => leerPdf(f), calc303: (...a) => c303(...a), calc349: calcular349, calc349Ops: calcular349Ops });
   Object.assign(tabs, M4.tabs);
   Object.assign(badges, M4.badges);
   // 303 de un periodo (con sus ajustes y la compensación disponible) y casilla total de retenciones de cada modelo, para el 390 y los resúmenes anuales

@@ -926,10 +926,45 @@ export function crearModelos(c) {
   document.addEventListener('input', (ev) => { const k = ev.target.dataset?.intrafil; if (!k) return; intraF = { ...intraF, [k]: ev.target.value }; intraFiltrar(); });
 
   const kinds = { m232: cargar232, m592: cargar592, a22: a22Cargar, intra: cargarIntra };
+  // ================= Conciliación mod 592: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
+  // mismo cálculo que la pestaña «Modelo 592» con los movimientos cargados de cada empresa (HER, ESP y LYS); presentado = el 592 de «Impuestos presentados»
+  function filas592() {
+    const ej = String(ejercicio()), selAnt = S.sel, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas]; let cargando = false;
+    try {
+      for (const e of lista) {
+        if (!obl592(e)) continue;
+        S.sel = e.id;
+        const cur = big('m592-mov', () => ({ fab: [], aic: [] }));
+        if (!cur) { cargando = true; continue; }
+        const mov = { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, d = datos592();
+        const prs = S.registros.find((x) => x.tipo === 'prs' && x.empresa_id === e.id && x.ejercicio === +ej)?.datos ?? {};
+        const pers = e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'] : Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+        for (const per of pers) {
+          const L = calc592De(d, mov, ej, per), P = prs[`592|${per}`] ?? null, hayMov = L.fab.length > 0 || L.aic.length > 0;
+          if (!P && !hayMov) continue;
+          const n = (v) => (v === undefined || v === null || v === '' ? null : Number(v)), pRes = P ? n(P.res) : null, pCuota = P ? n(P.cuota) : null;
+          const dRes = pRes !== null ? r2(L.res - pRes) : null;
+          const est = !P ? ['aviso', 'Pendiente de presentar'] : !hayMov ? ['aviso', 'Presentado; sin movimientos cargados para calcular'] : dRes !== null && Math.abs(dRes) <= 1 ? ['ok', 'Cuadra'] : ['ko', 'Diferencia'];
+          out.push({ e, per, calcCuota: L.cuota, pCuota, calcRes: L.res, pRes, dRes, est, mov: L.fab.length + L.aic.length });
+        }
+      }
+    } finally { S.sel = selAnt; }
+    return { filas: out, cargando };
+  }
+  function vistaC592() {
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const { filas: F, cargando } = filas592(), ej = ejercicio(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length, num = (v) => (v === null || v === undefined ? '—' : nf2(v));
+    return `<section class="dsec"><h3>Conciliación mod 592 · impuesto de envases de plástico no reutilizables · ${ej}</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia · ${ic.aviso} ${k('aviso')} pendientes o sin movimientos${cargando ? ' · ⏳ cargando los movimientos de alguna empresa…' : ''}</p>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Periodo</th><th>Movimientos</th><th>Cuota calculada</th><th>Cuota presentada</th><th>A ingresar calculado</th><th>A ingresar presentado</th><th>Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
+      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td>${x.per} ${ej}</td><td class="n">${x.mov}</td><td class="n">${num(x.calcCuota)}</td><td class="n">${num(x.pCuota)}</td><td class="n">${num(x.calcRes)}</td><td class="n">${num(x.pRes)}</td><td class="n">${num(x.dRes)}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || '<tr><td colspan="10" class="vacio">Sin periodos del 592 en este ejercicio (el modelo solo está activado para Herogra Fertilizantes, Herogra Especiales y Lysur).</td></tr>'}</tbody></table></div>
+      <p class="hint">Calculado = el mismo cálculo de la pestaña «Modelo 592» con el libro registro AIC y la contabilidad de fabricantes cargados de cada empresa. Presentado = la cuota y el total a ingresar del 592 en «Impuestos presentados». Cuadra si el total a ingresar difiere en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
+  }
   const tabs = {
     modintra: ['Intrastat', 'Fichero AEAT', vistaIntra],
     c349i: ['Conciliación 349 - Intrastat', 'Bienes · por mes y factura', vistaIntraConc],
     mod592: ['Modelo 592', 'Envases de plástico', vista592],
+    c592: ['Conciliación mod 592', 'Calculado frente a presentado', vistaC592],
     moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
