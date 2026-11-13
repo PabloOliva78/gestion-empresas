@@ -288,7 +288,7 @@ function tabsNav() {
   }
   // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
   const c = abierto ? tpCfg(abierto.i) : null, rz = '<span class="tp-rz w" data-tprz="w" title="Arrastra para cambiar el ancho de todas las pestañas del bloque (doble clic: restablecer)"></span><span class="tp-rz t" data-tprz="t" title="Arrastra para cambiar el tamaño del texto de todas las pestañas del bloque (doble clic: restablecer)"></span>';
-  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}${c.w ? ' fijo' : ''}" data-g="${abierto.i}" style="${c.w ? `--pw:${c.w}px;` : ''}--pt:${c.t};--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
+  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}${c.w ? ' fijo' : ''}${c.a === 'l' ? ' al-l' : c.a === 'r' ? ' al-r' : ''}" data-g="${abierto.i}" style="${c.w ? `--pw:${c.w}px;` : ''}--pt:${c.t};--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}${rz}</button>`).join('')}</div>` : ''}</div>`;
 }
 
@@ -321,6 +321,8 @@ function render() {
         <span class="hint" id="pdfEstado"></span>` : ''}
       <div class="lat-ctl">
       <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
+      ${menuNuevo() ? (() => { const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab)), a = g ? (tpCfg(g.i).a ?? 'c') : 'c';
+    return `<div class="zoom-c no-print" title="Alineación del texto de las píldoras de las pestañas (todas las del bloque)"><span>Texto pestañas</span>${[['l', 'Izquierda', '⇤'], ['c', 'Centro', '↔'], ['r', 'Derecha', '⇥']].map(([k, n, s]) => `<button data-talin="${k}" title="${n}"${a === k ? ' class="on"' : ''}>${s}</button>`).join('')}</div>`; })() : ''}
       ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
       <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
       <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
@@ -827,6 +829,11 @@ root.addEventListener('click', (ev) => {
   if (ir && !ev.target.closest('button')) { S.tab = ir.dataset.ir; S.grp = -1; return render(); }
   const t = ev.target.closest('button');
   if (!t) return;
+  if (t.dataset.talin !== undefined) { // alineación del texto de las píldoras del bloque abierto
+    const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab));
+    if (g) { (TP[g.i] ??= {}).a = t.dataset.talin; tpGuarda(); render(); }
+    return;
+  }
   if (t.dataset.zoom !== undefined) {
     const z = t.dataset.zoom === '0' ? 1 : zoomDe() + (t.dataset.zoom === '+' ? 0.1 : -0.1), v = Math.min(2, Math.max(0.5, Math.round(z * 10) / 10));
     if (v === 1) delete S.zooms[S.tab]; else S.zooms[S.tab] = v;
