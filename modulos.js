@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=13';
-import { crearModelos } from './modelos.js?v=367';
+import { crearModelos } from './modelos.js?v=369';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=2';
@@ -3680,6 +3680,13 @@ export function crearModulos(c) {
     const obl = new Set(obP.map((o) => o.mod));
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
       const c = calc[m], pr = pres[m], o = (() => { const q = obP.filter((x) => x.mod === m); return m === '583' && q.length > 1 ? { ...q[0], pres: q.every((x) => x.pres) } : q[0]; })(), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
+      if (m === '583' && obP.some((x) => x.mod === '583')) { // en octubre se presentan dos 583 (3T del año y anual del anterior): una tarjeta para cada uno, con su importe
+        return obP.filter((x) => x.mod === '583').map((x) => {
+          let v = null; try { v = M4.importe583(x.yP, x.per); } catch (err) { /* sin retribuciones */ }
+          const val = x.pres && x.imp !== null && x.imp !== undefined ? x.imp : v;
+          return tarjeta(id, `Modelo 583 · ${x.per}/${x.yP}`, `<div class="dash-v">${g(val)}</div><div class="dash-s">${val === null ? 'Obligatorio' : val > 0.005 ? 'A ingresar' : val < -0.005 ? 'A devolver' : 'Cero'}</div><div class="dash-s">${x.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
+        }).join('');
+      }
       if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(intr ? rr(intr.exp + intr.int) : null)}</div><div class="dash-s">Informativa${intr ? ` · Exp. ${g(intr.exp)} · Imp. ${g(intr.int)}${ii ? '' : ' (presentado)'}` : ' · sin Intrastat este mes'}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!['111', '115', '123', '303', '349', '592', '583'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!o && c === undefined && pr === null) return '';

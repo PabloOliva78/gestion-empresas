@@ -1082,6 +1082,11 @@ export function crearModelos(c) {
     mod583: () => {
       if (!S.sel) return { t: 'Por empresa' };
       const R = calc583(ejercicio(), null);
+      if (S.periodo === '10') { // en octubre se presentan dos 583: el 3T del año y el anual (0A) del anterior; la pastilla enseña los dos importes si los hay
+        const A = calc583(ejercicio() - 1, null), hay = (X) => X.inst.some((x) => x.q.some((v) => v)),
+          a = hay(R) && R.pers.includes('3T') ? R.tot('3T') : null, b = hay(A) && A.pers.includes('0A') ? A.tot('0A') : null;
+        if (a !== null || b !== null) return { t: `3T/${ejercicio()} ${a === null ? '—' : eur(a)} · 0A/${ejercicio() - 1} ${b === null ? '—' : eur(b)}`, c: (a > 0.005 || b > 0.005) ? 'rojo' : 'verde' };
+      }
       return R.inst.some((x) => x.q.some((v) => v)) ? chipImp(R.tot(R.per), R.per) : { t: 'Sin datos' };
     },
     mod592: () => {
