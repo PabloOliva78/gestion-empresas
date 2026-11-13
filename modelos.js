@@ -367,7 +367,12 @@ export function crearModelos(c) {
     const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return null;
     return calc592De(datos592(), { fab: cur.datos.fab ?? [], aic: cur.datos.aic ?? [] }, String(ej), per).res;
   }
-  // importar los registros desde un Excel (como las tablas D y E de la hoja Mod592, o un listado con esas columnas)
+  // importe a ingresar del 583 del periodo (cuota diferencial) con las retribuciones de su pestaña (a mano o del mayor); null si no aplica o aún no hay retribuciones
+  function importe583(ej, per) {
+    if (!per || !(c.obl583 ? c.obl583(empresa()) : false)) return null;
+    const R = calc583(Number(ej), grande('may-mov'));
+    return R.inst.some((x) => x.q.some((v) => v)) && R.pers.includes(per) ? R.tot(per) : null;
+  }  // importar los registros desde un Excel (como las tablas D y E de la hoja Mod592, o un listado con esas columnas)
   async function cargar592(files) {
     const cur = big('m592-mov', () => ({ fab: [], aic: [] })); if (!cur) return;
     const mov = cur.datos; mov.fab ??= []; mov.aic ??= []; let nF = 0, nA = 0;
@@ -1111,5 +1116,5 @@ export function crearModelos(c) {
       return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
     },
   };
-  return { tabs, kinds, acciones, adif, badges, intraIngesta, oblIntE, intraImportes, importe592 };
+  return { tabs, kinds, acciones, adif, badges, intraIngesta, oblIntE, intraImportes, importe592, importe583 };
 }
