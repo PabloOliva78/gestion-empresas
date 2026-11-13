@@ -1319,27 +1319,56 @@ export function crearModulos(c) {
     const per = [`<option value="">Todo el ejercicio ${ej}</option>`,
       ...MESES.map((m, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}"${S.periodo === v ? ' selected' : ''}>Periodo ${v} (${m}) ${ej}</option>`; }),
       ...['1T', '2T', '3T', '4T'].map((q) => `<option value="${q}"${S.periodo === q ? ' selected' : ''}>Trimestre ${q} ${ej}</option>`)].join('');
-    const sel = (campo, valor, lista) => `<select data-fc="${campo}"><option value="">Todos</option>${lista.map((x) => `<option${x === valor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
-    const c = cuerpoFc(s, datos);
-    // el desplegable de países solo ofrece los que hay en la selección actual (periodo, código de impuesto y demás filtros), con su número de líneas
-    const selPais = (() => {
-      const guardado = fcPais; fcPais = ''; const base = lineasFc(s, datos); fcPais = guardado;
-      const cnt = new Map(); base.forEach((l) => { const cc = paisVis(l); cnt.set(cc, (cnt.get(cc) || 0) + 1); });
-      if (fcPais && !cnt.has(fcPais)) cnt.set(fcPais, 0);
-      const ops = [...cnt].map(([cc, n]) => [cc, String(NOMBRE_PAIS[cc] ?? cc).toUpperCase(), n]).sort((a, b) => a[1].localeCompare(b[1], 'es'));
-      return `<select data-fc="pais" title="País (solo los de la selección actual)"><option value="">País (todos · ${ops.length})</option>${ops.map(([cc, n, k]) => `<option value="${cc}"${cc === fcPais ? ' selected' : ''}>${cc} - ${esc(n)} (${k})</option>`).join('')}</select>`;
-    })();
+    const c = cuerpoFc(s, datos), O = opcionesFc(s, datos);
     const vuelta = S.vuelta && S.vuelta.fac === fcQ ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige la factura aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
+    // filtros en cascada: cada lista solo ofrece lo que hay con los demás filtros puestos (NIF, nombre, fecha, país, código, base y cuota)
+    const inF = (k, t, w) => `<input data-fqf="${k}" type="search" list="dlfc-${k}" autocomplete="off" value="${esc(fcF[k])}" placeholder="${t}" title="${t}"${w ? ` style="width:${w}"` : ''}>`;
     return `${vuelta}<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
-      <input data-fq type="search" placeholder="Buscar NIF, nombre, factura o importe…" value="${esc(fcQ)}">
-      ${[['pais', 'País'], ['nombre', 'Nombre'], ['nif', 'CIF / NIF'], ['codigo', 'Código'], ['base', 'Base'], ['cuota', 'Cuota'], ['fecha', 'Fecha']].map(([k, t]) => (k === 'pais' ? selPais : k === 'codigo'
-        ? `<select data-fc="cod" title="Código"><option value="">Código (todos)</option>${[...new Set(datos.map((l) => l.codigo || ''))].sort().map((x) => (x ? `<option${x === fcCod ? ' selected' : ''}>${esc(x)}</option>` : `<option value="__sin"${fcCod === '__sin' ? ' selected' : ''}>(sin código)</option>`)).join('')}</select>`
-        : `<input data-fqf="${k}" type="search" value="${esc(fcF[k])}" placeholder="${t}" title="${t}">`)).join('')}
+      ${inF('nif', 'NIF')}${inF('nombre', 'Nombre')}${inF('fecha', 'Fecha')}
+      <select data-fc="pais" title="País (solo los de la selección actual)">${htmlSelPais(O)}</select>
+      <select data-fc="cod" title="Código de impuesto (solo los de la selección actual)">${htmlSelCod(O)}</select>
+      ${inF('base', 'Base')}${inF('cuota', 'Cuota')}
+      ${fcQ ? `<button class="small no-print" data-act="m-fcqlimpiar" title="Quitar la búsqueda por nº de factura">Factura: «${esc(fcQ)}» ✕</button>` : ''}
       <span id="fcCuenta" class="hint">${c.n} facturas</span>
       ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
+      <span id="dlfc">${htmlDatalistsFc(O)}</span>
       <div id="fcTabla">${c.html}</div>`;
   }
 
+  // ---- Filtros en cascada de Emitidas y Recibidas: cada lista ofrece solo lo que hay cumpliendo los demás filtros ----
+  // líneas que cumplen todos los filtros menos el k (nif, nombre, fecha, pais, cod, base, cuota)
+  function sinFiltroFc(s, datos, k) {
+    const g = { cod: fcCod, pais: fcPais, fpais: fcF.pais, f: fcF[k] };
+    if (k === 'cod') fcCod = ''; else if (k === 'pais') { fcPais = ''; fcF.pais = ''; } else fcF[k] = '';
+    try { return lineasFc(s, datos); } finally { fcCod = g.cod; fcPais = g.pais; fcF.pais = g.fpais; if (k !== 'cod' && k !== 'pais') fcF[k] = g.f; }
+  }
+  function opcionesFc(s, datos) {
+    const L = (k) => sinFiltroFc(s, datos, k);
+    const uniq = (f, fn) => [...new Set(f.map(fn).filter((v) => v !== '' && v != null))];
+    const nums = (c, k) => [...new Set(L(k).map((l) => Math.round((Number(l[c]) || 0) * 100)))].sort((a, b) => a - b).map((v) => fnum(v / 100));
+    const cnt = (f, fn) => { const m = new Map(); f.forEach((l) => { const q = fn(l); m.set(q, (m.get(q) || 0) + 1); }); return m; };
+    return { nif: uniq(L('nif'), (l) => String(l.nif || '').toUpperCase()).sort(), nombre: uniq(L('nombre'), (l) => String(l.nombre || '').trim()).sort((a, b) => a.localeCompare(b, 'es')),
+      fecha: uniq(L('fecha'), (l) => l.fecha).sort().map((d) => d.split('-').reverse().join('/')), base: nums('base', 'base'), cuota: nums('cuota', 'cuota'),
+      paises: cnt(L('pais'), paisVis), cods: cnt(L('cod'), (l) => l.codigo || '') };
+  }
+  const htmlSelPais = (O) => {
+    const m = new Map(O.paises); if (fcPais && !m.has(fcPais)) m.set(fcPais, 0);
+    const ops = [...m].map(([cc, n]) => [cc, String(NOMBRE_PAIS[cc] ?? cc).toUpperCase(), n]).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+    return `<option value="">País (todos · ${ops.length})</option>${ops.map(([cc, n, k]) => `<option value="${cc}"${cc === fcPais ? ' selected' : ''}>${cc} - ${esc(n)} (${k})</option>`).join('')}`;
+  };
+  const htmlSelCod = (O) => {
+    const m = new Map(O.cods); if (fcCod && !m.has(fcCod)) m.set(fcCod, 0);
+    const ops = [...m].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    return `<option value="">Código (todos · ${ops.length})</option>${ops.map(([c, k]) => `<option value="${c === '' ? '__sin' : esc(c)}"${(c === '' ? fcCod === '__sin' : c === fcCod) ? ' selected' : ''}>${c === '' ? '(sin código)' : esc(c)} (${k})</option>`).join('')}`;
+  };
+  const htmlDatalistsFc = (O) => ['nif', 'nombre', 'fecha', 'base', 'cuota'].map((k) => `<datalist id="dlfc-${k}">${O[k].slice(0, 400).map((v) => `<option value="${esc(v)}"></option>`).join('')}</datalist>`).join('');
+  // al escribir en un filtro se actualizan las listas de los demás sin volver a dibujar la barra (así no se pierde el cursor)
+  function refrescarOpcionesFc(s, datos) {
+    const O = opcionesFc(s, datos), q = (x) => document.querySelector(x);
+    const dl = document.getElementById('dlfc'); if (dl) dl.innerHTML = htmlDatalistsFc(O);
+    const sp = q('select[data-fc="pais"]'); if (sp) sp.innerHTML = htmlSelPais(O);
+    const sc = q('select[data-fc="cod"]'); if (sc) sc.innerHTML = htmlSelCod(O);
+  }
   // La búsqueda actualiza solo la tabla, para no perder el cursor al escribir
   function buscarFcCampo(k, v) { if (k in fcF) { fcF[k] = v; buscarFc(fcQ); } }
   function buscarFc(v, mas) {
@@ -1351,6 +1380,7 @@ export function crearModulos(c) {
     const t = document.getElementById('fcTabla'), n = document.getElementById('fcCuenta');
     if (t) t.innerHTML = c.html;
     if (n) n.textContent = `${c.n} facturas`;
+    if (!mas) refrescarOpcionesFc(s, datos);
   }
   async function editarFc(clave, valor) {
     const [s, i, campo] = clave.split('|'), tipo = `fact-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
@@ -1404,7 +1434,7 @@ export function crearModulos(c) {
     try { await navigator.clipboard.writeText(n); } catch (_) { /* si no se copia, se escribe a mano */ }
     if (w) try { w.focus(); } catch (_) { /* otra pestaña */ }
   }
-  function setFc(campo, valor) { fcLim = 300; if (campo === 'cod') { fcCod = valor; fcPais = ''; } else fcPais = valor; render(); }
+  function setFc(campo, valor) { fcLim = 300; if (campo === 'cod') fcCod = valor; else fcPais = valor; render(); }
 
   // S.NC.ISP.A (ISP autorrepercutida) va siempre en el libro repercutido: lo que haya en el soportado se pasa (sin repetir lo que ya está)
   async function moverIspA(empresaId, filtro = () => true) {
@@ -4768,6 +4798,7 @@ export function crearModulos(c) {
       'm-siixl': () => excelConcSii(d.s),
       'm-fcnv': () => fcNvAbrir(d.s),
       'm-fcvuelta': () => { const v = S.vuelta; if (!v) return; S.vuelta = null; fcQ = ''; ['E', 'R'].forEach((x) => { if (siiFil[x].fac === v.fac) siiFil[x].fac = ''; }); S.periodo = v.periodo; S.tab = v.tab; S.grp = -1; render(); },
+      'm-fcqlimpiar': () => { fcQ = ''; S.vuelta = null; fcLim = 300; render(); },
       'm-fcmas': () => { fcLim = d.t ? 1e9 : fcLim + 500; buscarFc(fcQ, true); },
       'm-fcnvok': () => fcNvOk(),
       'm-fcnvx': () => { fcNueva = null; render(); },
