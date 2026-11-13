@@ -64,6 +64,7 @@ export function activarRedimension(raiz, pestana) {
     const guardado = leer();
     raiz.querySelectorAll('table').forEach((tabla) => {
       const m = mapa(tabla);
+      if (tabla.closest('.ttp')) { n++; return; } // Transacciones de proveedores: sus tablas ajustan el ancho por su cuenta (no se les aplican anchos fijos guardados)
       if (!m || m.ncols < 2 || !m.hojas.length) { n++; return; }
       const idx = n++;
       if (tabla.dataset.rs) return; // ya preparada
