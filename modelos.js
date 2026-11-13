@@ -875,6 +875,7 @@ export function crearModelos(c) {
     'm-a22add': async () => { const D = a22Datos(); D.filas.push({ per: `1T ${S.ejercicio}` }); await a22Guardar(D); render(); },
     'm-a22del': async (d) => { const D = a22Datos(); D.filas.splice(+d.i, 1); await a22Guardar(D); render(); },
     'm-a22csv': (d) => a22Csv(d.t),
+    'm-c232libros': () => { c232Libros = true; render(); },
     'm-a22borrar': async () => { if (!confirm('¿Quitar las compras y ventas cargadas para el A22?')) return; await bigGuardar('a22src', { compras: [], ventas: [], archivos: [] }); render(); },
     'm-a22pasar': async () => {
       const Sx = a22Src(); if (!Sx) return; const R = a22Calc(Sx), D = a22Datos();
@@ -929,6 +930,48 @@ export function crearModelos(c) {
   // ================= Conciliación mod 592: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
   // mismo cálculo que la pestaña «Modelo 592» con los movimientos cargados de cada empresa (HER, ESP y LYS); presentado = el 592 de «Impuestos presentados»
   const nfm = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
+  // ================= Conciliación mod 232: operaciones vinculadas, calculado (Emitidas y Recibidas) frente a presentado, por empresa (resumen de control; solo lee) =================
+  // el 232 de un ejercicio se presenta del 1 al 30 de noviembre del año siguiente; se declara cada entidad del grupo con la que se superan 250.000 €
+  let c232Libros = false; // los libros de IVA de todas las empresas solo se leen cuando se pulsa el botón (son pesados)
+  function filas232() {
+    const ej = m232EjDef(), selAnt = S.sel, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas], plazo = Date.UTC(ej + 1, 10, 30) + 864e5; let cargando = false;
+    try {
+      for (const e of lista) {
+        S.sel = e.id;
+        const D = m232Reg(ej), pres = m232Pres(ej, D), F = D.filas ?? [];
+        let calc = null;
+        if (c232Libros) {
+          const E = grande('fact-E'), Rr = grande('fact-R');
+          if (!E || !Rr) cargando = true;
+          else {
+            const R = calc232(ej), ob = new Set(R.filas.filter((x) => x.oblig).map((x) => x.id)), OPS = m232Ops(ej), M = new Map();
+            const g = (k) => { if (!M.has(k)) M.set(k, { pres: 0, calc: 0 }); return M.get(k); };
+            F.forEach((f) => { if (f.nif && ob.has(f.nif)) g(`${f.nif}|${f.op || '01'}|${f.ip === 'P' ? 'P' : 'I'}`).pres += parseNum(f.imp) || 0; });
+            Object.entries(OPS).forEach(([k, v]) => { if (ob.has(k.split('|')[0])) g(k).calc += v; });
+            const lineas = [...M.values()].map((x) => r2(x.pres - x.calc)), nDif = lineas.filter((d) => Math.abs(d) > 1).length;
+            calc = { nObl: ob.size, nLin: M.size, nDif, dif: r2(lineas.reduce((s, d) => s + Math.abs(d), 0)) };
+          }
+        }
+        if (!pres && !F.length && !(calc && calc.nObl)) continue; // solo salen las empresas con 232 registrado o que superan 250.000 € con alguna sociedad del grupo
+        const vencido = Date.now() > plazo;
+        const est = calc === null ? (pres ? ['aviso', 'Presentado; carga los libros para comparar'] : ['aviso', 'Con registros del 232 sin presentar; carga los libros para comparar'])
+          : calc.nObl && !pres ? [vencido ? 'ko' : 'aviso', vencido ? 'Obligada y sin 232 presentado (plazo vencido)' : 'Obligada: pendiente de presentar (hasta el 30/11/' + (ej + 1) + ')']
+            : !calc.nObl && pres ? ['aviso', 'Presentado, pero con los libros no supera 250.000 € con ninguna entidad'] : calc.nDif ? ['ko', `${calc.nDif} línea(s) con diferencia entre lo presentado y lo calculado`] : ['ok', 'Cuadra con los libros'];
+        out.push({ e, ej, pres, nFilas: F.length, calc, est });
+      }
+    } finally { S.sel = selAnt; }
+    return { filas: out, cargando, ej };
+  }
+  function vistaC232() {
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const { filas: F, cargando, ej } = filas232(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length;
+    return `<section class="dsec"><h3>Conciliación mod 232 · operaciones vinculadas · ejercicio ${ej} (se presenta en noviembre de ${ej + 1})</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia o sin presentar · ${ic.aviso} ${k('aviso')} pendientes${cargando ? ' · ⏳ leyendo los libros de alguna empresa…' : ''}</p>
+      <p class="no-print"><button class="small" data-act="m-c232libros"${c232Libros ? ' disabled' : ''}>${c232Libros ? '✓ Libros de IVA de todas las empresas cargados' : 'Cargar los libros de IVA de todas las empresas (para calcular)'}</button></p>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>232 presentado</th><th>Registros del 232</th><th>Entidades que superan 250.000 €</th><th>Líneas comparadas</th><th>Líneas con diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
+      ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td style="text-align:center">${x.pres ? 'Sí' : 'No'}</td><td class="n">${x.nFilas}</td><td class="n">${x.calc ? x.calc.nObl : '—'}</td><td class="n">${x.calc ? x.calc.nLin : '—'}</td><td class="n">${x.calc ? x.calc.nDif : '—'}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || `<tr><td colspan="8" class="vacio">${c232Libros ? 'Ninguna empresa supera 250.000 € con otra sociedad del grupo en ' + ej + ' ni tiene 232 registrado.' : 'Ninguna empresa tiene 232 registrado en ' + ej + '. Pulsa «Cargar los libros» para calcular quién está obligada.'}</td></tr>`}</tbody></table></div>
+      <p class="hint">Calculado = lo que sale de Emitidas (ingresos) y Recibidas (pagos) con las demás sociedades del grupo, por entidad, tipo de operación e ingreso/pago, igual que en la pestaña «Modelo 232». Solo cuentan las entidades que superan 250.000 € (las que se declaran). Presentado = los registros del 232 cargados o presentados. Cuadra si todas las líneas difieren en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
+  }
   // ================= Conciliación mod 583: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
   // mismo cálculo que la pestaña «Modelo 583» (retribuciones por trimestre a mano o desde el mayor); presentado = el 583 de «Impuestos presentados» del mismo ejercicio
   function filas583() {
@@ -998,6 +1041,7 @@ export function crearModelos(c) {
     mod592: ['Modelo 592', 'Envases de plástico', vista592],
     c592: ['Conciliación mod 592', 'Calculado frente a presentado', vistaC592],
     c583: ['Conciliación mod 583', 'Calculado frente a presentado', vistaC583],
+    c232: ['Conciliación mod 232', 'Calculado frente a presentado', vistaC232],
     moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
