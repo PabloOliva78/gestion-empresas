@@ -3669,7 +3669,7 @@ export function crearModulos(c) {
       try { const o583 = obligaciones(e, ej, presIndex()).filter((o) => o.mod === '583' && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))), vs = o583.map((o) => M4.importe583(o.yP, o.per)).filter((v) => v !== null && v !== undefined); if (vs.length) calc['583'] = rr(vs.reduce((s, v) => s + v, 0)); } catch (err) { /* sin retribuciones del 583 */ } // el 583 del periodo (3T y anual de octubre) con sus retribuciones // el 592 es a pagar: sale su cuota a ingresar (casilla 8) como el resto
     }
     const pres = { 111: hay(pv('111', 'retN')) || hay(pv('111', 'retP')) ? rr((pv('111', 'retN') || 0) + (pv('111', 'retP') || 0)) : null, 115: pv('115', 'ret') ?? null,
-      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */, 592: pv('592', 'res') ?? null };
+      123: pv('123', 'ret') ?? null, 303: pv('303', 'liq') ?? null /* resultado de la liquidación (casilla 71), no el resultado IVA (46) */, 349: hay(pv('349', 'imp')) ? rr(pv('349', 'imp') - (Number(pv('349', 'rect')) || 0)) : null /* importe operaciones − importe rectificaciones */, 592: pv('592', 'res') ?? null, 583: null /* el 583 se guarda por 3T / 0A: se mira si está presentado, no su importe */ };
     // modelos obligatorios del periodo (los mismos que salen en Liquidaciones a presentar) y los que tienen datos
     const obP = p ? obligaciones(e, ej, presIndex()).filter((o) => (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)))) : [];
     const ii = M4.intraImportes(ej, meses.map(Number), E, R, true); // Intrastat cargado (bloque 4): expediciones e introducciones del periodo; null si no hay
@@ -3679,7 +3679,7 @@ export function crearModulos(c) {
     const ORD_IMP = ['111', '115', '123', '200', '202', '303', '349', '583', '592', 'A22', '180', '190', '193', '232', '390', 'Intrastat'];
     const obl = new Set(obP.map((o) => o.mod));
     const imps = ORD_IMP.filter((m) => obl.has(m) || ['111', '115', '123', '303', '349'].includes(m)).map((m) => {
-      const c = calc[m], pr = pres[m], o = obP.find((x) => x.mod === m), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
+      const c = calc[m], pr = pres[m], o = (() => { const q = obP.filter((x) => x.mod === m); return m === '583' && q.length > 1 ? { ...q[0], pres: q.every((x) => x.pres) } : q[0]; })(), id = m === 'A22' ? 'moda22' : m === 'Intrastat' ? 'modintra' : 'mod' + m, tit = m === 'Intrastat' ? 'Intrastat' : 'Modelo ' + m;
       if (m === 'Intrastat') return tarjeta(id, tit, `<div class="dash-v">${g(intr ? rr(intr.exp + intr.int) : null)}</div><div class="dash-s">Informativa${intr ? ` · Exp. ${g(intr.exp)} · Imp. ${g(intr.int)}${ii ? '' : ' (presentado)'}` : ' · sin Intrastat este mes'}</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!['111', '115', '123', '303', '349', '592', '583'].includes(m)) return tarjeta(id, tit, `<div class="dash-v">${g(o.imp)}</div><div class="dash-s">Obligatorio</div><div class="dash-s">${o.pres ? ok('Presentado') : nd('Sin presentar')}</div>`);
       if (!o && c === undefined && pr === null) return '';
