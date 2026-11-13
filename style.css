@@ -1414,3 +1414,6 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 
 /* Transacciones: columnas de la tabla de proveedores redimensionables */
 .ttp .tt-main > thead th { position: relative; }
+
+/* logo fijo de Herogra Group arriba a la derecha (no cambia con la empresa) */
+header.doc img.logo-cab.logo-hg { height: 46px; max-width: 160px; padding: 3px 7px; }

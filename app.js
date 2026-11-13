@@ -342,7 +342,7 @@ function render() {
         <p class="doc-sub">Inicio · grupos de pestañas</p>
         <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div></div>
         <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
-        <div class="doc-r">${e ? logoHtml(e, 'logo-cab') : ''}<div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
+        <div class="doc-r"><img class="logo-cab logo-hg" src="logos/herogra-group.jpg?v=1" alt="Herogra Group"><div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
       ${tabsNav()}
       <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
