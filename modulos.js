@@ -3786,7 +3786,7 @@ export function crearModulos(c) {
       } catch (err) { ctas = `<p class="hint">No se han podido calcular los saldos: ${esc(err.message)}</p>`; }
     }
     // 4) liquidaciones pendientes de presentar
-    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.mod === 'Intrastat' ? (intr ? rr(intr.exp + intr.int) : null) : o.imp ?? calc[o.mod] ?? null })) : [];
+    const pend = p ? obligaciones(e, ej, presIndex()).filter((o) => !o.pres && (en583Oct(o) ? enPeriodo(o, p) : o.per === p || (/^[1-4]T$/.test(p) && enPeriodo(o, p)) || (o.mod === '232' && (/^\d\d$/.test(p) ? [+p] : /^[1-4]T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : []).includes(10)))).map((o) => ({ mod: o.mod, per: perTxt(o), imp: o.mod === 'Intrastat' ? (intr ? rr(intr.exp + intr.int) : null) : o.mod === '583' ? (o.imp ?? (() => { try { return M4.importe583(o.yP, o.per); } catch (err) { return null; } })()) /* 583: el importe de su periodo (0A del ejercicio anterior incluido), el de la pestaña del 583 de ese ejercicio */ : o.imp ?? calc[o.mod] ?? null })) : [];
     const siiTxt = [];
     [['E', 'SII emitidas', sE], ['R', 'SII recibidas', sR]].forEach(([s, n, L]) => {
       const c = L.filter((x) => (s === 'E' ? x.fecha >= rg.desde && x.fecha <= rg.hasta : x.ej === ej && (!p || x.per === p))).length;
