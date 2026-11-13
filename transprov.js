@@ -16,6 +16,22 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
   const quien = () => S.perfil?.nombre || S.perfil?.email || '';
   const ESTADOS = [['pend', 'Pendiente'], ['curso', 'En curso'], ['sub', 'Subsanada']];
   const nEst = (e) => ESTADOS.find((x) => x[0] === e)?.[1] ?? e;
+  // ---------- ancho de las columnas del desplegable: se arrastra en la cabecera y vale para TODOS los proveedores (se recuerda en este navegador) ----------
+  const CAB = ['Conciliado', 'Revisado', 'Fecha', 'Asiento', 'Factura', 'Fecha de documento', 'Descripción', 'Fecha de vencimiento', 'Fecha de vto. pagaré', 'Débito', 'Crédito', 'Saldo', 'Divisa', 'Forma de pago', 'Estado conciliación', 'Observaciones'];
+  const CW0 = [78, 74, 96, 100, 110, 112, 300, 112, 112, 92, 92, 92, 62, 200, 150, 280];
+  let CW = {}; try { CW = JSON.parse(localStorage.getItem('tprov-cw') || '{}') ?? {}; } catch { CW = {}; }
+  const cw = (i) => Math.max(40, +CW[i] || CW0[i]);
+  function aplicarCw() {
+    let st = document.getElementById('tt-cw-st'); if (!st) { st = document.createElement('style'); st.id = 'tt-cw-st'; document.head.appendChild(st); }
+    st.textContent = `.ttp .tt-dk { table-layout: fixed; width: ${CAB.reduce((s, _, i) => s + cw(i), 0)}px; min-width: 0; }` + CAB.map((_, i) => `.ttp .tt-dk th:nth-child(${i + 1}) { width: ${cw(i)}px; }`).join('');
+  }
+  try { aplicarCw(); } catch { /* sin documento */ }
+  let arr = null;
+  document.addEventListener('mousedown', (ev) => { const h = ev.target.closest?.('[data-ttrz]'); if (!h) return; ev.preventDefault(); const i = +h.dataset.ttrz; arr = { i, x: ev.clientX, w: cw(i) }; document.body.style.cursor = 'col-resize'; });
+  document.addEventListener('mousemove', (ev) => { if (!arr) return; CW[arr.i] = Math.max(40, Math.round(arr.w + ev.clientX - arr.x)); aplicarCw(); });
+  document.addEventListener('mouseup', () => { if (!arr) return; arr = null; document.body.style.cursor = ''; try { localStorage.setItem('tprov-cw', JSON.stringify(CW)); } catch { /* sin almacenamiento */ } });
+  document.addEventListener('dblclick', (ev) => { const h = ev.target.closest?.('[data-ttrz]'); if (!h) return; delete CW[h.dataset.ttrz]; aplicarCw(); try { localStorage.setItem('tprov-cw', JSON.stringify(CW)); } catch { /* */ } });
+  const restablecerCw = () => { CW = {}; aplicarCw(); try { localStorage.removeItem('tprov-cw'); } catch { /* */ } };
 
   // ---------- lectura del Excel ----------
   const iso = (v) => {
@@ -177,7 +193,7 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
   }
 
   // ---------- vista ----------
-  const zona = () => (puede() ? `<div class="dropzone" data-ttdz tabindex="0" role="button"><b>Suelta aquí el Excel «Informe de transacciones de proveedor»</b> (una hoja por proveedor) o pulsa para elegirlo. Cada carga se guarda como una foto fechada: lo que ya no salga se propone como saldado y lo confirmas tú.<input type="file" data-ttfile accept=".xlsx,.xls" hidden></div>` : '');
+  const zona = () => (puede() ? `<div class="dropzone" data-ttdz tabindex="0" role="button"><b>Suelta aquí el Excel «Informe de transacciones de proveedor»</b> o pulsa para elegirlo · cada carga se guarda fechada y lo que ya no salga lo confirmas tú<input type="file" data-ttfile accept=".xlsx,.xls" hidden></div>` : '');
   function vista() {
     if (!S.sel) return '<p class="vacio">Elige una empresa en el desplegable de la izquierda.</p>';
     const L = grande(TIPO); if (!L) return '<p class="vacio">Cargando datos…</p>';
@@ -216,8 +232,8 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
       const lab = (t, val) => (val ? `<span><span class="tt-l">${t}</span> <b>${esc(val)}</b></span>` : '');
       return `<tr class="tt-det" data-ttd="${esc(p.cod)}" data-b="${esc(sinAc(`${p.cod} ${p.nombre} ${p.ls.map((x) => `${x.factura} ${x.desc}`).join(' ')}`))}"><td colspan="9">
         <div class="tt-cab">${lab('Proveedor:', p.cod)}${lab('Nombre:', p.nombre)}${lab('Teléfono:', h.tel)}${lab('Email:', h.email)}${lab('Forma de pago:', h.pago)}${lab('Condiciones de pago:', h.cond)}
-          ${ed ? `<span class="tt-sp"></span><button class="tt-b" data-ttact="xls|${esc(p.cod)}">Excel</button> <button class="tt-b" data-ttact="pdf|${esc(p.cod)}">PDF</button> <button class="tt-b" data-ttact="provsub|${esc(p.cod)}">Marcar todas conciliadas</button>${p.pc ? ` <button class="tt-b" data-ttact="provok|${esc(p.cod)}">✔ Confirmar las ${p.pc} saldadas</button>` : ''}` : ''}</div>
-        <div class="tt-sc"><table class="tt-t tt-dk"><thead><tr><th>Conciliado</th><th>Revisado</th><th>Fecha</th><th>Asiento</th><th>Factura</th><th>Fecha de documento</th><th>Descripción</th><th>Fecha de vencimiento</th><th>Fecha de vto. pagaré</th><th>Débito</th><th>Crédito</th><th>Saldo</th><th>Divisa</th><th>Forma de pago</th><th>Estado conciliación</th><th>Observaciones</th></tr></thead>
+          ${ed ? `<span class="tt-sp"></span><button class="tt-b" data-ttact="cw|" title="Los anchos de columna son comunes a todos los proveedores">Restablecer anchos</button> <button class="tt-b" data-ttact="xls|${esc(p.cod)}">Excel</button> <button class="tt-b" data-ttact="pdf|${esc(p.cod)}">PDF</button> <button class="tt-b" data-ttact="provsub|${esc(p.cod)}">Marcar todas conciliadas</button>${p.pc ? ` <button class="tt-b" data-ttact="provok|${esc(p.cod)}">✔ Confirmar las ${p.pc} saldadas</button>` : ''}` : ''}</div>
+        <div class="tt-sc"><table class="tt-t tt-dk"><thead><tr>${CAB.map((c, i) => `<th>${c}<span class="tt-rz" data-ttrz="${i}" title="Arrastra para ajustar el ancho (vale para todos los proveedores)"></span></th>`).join('')}</tr></thead>
           <tbody>${fl}<tr class="tt-tp"><td colspan="6"></td><td>Total proveedor</td><td colspan="2"></td><td class="n">${v(r2(dt.deb))}</td><td class="n">${v(r2(dt.cre))}</td><td class="n">${v(sd)}</td><td class="c">EUR</td><td></td><td class="c">${sd > 0.005 ? 'Saldo deudor' : sd < -0.005 ? 'Saldo acreedor' : 'Saldo 0'}</td><td></td></tr></tbody></table></div></td></tr>`;
     };
     const cuerpo = filas.map((p) => {
@@ -228,14 +244,15 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
     const banner = porConf.length ? `<div class="tt-ban"><b>${porConf.length} partidas ya no salen en el último listado</b> (${fd(ult?.f)}): parece que las has saldado en el ERP. ${ed ? `<button class="tt-b pri" data-ttact="confirmar|">✔ Confirmar todas como saldadas</button> <button class="tt-b" data-ttact="mantener|">Siguen pendientes</button> <button class="tt-b" data-ttact="ver|conf">Revisarlas una a una</button>` : ''}</div>` : '';
     const histCargas = P.hist ? `<table class="tt-t tt-dt"><thead><tr><th>Listado del</th><th>Archivo</th><th>Cargado</th><th>Por</th><th>Proveedores</th><th>Partidas</th><th>Nuevas</th><th>Propuestas saldadas</th><th>Saldo abierto</th></tr></thead><tbody>${[...cargas].reverse().map((c) => `<tr><td>${fd(c.f)}</td><td>${esc(c.archivo)}</td><td>${fd(c.el)}</td><td>${esc(c.u)}</td><td class="num n">${c.nProv}</td><td class="num n">${c.nLin}</td><td class="num n">${c.nNue}</td><td class="num n">${c.nDes}</td><td class="num n">${fm(c.saldo)}</td></tr>`).join('')}</tbody></table>
       <h4 class="tt-h4">Últimos movimientos de seguimiento</h4><table class="tt-t tt-dt"><thead><tr><th>Fecha</th><th>Quién</th><th>Proveedor</th><th>Factura / descripción</th><th>Qué se hizo</th></tr></thead><tbody>${lin.flatMap((x) => x.hist.map((h) => ({ ...h, x }))).filter((h) => !/^Aparece/.test(h.a)).sort((a, b) => b.f.localeCompare(a.f)).slice(0, 40).map((h) => `<tr><td>${fd(h.f)}</td><td>${esc(h.u)}</td><td>${esc(h.x.cod)} ${esc(pv.get(h.x.cod)?.nombre ?? '')}</td><td>${esc(h.x.factura || h.x.desc)}</td><td>${esc(h.a)}</td></tr>`).join('')}</tbody></table>` : '';
-    const opt = (v, t) => `<option value="${v}"${P.f === v ? ' selected' : ''}>${t}</option>`;
-    return `<div class="inicio ttp"><h3 class="tt-h">Transacciones de proveedores · ${esc(e?.nombre ?? '')}${ult ? ` <span class="tt-f">listado del ${fd(ult.f)}</span>` : ''}</h3>
-      <div class="tt-bar"><select class="tt-chip" data-ttf>${opt('abiertas', 'Con partidas abiertas')}${opt('conf', 'Por confirmar')}${opt('sub', 'Con partidas subsanadas')}${opt('todos', 'Todos los proveedores')}</select>
+    const seg = (v, t, n) => `<button class="${P.f === v ? 'on' : ''}" data-ttact="f|${v}">${t} <i>${n}</i></button>`;
+    const nConf = todas.filter((p) => p.pc).length, nSub = todas.filter((p) => p.ls.some((x) => x.estado === 'sub')).length;
+    return `<div class="inicio ttp"><div class="tt-sub"><b>${esc(e?.nombre ?? '')}</b>${ult ? `<span>Listado del ${fd(ult.f)}</span>` : ''}${ult ? `<span>${cargas.length} ${cargas.length === 1 ? 'carga' : 'cargas'}</span>` : ''}</div>
+      <div class="tt-bar"><div class="tt-seg">${seg('abiertas', 'Abiertas', conAb)}${seg('conf', 'Por confirmar', nConf)}${seg('sub', 'Subsanadas', nSub)}${seg('todos', 'Todos', todas.length)}</div>
         <input class="tt-chip tt-q" type="search" data-ttq placeholder="Buscar proveedor, factura, descripción…" value="${esc(P.q)}" autocomplete="off">
         <span class="tt-sp"></span><button class="tt-chip no-print" data-ttact="hist|">${P.hist ? 'Ocultar' : 'Ver'} cargas y movimientos</button><button class="tt-chip no-print" data-ttact="xls|">Descargar Excel</button><button class="tt-chip no-print" data-ttact="pdf|">Descargar PDF</button></div>
       <div class="tt-kg">${tarj('Proveedores', todas.length, '', `${conAb} con partidas abiertas`)}${tarj('Saldo abierto', fm(sAb), '', `al inicio: ${fm(sIni)}`)}${tarj('De ello vencido', fm(vencTot), vencTot ? 'neg' : '')}${tarj('Subsanadas', `${sub} de ${tot}`, 'ok', tot ? `${Math.round((sub / tot) * 100)} % resuelto` : '')}${tarj('Por confirmar', porConf.length, porConf.length ? 'warn' : '')}</div>
       ${banner}${zona()}${P.msg ? `<p class="tt-msg">${esc(P.msg)}</p>` : ''}${histCargas}
-      <div class="tt-box"><table class="tt-t"><thead><tr><th></th><th>Código</th><th>Proveedor</th><th class="n">Abiertas</th><th class="n">Débito</th><th class="n">Crédito</th><th class="n">Saldo</th><th class="n">Vencido</th><th>Estado</th></tr></thead>
+      <div class="tt-box"><table class="tt-t tt-main"><thead><tr><th></th><th>Código</th><th>Proveedor</th><th class="n">Abiertas</th><th class="n">Débito</th><th class="n">Crédito</th><th class="n">Saldo</th><th class="n">Vencido</th><th>Estado</th></tr></thead>
         <tbody>${cuerpo || `<tr><td colspan="9">${tot ? 'Nada con ese filtro.' : 'Sin transacciones cargadas: suelta el Excel arriba.'}</td></tr>`}${cuerpo ? `<tr class="tt-tot"><td></td><td colspan="2">Total (${filas.length} proveedores)</td><td class="n">${tot2.n}</td><td class="n">${fm(r2(tot2.deb))}</td><td class="n">${fm(r2(tot2.cre))}</td><td class="n">${fm(r2(tot2.saldo))}</td><td class="n">${fm(r2(tot2.venc))}</td><td></td></tr>` : ''}</tbody></table></div>
       <p class="tt-nota">Saldo = débito − crédito de las partidas abiertas (negativo: se le debe al proveedor; positivo: pagos sin factura o saldo a nuestro favor). «Vencido» = crédito con vencimiento anterior a la fecha del listado. Las partidas nunca se borran: las subsanadas quedan con su fecha, quién las marcó y su nota.</p></div>`;
   }
@@ -247,7 +264,7 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
     if (b) {
       const [a, k] = [b.dataset.ttact.slice(0, b.dataset.ttact.indexOf('|')), b.dataset.ttact.slice(b.dataset.ttact.indexOf('|') + 1)];
       if (a === 'ok') confirmar(k); else if (a === 'no') mantener(k); else if (a === 'confirmar') masivo('', 'confirmar'); else if (a === 'mantener') masivo('', 'mantener');
-      else if (a === 'ver') { P.f = 'conf'; render(); } else if (a === 'hist') { P.hist = !P.hist; render(); } else if (a === 'xls') exportarExcel(k); else if (a === 'pdf') exportarPdf(k);
+      else if (a === 'ver') { P.f = 'conf'; render(); } else if (a === 'f') { P.f = k; render(); } else if (a === 'cw') restablecerCw(); else if (a === 'hist') { P.hist = !P.hist; render(); } else if (a === 'xls') exportarExcel(k); else if (a === 'pdf') exportarPdf(k);
       else if (a === 'provsub') masivo(k, 'sub'); else if (a === 'provok') masivo(k, 'confirmar');
       return;
     }
