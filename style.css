@@ -1366,3 +1366,15 @@ td.pais-1l .pais-n{display:inline;font-size:inherit;color:inherit;vertical-align
 .tp-rz.w { top: 14%; bottom: 14%; right: -4px; width: 10px; cursor: col-resize; }
 .tp-rz.t { left: 18%; right: 18%; bottom: -4px; height: 10px; cursor: row-resize; }
 .tp-rz:hover { background: rgba(37, 99, 235, .4); }
+/* todas las pestañas del bloque en una sola línea (se reparten el ancho); si el usuario fija un ancho con el ratón, ese ancho (y desplazamiento lateral si no caben) */
+.tabs-wrap .tpills { flex-wrap: nowrap; justify-content: center; overflow-x: auto; padding: 2px 4px 10px; }
+.tpill { flex: 1 1 0; width: auto; min-width: 78px; }
+.tpills.fijo .tpill { flex: none; width: var(--pw, 210px); }
+.tpills.compacto .tpill { padding: .4rem .5rem; }
+.tpills.compacto .tpill b { font-size: calc(.88rem * var(--pt, 1)); }
+.tpills.compacto .tpill .badge { font-size: calc(.78rem * var(--pt, 1)); padding: .1rem .45rem; }
+.tpills:not(.compacto) { justify-content: center; }
+.tpills:not(.compacto):not(.fijo) .tpill { flex: 0 1 260px; }
+.tpills.compacto .tpill { border-radius: 30px; padding: .45rem .3rem; min-width: 84px; }
+.tpills.compacto .tpill b { font-size: calc(.82rem * var(--pt, 1)); }
+.tpills.compacto .tpill .badge { font-size: calc(.72rem * var(--pt, 1)); padding: .1rem .3rem; border-radius: 12px; }

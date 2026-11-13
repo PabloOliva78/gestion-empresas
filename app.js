@@ -266,7 +266,7 @@ function vistaVistas() {
 const menuNuevo = () => { try { return localStorage.getItem('imp-menuNuevo') === '1'; } catch { return false; } };
 // Tamaño de las pestañas (vista nueva): ancho y texto, común a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
 let TP = {}; try { TP = JSON.parse(localStorage.getItem('imp-tpill') || '{}') ?? {}; } catch { TP = {}; }
-const tpCfg = (i) => ({ w: 210, t: 1, ...(TP[i] ?? {}) });
+const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en una sola línea, repartiéndose el ancho
 const tpGuarda = () => { try { localStorage.setItem('imp-tpill', JSON.stringify(TP)); } catch { /* sin almacenamiento */ } };
 function bloquesLat() {
   if (!menuNuevo()) return '';
@@ -288,7 +288,7 @@ function tabsNav() {
   }
   // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
   const c = abierto ? tpCfg(abierto.i) : null, rz = '<span class="tp-rz w" data-tprz="w" title="Arrastra para cambiar el ancho de todas las pestañas del bloque (doble clic: restablecer)"></span><span class="tp-rz t" data-tprz="t" title="Arrastra para cambiar el tamaño del texto de todas las pestañas del bloque (doble clic: restablecer)"></span>';
-  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}" data-g="${abierto.i}" style="--pw:${c.w}px;--pt:${c.t}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
+  return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}${c.w ? ' fijo' : ''}" data-g="${abierto.i}" style="${c.w ? `--pw:${c.w}px;` : ''}--pt:${c.t}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}${rz}</button>`).join('')}</div>` : ''}</div>`;
 }
 
@@ -957,14 +957,15 @@ let tpArr = null, tpUlt = 0;
 root.addEventListener('mousedown', (ev) => {
   const h = ev.target.closest?.('[data-tprz]'); if (!h) return;
   ev.preventDefault(); const el = h.closest('.tpills'), i = Number(el.dataset.g), c = tpCfg(i);
-  tpArr = { i, k: h.dataset.tprz, x: ev.clientX, y: ev.clientY, w: c.w, t: c.t, el };
+  tpArr = { i, k: h.dataset.tprz, x: ev.clientX, y: ev.clientY, w: c.w ?? h.closest('.tpill').offsetWidth, t: c.t, el };
 });
 document.addEventListener('mousemove', (ev) => {
   if (!tpArr) return;
   const a = tpArr, c = (TP[a.i] ??= {});
   if (a.k === 'w') c.w = Math.round(Math.min(560, Math.max(110, a.w + ev.clientX - a.x)));
   else c.t = Math.round(Math.min(2.4, Math.max(0.7, a.t + (ev.clientY - a.y) / 120)) * 100) / 100;
-  a.el.style.setProperty('--pw', `${tpCfg(a.i).w}px`); a.el.style.setProperty('--pt', tpCfg(a.i).t);
+  if (a.k === 'w') { a.el.classList.add('fijo'); a.el.style.setProperty('--pw', `${tpCfg(a.i).w}px`); }
+  a.el.style.setProperty('--pt', tpCfg(a.i).t);
 });
 document.addEventListener('mouseup', () => { if (!tpArr) return; tpArr = null; tpUlt = Date.now(); tpGuarda(); alinearPanel(); });
 root.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-tprz]') || Date.now() - tpUlt < 350) { ev.stopImmediatePropagation(); ev.preventDefault(); } }, true); // soltar tras arrastrar no abre la pestaña
