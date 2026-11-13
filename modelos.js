@@ -269,12 +269,22 @@ export function crearModelos(c) {
     const cabRet = (RX) => `<tr><th>Nº registro / CIL</th><th>Delegación</th>${RX.grande ? '<th>1er trimestre</th><th>2º trimestre</th><th>3er trimestre</th><th>4º trimestre</th>' : '<th>3T · acumulado enero–septiembre</th><th>0A · acumulado enero–diciembre</th>'}<th>MWh (anual)</th><th></th></tr>`;
     // el 0A del ejercicio anterior (se presenta en noviembre de este ejercicio): sus datos se escriben aquí y se guardan en el ejercicio anterior
     const bloque0A = () => {
-      const y = R.ej - 1, R1 = calc583(y, M), c0 = (k) => r2(R1.inst.reduce((s, x) => s + (x.calc['0A']?.[k] ?? 0), 0));
+      const y = R.ej - 1, R1 = calc583(y, M);
+      const liq1 = R1.inst.map((x, k) => { const cc = x.calc['0A'] ?? { base: 0, cuota: 0, pagos: 0, dif: 0 }; return `<div class="f583-inst">
+      ${R1.inst.length > 1 ? `<div class="f303-sec">Instalación ${esc(x.I.reg || String(k + 1))}</div>` : ''}
+      ${L('a) Número de registro (RO/RE) o CIL de la instalación', 'a', esc(x.I.reg || '—'))}
+      ${L('b) Delegación de la AEAT donde radica la instalación', 'b', esc(x.I.deleg || '—'))}
+      ${L('c) Energía eléctrica medida en barras de central (MWh)', 'c', esc(x.I.mwh || '—'))}
+      ${L('d) Base imponible (art. 6 Ley 15/2012) · retribuciones acumuladas × porcentaje que integra la base', 'd', eur(cc.base))}
+      ${L('e) Tipo impositivo (%)', 'e', nf.format(R1.tipo))}
+      ${L('f) Cuota íntegra [d × e]', 'f', eur(cc.cuota))}
+      ${L(`g) Pagos fraccionados realizados en ${y}`, 'g', eur(cc.pagos))}
+      ${L('h) Cuota diferencial [f − g] (negativa: a devolver)', 'h', eur(cc.dif))}</div>`; }).join('');
       return `<div class="f303-sec">0A ${y} · anual ${y}, se presenta en noviembre de ${R.ej}</div>
       <label class="f583-chk"><input type="checkbox" data-m583chk="grande" data-m583y="${y}"${R1.grande ? ' checked' : ''}${dis}> Valor de la producción del año anterior a ${y} superior a 500.000 € (cuatro trimestres; si no, 3T y 0A acumulados)</label>
       <div class="wrap" style="padding:0 1rem"><table class="tabla" style="width:auto;margin-top:6px"><thead>${cabRet(R1)}</thead><tbody>${filasRet(R1, y)}</tbody></table></div>
-      ${L(`d) Base imponible del 0A ${y}`, 'd', eur(c0('base')))}${L('f) Cuota íntegra', 'f', eur(c0('cuota')))}${L(`g) Pagos fraccionados realizados en ${y} (3T)`, 'g', eur(c0('pagos')))}
-      <div class="f-row l1"><span class="lb"><b>Cuota diferencial del 0A ${y} (a ingresar o, si es negativa, a devolver)</b></span><span class="bx final"><b>h</b><span class="v"><b>${eur(R1.tot('0A'))}</b></span></span></div>
+      <div class="f303-sec">Liquidación 0A ${y}</div>${liq1}
+      <div class="f-row l1"><span class="lb"><b>i) Cuota diferencial total del 0A ${y} (a ingresar o, si es negativa, a devolver)</b></span><span class="bx final"><b>i</b><span class="v"><b>${eur(R1.tot('0A'))}</b></span></span></div>
       <div class="hint" style="padding:.3rem 1rem">Estos datos se guardan en el ejercicio ${y}: también los verás cambiando el ejercicio a ${y} y eligiendo el periodo 0A.</div>`;
     };
     const liq = R.inst.map((x, k) => { const cc = x.calc[p] ?? { base: 0, cuota: 0, pagos: 0, dif: 0 }; return `<div class="f583-inst">
