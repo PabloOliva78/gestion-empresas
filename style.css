@@ -1518,3 +1518,6 @@ header.doc h2 { text-align: center; padding-left: 0; }
 .tpills.al-l .tpill { align-items: flex-start; text-align: left; padding-left: 1.6rem; }
 .tpills.al-r .tpill { align-items: flex-end; text-align: right; padding-right: 1.6rem; }
 .zoom-c button.on { background: #1e3a8a; color: #fff; }
+
+/* Importes de las pildoras de pestanas: centrados y mas grandes */
+.tpills .tpill .badge, .tpills .tpill .badge.amar, .tpills.compacto .tpill .badge { align-self: center; text-align: center; font-size: calc(1.3rem * var(--pt, 1)); font-weight: 700; padding: .12rem .9rem; margin-top: .15rem; }
