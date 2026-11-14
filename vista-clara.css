@@ -175,6 +175,12 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .xc-k { border: 2px solid #0071e3 !important; border-radius: 18px; box-shadow: none; padding: 8px 16px 10px; }
 .layout.v-clara .xc-k:has(.xc-est.ko) { border-color: #d70015 !important; background: #fff5f4; }
 .layout.v-clara .xc-kt { color: #6e6e73; }
+/* Globos de ancho ajustable (se arrastra su borde derecho; doble clic = ancho original): con un ancho puesto a mano dejan de repartirse el espacio */
+.layout.v-clara .xc-kg { display: flex; flex-wrap: wrap; }
+.layout.v-clara .xc-k { flex: 1 1 150px; min-width: 0; }
+.layout.v-clara .xc-k[style*="width"], .layout.v-clara .ctas .mov-wrap[style*="width"], .layout.v-clara .ctas .res-wrap[style*="width"] { flex: none; }
+.layout.v-clara .ctas .css-flex { flex-wrap: wrap; }
+.layout.v-clara .xc-top > .caja-rs, .layout.v-clara .xc-k > .caja-rs, .layout.v-clara .ctas .mov-wrap > .caja-rs, .layout.v-clara .ctas .res-wrap > .caja-rs { border-radius: 0 16px 16px 0; }
 .layout.v-clara .ctas .css-flex { gap: 12px; padding: 0; }
 .layout.v-clara .ctas .mov-wrap, .layout.v-clara .ctas .res-wrap { background: #fff; border: 2px solid #0071e3; border-radius: 18px; padding: 10px 10px 12px; }
 .layout.v-clara .ctas .css-4760-t { color: #1d1d1f; }

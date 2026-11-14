@@ -115,7 +115,8 @@ const leerC = () => { try { return JSON.parse(localStorage.getItem(CLAVE_CAJAS) 
 const guardarC = (o) => { try { localStorage.setItem(CLAVE_CAJAS, JSON.stringify(o)); } catch { /* sin almacenamiento */ } };
 const escalaCaja = (el) => { const s = document.createElement('div'); s.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:1px;padding:0;border:0'; (el.parentElement ?? document.body).appendChild(s); const z = s.getBoundingClientRect().width / 100; s.remove(); return Number.isFinite(z) && z > 0 ? z : 1; };
 export function activarCajas(raiz, pestana) {
-  const SEL = '.vista section.dsec, .vista section.prs-card, .vista section.block, .vista .dropzone, .vista .aviso, .vista .chk-banner, .vista .conc-resumen, .vista .ley-aviso, .vista .ley-msg, .vista .bloque-avisos, .vista .sii-fijo, .vista .ley-fijo';
+  const SEL = '.vista section.dsec, .vista section.prs-card, .vista section.block, .vista .dropzone, .vista .aviso, .vista .chk-banner, .vista .conc-resumen, .vista .ley-aviso, .vista .ley-msg, .vista .bloque-avisos, .vista .sii-fijo, .vista .ley-fijo'
+    + ', .layout.v-clara .vista .xc-top, .layout.v-clara .vista .xc-k, .layout.v-clara .vista .ctas .mov-wrap, .layout.v-clara .vista .ctas .res-wrap'; // vista clara: cada globo de las cuentas contables
   const preparar = () => {
     const g = leerC(); let n = 0;
     raiz.querySelectorAll(SEL).forEach((c) => {
@@ -141,7 +142,8 @@ export function activarCajas(raiz, pestana) {
     const c = t.parentElement, z = escalaCaja(c), w0 = c.getBoundingClientRect().width / z, x0 = ev.clientX, clave = c.dataset.cw;
     let w = Math.round(w0);
     document.body.classList.add('rs-arrastrando');
-    const mover = (e) => { w = Math.max(260, Math.round(w0 + (e.clientX - x0) / z)); c.style.boxSizing = 'border-box'; c.style.width = `${w}px`; c.style.maxWidth = 'none'; };
+    const minimo = c.classList.contains('xc-k') ? 110 : 260; // los globos de los totales de las cuentas pueden ser más estrechos
+    const mover = (e) => { w = Math.max(minimo, Math.round(w0 + (e.clientX - x0) / z)); c.style.boxSizing = 'border-box'; c.style.width = `${w}px`; c.style.maxWidth = 'none'; };
     const soltar = () => {
       document.removeEventListener('mousemove', mover); document.removeEventListener('mouseup', soltar);
       document.body.classList.remove('rs-arrastrando');
