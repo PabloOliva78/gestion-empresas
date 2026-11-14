@@ -69,8 +69,13 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .lat-pie #out { flex: none; background: #f2f2f7; color: #1d1d1f; border: 0; border-radius: 99px; font-size: 12px; font-weight: 500; padding: 4px 11px; }
 
 /* --- Zona principal: tarjeta blanca con las pestañas del bloque arriba, como tarjetas --- */
-.layout.v-clara > .princ { --bg: #fff; background: #fff; border-radius: 20px; box-shadow: var(--cl-som); padding: 0 0 1.5rem; min-height: calc(100vh - var(--hh, 0px) - 14px); }
-.layout.v-clara .tabs-wrap.tw-nuevo { background: #fff; padding: 18px 22px 14px; border-bottom: 1px solid #e5e5ea; border-radius: 20px 20px 0 0; }
+.layout.v-clara > .princ { --bg: #fff; background: none; padding: 0; }
+/* Globos: cabecera, botonera, pestañas y contenido llevan borde azul; las pestañas van en un globo propio, fijo bajo la cabecera, y el contenido en otro debajo */
+.layout.v-clara > header.doc::after, .layout.v-clara > .lat, .layout.v-clara .tabs-wrap.tw-nuevo, .layout.v-clara .vista { border: 2px solid #0071e3; }
+.layout.v-clara .tabs-wrap.tw-nuevo { background: #fff; padding: 16px 20px; border-radius: 20px; box-shadow: 0 0 0 14px #f5f5f7; } /* el halo del color del fondo tapa lo que pasa por detrás de las esquinas al desplazar */
+.layout.v-clara .tabs-wrap.tw-nuevo + .vista { margin-top: 14px; }
+.layout.v-clara .tabs-wrap.tw-nuevo:empty + .vista { margin-top: 0; }
+.layout.v-clara .vista { background: #fff; border-radius: 20px; box-shadow: var(--cl-som); min-height: 45vh; }
 .layout.v-clara .tabs-wrap .tpills { flex-wrap: wrap; justify-content: flex-start; gap: 10px; overflow: visible; padding: 0; }
 .layout.v-clara .tpills .tpill { flex: 1 1 150px; width: auto; max-width: 250px; min-width: 0; min-height: calc(96px * var(--pt, 1)); align-items: center; justify-content: flex-start; text-align: center; gap: 2px;
   padding: 10px 13px; background: #f5f5f7; color: #1d1d1f; border: 2px solid transparent; border-radius: 16px; box-shadow: none; }
@@ -91,7 +96,7 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .tpills.al-r .tpill { align-items: flex-end; text-align: right; padding-right: 13px; }
 .layout.v-clara .tpills.al-l .tpill .badge { align-self: flex-start; }
 .layout.v-clara .tpills.al-r .tpill .badge { align-self: flex-end; }
-.layout.v-clara .vista { padding: 16px 22px; }
+.layout.v-clara .vista { padding: 18px 22px 24px; }
 .layout.v-clara .tab-tit { font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: #1d1d1f; }
 .layout.v-clara .tab-tit small { font-size: 14px; letter-spacing: 0; color: #6e6e73; }
 
@@ -118,4 +123,4 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
   .layout.v-clara > header.doc, .layout.v-clara > .lat { position: static; height: auto; }
   .layout.v-clara > .lat { margin-bottom: 14px; }
 }
-@media print { .layout.v-clara { padding: 0; } .layout.v-clara > .princ { box-shadow: none; border-radius: 0; } }
+@media print { .layout.v-clara { padding: 0; } .layout.v-clara .vista { border: 0; box-shadow: none; border-radius: 0; padding: 0; } }
