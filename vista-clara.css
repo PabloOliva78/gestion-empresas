@@ -45,6 +45,10 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .lat.lat-nuevo .bl-nav .gpill small { display: none; }
 .layout.v-clara .lat.lat-nuevo .bl-nav .gpill .gico { height: min(36px, 3.6vh); width: 54px; border-radius: 99px; padding: 3px; }
 .layout.v-clara .lat.lat-nuevo .bl-nav .gpill.act, .layout.v-clara .lat.lat-nuevo .bl-nav .gpill.abierto { background: #0071e3; color: #fff; }
+/* Borde azul en las píldoras de los bloques y en las pestañas (la pestaña abierta lleva el color de la empresa) */
+.layout.v-clara .lat.lat-nuevo .bl-nav .gpill { border: 2px solid #0071e3; }
+.layout.v-clara .tabs-wrap .tpills .tpill, .layout.v-clara .tabs-wrap .tpills .tpill:hover { border-color: #0071e3; }
+.layout.v-clara .tabs-wrap .tpills .tpill.on { border-color: var(--emp, #0071e3); }
 /* Solo un bloque marcado: al pulsar otro, el de la pestaña abierta deja de estar en azul */
 .layout.v-clara .lat.lat-nuevo .bl-nav:has(.gpill.abierto) .gpill.act:not(.abierto) { background: #f2f2f7; color: #1d1d1f; }
 .layout.v-clara .lat.lat-nuevo .bl-nav:has(.gpill.abierto) .gpill.act:not(.abierto):hover { background: #e8e8ed; }

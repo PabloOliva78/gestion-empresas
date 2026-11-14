@@ -277,7 +277,8 @@ const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en
 const tpGuarda = () => { try { localStorage.setItem('imp-tpill', JSON.stringify(TP)); } catch { /* sin almacenamiento */ } };
 function bloquesLat() {
   if (!menuNuevo()) return '';
-  return `<nav class="bl-wrap"><div class="bl-nav">${gruposVisibles().map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
+  const orden = (g) => (vistaClara() && g.i === 11 ? 9.5 : g.i); // vista clara: «Proveedores y clientes» va antes que «Administración»
+  return `<nav class="bl-wrap"><div class="bl-nav">${gruposVisibles().sort((a, b) => orden(a) - orden(b)).map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
       ${iconoGrupo(g.ico)}<span><b>${esc(vistaClara() ? (GRUPOS_CORTO[g.i] ?? g.tit) : g.tit)}</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</div></nav>`;
 }
 function tabsNav() {
