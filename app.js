@@ -330,7 +330,7 @@ function render() {
         <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
         <p class="doc-sub">Inicio · grupos de pestañas</p>
         <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>`}</div>
-        ${clara ? '<h2>Conciliación<small>Fiscal · contabilidad · auditoría</small></h2>' : '<h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>'}
+        ${clara ? '<h2>CONCILIACIÓN FISCAL - CONTABLE</h2>' : '<h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>'}
         <div class="doc-r"><div class="doc-sel no-print">
           <div class="two">
             <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
