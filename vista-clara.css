@@ -147,6 +147,39 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara table.cmg-t td { border: 0; border-left: 2px solid #0071e3; border-right: 2px solid #0071e3; border-top: 1px solid rgba(0, 0, 0, .07); }
 .layout.v-clara table.cmg-t tbody tr:last-child td { border-bottom: 2px solid #0071e3; border-radius: 0 0 14px 14px; }
 
+/* Cabecera de la página: globo en azul claro */
+.layout.v-clara > header.doc::after { background: #eaf3fe; }
+
+/* Cuentas contables (extracto y resumen): cabecera de la cuenta, totales, movimientos y resumen, cada uno en su globo */
+.layout.v-clara .xc-cab { background: none; color: #1d1d1f; padding: 0; border-radius: 0; overflow: visible; margin: 0 0 12px; }
+.layout.v-clara .xc-glow { display: none; }
+.layout.v-clara .xc-top { background: #fff; border: 2px solid #0071e3; border-radius: 18px; padding: 14px 20px; }
+.layout.v-clara .xc-p { background: #f2f2f7; border: 0; color: #1d1d1f; }
+.layout.v-clara .xc-pa { background: #0071e3; color: #fff; }
+.layout.v-clara .xc-emp { border: 1px solid #d2d2d7; color: #1d1d1f; }
+.layout.v-clara .xc-cta { background: #f2f2f7; border: 0; }
+.layout.v-clara .xc-pref { background: #0071e3; color: #fff; }
+.layout.v-clara .xc-p select, .layout.v-clara .xc-balin { background: #fff; color: #1d1d1f; border: 1px solid #d2d2d7; }
+.layout.v-clara .xc-sub, .layout.v-clara .xc-per { color: #6e6e73; opacity: 1; }
+.layout.v-clara .xc-sc, .layout.v-clara .xc-s { opacity: 1; color: #86868b; }
+.layout.v-clara .xc-rev { background: #f2f2f7; border: 0; }
+.layout.v-clara .xc-rev svg circle:first-of-type { stroke: #d2d2d7; }
+.layout.v-clara .xc-rev svg circle:last-of-type { stroke: #0071e3; }
+.layout.v-clara .xc-rev svg text { fill: #1d1d1f; }
+.layout.v-clara .xc-kg { gap: 12px; margin-top: 12px; }
+.layout.v-clara .xc-k { border: 2px solid #0071e3 !important; border-radius: 18px; box-shadow: none; padding: 8px 16px 10px; }
+.layout.v-clara .xc-k:has(.xc-est.ko) { border-color: #d70015 !important; background: #fff5f4; }
+.layout.v-clara .xc-kt { color: #6e6e73; }
+.layout.v-clara .ctas .css-flex { gap: 12px; padding: 0; }
+.layout.v-clara .ctas .mov-wrap, .layout.v-clara .ctas .res-wrap { background: #fff; border: 2px solid #0071e3; border-radius: 18px; padding: 10px 10px 12px; }
+.layout.v-clara .ctas .css-4760-t { color: #1d1d1f; }
+.layout.v-clara .ctas th, .layout.v-clara .ctas .css-flex .tnom th.pp, .layout.v-clara .ctas .css-flex .tnom thead th:first-child { background: #eaf3fe !important; color: #0b4a99 !important; border-left: 0; }
+.layout.v-clara .ctas th.xdif { background: #dcebfd !important; }
+.layout.v-clara .ctas .tnom td { border-bottom: 1px solid #f0f0f3; }
+.layout.v-clara .ctas .tnom tr.cf-ok td { background: #eefaf1 !important; color: inherit; }
+.layout.v-clara .ctas .tnom tr.cf-ko td { background: #fff0ee !important; }
+.layout.v-clara .ctas .tnom tr.ttot td { background: #f5f5f7; }
+
 /* Liquidaciones Tributarias: cada modelo (cada fila) va en su propio globo con borde azul */
 .layout.v-clara table.lt-t { border-collapse: separate; border-spacing: 0 8px; border: 0; border-radius: 0; background: none; overflow: visible; }
 .layout.v-clara table.lt-t th { background: none !important; border: 0 !important; color: #6e6e73 !important; padding-bottom: 0; }

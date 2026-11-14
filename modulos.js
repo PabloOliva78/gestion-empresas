@@ -2942,7 +2942,7 @@ export function crearModulos(c) {
         <td class="c" colspan="2"><button class="small" data-act="m-ctanvok">Registrar</button> <button class="small" data-act="m-ctanvx">Cancelar</button></td></tr>`; })() : '';
     const nCom = c.comp || 0, nPen = c.pend || 0, nExc = c.exc || 0, cobPct = Math.round((c.cobertura || 0) * 1000) / 10, circ = 2 * Math.PI * 26, arco = Math.max(0, Math.min(1, c.cobertura || 0)) * circ;
     const kp = (tit, val, col, extra = '') => `<div class="xc-k" style="border-top-color:${col}"><div class="xc-kt">${tit}</div><div class="xc-kv">${val}</div>${extra}</div>`;
-    const banner = `<div class="xc-cab"><div class="xc-glow"></div>
+    const banner = `<div class="xc-cab"><div class="xc-glow"></div><div class="xc-top">
       <div class="xc-ruta"><span class="xc-p">5. Cuentas contables</span><span class="xc-s">›</span><span class="xc-pa">Extracto · ${esc(D.pref)}</span><span class="xc-emp">${esc(e.nombre)} <span>· ${esc(e.cif)}</span></span></div>
       <div class="xc-fila"><div class="xc-izq"><div class="xc-tit">Extracto de cuenta contable</div><div class="xc-sub">Formato auditoría · papel de trabajo: movimientos, saldo acumulado y controles de revisión</div>
         <div class="xc-sel"><span class="xc-cta"><input class="xc-pref" data-cta="pref" data-id="${k}" value="${esc(D.pref)}" aria-label="Cuenta"${ed ? '' : ' disabled'}><span class="xc-desc">${esc(C.desc)}</span></span>
@@ -2951,7 +2951,7 @@ export function crearModulos(c) {
           <span class="xc-p">Saldo según balance <input class="xc-balin" type="text" inputmode="decimal" data-cta="balance" data-id="${k}-${D.ej}" value="${c.balance === null ? '' : fnum(c.balance)}" placeholder="-"${ed ? '' : ' disabled'}></span></div>
         <div class="xc-per">Periodo del extracto: <b>${D.desde}</b> → <b>${D.hasta}</b> <span class="xc-sc">${esc(D.subcuentas.join(', ') || 'sin movimientos')}</span></div></div>
         <div class="xc-rev"><svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Cobertura de la revisión ${cobPct} por ciento"><title>Cobertura de la revisión</title><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="#7be0b4" stroke-width="7" stroke-linecap="round" stroke-dasharray="${arco.toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">${cobPct} %</text></svg>
-          <div class="xc-rt"><b>Revisión</b><div>${nCom} de ${c.n} comprobadas</div><div>${nPen} pendientes</div><div>${nExc} con excepción</div></div></div></div>
+          <div class="xc-rt"><b>Revisión</b><div>${nCom} de ${c.n} comprobadas</div><div>${nPen} pendientes</div><div>${nExc} con excepción</div></div></div></div></div>
       <div class="xc-kg">${kp('Saldo inicial', z(c.saldoIni), '#98a2b3')}${kp('Total debe', `<span style="color:#1d4ed8">${z(c.tD)}</span>`, '#2f6df0')}${kp('Total haber', `<span style="color:#5b3fd0">${z(c.tH)}</span>`, '#7a5af8')}
         ${kp('Saldo final calculado', `<span style="color:#17703a">${z(c.saldoFin)}</span>`, '#19b36b')}${kp('Frente al balance', `<span style="color:${c.estado === 'CUADRA' ? '#17703a' : '#a32b2b'}">${fnum(c.dif)}</span>`, c.estado === 'CUADRA' ? '#19b36b' : '#e0334c',
           `<span class="xc-est ${c.estado === 'CUADRA' ? 'ok' : 'ko'}">${c.estado === 'CUADRA' ? 'Cuadra' : 'Revisar diferencia'}</span>`)}</div></div>`;
