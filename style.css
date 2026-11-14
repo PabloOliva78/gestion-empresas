@@ -1521,3 +1521,7 @@ header.doc h2 { text-align: center; padding-left: 0; }
 
 /* Importes de las pildoras de pestanas: centrados y mas grandes */
 .tpills .tpill .badge, .tpills .tpill .badge.amar, .tpills.compacto .tpill .badge { align-self: center; text-align: center; font-size: calc(1.3rem * var(--pt, 1)); font-weight: 700; padding: .12rem .9rem; margin-top: .15rem; }
+
+/* Numeros de las tablas (los marca alinearNumeros en app.js): importes a la derecha, porcentajes al centro */
+td.n-der, input.n-der { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.n-cen { text-align: center !important; font-variant-numeric: tabular-nums; white-space: nowrap; }

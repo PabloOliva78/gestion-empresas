@@ -430,6 +430,62 @@ root.addEventListener('keydown', (ev) => {
   if (dest) { dest.focus(); dest.select?.(); }
 });
 
+// Números de las tablas (todas las pestañas): los importes van a la derecha, con separador de miles y decimales; los porcentajes, centrados y sin ceros decimales (21,00 → 21; los recargos 5,2 · 1,4 · 0,5 se quedan).
+// Columna de importes = la que tiene algún número con coma decimal; no se tocan las de números sin decimales (años, cuentas, n.º de facturas) ni las tablas campo/valor.
+const N_DEC = /^[-−+]?\s?(\d{1,3}(\.\d{3})+|\d+),\d+(\s?€)?$/; // importe con coma decimal: 1.234,5 · 1234,50 €
+const N_ENT = /^[-−+]?\s?(\d{1,3}(\.\d{3})+|\d+)(\s?€)?$/; // entero: 1234 · 1.234
+const N_PUNTO = /^[-−+]?\d+\.\d{1,2}$/; // decimal con punto, sin formato: 1234.5
+const N_VACIO = /^[-–—]?$/;
+const N_PCT = /^[-−+]?\s?\d+(,\d+)?\s?%?$/; // porcentaje: 21,00 · 5,2 % · 84
+const N_CAB_PCT = /%|porcentaje|^(tipos?|tipo (iva|irpf|re|ret\.?|retenci[oó]n|recargo)|recargo|coef\.?|coeficiente)$/i;
+function numFormato(t) {
+  const euro = /€/.test(t), neg = /^[-−]/.test(t);
+  let s = t.replace(/[€\s+−-]/g, '');
+  s = N_PUNTO.test(t) ? s : s.replace(/\./g, '').replace(',', '.');
+  const dec = (s.split('.')[1] ?? '').length, v = Number(s);
+  if (!Number.isFinite(v)) return t;
+  const f = new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: Math.max(2, dec) }).format(v);
+  return `${neg && v ? '-' : ''}${f}${euro ? ' €' : ''}`;
+}
+const pctFormato = (t) => t.replace(/,(\d*?)0+(?=\s?%?$)/, (m, d) => (d ? `,${d}` : '')); // quita los ceros decimales del final
+const soloTexto = (c) => c.childNodes.length === 1 && c.firstChild.nodeType === 3; // solo se reescribe la celda que es texto puro
+function alinearNumeros(raiz) {
+  raiz.querySelectorAll('table').forEach((tb) => {
+    if (tb.classList.contains('kv')) return;
+    const filas = [...tb.rows];
+    if (filas.some((r) => [...r.cells].some((c) => c.rowSpan > 1))) return; // con celdas combinadas en vertical no se sabe la columna
+    const cols = [];
+    filas.forEach((r) => { let k = 0; [...r.cells].forEach((c) => {
+      const col = (cols[k] ??= { pct: false, imp: false, celdas: [] }), t = c.textContent.trim();
+      if (c.colSpan === 1) {
+        if (c.tagName === 'TH') { if (N_CAB_PCT.test(t)) col.pct = true; }
+        else { if (/\d\s?%$/.test(t)) col.pct = true; if (N_DEC.test(t) || N_DEC.test(c.querySelector('input')?.value?.trim() ?? '')) col.imp = true; col.celdas.push(c); }
+      }
+      k += c.colSpan; }); });
+    cols.forEach((col) => { if (!col.imp && !col.pct) return; col.celdas.forEach((c) => {
+      const inp = c.querySelector('input'), t = c.textContent.trim();
+      if (col.pct) { // porcentajes: al centro
+        if (inp || !N_PCT.test(t)) return;
+        c.classList.add('n-cen');
+        if (soloTexto(c) && t.includes(',')) { const f = pctFormato(t); if (f !== t) c.firstChild.nodeValue = f; }
+        return;
+      }
+      if (inp) { const v = inp.value.trim(); if (N_DEC.test(v) || N_ENT.test(v) || N_VACIO.test(v)) inp.classList.add('n-der'); return; }
+      if (!(N_DEC.test(t) || N_ENT.test(t) || N_PUNTO.test(t) || N_VACIO.test(t))) return;
+      c.classList.add('n-der');
+      if (N_VACIO.test(t) || !soloTexto(c)) return;
+      const f = numFormato(t); if (f !== t) c.firstChild.nodeValue = f;
+    }); });
+  });
+}
+// Se repasa cada vez que cambia el contenido de la pestaña (también cuando una tabla se redibuja sola), una vez por fotograma
+let numPend = false;
+new MutationObserver((ms) => {
+  if (numPend || !ms.some((m) => m.target === root || m.target.closest?.('.vista'))) return;
+  numPend = true;
+  requestAnimationFrame(() => { numPend = false; const v = root.querySelector('.vista'); if (v) { try { alinearNumeros(v); } catch (e) { console.warn('números:', e.message); } } });
+}).observe(root, { childList: true, subtree: true });
+
 function refrescarTabs() {
   const w = root.querySelector('.tabs-wrap'), b = root.querySelector('.bl-wrap');
   if (!w) return;
