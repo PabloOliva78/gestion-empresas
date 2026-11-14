@@ -140,3 +140,9 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .tprs th.ch small { color: #86868b; }
 .layout.v-clara .tprs td { border-bottom: 1px solid #f0f0f3; }
 .layout.v-clara .tprs tr.ttot td { background: #f5f5f7; border-top: 1px solid #d2d2d7; border-bottom: 0; }
+
+/* Cuadro de mando por meses: cada columna (empresa, cada mes y anual) va en su propio globo con borde azul */
+.layout.v-clara table.cmg-t { border-collapse: separate; border-spacing: 8px 0; border: 0; border-radius: 0; background: none; overflow: visible; }
+.layout.v-clara table.cmg-t th { background: #eaf3fe !important; color: #0b4a99 !important; border: 2px solid #0071e3 !important; border-bottom: 0 !important; border-radius: 14px 14px 0 0; padding-top: .45rem; padding-bottom: .45rem; }
+.layout.v-clara table.cmg-t td { border: 0; border-left: 2px solid #0071e3; border-right: 2px solid #0071e3; border-top: 1px solid rgba(0, 0, 0, .07); }
+.layout.v-clara table.cmg-t tbody tr:last-child td { border-bottom: 2px solid #0071e3; border-radius: 0 0 14px 14px; }
