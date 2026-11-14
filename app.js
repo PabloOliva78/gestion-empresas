@@ -262,8 +262,17 @@ function vistaVistas() {
     ${op('c', 'Vista de siempre', 'Los bloques van en la fila de arriba y su panel de pestañas sale debajo.')}
     ${op('n', 'Vista nueva', 'Los bloques van como píldoras en la barra izquierda y, al pulsar uno, sus pestañas salen arriba, centradas, también como píldoras.')}
     ${op('d', 'Vista clara', 'Diseño claro: cabecera a todo el ancho con el logo de la empresa, botonera blanca a la izquierda y las pestañas del bloque como tarjetas sobre el contenido.')}
+    <p class="hint">La elección se recuerda en este navegador.</p></section>
+    <section class="dsec"><h3>Tipo de letra</h3>
+    <label class="vistas-chk"><input type="radio" name="letraApp" data-letra=""${letraApp() ? '' : ' checked'}> <b>Letra normal</b></label>
+    <label class="vistas-chk"><input type="radio" name="letraApp" data-letra="ayfs"${letraApp() === 'ayfs' ? ' checked' : ''}> <b>Are You Freakin' Serious</b></label>
+    <p class="hint">Letra de Misti's Fonts (www.mistifonts.com). Se aplica a toda la aplicación, en cualquier vista; los importes y porcentajes de las tablas se quedan con la letra normal para que se lean bien.</p>
     <p class="hint">La elección se recuerda en este navegador.</p></section>`;
 }
+// Tipo de letra (se elige en Administración › Vistas): '' = la normal; 'ayfs' = «Are You Freakin' Serious»
+const letraApp = () => { try { return localStorage.getItem('imp-letra') === 'ayfs' ? 'ayfs' : ''; } catch { return ''; } };
+const aplicarLetra = () => document.body.classList.toggle('letra-ayfs', letraApp() === 'ayfs');
+aplicarLetra();
 // Vista del menú (se elige en Administración › Vistas): 'c' = la de siempre (bloques arriba); 'n' = bloques a la izquierda y pestañas en píldoras arriba; 'd' = como la nueva, con el diseño claro
 const vistaMenu = () => { try { const v = localStorage.getItem('imp-vista'); return ['c', 'n', 'd'].includes(v) ? v : localStorage.getItem('imp-menuNuevo') === '1' ? 'n' : 'c'; } catch { return 'c'; } };
 const menuNuevo = () => vistaMenu() !== 'c';
@@ -968,6 +977,7 @@ async function conProgreso(fn, files) {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
+  if (t.dataset?.letra !== undefined) { try { localStorage.setItem('imp-letra', t.dataset.letra); } catch { /* sin almacenamiento */ } aplicarLetra(); return render(); }
   if (t.dataset?.vista !== undefined) { try { localStorage.setItem('imp-vista', t.dataset.vista); } catch { /* sin almacenamiento */ } S.grp = -1; return render(); }
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void conProgreso(M.cargarPdfs, fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
