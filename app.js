@@ -255,15 +255,22 @@ function gruposVisibles() {
     .filter((g) => g.ids.length);
 }
 function vistaVistas() {
-  const on = menuNuevo();
+  const v = vistaMenu();
+  const op = (k, tit, txt) => `<label class="vistas-chk"><input type="radio" name="vistaMenu" data-vista="${k}"${v === k ? ' checked' : ''}> <b>${tit}</b></label>
+    <p class="hint">${txt}</p>`;
   return `<section class="dsec"><h3>Vista del menú</h3>
-    <label class="vistas-chk"><input type="checkbox" data-menunuevo${on ? ' checked' : ''}> <b>Usar la vista nueva</b></label>
-    <p class="hint"><b>Marcada:</b> los bloques van como píldoras en la barra izquierda y, al pulsar uno, sus pestañas salen arriba, centradas, también como píldoras.</p>
-    <p class="hint"><b>Sin marcar:</b> la vista de siempre, con los bloques en la fila de arriba y su panel de pestañas debajo.</p>
+    ${op('c', 'Vista de siempre', 'Los bloques van en la fila de arriba y su panel de pestañas sale debajo.')}
+    ${op('n', 'Vista nueva', 'Los bloques van como píldoras en la barra izquierda y, al pulsar uno, sus pestañas salen arriba, centradas, también como píldoras.')}
+    ${op('d', 'Vista clara', 'Diseño claro: cabecera a todo el ancho con el logo de la empresa, botonera blanca a la izquierda y las pestañas del bloque como tarjetas sobre el contenido.')}
     <p class="hint">La elección se recuerda en este navegador.</p></section>`;
 }
-// Vista del menú (se elige en Administración › Vistas): false = la de siempre (bloques arriba); true = bloques a la izquierda y pestañas en píldoras arriba
-const menuNuevo = () => { try { return localStorage.getItem('imp-menuNuevo') === '1'; } catch { return false; } };
+// Vista del menú (se elige en Administración › Vistas): 'c' = la de siempre (bloques arriba); 'n' = bloques a la izquierda y pestañas en píldoras arriba; 'd' = como la nueva, con el diseño claro
+const vistaMenu = () => { try { const v = localStorage.getItem('imp-vista'); return ['c', 'n', 'd'].includes(v) ? v : localStorage.getItem('imp-menuNuevo') === '1' ? 'n' : 'c'; } catch { return 'c'; } };
+const menuNuevo = () => vistaMenu() !== 'c';
+const vistaClara = () => vistaMenu() === 'd';
+// Nombres cortos de los bloques en la vista clara (mismo orden que GRUPOS)
+const GRUPOS_CORTO = ['Información tributaria', 'Registro Mercantil', 'Información empresa', 'Modelos tributarios', 'Cuentas contables', 'SII', 'Estados financieros',
+  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'Administración', 'Proveedores y clientes'];
 // Tamaño de las pestañas (vista nueva): ancho y texto, común a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
 let TP = {}; try { TP = JSON.parse(localStorage.getItem('imp-tpill') || '{}') ?? {}; } catch { TP = {}; }
 const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en una sola línea, repartiéndose el ancho
@@ -271,7 +278,7 @@ const tpGuarda = () => { try { localStorage.setItem('imp-tpill', JSON.stringify(
 function bloquesLat() {
   if (!menuNuevo()) return '';
   return `<nav class="bl-wrap"><div class="bl-nav">${gruposVisibles().map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
-      ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)}</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</div></nav>`;
+      ${iconoGrupo(g.ico)}<span><b>${esc(vistaClara() ? (GRUPOS_CORTO[g.i] ?? g.tit) : g.tit)}</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</div></nav>`;
 }
 function tabsNav() {
   const grupos = gruposVisibles();
@@ -312,39 +319,49 @@ function render() {
   if (S.periodo && !periodosDe(e).includes(S.periodo)) S.periodo = ''; // el periodo elegido tiene que ser de esta empresa (meses o trimestres)
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   const scrollTablas = [...root.querySelectorAll('.wrap')].map((w) => [w.scrollLeft, w.scrollTop]); // al redibujar, las tablas anchas no vuelven al principio
-  root.innerHTML = `<div class="layout">
-    <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}">
-      <div>${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1></div>
-      ${bloquesLat()}
-      ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
-        <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
-        <span class="hint" id="pdfEstado"></span>` : ''}
-      <div class="lat-ctl">
-      <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
-      ${menuNuevo() ? (() => { const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab)), a = g ? (tpCfg(g.i).a ?? 'c') : 'c';
-    return `<div class="zoom-c no-print" title="Alineación del texto de las píldoras de las pestañas (todas las del bloque)"><span>Texto pestañas</span>${[['l', 'Izquierda', '⇤'], ['c', 'Centro', '↔'], ['r', 'Derecha', '⇥']].map(([k, n, s]) => `<button data-talin="${k}" title="${n}"${a === k ? ' class="on"' : ''}>${s}</button>`).join('')}</div>`; })() : ''}
-      ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
-      <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
-      <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
-      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> <button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button></div>
-      </div>
-      <div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${new URL(import.meta.url).searchParams.get('v') ?? '—'}</span>
-        <button id="out" class="small">Salir</button></div>
-    </aside>
-    <main class="princ">
-      <header class="doc"><div class="doc-l"><img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO Asesoría"><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
+  const clara = vistaClara(); // vista clara: la cabecera va arriba a todo el ancho (fuera de la zona principal) y lleva el logo de la empresa delante del de PO
+  const version = new URL(import.meta.url).searchParams.get('v') ?? '—';
+  const cabHtml = `<header class="doc"><div class="doc-l">${clara
+    ? `${e ? logoHtml(e, 'logo-aside logo-emp') : ''}<img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO Asesoría"><b class="logo-txt"><small>Asesoría</small>Fiscal<br>y contable</b>
+        <div><p class="doc-sub">Empresa · NIF</p><p class="doc-emp">${e ? esc(nombreEmp(e)) : 'Todas las empresas'}</p>
+        <p class="doc-per">${e ? esc(e.cif) : ''}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>`
+    : `<img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO Asesoría"><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
         <div>
         <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
         <p class="doc-sub">Inicio · grupos de pestañas</p>
-        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div></div>
-        <h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>
+        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>`}</div>
+        ${clara ? '<h2>Conciliación<small>Fiscal · contabilidad · auditoría</small></h2>' : '<h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>'}
         <div class="doc-r"><div class="doc-sel no-print">
           <div class="two">
             <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
     `<option${y === Number(S.ejercicio) ? ' selected' : ''}>${y}</option>`).join('')}</select></label>
             <label>Periodo<select data-glob="periodo">${periodosDe(e).map((p) => `<option value="${p}"${p === S.periodo ? ' selected' : ''}>${etiquetaPeriodo(p)}</option>`).join('')}<option value=""${S.periodo ? '' : ' selected'}>Anual (todo el ejercicio)</option></select></label>
           </div>
-          <div class="lbl">Empresa${empresaSelector()}</div></div><img class="logo-cab logo-hg" src="logos/herogra-group.jpg?v=1" alt="Herogra Group"><div><span>Fecha del documento</span><b>${fmt(hoy())}</b></div></div></header>
+          <div class="lbl">Empresa${empresaSelector()}</div></div><img class="logo-cab logo-hg" src="logos/herogra-group.jpg?v=1" alt="Herogra Group"><div><span>${clara ? 'Fecha' : 'Fecha del documento'}</span><b>${fmt(hoy())}</b></div></div></header>`;
+  const usuario = S.perfil.email || S.perfil.nombre || '';
+  root.innerHTML = `<div class="layout${clara ? ' v-clara' : ''}">${clara ? cabHtml : ''}
+    <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}">
+      <div>${clara ? '<h1>Conciliación fiscal-contable</h1>' : `${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1>`}</div>
+      ${bloquesLat()}
+      ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
+        <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
+        <span class="hint" id="pdfEstado"></span>` : ''}
+      <div class="lat-ctl">
+      <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
+      ${menuNuevo() && !clara ? (() => { const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab)), a = g ? (tpCfg(g.i).a ?? 'c') : 'c';
+    return `<div class="zoom-c no-print" title="Alineación del texto de las píldoras de las pestañas (todas las del bloque)"><span>Texto pestañas</span>${[['l', 'Izquierda', '⇤'], ['c', 'Centro', '↔'], ['r', 'Derecha', '⇥']].map(([k, n, s]) => `<button data-talin="${k}" title="${n}"${a === k ? ' class="on"' : ''}>${s}</button>`).join('')}</div>`; })() : ''}
+      ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
+      <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
+      <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
+      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> <button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button></div>
+      </div>
+      ${clara ? `<div class="lat-pie"><span class="pie-av">${esc(usuario.replace(/[^a-záéíóúñ]/gi, '').slice(0, 2).toUpperCase())}</span><span class="pie-tx"><b title="${esc(usuario)}">${esc(usuario)}</b><small>${ROLES[S.perfil.rol]}</small><small>Versión ${version}</small></span>
+        <button id="out" class="small">Salir</button></div>`
+    : `<div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${version}</span>
+        <button id="out" class="small">Salir</button></div>`}
+    </aside>
+    <main class="princ">
+      ${clara ? '' : cabHtml}
       ${tabsNav()}
       <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
@@ -894,7 +911,7 @@ async function conProgreso(fn, files) {
 
 root.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.dataset?.menunuevo !== undefined) { try { localStorage.setItem('imp-menuNuevo', t.checked ? '1' : '0'); } catch { /* sin almacenamiento */ } S.grp = -1; return render(); }
+  if (t.dataset?.vista !== undefined) { try { localStorage.setItem('imp-vista', t.dataset.vista); } catch { /* sin almacenamiento */ } S.grp = -1; return render(); }
   if (t.id === 'carpetaIn') { const fs = [...t.files]; t.value = ''; return void conProgreso(M.cargarPdfs, fs); }
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
