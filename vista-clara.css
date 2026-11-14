@@ -146,3 +146,10 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara table.cmg-t th { background: #eaf3fe !important; color: #0b4a99 !important; border: 2px solid #0071e3 !important; border-bottom: 0 !important; border-radius: 14px 14px 0 0; padding-top: .45rem; padding-bottom: .45rem; }
 .layout.v-clara table.cmg-t td { border: 0; border-left: 2px solid #0071e3; border-right: 2px solid #0071e3; border-top: 1px solid rgba(0, 0, 0, .07); }
 .layout.v-clara table.cmg-t tbody tr:last-child td { border-bottom: 2px solid #0071e3; border-radius: 0 0 14px 14px; }
+
+/* Liquidaciones Tributarias: cada modelo (cada fila) va en su propio globo con borde azul */
+.layout.v-clara table.lt-t { border-collapse: separate; border-spacing: 0 8px; border: 0; border-radius: 0; background: none; overflow: visible; }
+.layout.v-clara table.lt-t th { background: none !important; border: 0 !important; color: #6e6e73 !important; padding-bottom: 0; }
+.layout.v-clara table.lt-t td { border: 0; border-top: 2px solid #0071e3; border-bottom: 2px solid #0071e3; border-left: 1px solid rgba(0, 0, 0, .08); vertical-align: middle; }
+.layout.v-clara table.lt-t td:first-child { border-left: 2px solid #0071e3; border-radius: 14px 0 0 14px; padding-left: .8rem; }
+.layout.v-clara table.lt-t td:last-child { border-right: 2px solid #0071e3; border-radius: 0 14px 14px 0; }
