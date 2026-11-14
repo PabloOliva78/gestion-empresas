@@ -76,7 +76,7 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .tabs-wrap.tw-nuevo + .vista { margin-top: 14px; }
 .layout.v-clara .tabs-wrap.tw-nuevo:empty + .vista { margin-top: 0; }
 .layout.v-clara .vista { background: #fff; border-radius: 20px; box-shadow: var(--cl-som); min-height: 45vh; }
-.layout.v-clara .tabs-wrap .tpills { flex-wrap: wrap; justify-content: flex-start; gap: 10px; overflow: visible; padding: 0; }
+.layout.v-clara .tabs-wrap .tpills { flex-wrap: wrap; justify-content: center; gap: 10px; overflow: visible; padding: 0; }
 .layout.v-clara .tpills .tpill { flex: 1 1 150px; width: auto; max-width: 250px; min-width: 0; min-height: calc(96px * var(--pt, 1)); align-items: center; justify-content: flex-start; text-align: center; gap: 2px;
   padding: 10px 13px; background: #f5f5f7; color: #1d1d1f; border: 2px solid transparent; border-radius: 16px; box-shadow: none; }
 .layout.v-clara .tpills .tpill:hover { border-color: #d2d2d7; transform: none; }
