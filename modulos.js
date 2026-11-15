@@ -4593,6 +4593,30 @@ export function crearModulos(c) {
         <td class="num">${puede() ? `<button class="small danger" data-act="m-del" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></div></details>` : '';
   };
 
+  // ¿De qué empresa es el archivo? Se mira, por este orden: el NIF titular de la descarga del SII, el nombre D365_<SIGLA>_…, las siglas de los asientos del libro y el nombre del archivo.
+  // Si no se reconoce ninguna, se queda en la empresa elegida. Así un Excel de Bisari soltado estando en Lysur va a Bisari.
+  async function destinoArchivo(f) {
+    const sel = empresa(), porSigla = (s) => S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === String(s ?? '').toUpperCase()) ?? null;
+    let porContenido = null;
+    try {
+      const filas = await filasExcel(f), sii = leerSII(filas);
+      if (sii) {
+        const iT = (sii.cab ?? []).findIndex((h) => /^NIF Titular$/i.test(String(h ?? '').trim())), t = iT >= 0 ? sii[0]?.raw?.[iT] : null;
+        if (t) porContenido = S.empresas.find((x) => x.cif && normNif(x.cif) === normNif(t)) ?? null;
+      } else {
+        const lib = leerLibroBC(filas) ?? leerLibroIVA(filas), cnt = new Map();
+        (lib ?? []).forEach((l) => { const p = String(l.asiento ?? '').split('-')[0].toUpperCase(); if (/^[A-Z]{2,4}$/.test(p)) cnt.set(p, (cnt.get(p) || 0) + 1); });
+        const top = [...cnt].sort((a, b) => b[1] - a[1])[0];
+        if (top) porContenido = porSigla(top[0]);
+      }
+    } catch (err) { /* no se pudo leer: se decide por el nombre */ }
+    if (porContenido) return porContenido;
+    const d365 = /^D365_([^_]+)_/i.exec(f.name);
+    if (d365 && porSigla(d365[1])) return porSigla(d365[1]);
+    const i = c.idxEmp({ nombre: f.name.replace(/[._]+/g, ' '), siglas: '' });
+    if (i >= 0) { const e = S.empresas.find((x) => c.idxEmp(x) === i); if (e) return e; }
+    return sel;
+  }
   async function subirArchivos(files) {
     if (archKind === 'prspdf') return cargarPresentados(files);
     if (archKind === 'fundae') return cargarFundae(files);
@@ -4605,22 +4629,23 @@ export function crearModulos(c) {
       try {
         const ref = `${f.name}|${f.size}`;
         const leible = ['emitidas', 'recibidas', 'sii', 'extractos'].includes(archKind); // estos se vuelven a leer aunque el archivo ya esté guardado (puede que la lectura anterior fallara)
-        const yaGuardado = archivosDe(archKind).some((r) => r.datos.ref === ref);
+        const dest = leible ? await destinoArchivo(f) : empresa(), eid = dest?.id ?? S.sel, otra = eid !== S.sel; // el archivo va a su propia empresa aunque se suelte en otra
+        const yaGuardado = S.registros.some((r) => r.tipo === `arch-${archKind}` && r.empresa_id === eid && r.datos.ref === ref);
         if (vistos.has(ref) || (yaGuardado && !leible)) { informe.push(`↩ ${f.name}: repetido`); continue; }
         vistos.add(ref);
         if (!yaGuardado) {
           const id = crypto.randomUUID();
-          const sub = await subir(S.sel, 'arch-' + archKind, id, 'archivo', f);
+          const sub = await subir(eid, 'arch-' + archKind, id, 'archivo', f);
           if (sub.error) throw new Error(sub.error);
-          const err = await guardarRegistro(null, { id, empresa_id: S.sel, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
+          const err = await guardarRegistro(null, { id, empresa_id: eid, tipo: 'arch-' + archKind, ejercicio: Number(S.ejercicio),
             datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
           if (err) throw new Error(err);
         }
-        informe.push(['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, S.sel) : archKind === 'extractos' ? await ingestaMayor(f, S.sel) : `✔ ${f.name}`);
+        informe.push((['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, eid) : archKind === 'extractos' ? await ingestaMayor(f, eid) : `✔ ${f.name}`) + (otra ? `  → ES DE OTRA EMPRESA: guardado en ${dest.nombre}` : ''));
       } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
     }
     await cargar(); render();
-    alert(`${ARCH[archKind]}: ${informe.length} archivos\n${informe.join('\n')}\n\nSe guardan en la empresa y el ejercicio elegidos.`);
+    alert(`${ARCH[archKind]}: ${informe.length} archivos\n${informe.join('\n')}\n\nSe guardan en el ejercicio elegido y en la empresa de cada archivo (si el archivo es de otra empresa distinta de la elegida, va a la suya y se avisa).`);
   }
 
   // ---------- Carga de PDF (AEAT y tributos locales) ----------
