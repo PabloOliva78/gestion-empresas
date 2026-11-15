@@ -61,8 +61,10 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
 
   // ---------- piezas de pantalla ----------
   const sinEmp = '<p class="vacio">Elige una empresa en el desplegable de arriba.</p>';
-  const instNombre = (d, k) => { const i = d.inst.find((x) => x.k === k); return i ? `${i.id} · ${i.nombre}` : ''; };
-  const optsInst = (d, sel) => `<option value="">—</option>${d.inst.map((i) => `<option value="${esc(i.k)}"${i.k === sel ? ' selected' : ''}>${esc(`${i.id} · ${i.nombre}`)}</option>`).join('')}`;
+  // la emisión se asocia a una instalación o, como en el registro de la UE cuando no consta la planta, solo a un operador («OP|OP-03»)
+  const opDeK = (d, k) => (String(k).startsWith('OP|') ? d.oper.find((o) => o.id === String(k).slice(3)) : d.oper.find((o) => o.id === d.inst.find((x) => x.k === k)?.opId));
+  const instNombre = (d, k) => { const i = d.inst.find((x) => x.k === k); if (i) return `${i.id} · ${i.nombre}`; const o = String(k).startsWith('OP|') ? opDeK(d, k) : null; return o ? `${o.id} · ${o.nombre} (sin instalación)` : ''; };
+  const optsInst = (d, sel) => `<option value="">—</option>${d.inst.map((i) => `<option value="${esc(i.k)}"${i.k === sel ? ' selected' : ''}>${esc(`${i.id} · ${i.nombre}`)}</option>`).join('')}<optgroup label="Solo operador (sin instalación)">${d.oper.map((o) => `<option value="OP|${esc(o.id)}"${`OP|${o.id}` === sel ? ' selected' : ''}>${esc(`${o.id} · ${o.nombre}`)}</option>`).join('')}</optgroup>`;
   const selAno = (anos) => `<label>Año <select data-cbano="1">${anos.map((y) => `<option${y === ano() ? ' selected' : ''}>${y}</option>`).join('')}</select></label>`;
   const anosDe = (L) => { const s = new Set([Number(S.ejercicio), 2026]); L.forEach((l) => l.y && s.add(l.y)); return [...s].sort((a, b) => b - a); };
   // tabla editable: cols = [campo, etiqueta, ancho(em), tipo?]; los datos viven en d[clave]
@@ -88,7 +90,7 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   }
 
   // ---------- 2 · Operadores e instalaciones ----------
-  const OPCOLS = [['id', 'Id. operador', 6], ['nombre', 'Nombre', 18], ['pais', 'País', 3], ['ciudad', 'Ciudad', 10], ['calle', 'Calle', 16], ['cp', 'C. postal', 6], ['contacto', 'Contacto', 12], ['email', 'Correo', 16], ['tel', 'Teléfono', 11]];
+  const OPCOLS = [['id', 'Id. operador', 6], ['nombre', 'Nombre', 18], ['pais', 'País', 3], ['ciudad', 'Ciudad', 10], ['calle', 'Calle', 16], ['cp', 'C. postal', 6], ['provincia', 'Provincia', 8], ['numero', 'Nº', 4], ['lineaCalle', 'Línea adicional calle', 10], ['apartado', 'Apartado correos', 7], ['contacto', 'Contacto', 12], ['email', 'Correo', 16], ['tel', 'Teléfono', 11]];
   const INCOLS = [['id', 'Id. instalación', 6], ['nombre', 'Nombre', 16], ['opId', 'Operador', 6], ['pais', 'País', 3], ['ciudad', 'Ciudad', 10], ['cp', 'C. postal', 6], ['lat', 'Latitud', 9], ['lon', 'Longitud', 9], ['tipoCoord', 'Tipo coord.', 3], ['paisProd', 'País prod.', 3]];
   function vistaInst() {
     if (!S.sel) return sinEmp; const d = D();
@@ -100,7 +102,7 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   }
 
   // ---------- 3 · Emisiones por producto ----------
-  const EMCOLS = [['instK', 'Instalación', 14, 'inst'], ['nc', 'Código NC (8)', 8], ['producto', 'Producto', 16], ['metodo', 'Método', 4], ['directa', 'Directas tCO₂/t', 7], ['indirecta', 'Indirectas tCO₂/t', 7], ['mwh', 'Electricidad MWh/t', 7], ['factor', 'Factor tCO₂/MWh', 7], ['fuenteFactor', 'Fuente factor', 6], ['fuenteElec', 'Fuente electr.', 6], ['periodo', 'Periodo de los datos', 16], ['origenDato', 'Origen del dato', 14]];
+  const EMCOLS = [['instK', 'Instalación', 14, 'inst'], ['nc', 'Código NC (8)', 8], ['producto', 'Producto', 16], ['metodo', 'Método', 4], ['directa', 'Directas tCO₂/t', 7], ['indirecta', 'Indirectas tCO₂/t', 7], ['mwh', 'Electricidad MWh/t', 7], ['factor', 'Factor tCO₂/MWh', 7], ['fuenteFactor', 'Fuente factor', 6], ['fuenteElec', 'Fuente electr.', 6], ['otraFuente', 'Otra indicación de la fuente', 10], ['tipoDet', 'Tipo determ.', 4], ['normas', 'Normas', 5], ['precioC', 'Precio carbono pagadero €/tCO₂', 7], ['paisProd', 'País de producción', 3], ['periodo', 'Periodo de los datos', 16], ['origenDato', 'Origen del dato', 14]];
   function vistaEmi() {
     if (!S.sel) return sinEmp; const d = D();
     return `<div class="inicio cb"><section class="dsec"><h3>Emisiones incorporadas por producto e instalación</h3>
@@ -145,12 +147,12 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   }
 
   // ---------- 6 · Informe trimestral ----------
-  const DCOLS = [['nombre', 'Declarante', 22], ['nif', 'NIF', 12], ['funcion', 'Función', 4], ['pais', 'País', 3], ['provincia', 'Provincia', 9], ['poblacion', 'Población', 9], ['calle', 'Calle', 12], ['cp', 'C. postal', 6], ['anc', 'Autoridad (ANC)', 9]];
-  const FCOLS = [['firmaFecha', 'Firmado el', 10], ['firmaLugar', 'Firmado en', 9], ['firmaNombre', 'Firmado por', 20], ['firmaCargo', 'Cargo', 6]];
+  const DCOLS = [['nombre', 'Declarante', 22], ['nif', 'NIF', 12], ['funcion', 'Función', 4], ['pais', 'País', 3], ['provincia', 'Provincia', 9], ['poblacion', 'Población', 9], ['calle', 'Calle', 12], ['lineaCalle', 'Línea adicional calle', 9], ['numero', 'Número', 4], ['cp', 'C. postal', 6], ['apartado', 'Apartado correos', 7], ['actuaImportador', 'Actúa como importador (sí/no)', 5], ['anc', 'Autoridad competente (ref.)', 9]];
+  const FCOLS = [['firmaFecha', 'Firmado el', 10], ['firmaLugar', 'Firmado en', 9], ['firmaNombre', 'Firmado por', 20], ['firmaCargo', 'Cargo', 6], ['certifico', 'Certifico (sí/no)', 5], ['confirmo', 'Confirmo el uso de los datos (sí/no)', 5]];
   const INFCOLS = [['periodo', 'Periodo', 8], ['id', 'Identificación', 24], ['emision', 'Fecha de emisión', 16], ['estado', 'Estado', 9], ['notas', 'Notas', 20]];
   function filasInforme(d, q) {
-    return lineas(d).filter((l) => l.q === q).sort((a, b) => a.num.localeCompare(b.num) || a.n - b.n).map((l, i) => { const c = calc(d, l), e = c.e, ins = d.inst.find((x) => x.k === d.asig[l.key]?.inst), op = d.oper.find((o) => o.id === ins?.opId) ?? {};
-      return { n: i + 1, l, e, ins, op, dir: c.dir, ind: c.ind, tot: c.tot, falta: !e || !ins || !op.id }; });
+    return lineas(d).filter((l) => l.q === q).sort((a, b) => a.num.localeCompare(b.num) || a.n - b.n).map((l, i) => { const c = calc(d, l), e = c.e, k = d.asig[l.key]?.inst, ins = d.inst.find((x) => x.k === k), op = opDeK(d, k) ?? {};
+      return { n: i + 1, l, e, ins, op, dir: c.dir, ind: c.ind, tot: c.tot, falta: !e || !k || !op.id }; });
   }
   function vistaInf() {
     if (!S.sel) return sinEmp; const d = D(), L = lineas(d), qs = [...new Set(L.map((l) => l.q).filter(Boolean))].sort().reverse();
@@ -167,9 +169,17 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   }
   function exportarXls(q) {
     const d = D(), F = filasInforme(d, q), X = window.XLSX; if (!X) return alert('No se cargó el lector de Excel.');
-    const cab = [['Informe CBAM', q], ['Declarante', d.decl.nombre ?? ''], ['NIF', d.decl.nif ?? ''], ['Autoridad competente', d.decl.anc ?? ''], ['Firmado por', d.decl.firmaNombre ?? ''], ['Cargo', d.decl.firmaCargo ?? '']];
-    const ms = [['Nº', 'DUA', 'Partida', 'Código NC', 'Descripción', 'País de origen', 'Procedimiento', 'Masa neta (t)', 'Id. operador', 'Operador', 'País operador', 'Id. instalación', 'Instalación', 'País instalación', 'Latitud', 'Longitud', 'Método de producción', 'Emisiones directas (tCO2/t)', 'Emisiones indirectas (tCO2/t)', 'Electricidad (MWh/t)', 'Factor de emisión (tCO2/MWh)', 'Fuente del factor', 'Emisiones directas (tCO2)', 'Emisiones indirectas (tCO2)', 'Emisiones totales (tCO2)'],
-      ...F.map((x) => [x.n, x.l.num, x.l.n, x.l.nc, x.l.desc, String(x.l.origen).slice(0, 2).toUpperCase(), String(x.l.reg).slice(0, 2), r2(x.l.tm * 1e4) / 1e4, x.op.id ?? '', x.op.nombre ?? '', x.op.pais ?? '', x.ins?.id ?? '', x.ins?.nombre ?? '', x.ins?.pais ?? '', x.ins?.lat ?? '', x.ins?.lon ?? '', x.e?.metodo ?? '', x.e?.directa ?? '', x.e?.indirecta ?? '', x.e?.mwh ?? '', x.e?.factor ?? '', x.e?.fuenteFactor ?? '', r2(x.dir * 1e4) / 1e4, r2(x.ind * 1e4) / 1e4, r2(x.tot * 1e4) / 1e4])];
+    const dc = d.decl, cab = [['Informe CBAM', q], ['Declarante', dc.nombre ?? ''], ['Número de identificación', dc.nif ?? ''], ['Función', dc.funcion ?? ''], ['Estado miembro de establecimiento', dc.pais ?? ''], ['Provincia', dc.provincia ?? ''], ['Población', dc.poblacion ?? ''], ['Calle', dc.calle ?? ''], ['Línea adicional para calle', dc.lineaCalle ?? ''], ['Número', dc.numero ?? ''], ['Código postal', dc.cp ?? ''], ['Apartado de correos', dc.apartado ?? ''],
+      ['El declarante actúa como importador', /^n/i.test(dc.actuaImportador ?? '') ? 'No' : 'Sí'], ['Autoridad competente (número de referencia)', dc.anc ?? ''], ['Firmado el', dc.firmaFecha ?? ''], ['Firmado en', dc.firmaLugar ?? ''], ['Firmado por', dc.firmaNombre ?? ''], ['Cargo del firmante', dc.firmaCargo ?? ''], ['Certifico (exactitud y plenitud)', /^n/i.test(dc.certifico ?? '') ? 'No' : 'Sí'], ['Confirmo el uso de los datos (Reglamento UE 2023/956)', /^n/i.test(dc.confirmo ?? '') ? 'No' : 'Sí']];
+    const cat = (nc) => CATALOGO.find((c) => c[0] === nc), r4 = (v) => r2(v * 1e4) / 1e4;
+    const ms = [['Nº', 'DUA', 'Partida', 'Código subpartida SA', 'Subpartida (descripción)', 'Código NC (8)', 'Descripción de las mercancías', 'País de origen', 'Zona de importación', 'Procedimiento solicitado', 'Procedimiento anterior', 'Masa neta (t)', 'Unidad de medida', 'Observaciones',
+      'País de producción', 'Id. operador', 'Operador', 'País operador', 'Provincia', 'Población', 'Calle', 'Línea adicional calle', 'Número', 'Código postal', 'Apartado de correos', 'Contacto', 'Correo', 'Teléfono',
+      'Id. instalación', 'Instalación', 'País instalación', 'Población instalación', 'Latitud', 'Longitud', 'Cantidad producida (t)', 'Tipo de determinación', 'Normas de notificación', 'Método de producción', 'Emisiones directas específicas (tCO2/t)', 'Emisiones indirectas específicas (tCO2/t)', 'Electricidad consumida (MWh/t)', 'Factor de emisión (tCO2/MWh)', 'Fuente del factor', 'Otra indicación de la fuente', 'Fuente de electricidad', 'Unidad de las emisiones',
+      'Emisiones directas (tCO2)', 'Emisiones indirectas (tCO2)', 'Emisiones totales (tCO2)', 'Emisiones por unidad de producto (tCO2/t)', 'Precio del carbono pagadero (€/tCO2)'],
+      ...F.map((x) => [x.n, x.l.num, x.l.n, x.l.nc.slice(0, 6), cat(x.l.nc)?.[1] ?? '', x.l.nc, x.l.desc || cat(x.l.nc)?.[2] || cat(x.l.nc)?.[1] || '', String(x.l.origen).slice(0, 2).toUpperCase(), 'EU', String(x.l.reg).slice(0, 2), '', r4(x.l.tm), '01', d.asig[x.l.key]?.obs ?? '',
+        x.e?.paisProd || x.ins?.paisProd || x.ins?.pais || '', x.op.id ?? '', x.op.nombre ?? '', x.op.pais ?? '', x.op.provincia ?? '', x.op.ciudad ?? '', x.op.calle ?? '', x.op.lineaCalle ?? '', x.op.numero ?? '', x.op.cp ?? '', x.op.apartado ?? '', x.op.contacto ?? '', x.op.email ?? '', x.op.tel ?? '',
+        x.ins?.id ?? '', x.ins?.nombre ?? '', x.ins?.pais ?? '', x.ins?.ciudad ?? '', x.ins?.lat ?? '', x.ins?.lon ?? '', r4(x.l.tm), x.e?.tipoDet ?? '', x.e?.normas ?? '', x.e?.metodo ?? '', x.e?.directa ?? '', x.e?.indirecta ?? '', x.e?.mwh ?? '', x.e?.factor ?? '', x.e?.fuenteFactor ?? '', x.e?.otraFuente ?? '', x.e?.fuenteElec ?? '', 'EMU1',
+        r4(x.dir), r4(x.ind), r4(x.tot), x.l.tm ? r4(x.tot / x.l.tm) : '', x.e?.precioC ?? ''])];
     const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(cab), 'Cabecera'); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(ms), 'Mercancías');
     X.writeFile(wb, `CBAM_${q}_${(empresa()?.siglas ?? 'EMP')}.xlsx`);
   }
