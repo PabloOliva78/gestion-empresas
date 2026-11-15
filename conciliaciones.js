@@ -530,10 +530,14 @@ export function crearConciliaciones(c) {
     else if (m === '303' || m === '349') {
       const RE = lib('fact-E') ?? [], RR = lib('fact-R') ?? [], FM = {};
       const fm = (p) => FM[p] ??= (/T$/.test(p) ? [0, 1, 2].map((i) => (+p[0] - 1) * 3 + i + 1) : [+p]).map((x) => { try { const pp = String(x).padStart(2, '0'); return { mes: x, C3: calc303(RE, RR, ej, pp), K: calc349(RE, RR, ej, pp) }; } catch { return null; } }).filter(Boolean);
+      // si en el periodo no hay ninguna línea en los libros de IVA (p. ej. no se han cargado los de ese ejercicio), el resultado del 303 se compara con lo contabilizado en las cuentas 4700 (deudora, debe) y 4750 (acreedora, haber)
+      const ctE = conFecha(RE), ctR = conFecha(RR);
+      const hayLib = (p) => { const [a, b] = rngPer(ej, p); return ctE.some((l) => en(l, a, b)) || ctR.some((l) => en(l, a, b)); };
+      const mov303 = (p) => { const k0 = kOf('4700.01'), k5 = kOf('4750.01'); if (!M || (!k0 && !k5)) return null; const [a, b] = rngPer(ej, p), s = (k) => (k ? movsK(k, M).filter((l) => en(l, a, b)) : []); return r2(s(k5).reduce((x, l) => x + (+l.haber || 0), 0) - s(k0).reduce((x, l) => x + (+l.debe || 0), 0)); };
       if (m === '303') C = [
         { t: 'IVA diferido importación (77)', pres: (p) => P('adu', p), cont: [['Calculado', (p) => r2(fm(p).reduce((s, x) => s + (+x.C3.c77 || 0), 0))]] },
         // lo presentado guardado como «Resultado IVA» es la casilla 46 (régimen general); el IVA diferido (77) y las cuotas aplicadas (78) se comparan aparte
-        { t: 'Resultado (casilla 46)', pres: (p) => P('res', p), cont: [['Calculado (46)', (p) => r2(fm(p).reduce((s, x) => s + x.C3.c46, 0))]] }];
+        { t: 'Resultado (casilla 46)', pres: (p) => P('res', p), cont: [['Calculado (46) · sin libros: cuentas 4700/4750', (p) => (hayLib(p) ? r2(fm(p).reduce((s, x) => s + x.C3.c46, 0)) : (mov303(p) ?? r2(fm(p).reduce((s, x) => s + x.C3.c46, 0))))]] }];
       else {
         const cl = (p, k) => r2(fm(p).reduce((s, x) => s + ((x.K.porClave.find((y) => y.clave === k) || {}).importe || 0), 0)), itf = extra?.intra(ej);
         const itv = (p, fl) => (itf ? r2(fm(p).reduce((s, x) => s + itf(x.mes, fl), 0)) : null);
