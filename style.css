@@ -1531,3 +1531,7 @@ td.n-cen { text-align: center !important; font-variant-numeric: tabular-nums; wh
 @font-face { font-family: 'AYFS'; src: url('fuentes/are-you-freakin-serious.ttf') format('truetype'); size-adjust: 120%; font-display: swap; }
 body.letra-ayfs, body.letra-ayfs .layout, body.letra-ayfs button, body.letra-ayfs select, body.letra-ayfs input, body.letra-ayfs textarea, body.letra-ayfs table, body.letra-ayfs h1, body.letra-ayfs h2, body.letra-ayfs h3 { font-family: 'AYFS', "Segoe UI", system-ui, sans-serif !important; }
 body.letra-ayfs td.n-der, body.letra-ayfs td.n-cen, body.letra-ayfs td.num, body.letra-ayfs input.n-der, body.letra-ayfs td.num input { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif !important; }
+
+/* Ajustar a pantalla: botón activo */
+.zoom-c button.on{background:#0071e3;color:#fff;border-color:#0071e3}
+

@@ -31,7 +31,10 @@ const S = {
 };
 let uidActual = null;
 S.zooms = (() => { try { return JSON.parse(localStorage.getItem('zoom-pestanas') || '{}') || {}; } catch { return {}; } })(); // tamaño de cada pestaña y de sus tablas
-const zoomDe = () => Math.min(2, Math.max(0.5, Number(S.zooms[S.tab]) || 1));
+// «Ajustar a pantalla» por pestaña: 'ancho' (que quepa en ancho) o 'pantalla' (en ancho y alto, sin barras); se recalcula al abrir la pestaña, al cargar datos y al cambiar el tamaño de la ventana
+S.ajustes = (() => { try { return JSON.parse(localStorage.getItem('zoom-ajuste') || '{}') || {}; } catch { return {}; } })();
+S.zAuto = {}; // último zoom calculado para cada pestaña con ajuste (para que no parpadee al redibujar)
+const zoomDe = () => (S.ajustes[S.tab] && S.zAuto[S.tab] ? S.zAuto[S.tab] : Math.min(2, Math.max(0.5, Number(S.zooms[S.tab]) || 1)));
 // ancho y tamaño del texto de los formularios de los modelos (111, 115, 303, 349, 583…), de cada pestaña
 S.formas = (() => { try { return JSON.parse(localStorage.getItem('forma-modelos') || '{}') || {}; } catch { return {}; } })();
 const formaDe = () => {
@@ -358,6 +361,7 @@ function render() {
         <span class="hint" id="pdfEstado"></span>` : ''}
       <div class="lat-ctl">
       <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
+      <div class="zoom-c no-print" title="Ajusta esta pestaña a la pantalla (un solo zoom para toda la pestaña, que se recuerda). Vuelve a pulsarlo para quitarlo."><span>Ajustar a pantalla</span><button data-zoom="ancho" class="${S.ajustes[S.tab] === 'ancho' ? 'on' : ''}" title="Que quepa en ancho">↔ Ancho</button><button data-zoom="pantalla" class="${S.ajustes[S.tab] === 'pantalla' ? 'on' : ''}" title="Que quepa en ancho y en alto, sin barras">⤢ Pantalla</button></div>
       ${menuNuevo() ? (() => { const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab)), a = g ? (tpCfg(g.i).a ?? 'c') : 'c';
     return `<div class="zoom-c no-print" title="Alineación del texto de las píldoras de las pestañas (todas las del bloque)"><span>Texto pestañas</span>${[['l', 'Izquierda', '⇤'], ['c', 'Centro', '↔'], ['r', 'Derecha', '⇥']].map(([k, n, s]) => `<button data-talin="${k}" title="${n}"${a === k ? ' class="on"' : ''}>${s}</button>`).join('')}</div>`; })() : ''}
       ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
@@ -380,8 +384,30 @@ function render() {
   if (cab) root.querySelector('.layout').style.setProperty('--hh', `${cab.offsetHeight}px`); // la cabecera queda fija y las pestañas se pegan debajo
   alinearPanel();
   ajustarInicio();
+  ajustarZoom();
   restaurarFoco();
 }
+
+// Ajustar a pantalla: mide la pestaña a tamaño 100 % y busca el zoom con el que cabe (en ancho, o en ancho y alto). Es un solo zoom para toda la pestaña.
+function ajustarZoom() {
+  const modo = S.ajustes[S.tab], v = root.querySelector('.vista');
+  if (!modo || !v) return;
+  v.style.zoom = 1; v.style.setProperty('--z', 1);
+  const vr = v.getBoundingClientRect();
+  let need = v.scrollWidth;
+  v.querySelectorAll('.wrap, .scroll390, table').forEach((e) => { const r = e.getBoundingClientRect(); need = Math.max(need, Math.ceil(r.left - vr.left + Math.max(e.scrollWidth, r.width))); });
+  let z = Math.min(1, v.clientWidth / Math.max(need, 1));
+  if (modo === 'pantalla') {
+    const libre = innerHeight - vr.top - 8, alto = Math.max(v.scrollHeight, 1);
+    z = Math.min(z, libre / alto);
+  }
+  z = Math.max(0.4, Math.round(z * 100) / 100);
+  S.zAuto[S.tab] = z;
+  v.style.zoom = z; v.style.setProperty('--z', z);
+  const b = root.querySelector('.zoom-c button[data-zoom="0"]'); if (b) b.textContent = `${Math.round(z * 100)} %`;
+}
+let tReaj = 0;
+window.addEventListener('resize', () => { clearTimeout(tReaj); tReaj = setTimeout(ajustarZoom, 150); });
 
 // Pantalla de inicio: la letra se ajusta al ancho y al alto de la ventana para que quepa sin barra de desplazamiento vertical
 function ajustarInicio() {
@@ -917,7 +943,13 @@ root.addEventListener('click', (ev) => {
     if (g) { (TP[g.i] ??= {}).a = t.dataset.talin; tpGuarda(); render(); }
     return;
   }
+  if (t.dataset.zoom === 'ancho' || t.dataset.zoom === 'pantalla') { // ajustar a pantalla (si ya estaba puesto, se quita)
+    if (S.ajustes[S.tab] === t.dataset.zoom) { delete S.ajustes[S.tab]; delete S.zAuto[S.tab]; } else S.ajustes[S.tab] = t.dataset.zoom;
+    try { localStorage.setItem('zoom-ajuste', JSON.stringify(S.ajustes)); } catch { /* sin almacenamiento */ }
+    return render();
+  }
   if (t.dataset.zoom !== undefined) {
+    if (S.ajustes[S.tab]) { delete S.ajustes[S.tab]; delete S.zAuto[S.tab]; try { localStorage.setItem('zoom-ajuste', JSON.stringify(S.ajustes)); } catch { /* sin almacenamiento */ } } // tocar − / + / % quita el ajuste automático
     const z = t.dataset.zoom === '0' ? 1 : zoomDe() + (t.dataset.zoom === '+' ? 0.1 : -0.1), v = Math.min(2, Math.max(0.5, Math.round(z * 10) / 10));
     if (v === 1) delete S.zooms[S.tab]; else S.zooms[S.tab] = v;
     try { localStorage.setItem('zoom-pestanas', JSON.stringify(S.zooms)); } catch { /* sin almacenamiento */ }
