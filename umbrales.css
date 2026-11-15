@@ -1,0 +1,17 @@
+/* Alertas de umbrales (bloque 1) */
+.um .um-card { background: var(--card, #fff); border-radius: 18px; box-shadow: 0 4px 14px rgba(20, 40, 106, .15); padding: .5rem 1.1rem; }
+.um .um-fila { display: grid; grid-template-columns: minmax(260px, 1.4fr) minmax(140px, 1fr) 190px 110px; gap: 1rem; align-items: center; padding: .65rem 0; border-bottom: 1px solid #eef0f4; }
+.um .um-fila:last-child { border-bottom: 0; }
+.um .um-fila b, .um .um-fila small { display: block; }
+.um .um-fila small, .um .um-val small, .um .um-f { color: #667085; font-size: .72rem; font-weight: 400; }
+.um .um-f { display: block; }
+.um .um-val { font-weight: 700; font-size: 1rem; text-align: right; }
+.um .um-bar { height: 14px; background: #e6ebf5; border-radius: 9px; overflow: hidden; }
+.um .um-bar i { display: block; height: 100%; border-radius: 9px; }
+.um .um-bar i.v { background: #16a34a; } .um .um-bar i.a { background: #f59e0b; } .um .um-bar i.r { background: #dc2626; }
+.um .um-pill { border-radius: 99px; padding: .15rem .8rem; font-weight: 700; font-size: .8rem; text-align: center; background: #eef0f4; color: #667085; white-space: nowrap; display: inline-block; }
+.um .um-fila .um-pill { justify-self: center; }
+.um .um-pill.v { background: #dcf3e4; color: #1b7f3b; } .um .um-pill.a { background: #fff0a8; color: #6b4e00; } .um .um-pill.r { background: #fde2e2; color: #b42318; }
+.um tr.um-ej td { background: #e3ecff; }
+.um select { max-width: 100%; }
+@media (max-width: 900px) { .um .um-fila { grid-template-columns: 1fr; } .um .um-val { text-align: left; } }

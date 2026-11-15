@@ -12,6 +12,8 @@ import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=2';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
+import { crearUmbrales } from './umbrales.js?v=1';
+import { crearCbam } from './cbam.js?v=1';
 import { crearFase3 } from './fase3.js?v=2';
 import { crearProveedores } from './proveedores.js?v=6';
 import { crearClientes } from './clientes.js?v=5';
@@ -4317,6 +4319,10 @@ export function crearModulos(c) {
     R.modoTr = g(/1903\.\s*Modo de Transporte en Frontera:[ \t]*(\S[^\n]*)/); R.desc = all(/1805\.\s*Descripci[oó]n de las mercanc[ií]as:\s*(.*)/g).join(' · '); R.taric = all(/1809\.\s*C[oó]digo TARIC:\s*(.*)/g).join(' · ');
     const sum = (re) => { const v = all(re).map(duaNum).filter((x) => !Number.isNaN(x)); return v.length ? String(rr(v.reduce((a, b) => a + b, 0))) : ''; };
     R.bruta = sum(/1804\.\s*Masa Bruta \(Kg\):\s*([\d.,]+)/g); R.neta = sum(/1801\.\s*Masa Neta\s*\(kg\):\s*([\d.,]+)/g);
+    { // una entrada por partida (código TARIC, descripción, país de origen, masa neta y régimen), para el CBAM
+      const pT = all(/1809\.\s*C[oó]digo TARIC:\s*(\d{8,10})/g), pD = all(/1805\.\s*Descripci[oó]n de las mercanc[ií]as:\s*(.*)/g), pO = all(/1608\.\s*Pa[ií]s de Origen:\s*([A-Z]{2})/g), pN = all(/1801\.\s*Masa Neta\s*\(kg\):\s*([\d.,]+)/g), pR = all(/1109\.\s*R[eé]gimen Aduanero:\s*(\d{2,4})/g);
+      R.partidas = pT.map((t, i) => ({ n: i + 1, taric: t, desc: pD[i] ?? '', origen: pO[i] ?? '', neta: duaNum(pN[i]) || 0, reg: String(pR[i] ?? '').slice(0, 2) }));
+    }
     const trib = (ini, fin) => {
       const a = L.findIndex((l) => l.startsWith(ini)); if (a < 0) return {};
       const o = {};
@@ -4707,7 +4713,7 @@ export function crearModulos(c) {
   const textoPdf = async (file) => (await leerPdf(file)).texto;
 
   // Registros que son únicos por empresa (y ejercicio): si se va a CREAR uno y en la base ya existe, se actualiza ese en vez de duplicarlo (la lista de la pantalla puede ir por detrás)
-  const UNICOS = new Set(['prs', 'nominas', 'ctacfg', 'm303', 'm111', 'm115', 'm123', 'liqiva', 'liqpres']);
+  const UNICOS = new Set(['prs', 'nominas', 'ctacfg', 'm303', 'm111', 'm115', 'm123', 'liqiva', 'liqpres', 'tipoej', 'cbam']);
   async function guardarRegistro(existente, fila) {
     if (!existente && UNICOS.has(fila.tipo) && fila.empresa_id) {
       let q = db.from('registros').select('id,datos').eq('empresa_id', fila.empresa_id).eq('tipo', fila.tipo);
@@ -5588,6 +5594,10 @@ export function crearModulos(c) {
   Object.assign(tabs, M12.tabs);
   const M13 = crearModelo347({ S, esc, render, empresa, grande, normNif }); // Modelo 347 (bloque 4): pestaña nueva que solo lee los libros
   Object.assign(tabs, M13.tabs);
+  const M18 = crearUmbrales({ S, esc, render, cargar, empresa, grande, normNif, guardarRegistro, puede }); // Bloque 1 · Alertas de umbrales y tipo GE/PYME por ejercicio
+  Object.assign(tabs, M18.tabs);
+  const M19 = crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarRegistro, duaRegs, duaLeer: async (blob) => duaDeTexto(await duaTexto(blob)), textoPdf: duaTexto }); // Bloque 13 · CBAM
+  Object.assign(tabs, M19.tabs);
   const M14 = crearFase3({ S, esc, render, empresa, grande, c303: (...a) => c303(...a), prsVal, calcular349Ops }); // 349 rectificaciones y cuadre 390–303 (bloque 4): pestañas nuevas que solo leen
   Object.assign(tabs, M14.tabs);
   const M15 = crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Proveedores - Clientes: pestaña nueva

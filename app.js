@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=422';
+import { crearModulos } from './modulos.js?v=424';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -186,7 +186,7 @@ function renderPendiente() {
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
   // [título, pestañas, logo, subtítulo del panel]
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'cierre', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'otros'],
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'cierre', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'umbr','otros'],
     'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
@@ -201,6 +201,7 @@ const GRUPOS = [
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
   ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia'], 'adm', 'Usuarios, roles y acceso a las empresas.'],
   ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
+  ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
 ];
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
@@ -282,7 +283,7 @@ const menuNuevo = () => vistaMenu() !== 'c';
 const vistaClara = () => vistaMenu() === 'd';
 // Nombres cortos de los bloques en la vista clara (mismo orden que GRUPOS)
 const GRUPOS_CORTO = ['Información tributaria', 'Registro Mercantil', 'Información empresa', 'Modelos tributarios', 'Cuentas contables', 'SII', 'Estados financieros',
-  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'Administración', 'Proveedores y clientes'];
+  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'Administración', 'Proveedores y clientes', 'CBAM'];
 // Tamaño de las pestañas (vista nueva): ancho y texto, común a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
 let TP = {}; try { TP = JSON.parse(localStorage.getItem('imp-tpill') || '{}') ?? {}; } catch { TP = {}; }
 const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en una sola línea, repartiéndose el ancho
@@ -326,7 +327,17 @@ const MM12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')
 const periodosDe = (e) => (!e ? [...MM12, '1T', '2T', '3T', '4T'] : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'] : MM12);
 const etiquetaPeriodo = (p) => (/^\d\d$/.test(p) ? `${p} · ${MESES_N[+p - 1]}` : `${p[0]}º trimestre (${p})`);
 
+// El tipo de empresa (GE mensual / PYME trimestral) puede cambiar de un ejercicio a otro: si hay un registro «tipoej» de ese ejercicio manda; si no, vale el de la ficha (tipoBase)
+function aplicarTipoEjercicio() {
+  const ej = Number(S.ejercicio);
+  S.empresas.forEach((e) => {
+    if (!('tipoBase' in e)) e.tipoBase = e.tipo ?? null;
+    const t = S.registros.find((x) => x.tipo === 'tipoej' && x.empresa_id === e.id && x.ejercicio === ej)?.datos?.tipo;
+    e.tipo = t === 'GE' || t === 'PYME' ? t : e.tipoBase;
+  });
+}
 function render() {
+  aplicarTipoEjercicio();
   if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'ini';
   const e = S.empresas.find((x) => x.id === S.sel);
   if (S.periodo && !periodosDe(e).includes(S.periodo)) S.periodo = ''; // el periodo elegido tiene que ser de esta empresa (meses o trimestres)
@@ -629,7 +640,7 @@ function vistaEmpresas() {
   const sel = (e, campo, ops, v) => (ed ? `<select data-empf="${e.id}|${campo}">${Object.entries(ops).map(([k, t]) => `<option value="${k}"${k === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : esc(ops[v] ?? v ?? ''));
   const TIPOS = { '': '—', GE: 'Gran empresa (mensual)', PYME: 'Pyme (trimestral)' };
   const filas = [...S.empresas].sort((a, b) => (idxEmp(a) < 0 ? 99 : idxEmp(a)) - (idxEmp(b) < 0 ? 99 : idxEmp(b))).map((e) => `<tr><td><div class="emp">${logoHtml(e)}${esc(etiquetaEmp(e))}</div></td><td>${esc(e.cif)}</td>
-    <td>${cel(e, 'siglas', e.siglas, 'Sigla')}</td><td>${sel(e, 'tipo', TIPOS, e.tipo ?? '')}</td><td>${sel(e, 'programa', PROGRAMAS, programaDe(e))}</td><td>${cel(e, 'banco', e.datos?.banco, 'Banco')}</td>
+    <td>${cel(e, 'siglas', e.siglas, 'Sigla')}</td><td>${sel(e, 'tipo', TIPOS, e.tipoBase ?? e.tipo ?? '')}</td><td>${sel(e, 'programa', PROGRAMAS, programaDe(e))}</td><td>${cel(e, 'banco', e.datos?.banco, 'Banco')}</td>
     <td class="acciones">${ed ? `<label class="small lbl-btn" title="Cambiar el logo">Logo<input type="file" accept="image/*" data-emplogo="${e.id}" hidden></label>${e.datos?.logo ? `<button class="small" data-act="emp-logodel" data-id="${e.id}" title="Quitar el logo cambiado">sin logo</button>` : ''}` : ''}</td>
     <td class="acciones">${ed ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}" title="Borrar">✕</button>` : ''}</td></tr>`).join('');
   return `<div class="bar"><span class="space"></span>
@@ -695,7 +706,7 @@ function formEmpresa(e = {}) {
     { name: 'nombre', label: 'Nombre', value: e.nombre, required: true },
     { name: 'cif', label: 'CIF', value: e.cif },
     { name: 'siglas', label: 'Siglas', value: e.siglas },
-    { name: 'tipo', label: 'Tipo de empresa', type: 'select', options: { '': '—', GE: 'GE', PYME: 'PYME' }, value: e.tipo ?? '' },
+    { name: 'tipo', label: 'Tipo de empresa', type: 'select', options: { '': '—', GE: 'GE', PYME: 'PYME' }, value: e.tipoBase ?? e.tipo ?? '' },
     { name: 'notas', label: 'Notas', type: 'textarea', value: e.notas },
   ], async (v) => {
     const datos = { nombre: v.nombre, cif: nul(v.cif), siglas: nul(v.siglas.toUpperCase()), tipo: nul(v.tipo), notas: nul(v.notas) };
