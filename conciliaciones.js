@@ -533,7 +533,7 @@ export function crearConciliaciones(c) {
       // si en el periodo no hay ninguna línea en los libros de IVA (p. ej. no se han cargado los de ese ejercicio), el resultado del 303 se compara con lo contabilizado en las cuentas 4700 (deudora, debe) y 4750 (acreedora, haber)
       const ctE = conFecha(RE), ctR = conFecha(RR);
       const hayLib = (p) => { const [a, b] = rngPer(ej, p); return ctE.some((l) => en(l, a, b)) || ctR.some((l) => en(l, a, b)); };
-      const mov303 = (p) => { const k0 = kOf('4700.01'), k5 = kOf('4750.01'); if (!M || (!k0 && !k5)) return null; const [a, b] = rngPer(ej, p), s = (k) => (k ? movsK(k, M).filter((l) => en(l, a, b)) : []); return r2(s(k5).reduce((x, l) => x + (+l.haber || 0), 0) - s(k0).reduce((x, l) => x + (+l.debe || 0), 0)); };
+      const mov303 = (p) => { const k0 = kOf('4700.01'), k5 = kOf('4750.01'); if (!M || (!k0 && !k5)) return null; const [a, b] = rngPer(ej, p), s = (k) => (k ? movsK(k, M).filter((l) => en(l, a, b)) : []); const d0 = r2(s(k0).reduce((x, l) => x + (+l.debe || 0), 0)), h5 = r2(s(k5).filter((l) => !/^(OH|OD)[-\s]/i.test(String(l.asiento || ''))).reduce((x, l) => x + (+l.haber || 0), 0)); return d0 > 0.005 ? -d0 : h5; }; // a compensar = lo cargado en 4700 (en negativo); a ingresar = lo abonado en 4750 (sin los asientos OH/OD de reversión de reclasificaciones anteriores)
       if (m === '303') C = [
         { t: 'IVA diferido importación (77)', pres: (p) => P('adu', p), cont: [['Calculado', (p) => r2(fm(p).reduce((s, x) => s + (+x.C3.c77 || 0), 0))]] },
         // lo presentado guardado como «Resultado IVA» es la casilla 46 (régimen general); el IVA diferido (77) y las cuotas aplicadas (78) se comparan aparte
