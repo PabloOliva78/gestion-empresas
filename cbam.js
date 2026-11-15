@@ -1,12 +1,16 @@
 // Bloque 13 · CBAM (Mecanismo de Ajuste en Frontera por Carbono). Todo se guarda en un registro «cbam» por empresa.
 // Las importaciones salen de los DUA de «DUA-H1» (una línea por partida con código CBAM); operadores, instalaciones y emisiones se cargan
 // desde los informes QReport ya presentados o desde la plantilla del productor, y se pueden escribir a mano.
-import { leerQReport, leerPlantilla } from './cbam-lector.js?v=1';
+import { leerQReport, leerPlantilla } from './cbam-lector.js?v=2';
 
 export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarRegistro, duaRegs, duaLeer, textoPdf }) {
   const FACTOR0 = { 2026: 2.5, 2027: 5, 2028: 10, 2029: 22.5, 2030: 48.5, 2031: 61, 2032: 73.5, 2033: 86, 2034: 100 };
   const PREF0 = '2808, 2814, 283421, 3102, 3105'; // códigos de las mercancías CBAM de fertilizantes (se pueden cambiar en «Cálculo»)
   const UMBRAL_T = 50;
+  // Precio del certificado: media trimestral en 2026 (publicada por la Comisión; semanal desde 2027). Editable por trimestre.
+  const PRECIOQ0 = { '2026-Q1': 75.36, '2026-Q2': 75.28, '2026-Q3': 82.32 };
+  const precioQ = (d, q, y) => num(d.cfg.precioQ?.[q]) || num(d.cfg.precio?.[y]);
+  const precioAnio = (d, y) => { const ps = [1, 2, 3, 4].map((n) => precioQ(d, `${y}-Q${n}`, y)).filter(Boolean); return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : 0; };
   const nf = (v, d = 2) => (v === null || v === undefined || v === '' || Number.isNaN(+v) ? '' : new Intl.NumberFormat('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: 'always' }).format(+v));
   const r2 = (x) => Math.round((Number(x) + (x < 0 ? -1e-9 : 1e-9)) * 100) / 100;
   const num = (s) => { const v = parseFloat(String(s ?? '').replace(/\s/g, '').replace(',', '.')); return Number.isFinite(v) ? v : 0; };
@@ -16,8 +20,8 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
 
   // ---------- datos guardados ----------
   const regCbam = () => S.registros.find((r) => r.tipo === 'cbam' && r.empresa_id === S.sel);
-  const DEF = () => ({ oper: [], inst: [], emi: [], asig: {}, aut: { estado: 'No solicitada' }, cert: [], cfg: { prefijos: PREF0, factor: { ...FACTOR0 }, precio: {}, deduc: {}, ctaGasto: '', ctaProv: '' }, decl: {}, inf: [], docs: [], tareas: null });
-  function D() { const d = regCbam()?.datos ?? {}, b = DEF(); return { ...b, ...d, cfg: { ...b.cfg, ...(d.cfg ?? {}), factor: { ...b.cfg.factor, ...(d.cfg?.factor ?? {}) } }, aut: { ...b.aut, ...(d.aut ?? {}) } }; }
+  const DEF = () => ({ oper: [], inst: [], emi: [], asig: {}, aut: { estado: 'No solicitada' }, cert: [], cfg: { prefijos: PREF0, factor: { ...FACTOR0 }, precio: {}, precioQ: { ...PRECIOQ0 }, deduc: {}, ctaGasto: '', ctaProv: '' }, decl: {}, inf: [], docs: [], tareas: null });
+  function D() { const d = regCbam()?.datos ?? {}, b = DEF(); return { ...b, ...d, cfg: { ...b.cfg, ...(d.cfg ?? {}), factor: { ...b.cfg.factor, ...(d.cfg?.factor ?? {}) }, precioQ: { ...b.cfg.precioQ, ...(d.cfg?.precioQ ?? {}) } }, aut: { ...b.aut, ...(d.aut ?? {}) } }; }
   async function guardar(mut) {
     const reg = regCbam(), datos = D(); mut(datos);
     const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'cbam', ejercicio: null, datos });
@@ -100,20 +104,20 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   function vistaCalc() {
     if (!S.sel) return sinEmp; const d = D(), L = lineas(d), y = ano(), LY = L.filter((l) => l.y === y);
     const t = LY.reduce((a, l) => a + l.tm, 0), emis = r2(LY.reduce((a, l) => a + calc(d, l).tot, 0));
-    const pct = num(d.cfg.factor[y]) / 100, precio = num(d.cfg.precio[y]), ded = num(d.cfg.deduc[y]);
-    const cert = Math.max(0, emis * pct - (precio ? ded / precio : 0)), imp = r2(cert * precio);
+    const pct = num(d.cfg.factor[y]) / 100, precio = precioAnio(d, y), ded = num(d.cfg.deduc[y]);
+    const bruto = LY.reduce((a, l) => a + calc(d, l).tot * pct * precioQ(d, l.q, y), 0), cert = Math.max(0, emis * pct - (precio ? ded / precio : 0)), imp = r2(Math.max(0, bruto - ded)); // cada línea con el precio de su trimestre
     const pctU = t / UMBRAL_T * 100;
     const proy = Object.keys(FACTOR0).map((a) => { const f = num(d.cfg.factor[a]) / 100; return `<tr><td><b>${a}</b></td><td class="num">${nf(num(d.cfg.factor[a]), 1)} %</td><td class="num">${nf(emis * f, 2)}</td><td class="num">${precio ? nf(emis * f * precio, 2) : ''}</td></tr>`; }).join('');
     const inp = (k, a, ph) => `<input style="width:7em" data-cbcfg="${k}|${a}" value="${esc(d.cfg[k][a] ?? '')}" placeholder="${ph}">`;
     return `<div class="inicio cb"><section class="dsec"><h3>Cálculo de la obligación · ${y}</h3><div class="bar">${selAno(anosDe(L))}<span class="space"></span></div>
-      <div class="cb-ks">${kpi('Toneladas importadas', nf(t, 3) + ' t')}${kpi('Emisiones incorporadas', nf(emis, 2) + ' tCO₂')}${kpi('Certificados a entregar', nf(cert, 2), `factor CBAM ${nf(pct * 100, 1)} %`)}${kpi('Importe estimado', nf(imp, 2) + ' €', precio ? `a ${nf(precio, 2)} €/certificado` : 'falta el precio')}</div>
+      <div class="cb-ks">${kpi('Toneladas importadas', nf(t, 3) + ' t')}${kpi('Emisiones incorporadas', nf(emis, 2) + ' tCO₂')}${kpi('Certificados a entregar', nf(cert, 2), `factor CBAM ${nf(pct * 100, 1)} %`)}${kpi('Importe estimado', nf(imp, 2) + ' €', precio ? `precio medio ${nf(precio, 2)} €/certificado` : 'falta el precio')}</div>
       <div class="cb-um"><b>Umbral de ${UMBRAL_T} t por año</b><div class="um-bar" style="display:block;height:14px;background:#e6ebf5;border-radius:9px;overflow:hidden"><i style="display:block;height:100%;width:${Math.min(100, pctU)}%;background:${pctU > 100 ? '#dc2626' : pctU >= 80 ? '#f59e0b' : '#16a34a'}"></i></div><small>${nf(t, 1)} t de ${UMBRAL_T} t · ${pctU > 100 ? 'superado: hay que ser declarante autorizado y declarar' : 'por debajo del umbral (comprueba la norma vigente)'}</small></div>
-      <h4 class="it-sec">Datos del año ${y}</h4><div class="cb-form"><label>Factor CBAM ${y} (%) ${inp('factor', y, '')}</label><label>Precio del certificado (€/t) ${inp('precio', y, '0,00')}</label><label>Precio del carbono pagado en origen, total (€) ${inp('deduc', y, '0,00')}</label></div>
+      <h4 class="it-sec">Datos del año ${y}</h4><div class="cb-form"><label>Factor CBAM ${y} (%) ${inp('factor', y, '')}</label>${[1, 2, 3, 4].map((n) => `<label>Precio ${n}T (€/t) ${inp('precioQ', `${y}-Q${n}`, y === 2026 && n === 4 ? 'sin publicar' : '0,00')}</label>`).join('')}<label>Precio del carbono pagado en origen, total (€) ${inp('deduc', y, '0,00')}</label></div>
       <h4 class="it-sec">Evolución prevista (mismas emisiones)</h4><div class="wrap"><table class="tabla cb-t" style="width:auto"><thead><tr><th>Año</th><th class="num">Factor CBAM</th><th class="num">Certificados</th><th class="num">Importe €</th></tr></thead><tbody>${proy}</tbody></table></div>
       <h4 class="it-sec">Códigos CBAM y cuentas del asiento</h4><div class="cb-form"><label>Códigos que cuentan como CBAM (empiezan por) <input style="width:20em" data-cbcfg2="prefijos" value="${esc(d.cfg.prefijos)}"></label>
         <label>Cuenta de gasto <input style="width:8em" data-cbcfg2="ctaGasto" value="${esc(d.cfg.ctaGasto)}" placeholder="6…"></label><label>Cuenta de provisión <input style="width:8em" data-cbcfg2="ctaProv" value="${esc(d.cfg.ctaProv)}" placeholder="14… / 4999"></label></div>
       <h4 class="it-sec">Asiento propuesto</h4><div class="wrap"><table class="tabla cb-t" style="width:auto"><thead><tr><th>Cuenta</th><th class="num">Debe</th><th class="num">Haber</th></tr></thead><tbody><tr><td>${esc(d.cfg.ctaGasto || '(cuenta de gasto)')} · Gasto por certificados CBAM ${y}</td><td class="num">${nf(imp, 2)}</td><td></td></tr><tr><td>${esc(d.cfg.ctaProv || '(cuenta de provisión)')} · Provisión por certificados CBAM</td><td></td><td class="num">${nf(imp, 2)}</td></tr></tbody></table></div>
-      <p class="hint">Certificados = emisiones × factor CBAM del año − (precio del carbono pagado en origen ÷ precio del certificado). El factor es el porcentaje de la obligación que no cubre la asignación gratuita (2026: 2,5 % hasta el 100 % en 2034). Valores a confirmar con la normativa vigente.</p></section></div>`;
+      <p class="hint">Certificados = emisiones × factor CBAM del año − (precio del carbono pagado en origen ÷ precio del certificado). El factor es el porcentaje de la obligación que no cubre la asignación gratuita (2026: 2,5 % hasta el 100 % en 2034). El precio es la media trimestral publicada por la Comisión en 2026 (75,36 · 75,28 · 82,32 €; el 4T aún sin publicar) y semanal desde 2027; los certificados se compran en la plataforma común desde febrero de 2027. El umbral de 50 t es el de la Comisión. El factor por año y los plazos de declaración hay que confirmarlos en el Reglamento (UE) 2023/956 consolidado.</p></section></div>`;
   }
 
   // ---------- 5 · Autorización y certificados ----------

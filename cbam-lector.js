@@ -15,8 +15,11 @@ export function leerQReport(texto) {
   const decl = {};
   const dm = /Código postal: (.+?) Datos del importador/.exec(t);
   if (dm) {
-    const m = /^(.+?) (ES[A-Z0-9]{8,11}) (\d\d) - \d\d ([A-Z]{2}) - \S+ (\S+) (\S+) (.+) (\d{5})$/.exec(dm[1]);
-    if (m) Object.assign(decl, { nombre: m[1], nif: m[2], funcion: m[3], pais: m[4], provincia: m[5], poblacion: m[6], calle: m[7], cp: m[8], anc: informe.anc });
+    const m = /^(.+?) (ES[A-Z0-9]{8,11}) (\d\d) - .+? ([A-Z]{2}) - \S+ (.+) (\d{5})$/.exec(dm[1].replace(/ (Línea adicional para calle|Número):?/g, ''));
+    if (m) { // «GRANADA GRANADA LOJA S/N» (provincia, población, calle) o «GRANADA C/LOJA PARCELA 204» (población, calle)
+      const tk = m[5].split(' '), doble = tk.length > 2 && tk[0] === tk[1];
+      Object.assign(decl, { nombre: m[1], nif: m[2], funcion: m[3], pais: m[4], provincia: doble ? tk[0] : '', poblacion: tk[0], calle: tk.slice(doble ? 2 : 1).join(' '), cp: m[6], anc: informe.anc });
+    }
   }
   const fm = /Cargo del firmante: (\d{4}-\d\d-\d\d) (\S+) (.+) (\S+) Certifico/.exec(t);
   if (fm) Object.assign(decl, { firmaFecha: fm[1], firmaLugar: fm[2], firmaNombre: fm[3], firmaCargo: fm[4] });
@@ -44,7 +47,7 @@ export function leerQReport(texto) {
       tipoCoord: s(secIn, /Tipo de coordenadas (\d\d)/), paisProd: s(secIn, /País de producción Código del país ([A-Z]{2})/),
     };
     const em = {
-      directa: num(g(/Emisiones implícitas \(directas\) específicas ([\d.]+) tCO2/)[0]), indirecta: num(g(/Emisiones implícitas \(indirectas\) específicas ([\d.]+) tCO2/)[0]),
+      directa: num(g(/Emisiones implícitas \(directas\) específicas ([\d.]+)/)[0]), indirecta: num(g(/Emisiones implícitas \(indirectas\) específicas ([\d.]+)/)[0]),
       mwh: num(g(/Electricidad consumida ([\d.]+) MWh/)[0]), factor: num(g(/Factor de emisión ([\d.]+) t ?CO2/)[0]), fuenteFactor: g(/Fuente del factor de emisión (\d\d)/)[0] ?? '',
       fuenteElec: g(/Fuente de electricidad (\w+) - /)[0] ?? '', tipoDet: g(/Emisiones directas implícitas Tipo de determinación (\d\d)/)[0] ?? '', normas: g(/Tipo de normas de notificación aplicables (\w+) - /)[0] ?? '',
       metodo: g(/Método de producción \d+\. (P\d+), /)[0] ?? '', metodoNom: g(/Método de producción \d+\. P\d+, (.+?) Método/)[0] ?? '',
