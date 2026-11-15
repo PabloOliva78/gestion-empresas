@@ -1019,7 +1019,34 @@ export function crearModulos(c) {
   // Solo mira lo que ya está cargado (las insignias del menú no deben disparar descargas pesadas)
   // Las insignias del panel de modelos enseñan importes: al abrir el grupo se piden los libros de la empresa elegida (una vez, luego quedan en memoria)
   const peek = (tipo) => (S.sel ? grande(tipo) : null);
+  // Carga por lotes (varios archivos soltados a la vez): cada libro grande se lee UNA vez de la base de datos, se completa en memoria con todos los archivos y se guarda UNA vez al final.
+  // Antes cada archivo leía y reescribía el libro entero (decenas de MB cada vez) y a partir del tercero se cortaba la conexión.
+  let lote = null; // null = sin lote; Map `${tipo}|${empresaId}` → { id, tipo, empresaId, filas, sucio }
+  async function entradaLote(tipo, empresaId) {
+    const kl = `${tipo}|${empresaId}`; let c = lote.get(kl);
+    if (!c) {
+      const { data, error } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).order('id').limit(1).maybeSingle();
+      if (error) throw new Error(`no se pudo leer ${tipo} antes de guardar (${error.message}); no se ha guardado nada para no duplicar el libro`);
+      c = { id: data?.id ?? null, tipo, empresaId, filas: data?.datos?.filas ?? [], sucio: false }; lote.set(kl, c);
+    }
+    return c;
+  }
+  async function volcarLote() { // guarda cada libro modificado una sola vez; devuelve los errores (los archivos se pueden volver a soltar: no se duplican)
+    const errores = [];
+    for (const c of lote?.values() ?? []) {
+      if (!c.sucio) continue;
+      const err = await guardarRegistro(c.id ? { id: c.id } : null, { ...(c.id ? {} : { id: crypto.randomUUID() }), empresa_id: c.empresaId, tipo: c.tipo, ejercicio: null, datos: { filas: c.filas } });
+      if (err) errores.push(`${c.tipo}: ${err}`); else c.sucio = false;
+    }
+    return errores;
+  }
   async function guardarGrande(tipo, empresaId, nuevas, clave) {
+    if (lote) {
+      const c = await entradaLote(tipo, empresaId), mapa = new Map(c.filas.map((x) => [clave(x), x]));
+      nuevas.forEach((x) => mapa.set(clave(x), x));
+      c.filas = sinDupSii(tipo, [...mapa.values()]); c.sucio = true; GR.set(`${tipo}|${empresaId}`, c.filas);
+      return c.filas.length;
+    }
     const { data, error: eLee } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).order('id').limit(1).maybeSingle();
     if (eLee) throw new Error(`no se pudo leer ${tipo} antes de guardar (${eLee.message}); no se ha guardado nada para no duplicar el libro`);
     const mapa = new Map((data?.datos?.filas ?? []).map((x) => [clave(x), x]));
@@ -1084,10 +1111,12 @@ export function crearModulos(c) {
         const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name, ...(s === 'E' && l.codigo === 'R.NAC.NS' && marcasNsl.has(`${l.factura}|${l.nif}`) ? { nsl: true } : {}) }));
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
       }
-      const nIsp = await moverIspA(empresaId); // las S.NC.ISP.A que hubieran quedado en el soportado pasan al repercutido
-      if (nIsp) partes.push(`${nIsp} S.NC.ISP.A pasadas del soportado al repercutido`);
-      const nSue = await moverSueA(empresaId); // y las S.UE.* que hubieran quedado en el repercutido vuelven al soportado
-      if (nSue) partes.push(`${nSue} S.UE.* pasadas del repercutido al soportado`);
+      if (!lote) { // en un lote se hace una sola vez al final, con todos los archivos
+        const nIsp = await moverIspA(empresaId); // las S.NC.ISP.A que hubieran quedado en el soportado pasan al repercutido
+        if (nIsp) partes.push(`${nIsp} S.NC.ISP.A pasadas del soportado al repercutido`);
+        const nSue = await moverSueA(empresaId); // y las S.UE.* que hubieran quedado en el repercutido vuelven al soportado
+        if (nSue) partes.push(`${nSue} S.UE.* pasadas del repercutido al soportado`);
+      }
       return `✔ ${f.name}: libro de IVA${bc ? ' (Business Central)' : ''} · ${partes.join(' y ')}`;
     }
     return `❔ ${f.name}: guardado, pero no reconozco el formato (libro de IVA del ERP o consulta del SII)`;
@@ -1115,6 +1144,11 @@ export function crearModulos(c) {
       <td>${verArchivo(r.datos.archivo)}</td><td>${puede() ? `<button class="small danger" data-act="m-archdel" data-id="${r.id}" title="Quitar el archivo y los datos que aportó">✖ Quitar</button>` : ''}</td></tr>`).join('')}</tbody></table></details>`;
   }
   async function quitarDatosArchivo(tipo, nombre, empresaId) {
+    if (lote) { // dentro de un lote se quita en memoria y se guarda al final
+      const c = await entradaLote(tipo, empresaId), quitadas = c.filas.filter((x) => x.src === nombre);
+      if (quitadas.length) { c.filas = c.filas.filter((x) => x.src !== nombre); c.sucio = true; GR.set(`${tipo}|${empresaId}`, c.filas); }
+      return quitadas;
+    }
     const { data } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).maybeSingle();
     const filas = data?.datos?.filas ?? [], quitadas = filas.filter((x) => x.src === nombre);
     if (quitadas.length) await reemplazarGrande(tipo, empresaId, filas.filter((x) => x.src !== nombre), data);
@@ -4624,7 +4658,8 @@ export function crearModulos(c) {
     if (archKind === 'impuestos') return cargarPdfs(files);
     if (archKind === 'registro') return cargarRegistro(files);
     if (!S.sel) return void alert('Elige primero la empresa en el desplegable de la izquierda.');
-    const informe = [], vistos = new Set();
+    const informe = [], vistos = new Set(), tocadas = new Set(), usaLote = ['emitidas', 'recibidas', 'sii', 'extractos'].includes(archKind);
+    if (usaLote) lote = new Map(); // los libros se leen y se guardan una sola vez para todos los archivos
     for (const f of files) {
       try {
         const ref = `${f.name}|${f.size}`;
@@ -4641,8 +4676,14 @@ export function crearModulos(c) {
             datos: { nombre: f.name, ref, archivo: sub.val, subido: new Date().toISOString().slice(0, 10) } });
           if (err) throw new Error(err);
         }
+        tocadas.add(eid);
         informe.push((['emitidas', 'recibidas', 'sii'].includes(archKind) ? await ingestaIVA(f, eid) : archKind === 'extractos' ? await ingestaMayor(f, eid) : `✔ ${f.name}`) + (otra ? `  → ES DE OTRA EMPRESA: guardado en ${dest.nombre}` : ''));
       } catch (err) { informe.push(`✖ ${f.name}: ${err.message}`); }
+    }
+    if (usaLote) { // se guardan los libros (una vez cada uno) y se hace el reparto de S.UE.* / S.NC.ISP.A una sola vez
+      const errs = await volcarLote(); lote = null;
+      errs.forEach((e) => informe.push(`✖ no se pudo guardar ${e}. Vuelve a soltar los archivos (no se duplican).`));
+      if (!errs.length && ['emitidas', 'recibidas'].includes(archKind)) for (const id of tocadas) { const nI = await moverIspA(id), nS = await moverSueA(id); if (nI) informe.push(`↔ ${nI} S.NC.ISP.A pasadas del soportado al repercutido`); if (nS) informe.push(`↔ ${nS} S.UE.* pasadas del repercutido al soportado`); }
     }
     await cargar(); render();
     alert(`${ARCH[archKind]}: ${informe.length} archivos\n${informe.join('\n')}\n\nSe guardan en el ejercicio elegido y en la empresa de cada archivo (si el archivo es de otra empresa distinta de la elegida, va a la suya y se avisa).`);
@@ -4681,12 +4722,12 @@ export function crearModulos(c) {
     }
     // si se corta la conexión (libros grandes, wifi…) se reintenta hasta 3 veces; guardar dos veces lo mismo no duplica nada (misma fila por id)
     let error;
-    for (let intento = 1; intento <= 3; intento++) {
+    for (let intento = 1; intento <= 5; intento++) {
       ({ error } = existente
         ? await db.from('registros').update(fila).eq('id', existente.id)
         : await db.from('registros').insert(fila));
-      if (!error || !/NetworkError|Failed to fetch|fetch resource|Load failed/i.test(error.message ?? '') || intento === 3) break;
-      await new Promise((r) => setTimeout(r, 1500 * intento));
+      if (!error || !/NetworkError|Failed to fetch|fetch resource|Load failed/i.test(error.message ?? '') || intento === 5) break;
+      await new Promise((r) => setTimeout(r, 2500 * intento));
     }
     return error?.message;
   }
