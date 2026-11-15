@@ -154,7 +154,7 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 /* Cuentas contables (extracto y resumen): cabecera de la cuenta, totales, movimientos y resumen, cada uno en su globo */
 .layout.v-clara .xc-cab { background: none; color: #1d1d1f; padding: 0; border-radius: 0; overflow: visible; margin: 0 0 12px; }
 .layout.v-clara .xc-glow { display: none; }
-.layout.v-clara .xc-top { background: #fff; border: 2px solid #0071e3; border-radius: 18px; padding: 14px 20px; }
+.layout.v-clara .xc-top { background: #fbf6ea; border: 2px solid #0071e3; border-radius: 18px; padding: 14px 20px; } /* cabecera de cada cuenta contable en color crema (el mismo de la cabecera de la página) */
 /* sin la ruta («5. Cuentas contables › Extracto · cuenta»): la empresa queda arriba a la derecha, sobre el recuadro de revisión */
 .layout.v-clara .xc-ruta > .xc-p, .layout.v-clara .xc-ruta > .xc-s, .layout.v-clara .xc-ruta > .xc-pa { display: none; }
 .layout.v-clara .xc-top { position: relative; }
