@@ -180,10 +180,19 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   function vistaDoc() { if (!S.sel) return sinEmp; const d = D(); return `<div class="inicio cb"><section class="dsec"><h3>Documentos CBAM</h3>${tablaEd(d, 'docs', DOCOLS, 'Añadir documento')}<p class="hint">Referencias a los documentos del CBAM (informes presentados, solicitud de declarante, verificaciones, comunicaciones de los productores) con su enlace o ruta.</p></section></div>`; }
 
   // ---------- acciones ----------
+  // Texto del QReport en el orden en que lo escribe el PDF (cada dato junto a su etiqueta); el de los DUA lo ordena por filas y rompe las tablas
+  async function textoQR(file) {
+    const lib = window.pdfjsLib;
+    if (!lib) throw new Error('No se cargó el lector de PDF (pdf.js).');
+    lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise, out = [];
+    for (let p = 1; p <= doc.numPages; p++) out.push((await (await doc.getPage(p)).getTextContent()).items.map((i) => i.str).filter((s) => s && s.trim()).join(' | '));
+    return out.join('\n');
+  }
   async function cargarQR(files) {
     const nuevos = { oper: 0, inst: 0, emi: 0 }; let ultimo = null;
     for (const f of [...files].filter((x) => /\.pdf$/i.test(x.name))) {
-      let Q = null; try { Q = leerQReport(await textoPdf(f)); } catch (e) { ST.msg = `${f.name}: ${e.message}`; continue; }
+      let Q = null; try { Q = leerQReport(await textoQR(f)); } catch (e) { ST.msg = `${f.name}: ${e.message}`; continue; }
       if (!Q || !Q.mercancias.length) { ST.msg = `${f.name}: no parece un informe CBAM (QReport).`; continue; }
       await guardar((d) => {
         Q.oper.forEach((o) => { if (!d.oper.some((x) => x.id === o.id)) { d.oper.push(o); nuevos.oper++; } });
