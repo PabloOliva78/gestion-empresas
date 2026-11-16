@@ -144,7 +144,9 @@ export function revisar(lineas, sentido, desde, hasta) {
       if (c === 'R.UE' && (!nif || esNifEs(nif))) add('ueNif', nif ? `NIF ${nif}` : 'sin NIF');
       if (c === 'R.UE.S' && (!nif || esNifEs(nif))) add('uesNif', nif ? `NIF ${nif}` : 'sin NIF');
       if (/^R\.EX/.test(c) && esNifEs(nif) && !/canarias|ceuta|melilla/i.test(`${l.tipoPais ?? ''} ${l.pais ?? ''}`)) add('exNif', `NIF ${nif}`);
-      if (/^R\.ISP\./.test(c) && Math.abs(cuota) > 0.005) add('ispCuota');
+      // las autorrepercusiones de compras (proveedor no residente, código .NR, o tipo negativo) llevan cuota por diseño: solo es error en una venta con inversión
+      const autorrep = (+l.pct || 0) < 0 || /\.NR(\.SR)?$/.test(c);
+      if (/^R\.ISP\./.test(c) && Math.abs(cuota) > 0.005 && !autorrep) add('ispCuota');
       if (/^R\.(NC|RC)\.(NR|RD|SR|RDN)/.test(c) && esUE(nif) && !esNifEs(nif)) add('locEmit', `NIF ${nif}`);
       if (!nif && !/^R\.NAC\.NS/.test(c) && Math.abs(base) > 3000) add('nif', 'base superior a 3.000 €');
     } else {
