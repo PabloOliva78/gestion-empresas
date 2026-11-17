@@ -14,7 +14,7 @@ import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearUmbrales } from './umbrales.js?v=1';
 import { crearCbam } from './cbam.js?v=10';
-import { crearRevFactura } from './revfactura.js?v=4';
+import { crearRevFactura } from './revfactura.js?v=5';
 import { crearFase3 } from './fase3.js?v=2';
 import { crearProveedores } from './proveedores.js?v=6';
 import { crearClientes } from './clientes.js?v=5';
@@ -5599,7 +5599,7 @@ export function crearModulos(c) {
   Object.assign(tabs, M18.tabs);
   const M19 = crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarRegistro, duaRegs, duaLeer: async (blob) => duaDeTexto(await duaTexto(blob)), textoPdf: duaTexto }); // Bloque 13 · CBAM
   Object.assign(tabs, M19.tabs);
-  const M20 = crearRevFactura({ S, esc, render, empresa, textoPdf: duaTexto }); // Bloque 10 · Revisión factura AEAT (la factura solo vive en memoria)
+  const M20 = crearRevFactura({ S, esc, render, empresa, cargarOcr: cargarTesseract }); // Bloque 10 · Revisión factura AEAT (la factura solo vive en memoria)
   Object.assign(tabs, M20.tabs);
   const M14 = crearFase3({ S, esc, render, empresa, grande, c303: (...a) => c303(...a), prsVal, calcular349Ops }); // 349 rectificaciones y cuadre 390–303 (bloque 4): pestañas nuevas que solo leen
   Object.assign(tabs, M14.tabs);
