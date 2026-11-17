@@ -36,6 +36,12 @@ function ids(t) {
   const out = [], vistos = new Set();
   const add = (id, pos, pais, cuerpo) => { const k = pais + id; if (vistos.has(k)) return; vistos.add(k); out.push({ id, pos, pais, es: pais === 'ES' }); };
   for (const m of t.matchAll(/(?<![A-Z0-9])(?:ES[\s\-]?)?([ABCDEFGHJNPQRSUVW]\d{7}[0-9A-J]|\d{8}[A-Z]|[XYZ]\d{7}[A-Z])(?![A-Z0-9])/g)) { const v = validaNif(m[1]); if (v) add(m[1], m.index, 'ES'); }
+  // errores típicos del OCR: la letra inicial del CIF leída como cifra (B→5/8, S→5, G→6, D→0); solo se acepta si el dígito de control cuadra
+  const LET = { 5: 'BS', 8: 'B', 6: 'GB', 0: 'DO', 1: 'IJ', 3: 'J' };
+  for (const m of t.matchAll(/(?<![A-Z0-9.,])(\d)(\d{7}[0-9A-J])(?![A-Z0-9])/g)) {
+    const c = (LET[m[1]] || '').split('').map((L) => L + m[2]).filter((x) => 'ABCDEFGHJNPQRSUVW'.includes(x[0]) && validaNif(x)?.ok);
+    if (c.length >= 1) add(c[0], m.index, 'ES');
+  }
   for (const m of t.matchAll(/(?<![A-Z0-9])([A-Z]{2})[\s\-]?(\d[0-9A-Z]{7,11})(?![A-Z0-9])/g)) { if (EU.includes(m[1]) && /\d{6}/.test(m[2])) add(m[1] + m[2], m.index, m[1] === 'EL' ? 'GR' : m[1]); }
   return out.sort((a, b) => a.pos - b.pos);
 }
@@ -48,7 +54,7 @@ export function analizarFactura(texto, ctx = {}) {
 
   // ---- datos ----
   const m = {
-    num: [...t1.matchAll(/(?:factura|invoice|fra\.?|n[úu]m(?:ero)?\.?|n[ºo°]\.?|inv\.?)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°]\.?|no\.?|#)?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.#]*(?: [A-Z0-9\/\-\.#]*\d[A-Z0-9\/\-\.#]*)?)/gi)].find((x) => /\d/.test(x[1]) && x[1].trim().length >= 3 && !/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(x[1].trim())) ?? null,
+    num: [...t1.matchAll(/(?:factura|invoice|fra\.?|n[úu]m(?:ero)?\.?|n[ºo°?]\.?|inv\.?)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°?]\.?|no\.?|#)?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.#]*(?: [A-Z0-9\/\-\.#]*\d[A-Z0-9\/\-\.#]*)?)/gi)].find((x) => /\d/.test(x[1]) && x[1].trim().length >= 3 && !/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(x[1].trim())) ?? null,
     fecha: primero(t1, /(?:fecha(?:\s+de\s+(?:expedici[oó]n|emisi[oó]n|factura))?|date|invoice\s+date)\s*[:\-]?\s*(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{2}-\d{2})/i) ?? primero(t1, /(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4}|\d{4}-\d{2}-\d{2})/),
     base: primero(t1, /(?:base\s+imponible|taxable\s+(?:base|amount)|total\s+base|importe\s+neto|net\s+(?:amount|total)|subtotal|sub-total)\s*(?:\(?[A-Z€$]{0,3}\)?)?\s*[:\-]?\s*(-?[\d.,]*\d)/i),
     tipo: primero(t1, /(?:IVA|I\.V\.A\.?|VAT|IGIC|TAX)\s*(?:al|at|rate)?\s*[:\-(]?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%/i) ?? primero(t1, /(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s*(?:de\s+)?(?:IVA|I\.V\.A\.?|VAT)/i),
@@ -85,7 +91,7 @@ export function analizarFactura(texto, ctx = {}) {
   F.noSujeta = palabra(/no\s+sujet[ao]|not\s+subject\s+to\s+vat|outside\s+the\s+scope/i);
   F.recargo = palabra(/recargo\s+de\s+equivalencia/i);
 
-  const nFact = new Set([...t1.matchAll(/(?:commercial\s+invoice|factura|invoice)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°]\.?|no\.?|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.# ]{2,20}\d)/gi)].map((x) => x[1].replace(/\s+/g, '').toUpperCase())).size;
+  const nFact = new Set([...t1.matchAll(/(?:commercial\s+invoice|factura|invoice)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°?]\.?|no\.?|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.# ]{2,20}\d)/gi)].map((x) => x[1].replace(/\s+/g, '').toUpperCase())).size;
   const nombreMio = !!ctx.empresa?.nombre && t1.toUpperCase().includes(String(ctx.empresa.nombre).toUpperCase().replace(/\s+(S\.?A\.?|S\.?L\.?)\.?$/, '').trim());
 
   // ---- partes de la factura ----
@@ -101,6 +107,7 @@ export function analizarFactura(texto, ctx = {}) {
   F.emisor = emisor; F.receptor = receptor;
   let libro = emisor && esMia(emisor) ? 'Emitidas' : receptor && esMia(receptor) ? 'Recibidas' : nombreMio && !lista.some(esMia) ? 'Recibidas' : (ctx.libro || '');
   F.libro = libro;
+  if (emp && !lista.some(esMia) && !nombreMio) add('aviso', `La empresa elegida (${ctx.empresa?.nombre ?? emp}) no aparece en la factura ni como expedidor ni como destinatario: comprueba que has elegido la empresa correcta arriba.`, 'art. 97.Uno LIVA');
   const paisTxt = (() => { for (const [c, re] of Object.entries(PAISES)) if (re.test(t1)) return c; return ''; })();
   const paisE = emisor?.pais ?? (paisTxt && !esMia(emisor ?? {}) ? paisTxt : ''), paisR = receptor?.pais ?? '';
   F.paisEmisor = paisE; F.paisReceptor = paisR;
@@ -210,7 +217,7 @@ export function analizarFactura(texto, ctx = {}) {
       if (!reEx.test(ln)) continue;
       if (/inversi[oó]n\s+del\s+sujeto|reverse\s+charge/i.test(ln) && !/exent|exempt/i.test(ln)) continue;
       if (/no\s+sujet[ao]|not\s+subject/i.test(ln) && !/exent|exempt/i.test(ln)) continue;
-      const am = /art(?:[ií]culo|\.)?\s*(2[0-7])(?:\.?\s*(?:uno|dos|ap(?:artado)?\.?)?\s*[.,]?\s*(?:n[ºo°]?\s*)?(\d{1,2}))?/i.exec(ln);
+      const am = /art(?:[ií]culo|\.)?\s*(2[0-7])(?:\.?\s*(?:uno|dos|ap(?:artado)?\.?)?\s*[.,]?\s*(?:n[ºo°?]?\s*)?(\d{1,2}))?/i.exec(ln);
       const art = am ? +am[1] : null, apt = am?.[2] ? +am[2] : null, cero = /(?<![\d.,])0(?:[.,]0+)?\s?%/.test(ln), grp = infer(ln) || infer(t1);
       const mot = [], q = (n, tx) => mot.push({ n, t: tx });
       if (!art) {

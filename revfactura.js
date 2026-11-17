@@ -1,12 +1,12 @@
 // Bloque 10 · Revisión factura AEAT: se deja el PDF de una factura, se lee en el navegador y se analiza frente a la Ley del IVA, el Reglamento de facturación
 // y las reglas del SII (motor por reglas en revfactura-motor.js). La factura NO se guarda ni se sube: solo vive en memoria mientras la pestaña está abierta
 // y se borra al salir de ella (app.js llama a limpiar() cada vez que se dibuja otra pestaña).
-import { analizarFactura } from './revfactura-motor.js?v=3';
-import { leerFactura } from './revfactura-lector.js?v=1';
+import { analizarFactura } from './revfactura-motor.js?v=4';
+import { leerFactura } from './revfactura-lector.js?v=2';
 
 export function crearRevFactura({ S, esc, render, empresa, cargarOcr }) {
-  const ST = { res: null, nombre: '', texto: '', libro: '', msg: '', cargando: false, diag: '', estado: '' };
-  const limpiar = () => { if (ST.res || ST.texto || ST.nombre || ST.msg) { ST.res = null; ST.texto = ''; ST.nombre = ''; ST.msg = ''; ST.cargando = false; ST.diag = ''; ST.estado = ''; } };
+  const ST = { res: null, nombre: '', texto: '', libro: '', msg: '', cargando: false, diag: '', estado: '', mini: '' };
+  const limpiar = () => { if (ST.res || ST.texto || ST.nombre || ST.msg) { ST.res = null; ST.texto = ''; ST.nombre = ''; ST.msg = ''; ST.cargando = false; ST.diag = ''; ST.estado = ''; ST.mini = ''; } };
   const nf = (v, d = 2) => (v === null || v === undefined || v === '' ? '—' : new Intl.NumberFormat('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: 'always' }).format(+v));
   const ICO = { error: '✖', aviso: '⚠', info: 'ℹ', ok: '✓' }, COL = { error: ['#b42318', '#fde2e2'], aviso: ['#8a6d00', '#fff0a8'], info: ['#1e3a8a', '#e3ecff'], ok: ['#1b7f3b', '#dcf3e4'] };
 
@@ -19,7 +19,7 @@ export function crearRevFactura({ S, esc, render, empresa, cargarOcr }) {
     limpiar(); ST.cargando = true; ST.nombre = file.name; render();
     try {
       const L = await leerFactura(file, { cargarOcr, aviso: (m) => { ST.estado = m; render(); } });
-      ST.texto = L.texto; ST.diag = L.diag; analizar(); ST.msg = '';
+      ST.texto = L.texto; ST.diag = L.diag; ST.mini = L.miniatura || ''; analizar(); ST.msg = '';
       if (!ST.res.ok) ST.msg = `${ST.res.error} Lectura: ${L.diag}. Puedes pegar el texto de la factura en el cuadro de abajo.`;
     } catch (err) { ST.res = null; ST.msg = `No he podido leer el archivo: ${err.message}. Puedes pegar el texto de la factura en el cuadro de abajo.`; }
     ST.cargando = false; ST.estado = ''; render();
@@ -47,7 +47,7 @@ export function crearRevFactura({ S, esc, render, empresa, cargarOcr }) {
       <h3 style="margin-top:.8rem">Datos leídos</h3><table class="tabla rf-t"><tbody>${fila('Número', esc(F.numero))}${fila('Fecha', esc(F.fecha))}${fila('Expedidor', F.emisor ? `${esc(F.emisor.id)} (${esc(F.paisEmisor)})` : (F.paisEmisor ? esc(F.paisEmisor) : ''))}${fila('Destinatario', F.receptor ? `${esc(F.receptor.id)} (${esc(F.paisReceptor)})` : '')}${fila('Base imponible', F.base === null ? '' : `${nf(F.base)} ${esc(F.moneda)}`)}${F.baseGravada !== undefined ? fila('Base gravada', `${nf(F.baseGravada)} ${esc(F.moneda)}`) : ''}${fila('Tipo de IVA', F.tipo === null ? '' : `${nf(F.tipo, 1)} %`)}${fila('Cuota', F.cuota === null ? '' : nf(F.cuota))}${fila('Total', F.total === null ? '' : `${nf(F.total)} ${esc(F.moneda)}`)}${F.incoterm ? fila('Incoterm', esc(F.incoterm)) : ''}</tbody></table></section></div>`;
     }
     return `<div class="inicio rf"><section class="dsec"><h3>Revisión factura AEAT</h3>${zona}${barra}${cuerpo || '<p class="vacio">Deja una factura en PDF y te digo qué revisaría la AEAT y cómo se declara en el SII.</p>'}
-      ${ST.texto ? `<details class="no-print" style="margin:.5rem 0"><summary>Texto leído de la factura (para revisar el OCR)${ST.diag ? ` · ${esc(ST.diag)}` : ''}</summary><pre style="white-space:pre-wrap;font-size:.75rem;max-height:22rem;overflow:auto">${esc(ST.texto)}</pre></details>` : ''}
+      ${ST.texto || ST.diag ? `<details class="no-print" style="margin:.5rem 0"><summary>Texto leído de la factura (para revisar el OCR)${ST.diag ? ` · ${esc(ST.diag)}` : ''}</summary>${ST.mini ? `<p class="hint">Así ve la página 1 el lector (si sale en blanco, el PDF no se está dibujando):</p><img alt="Vista de la página 1" src="${ST.mini}" style="max-width:100%;border:1px solid #ccc">` : ''}<prestyle="white-space:pre-wrap;font-size:.75rem;max-height:22rem;overflow:auto">${esc(ST.texto)}</pre></details>` : ''}
       <details class="no-print" style="margin:.5rem 0"${ST.res && !ST.res.ok ? ' open' : ''}><summary>¿No la lee bien? Pega aquí el texto de la factura</summary><textarea id="facTxt" rows="6" style="width:100%;font-size:.8rem" placeholder="Abre el PDF, Ctrl+A, Ctrl+C y pega aquí con Ctrl+V"></textarea><div class="bar"><button class="small" data-factxt="1">Analizar este texto</button></div></details>
       <p class="hint">Análisis automático por reglas (Ley 37/1992 del IVA, Reglamento de facturación RD 1619/2012 y criterios del SII). Es orientativo: no sustituye la revisión de un profesional y no consulta VIES ni el censo. La factura no se guarda en ningún sitio: solo vive en la memoria de esta pestaña y se borra al salir de ella, al cambiar de empresa o al pulsar «Quitar la factura ahora».</p></section></div>`;
   }

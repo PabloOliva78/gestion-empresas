@@ -40,25 +40,37 @@ export async function leerFactura(file, { cargarOcr, aviso }) {
   }
   // ---- OCR ----
   dec('Leyendo la factura con OCR…'); await cargarOcr();
-  const w = await window.Tesseract.createWorker('spa'), partes = [];
-  const leer = async (cv, psm) => { await w.setParameters({ tessedit_pageseg_mode: String(psm), preserve_interword_spaces: '1' }); return (await w.recognize(cv)).data.text || ''; };
+  const w = await window.Tesseract.createWorker('spa'), partes = []; let miniatura = '';
+  const leer = async (cv, psm) => { if (psm) await w.setParameters({ tessedit_pageseg_mode: String(psm) }); return (await w.recognize(cv)).data.text || ''; };
   try {
     for (let p = 1; p <= paginas; p++) {
       dec(`Leyendo la factura con OCR (página ${p} de ${paginas})…`);
-      let origen, ancho, alto;
-      if (esImg) { const bmp = await createImageBitmap(file); const k = Math.min(3, 3200 / Math.max(bmp.width, bmp.height)); origen = bmp; ancho = Math.round(bmp.width * Math.max(k, 1)); alto = Math.round(bmp.height * Math.max(k, 1)); }
-      else { const pg = await doc.getPage(p), v1 = pg.getViewport({ scale: 1 }), sc = Math.min(3, 3400 / Math.max(v1.width, v1.height)), vp = pg.getViewport({ scale: Math.max(sc, 1.5) }); const base = document.createElement('canvas'); base.width = Math.round(vp.width); base.height = Math.round(vp.height); const bx = base.getContext('2d'); bx.fillStyle = '#fff'; bx.fillRect(0, 0, base.width, base.height); await pg.render({ canvasContext: bx, viewport: vp }).promise; origen = base; ancho = base.width; alto = base.height; }
+      const pg = esImg ? null : await doc.getPage(p), tr = [];
       let mejor = { t: '', n: -1, desc: '' };
-      const prueba = async (giro, realzar, psm) => { const t = await leer(preparar(origen, ancho, alto, giro, realzar), psm), n = util(t); if (n > mejor.n) mejor = { t, n, desc: `giro ${giro}°, ${realzar ? 'realzada' : 'original'}, modo ${psm}` }; return n; };
-      let n = await prueba(0, true, 3);
-      if (n < 150) n = await prueba(0, false, 3);
-      if (n < 150) n = await prueba(0, true, 6);
-      if (n < 150) for (const g of [90, 270, 180]) { n = await prueba(g, true, 3); if (n >= 150) break; }
-      diag.push(`OCR página ${p}: ${mejor.n} caracteres (${mejor.desc})`); partes.push(mejor.t);
+      const anota = (desc, t) => { const n = util(t); tr.push(`${desc}=${n}`); if (n > mejor.n) mejor = { t, n, desc }; return n; };
+      const intento = async (desc, fn) => { try { return anota(desc, await fn()); } catch (e) { tr.push(`${desc}=error(${String(e.message || e).slice(0, 40)})`); return 0; } };
+      // 1) método clásico (escala 2, lienzo sin tocar): es el que ya leía bien los DUA
+      let cv2 = null, bmp = null;
+      if (esImg) { bmp = await createImageBitmap(file); cv2 = document.createElement('canvas'); const k = Math.max(1, Math.min(2, 2400 / Math.max(bmp.width, bmp.height))); cv2.width = Math.round(bmp.width * k); cv2.height = Math.round(bmp.height * k); cv2.getContext('2d').drawImage(bmp, 0, 0, cv2.width, cv2.height); }
+      else { const vp = pg.getViewport({ scale: 2 }); cv2 = document.createElement('canvas'); cv2.width = vp.width; cv2.height = vp.height; await pg.render({ canvasContext: cv2.getContext('2d'), viewport: vp }).promise; }
+      if (p === 1) { try { const m = document.createElement('canvas'), k = 700 / cv2.width; m.width = 700; m.height = Math.round(cv2.height * k); const mx = m.getContext('2d'); mx.fillStyle = '#fff'; mx.fillRect(0, 0, m.width, m.height); mx.drawImage(cv2, 0, 0, m.width, m.height); miniatura = m.toDataURL('image/jpeg', 0.6); } catch { /* sin miniatura */ } }
+      let n = await intento('clásico', () => leer(cv2, 0));
+      // 2) reforzado: más resolución, grises y contraste, otros modos y giros
+      if (n < 150) {
+        let origen = cv2, ancho = cv2.width, alto = cv2.height;
+        if (!esImg) { try { const v1 = pg.getViewport({ scale: 1 }), sc = Math.max(2, Math.min(3, 3400 / Math.max(v1.width, v1.height))), vp = pg.getViewport({ scale: sc }), base = document.createElement('canvas'); base.width = Math.round(vp.width); base.height = Math.round(vp.height); const bx = base.getContext('2d'); bx.fillStyle = '#fff'; bx.fillRect(0, 0, base.width, base.height); await pg.render({ canvasContext: bx, viewport: vp }).promise; origen = base; ancho = base.width; alto = base.height; } catch { /* se sigue con la de escala 2 */ } }
+        const pr = (giro, realzar, psm) => intento(`giro${giro}${realzar ? '+contraste' : ''} modo${psm}`, () => leer(preparar(origen, ancho, alto, giro, realzar), psm));
+        n = await pr(0, true, 3);
+        if (n < 150) n = await pr(0, false, 3);
+        if (n < 150) n = await pr(0, true, 6);
+        if (n < 150) n = await pr(0, true, 11);
+        if (n < 150) for (const g of [90, 270, 180]) { n = await pr(g, true, 3); if (n >= 150) break; }
+      }
+      diag.push(`OCR página ${p}: ${mejor.n} caracteres [${tr.join(', ')}]`); partes.push(mejor.t);
     }
   } finally { await w.terminate(); }
   const ocr = partes.join('\n');
   // si el PDF tenía algo de texto y el OCR no mejora, se queda con lo más largo
   const texto = util(ocr) >= util(capa) ? ocr : capa;
-  return { texto, diag: diag.join(' · '), via: 'ocr' };
+  return { texto, diag: diag.join(' · '), via: 'ocr', miniatura };
 }
