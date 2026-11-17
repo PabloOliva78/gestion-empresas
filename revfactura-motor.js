@@ -12,6 +12,7 @@ const num = (s) => {
   else if (p >= 0 && /^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, '');
   const n = parseFloat(v); return Number.isFinite(n) ? (neg ? -n : n) : null;
 };
+const nf2 = (v) => Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const r2 = (x) => Math.round((x + (x < 0 ? -1e-9 : 1e-9)) * 100) / 100;
 
 // ---- NIF español: forma y dígito de control ----
@@ -47,7 +48,7 @@ export function analizarFactura(texto, ctx = {}) {
 
   // ---- datos ----
   const m = {
-    num: [...t1.matchAll(/(?:factura|invoice|fra\.?|n[úu]m(?:ero)?\.?|n[ºo°]\.?|inv\.?)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°]\.?|no\.?|#)?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.]*(?: [A-Z0-9\/\-\.]*\d[A-Z0-9\/\-\.]*)?)/gi)].find((x) => /\d/.test(x[1]) && x[1].trim().length >= 3 && !/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(x[1].trim())) ?? null,
+    num: [...t1.matchAll(/(?:factura|invoice|fra\.?|n[úu]m(?:ero)?\.?|n[ºo°]\.?|inv\.?)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°]\.?|no\.?|#)?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.#]*(?: [A-Z0-9\/\-\.#]*\d[A-Z0-9\/\-\.#]*)?)/gi)].find((x) => /\d/.test(x[1]) && x[1].trim().length >= 3 && !/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(x[1].trim())) ?? null,
     fecha: primero(t1, /(?:fecha(?:\s+de\s+(?:expedici[oó]n|emisi[oó]n|factura))?|date|invoice\s+date)\s*[:\-]?\s*(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{2}-\d{2})/i) ?? primero(t1, /(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4}|\d{4}-\d{2}-\d{2})/),
     base: primero(t1, /(?:base\s+imponible|taxable\s+(?:base|amount)|total\s+base|importe\s+neto|net\s+(?:amount|total)|subtotal|sub-total)\s*(?:\(?[A-Z€$]{0,3}\)?)?\s*[:\-]?\s*(-?[\d.,]*\d)/i),
     tipo: primero(t1, /(?:IVA|I\.V\.A\.?|VAT|IGIC|TAX)\s*(?:al|at|rate)?\s*[:\-(]?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%/i) ?? primero(t1, /(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s*(?:de\s+)?(?:IVA|I\.V\.A\.?|VAT)/i),
@@ -66,6 +67,13 @@ export function analizarFactura(texto, ctx = {}) {
   const f = m.fecha ? (() => { const s = m.fecha[1]; let d, mo, y; const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); if (a) { y = +a[1]; mo = +a[2]; d = +a[3]; } else { const b = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(s); if (!b) return null; d = +b[1]; mo = +b[2]; y = +b[3] < 100 ? 2000 + +b[3] : +b[3]; } const dt = new Date(y, mo - 1, d); return dt.getMonth() === mo - 1 ? dt : null; })() : null;
   F.fecha = f ? `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}` : '';
   F.base = m.base ? num(m.base[1]) : null; F.tipo = m.tipo ? num(m.tipo[1]) : null; F.cuota = m.cuota ? num(m.cuota[1]) : null; F.total = m.total ?? null; F.retTipo = m.ret ? num(m.ret[1]) : null;
+  if (!F.numero) { const nh = /(?<![A-Z0-9])([A-Z0-9]{0,4}#\d{3,})/i.exec(t1); if (nh) F.numero = nh[1].toUpperCase(); }
+  // «Desglose de impuestos: 93,51 € al 21,00 % sobre 445,30 €» → cuota, tipo y base gravada (puede ser solo una parte de la base)
+  const dg = /(-?\d[\d.,]*\d)\s*(?:€|eur)?\s+al\s+(\d{1,2}(?:[.,]\d+)?)\s*%\s+sobre\s+(-?\d[\d.,]*\d)/i.exec(t1);
+  if (dg) { F.cuota = num(dg[1]); F.tipo = num(dg[2]); F.baseGravada = num(dg[3]); }
+  // tabla «Base imponible | Impuestos | Total» con las cifras en la fila siguiente
+  const tb = /base\s+imponible\s+(?:impuestos?|iva|cuota)\s+total[^\d-]{0,30}(-?\d[\d.,]*\d)\s*(?:€|eur)?\s+(-?\d[\d.,]*\d)\s*(?:€|eur)?\s+(-?\d[\d.,]*\d)/i.exec(t1);
+  if (tb) { F.base = num(tb[1]); F.cuota = num(tb[2]); F.total = num(tb[3]); }
   F.moneda = /\bUSD\b|\$|US\s?dollar/i.test(t1) ? 'USD' : /\bGBP\b|£/.test(t1) ? 'GBP' : /\bEUR\b|€|euro/i.test(t1) ? 'EUR' : '';
   F.incoterm = (INCOTERMS.exec(t1) ?? [])[1] ?? '';
   const palabra = (re) => re.test(t1);
@@ -77,7 +85,7 @@ export function analizarFactura(texto, ctx = {}) {
   F.noSujeta = palabra(/no\s+sujet[ao]|not\s+subject\s+to\s+vat|outside\s+the\s+scope/i);
   F.recargo = palabra(/recargo\s+de\s+equivalencia/i);
 
-  const nFact = new Set([...t1.matchAll(/(?:commercial\s+invoice|factura|invoice)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°]\.?|no\.?|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\. ]{2,20}\d)/gi)].map((x) => x[1].replace(/\s+/g, '').toUpperCase())).size;
+  const nFact = new Set([...t1.matchAll(/(?:commercial\s+invoice|factura|invoice)\s*(?:n[úu]m(?:ero)?\.?|n[ºo°]\.?|no\.?|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-\.# ]{2,20}\d)/gi)].map((x) => x[1].replace(/\s+/g, '').toUpperCase())).size;
   const nombreMio = !!ctx.empresa?.nombre && t1.toUpperCase().includes(String(ctx.empresa.nombre).toUpperCase().replace(/\s+(S\.?A\.?|S\.?L\.?)\.?$/, '').trim());
 
   // ---- partes de la factura ----
@@ -113,8 +121,25 @@ export function analizarFactura(texto, ctx = {}) {
   if (simple) add('info', 'Factura simplificada: solo exige menos datos (art. 7 RD 1619/2012) y, sin NIF del destinatario, no da derecho a deducción salvo excepciones (arts. 97.Uno.3º y 6.1.d).', 'arts. 4 y 7 RD 1619/2012');
 
   // ---- importes ----
+  // líneas con importe: se busca qué conjunto de líneas suma la base gravada (el resto va sin IVA)
+  F.lineas = [];
+  {
+    const MON = /-?\d{1,3}(?:\.\d{3})*,\d{2}(?!\d)|-?\d+\.\d{2}(?!\d)/g;
+    const cand = T.split('\n').map((s) => s.replace(/\s+/g, ' ').trim()).filter((s) => /[A-Za-zÁÉÍÓÚáéíóúñÑ]{3}/.test(s) && !/total|base\s+imponible|impuesto|desglose|subtotal|vencimiento|pendiente|fecha|cuota|\bIVA\b|forma\s+de\s+pago|\bal\s+\d+[.,]?\d*\s*%\s+sobre/i.test(s));
+    for (const s of cand) { const a = s.match(MON); if (a?.length) { const imp = num(a[a.length - 1]); if (imp !== null && imp > 0 && imp !== F.total && imp !== F.base) F.lineas.push({ txt: s.length > 110 ? s.slice(0, 107) + '…' : s, imp, gravada: null }); } }
+    if (F.lineas.length > 14) F.lineas = [];
+    const bg0 = F.baseGravada ?? null;
+    if (F.lineas.length && bg0 !== null && F.base !== null && Math.abs(bg0 - F.base) > 0.02) {
+      const L = F.lineas; let hit = null, n = 0;
+      const rec = (i, sum, pick) => { if (hit || n++ > 40000) return; if (Math.abs(sum - bg0) <= 0.02) { hit = pick.slice(); return; } if (i >= L.length || sum > bg0 + 0.02) return; pick.push(i); rec(i + 1, sum + L[i].imp, pick); pick.pop(); rec(i + 1, sum, pick); };
+      rec(0, 0, []);
+      if (hit) L.forEach((l, i) => { l.gravada = hit.includes(i); });
+    }
+  }
+  const bgImp = F.baseGravada ?? F.base;
+  if (F.baseGravada !== undefined && F.base !== null && Math.abs(F.baseGravada - F.base) > 0.02) add('aviso', `Solo ${nf2(F.baseGravada)} de los ${nf2(F.base)} de base llevan IVA: ${nf2(r2(F.base - F.baseGravada))} van sin IVA. Revisa abajo en «Líneas exentas» qué conceptos son y si está justificado.`, 'art. 6.1.f-j RD 1619/2012');
   if (F.base !== null && F.tipo !== null && F.cuota !== null) {
-    const esp = r2(F.base * F.tipo / 100); if (Math.abs(esp - F.cuota) > 0.05 + Math.abs(F.base) * 0.0001) add('error', `La cuota (${F.cuota}) no cuadra con base × tipo: ${F.base} × ${F.tipo} % = ${esp}.`, 'art. 6.1.f-h RD 1619/2012'); else add('ok', `Base ${F.base}, tipo ${F.tipo} %, cuota ${F.cuota}: cuadran.`);
+    const esp = r2(bgImp * F.tipo / 100); if (Math.abs(esp - F.cuota) > 0.05 + Math.abs(bgImp) * 0.0001) add('error', `La cuota (${F.cuota}) no cuadra con base × tipo: ${bgImp} × ${F.tipo} % = ${esp}.`, 'art. 6.1.f-h RD 1619/2012'); else add('ok', `Base gravada ${bgImp}, tipo ${F.tipo} %, cuota ${F.cuota}: cuadran.`);
   } else if (F.base !== null || F.cuota !== null || F.tipo !== null) add('aviso', `Importes incompletos: base ${F.base ?? '¿?'}, tipo ${F.tipo ?? '¿?'}, cuota ${F.cuota ?? '¿?'}.`, 'art. 6.1.f-h RD 1619/2012');
   if (F.base !== null && F.total !== null) { const ret = F.retTipo ? r2(F.base * F.retTipo / 100) : 0, esp = r2(F.base + (F.cuota ?? (F.tipo !== null ? F.base * F.tipo / 100 : 0)) - ret); if (Math.abs(esp - F.total) > 0.05 + Math.abs(F.total) * 0.0001) add('aviso', `El total (${F.total}) no es base + IVA${ret ? ' − retención' : ''} (${esp}).`, ''); }
   if (F.tipo !== null && ![0, 4, 10, 21, 5.2, 1.4, 0.5].includes(F.tipo) && (esp(paisE) || !paisE)) add('error', `El tipo de IVA ${F.tipo} % no existe en territorio común (4 %, 10 %, 21 %; recargo 0,5 / 1,4 / 5,2 %).`, 'arts. 90 y 91 LIVA');
@@ -169,6 +194,74 @@ export function analizarFactura(texto, ctx = {}) {
     if (F.fecha && f) add('info', `Plazo para deducir: hasta el 31/12/${f.getFullYear() + 4} aproximadamente (4 años desde el devengo).`, 'art. 100.Dos LIVA');
   }
   if (F.rectificativa) { add('info', 'Factura rectificativa: debe referenciar la factura original (número y fecha) y la causa. En el SII, tipo R1 (error fundado en derecho o art. 80.Uno/Dos/Tres/Cuatro y 80.Cuatro) o R4 (resto); R5 si es simplificada.', 'art. 15 RD 1619/2012 y art. 80 LIVA'); if (!/(?:rectific|original|referencia|factura\s+n)/i.test(t1)) add('aviso', 'No se ve la referencia a la factura rectificada.', 'art. 15 RD 1619/2012'); }
+
+  // ---- líneas exentas: cuáles son, por qué se declaran exentas y si el precepto encaja con la operación ----
+  F.exentas = [];
+  {
+    const lineas = [...new Set(T.split('\n').map((s) => s.replace(/\s+/g, ' ').trim()).filter((s) => s.length > 3))];
+    const reEx = /\bexent[oa]s?\b|\bexempt(?:ed|ion)?\b|\bsin\s+i\.?v\.?a\b|(?<![\d.,])0(?:[.,]0+)?\s?%|\bart(?:[ií]culo|\.)?\s*2[0-7]\b/i;
+    const GR = { educ: [9, 10, 11], sanit: [2, 3, 4, 5, 6, 7, 8], seguro: [16], financ: [17, 18], vivienda: [23] };
+    const NOM = { educ: 'enseñanza/formación', sanit: 'servicios sanitarios', seguro: 'seguros', financ: 'operaciones financieras', vivienda: 'alquiler de vivienda' };
+    const infer = (s) => /ense[ñn]anza|educaci[oó]n|docente|colegio|formaci[oó]n/i.test(s) ? 'educ' : /sanitari|m[eé]dic|hospital|cl[ií]nica|odontol/i.test(s) ? 'sanit' : /seguro|p[oó]liza|reaseguro/i.test(s) ? 'seguro' : /pr[eé]stamo|cr[eé]dito|intereses|comisi[oó]n\s+bancaria|financier|\baval\b/i.test(s) ? 'financ' : /(?:alquiler|arrendamiento)[^.]{0,40}vivienda|vivienda[^.]{0,40}(?:alquiler|arrendamiento)/i.test(s) ? 'vivienda' : '';
+    const CAUSA = { 20: 'E1', 21: 'E2', 22: 'E3', 23: 'E4', 24: 'E4', 25: 'E5' };
+    const ueR = ue(paisR), fueraR = !!paisR && !ueR && !esp(paisR), recibExt = recib && !!paisE && !esp(paisE);
+    for (const ln of lineas) {
+      if (F.exentas.length >= 10) break;
+      if (!reEx.test(ln)) continue;
+      if (/inversi[oó]n\s+del\s+sujeto|reverse\s+charge/i.test(ln) && !/exent|exempt/i.test(ln)) continue;
+      if (/no\s+sujet[ao]|not\s+subject/i.test(ln) && !/exent|exempt/i.test(ln)) continue;
+      const am = /art(?:[ií]culo|\.)?\s*(2[0-7])(?:\.?\s*(?:uno|dos|ap(?:artado)?\.?)?\s*[.,]?\s*(?:n[ºo°]?\s*)?(\d{1,2}))?/i.exec(ln);
+      const art = am ? +am[1] : null, apt = am?.[2] ? +am[2] : null, cero = /(?<![\d.,])0(?:[.,]0+)?\s?%/.test(ln), grp = infer(ln) || infer(t1);
+      const mot = [], q = (n, tx) => mot.push({ n, t: tx });
+      if (!art) {
+        if (cero && !/exent|exempt/i.test(ln)) q('error', 'Tipo 0 %: en territorio común no existe tipo 0 %; debe ser exenta (con su precepto), no sujeta o inversión del sujeto pasivo.');
+        else q(op === 'interior' ? 'error' : 'aviso', 'Se declara exenta sin citar el precepto (art. 20 a 25 LIVA): la factura debe indicarlo.');
+      } else if (art === 21) {
+        if (recibExt) q('ok', 'Compra a un proveedor de otro país: su exención se rige por su propia ley; aquí no hay IVA español que deducir.');
+        else if (!paisR) q('aviso', 'Exportación (art. 21): no se identifica el país del cliente; exige cliente fuera de la UE y DUA de salida.');
+        else if (esp(paisR)) q('error', 'Cita el art. 21 (exportación) pero el cliente es español: una venta en España no es una exportación.');
+        else if (ueR) q('error', 'Cita el art. 21 (exportación) pero el cliente es de la UE: sería entrega intracomunitaria (art. 25), no exportación.');
+        else q('ok', 'Exportación a cliente de fuera de la UE: correcta si hay DUA de salida con levante y sello de salida.');
+      } else if (art === 25) {
+        if (recibExt) q('ok', 'Compra a un proveedor de otro país: su exención se rige por su propia ley; aquí no hay IVA español que deducir.');
+        else if (!paisR) q('aviso', 'Entrega intracomunitaria (art. 25): no se identifica el país del cliente; exige NIF-IVA vigente en VIES y transporte a otro Estado miembro.');
+        else if (esp(paisR)) q('error', 'Cita el art. 25 (entrega intracomunitaria) pero el cliente es español.');
+        else if (fueraR) q('error', 'Cita el art. 25 pero el cliente es de fuera de la UE: sería exportación (art. 21).');
+        else q('ok', 'Entrega a cliente de la UE: correcta si el NIF-IVA está vigente en VIES y hay prueba del transporte.');
+      } else if (art === 22) q('aviso', 'Art. 22 (operaciones asimiladas a exportación: navegación marítima y aérea, avituallamiento…): comprueba que el bien o servicio entra en alguno de sus apartados.');
+      else if (art === 23 || art === 24) q('aviso', `Art. ${art} (zonas francas, depósitos aduaneros y otros regímenes): exige que los bienes estén vinculados a ese régimen; comprueba la documentación aduanera.`);
+      else if (art === 26 || art === 27) q(op === 'importación' ? 'ok' : 'aviso', op === 'importación' ? `Importación exenta (art. ${art}): el DUA debe reflejar el motivo de la exención.` : `Art. ${art} se refiere a importaciones exentas; la operación no parece una importación.`);
+      else if (art === 20) {
+        if (op !== 'interior' && !recibExt) q('aviso', 'El art. 20 solo regula operaciones interiores exentas; la operación no parece interior.');
+        else if (grp && apt && !GR[grp].includes(apt)) q('aviso', `El apartado citado (20.Uno.${apt}º) no encaja con el concepto, que parece ${NOM[grp]}.`);
+        else if (!grp && F.bienes === 'bienes') q('aviso', 'Entrega de bienes exenta por el art. 20: salvo casos tasados (sellos, oro de inversión…) las entregas de bienes tributan; revisa el motivo.');
+        else if (!grp) q('aviso', 'No puedo confirmar por el concepto que la operación sea de las exentas del art. 20 (sanidad, enseñanza, seguros, financieras, alquiler de vivienda…).');
+        else q('ok', `Encaja con una exención del art. 20 (${NOM[grp]}).`);
+        if (emit) q('aviso', 'Las operaciones exentas del art. 20 no dan derecho a deducir: afectan a la prorrata (si es la actividad habitual) o a la regla de deducción.');
+      }
+      const v = mot.some((x) => x.n === 'error') ? 'incorrecta' : mot.some((x) => x.n === 'aviso') ? 'dudosa' : 'correcta';
+      F.exentas.push({ linea: ln.length > 110 ? ln.slice(0, 107) + '…' : ln, art, apt, causa: art ? (CAUSA[art] ?? 'E6') : '', v, motivos: mot.map((x) => x.t) });
+    }
+    // parte de la base que va sin IVA (la cuota solo cubre la base gravada): qué líneas son y si hay justificación
+    const resto = F.baseGravada !== undefined && F.base !== null ? r2(F.base - F.baseGravada) : 0;
+    if (resto > 0.02) {
+      const sin = F.lineas.filter((l) => l.gravada === false && !F.exentas.some((x) => x.linea === l.txt));
+      for (const l of (sin.length ? sin : [{ txt: `Importe sin IVA (resto de la base): ${nf2(resto)}`, imp: resto }])) {
+        const sup = /suplido|\btasas?\b|arancel|gastos\s+(?:de\s+)?(?:notar|registr)|provisi[oó]n\s+de\s+fondos/i.test(l.txt), cuotaOm = r2(l.imp * (F.tipo ?? 21) / 100), mot = [];
+        if (sup) mot.push('Parece un suplido: no forma parte de la base del IVA solo si se paga en nombre y por cuenta del cliente, se justifica y va facturado aparte.');
+        else if (op === 'interior' || !op) mot.push(`Línea sin IVA, sin precepto de exención ni causa de no sujeción citados. Si no se justifica tributa al ${F.tipo ?? 21} %: cuota no repercutida de ${nf2(cuotaOm)} €. Si es exenta, debe citar el artículo (arts. 20 a 25 LIVA); si es un suplido, ir separada.`);
+        else mot.push('Línea sin IVA: comprueba que la operación está exenta o no sujeta y que consta el precepto.');
+        F.exentas.push({ linea: l.txt, art: null, apt: null, causa: '', v: sup ? 'dudosa' : (op === 'interior' || !op) ? 'incorrecta' : 'dudosa', motivos: mot });
+      }
+    }
+    const nEx = F.exentas.length;
+    if (nEx) {
+      const bad = F.exentas.filter((x) => x.v === 'incorrecta').length, dud = F.exentas.filter((x) => x.v === 'dudosa').length;
+      add(bad ? 'error' : dud ? 'aviso' : 'ok', `${nEx} línea(s) exenta(s) o al 0 %: ${bad} incorrecta(s), ${dud} dudosa(s), ${nEx - bad - dud} correcta(s). Detalle en «Líneas exentas».`, 'arts. 20 a 25 LIVA');
+      const c = F.exentas.find((x) => x.art && x.v !== 'incorrecta' && x.causa); if (c) SII.causaExenta = `${c.causa} (art. ${c.art} LIVA)`;
+      if (hayIva && F.base && F.baseGravada === undefined) add('aviso', 'La factura mezcla líneas exentas y líneas con IVA: la base de cada tipo y la exenta deben ir desglosadas, y la cuota calcularse solo sobre la parte gravada.', 'art. 6.1.f-j RD 1619/2012');
+    }
+  }
 
   // ---- resumen SII ----
   if (!SII.resumen) SII.resumen = 'Revisa los datos del tipo de operación.';
