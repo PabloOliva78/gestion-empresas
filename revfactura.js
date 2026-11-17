@@ -2,7 +2,7 @@
 // y las reglas del SII (motor por reglas en revfactura-motor.js). La factura NO se guarda ni se sube: solo vive en memoria mientras la pestaña está abierta
 // y se borra al salir de ella (app.js llama a limpiar() cada vez que se dibuja otra pestaña).
 import { analizarFactura } from './revfactura-motor.js?v=4';
-import { leerFactura } from './revfactura-lector.js?v=2';
+import { leerFactura } from './revfactura-lector.js?v=3';
 
 export function crearRevFactura({ S, esc, render, empresa, cargarOcr }) {
   const ST = { res: null, nombre: '', texto: '', libro: '', msg: '', cargando: false, diag: '', estado: '', mini: '' };

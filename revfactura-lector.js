@@ -39,6 +39,9 @@ export async function leerFactura(file, { cargarOcr, aviso }) {
     if (util(capa) >= 120 * paginas) return { texto: capa, diag: diag.join(' · '), via: 'texto' };
   }
   // ---- OCR ----
+  // Firefox con protección anti-huella (privacy.resistFingerprinting) o con el permiso del lienzo sin aceptar devuelve imágenes en blanco: se comprueba antes de gastar tiempo en el OCR
+  const lienzoOk = (() => { try { const c = document.createElement('canvas'); c.width = c.height = 8; const x = c.getContext('2d'); x.fillStyle = 'rgb(12,200,34)'; x.fillRect(0, 0, 8, 8); const d = x.getImageData(0, 0, 8, 8).data; return d[0] === 12 && d[1] === 200 && d[2] === 34; } catch { return false; } })();
+  if (!lienzoOk) throw new Error('el navegador bloquea la lectura de imágenes del lienzo (en Firefox: pulsa el icono del lienzo junto a la barra de direcciones y elige «Permitir», o pon privacy.resistFingerprinting en false en about:config). Mientras tanto, pega el texto de la factura en el cuadro de abajo');
   dec('Leyendo la factura con OCR…'); await cargarOcr();
   const w = await window.Tesseract.createWorker('spa'), partes = []; let miniatura = '';
   const leer = async (cv, psm) => { if (psm) await w.setParameters({ tessedit_pageseg_mode: String(psm) }); return (await w.recognize(cv)).data.text || ''; };
