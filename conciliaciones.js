@@ -716,9 +716,8 @@ export function crearConciliaciones(c) {
     au123: ['Conciliación 123', 'Mod. 123 vs contabilidad', () => vistaAudi('123')],
     au303: ['Conciliación 303', 'SII vs contabilidad', () => vistaAudi303()],
     conc: ['Conciliación Cuentas - Impuestos', 'Saldo frente a impuesto', () => vistaConc()],
-    rprof: [RRES.rprof.tit, RRES.rprof.ts, () => vistaRetRes('rprof')],
-    ralq: [RRES.ralq.tit, RRES.ralq.ts, () => vistaRetRes('ralq')],
-    rint: [RRES.rint.tit, RRES.rint.ts, () => vistaRetRes('rint')],
+    // una sola pestaña (en Administración) con las tres tablas de las que se emiten certificados
+    certret: ['Certificado retenciones', 'Profesionales · alquileres · intereses y dividendos', () => { if (!S.sel) return sinEmpresa; if (!lib('fact-R')) return cargandoTxt; return ['rprof', 'ralq', 'rint'].map(vistaRetRes).join(''); }],
     rsop: [RRES.rsop.tit, RRES.rsop.ts, () => vistaRetRes('rsop')],
     adif: ['Análisis Diferencias', 'Causa y origen por modelo', () => vistaAdif()],
   };
@@ -729,8 +728,7 @@ export function crearConciliaciones(c) {
     au123: guard(() => { if (!S.sel || !lib('fact-R') || !lib('may-mov')) return null; return insigniaEstado(estadoAudi(calcAudi('123'))); }),
     au303: guard(() => { if (!S.sel || !lib('fact-E') || !lib('fact-R') || !lib('sii-E') || !lib('sii-R')) return null; return insigniaEstado(estado303()); }),
     conc: guard(() => { if (!S.sel) return { t: 'Por empresa' }; const M = lib('may-mov'); return { t: M && M.length ? 'Con extracto' : 'Sin extracto' }; }),
-    rprof: guard(() => (S.sel ? { t: rresChip('rprof') } : null)), ralq: guard(() => (S.sel ? { t: rresChip('ralq') } : null)),
-    rint: guard(() => (S.sel ? { t: rresChip('rint') } : null)), rsop: guard(() => (S.sel ? { t: rresChip('rsop') } : null)),
+    rsop: guard(() => (S.sel ? { t: rresChip('rsop') } : null)),
   };
   return { tabs, badges };
 }

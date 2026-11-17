@@ -21,7 +21,7 @@ import { crearClientes } from './clientes.js?v=5';
 import { crearTransProv } from './transprov.js?v=5';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=17';
+import { crearConciliaciones } from './conciliaciones.js?v=18';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
 
