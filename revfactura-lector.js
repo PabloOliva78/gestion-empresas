@@ -28,11 +28,11 @@ function preparar(origen, ancho, alto, giro, realzar) {
 export async function leerFactura(file, { cargarOcr, aviso }) {
   const diag = [], dec = (m) => aviso?.(m);
   const esImg = /^image\//.test(file.type) || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
-  let doc = null, capa = '', paginas = 1;
+  let doc = null, capa = '', paginas = 1, bytes = null;
   if (!esImg) {
     const lib = window.pdfjsLib; if (!lib) throw new Error('No se cargó el lector de PDF (pdf.js): recarga la página.');
     lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise; paginas = doc.numPages;
+    bytes = new Uint8Array(await file.arrayBuffer()); doc = await lib.getDocument({ data: bytes.slice() }).promise; paginas = doc.numPages;
     const pp = []; for (let p = 1; p <= doc.numPages; p++) pp.push(filasDeItems((await (await doc.getPage(p)).getTextContent()).items).join('\n'));
     capa = pp.join('\n');
     diag.push(`capa de texto del PDF: ${util(capa)} caracteres en ${paginas} página(s)`);
@@ -43,25 +43,34 @@ export async function leerFactura(file, { cargarOcr, aviso }) {
   const lienzoOk = (() => { try { const c = document.createElement('canvas'); c.width = c.height = 8; const x = c.getContext('2d'); x.fillStyle = 'rgb(12,200,34)'; x.fillRect(0, 0, 8, 8); const d = x.getImageData(0, 0, 8, 8).data; return d[0] === 12 && d[1] === 200 && d[2] === 34; } catch { return false; } })();
   if (!lienzoOk) throw new Error('el navegador bloquea la lectura de imágenes del lienzo (en Firefox: pulsa el icono del lienzo junto a la barra de direcciones y elige «Permitir», o pon privacy.resistFingerprinting en false en about:config). Mientras tanto, pega el texto de la factura en el cuadro de abajo');
   dec('Leyendo la factura con OCR…'); await cargarOcr();
-  const w = await window.Tesseract.createWorker('spa'), partes = []; let miniatura = '';
+  const w = await window.Tesseract.createWorker('spa'), partes = []; let miniatura = '', docAlt = null;
+  const blanca = (cv) => { try { const s = document.createElement('canvas'); s.width = 160; s.height = Math.max(1, Math.round(160 * cv.height / cv.width)); const x = s.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, s.width, s.height); x.drawImage(cv, 0, 0, s.width, s.height); const d = x.getImageData(0, 0, s.width, s.height).data; let o = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 200) o++; return o < s.width * s.height * 0.003; } catch { return false; } };
   const leer = async (cv, psm) => { if (psm) await w.setParameters({ tessedit_pageseg_mode: String(psm) }); return (await w.recognize(cv)).data.text || ''; };
   try {
     for (let p = 1; p <= paginas; p++) {
       dec(`Leyendo la factura con OCR (página ${p} de ${paginas})…`);
-      const pg = esImg ? null : await doc.getPage(p), tr = [];
+      const pg = esImg ? null : await doc.getPage(p), tr = []; let pgAlt = null;
       let mejor = { t: '', n: -1, desc: '' };
       const anota = (desc, t) => { const n = util(t); tr.push(`${desc}=${n}`); if (n > mejor.n) mejor = { t, n, desc }; return n; };
       const intento = async (desc, fn) => { try { return anota(desc, await fn()); } catch (e) { tr.push(`${desc}=error(${String(e.message || e).slice(0, 40)})`); return 0; } };
       // 1) método clásico (escala 2, lienzo sin tocar): es el que ya leía bien los DUA
       let cv2 = null, bmp = null;
       if (esImg) { bmp = await createImageBitmap(file); cv2 = document.createElement('canvas'); const k = Math.max(1, Math.min(2, 2400 / Math.max(bmp.width, bmp.height))); cv2.width = Math.round(bmp.width * k); cv2.height = Math.round(bmp.height * k); cv2.getContext('2d').drawImage(bmp, 0, 0, cv2.width, cv2.height); }
-      else { const vp = pg.getViewport({ scale: 2 }); cv2 = document.createElement('canvas'); cv2.width = vp.width; cv2.height = vp.height; await pg.render({ canvasContext: cv2.getContext('2d'), viewport: vp }).promise; }
+      else {
+        const dibuja = async (pgx) => { const vp = pgx.getViewport({ scale: 2 }), c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; await pgx.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; return c; };
+        cv2 = await dibuja(pg);
+        // Firefox puede dibujar en blanco la imagen de un escaneo (decodificación en segundo plano): se reintenta decodificando en la página
+        if (blanca(cv2)) {
+          tr.push('dibujo en blanco');
+          try { docAlt ??= await window.pdfjsLib.getDocument({ data: bytes.slice(), isOffscreenCanvasSupported: false, isImageDecoderSupported: false, useWorkerFetch: false }).promise; pgAlt = await docAlt.getPage(p); const c3 = await dibuja(pgAlt); if (!blanca(c3)) { cv2 = c3; tr.push('reintento sin OffscreenCanvas=ok'); } else tr.push('reintento sin OffscreenCanvas=sigue en blanco'); } catch (e) { tr.push(`reintento=error(${String(e.message || e).slice(0, 40)})`); }
+        }
+      }
       if (p === 1) { try { const m = document.createElement('canvas'), k = 700 / cv2.width; m.width = 700; m.height = Math.round(cv2.height * k); const mx = m.getContext('2d'); mx.fillStyle = '#fff'; mx.fillRect(0, 0, m.width, m.height); mx.drawImage(cv2, 0, 0, m.width, m.height); miniatura = m.toDataURL('image/jpeg', 0.6); } catch { /* sin miniatura */ } }
       let n = await intento('clásico', () => leer(cv2, 0));
       // 2) reforzado: más resolución, grises y contraste, otros modos y giros
       if (n < 150) {
         let origen = cv2, ancho = cv2.width, alto = cv2.height;
-        if (!esImg) { try { const v1 = pg.getViewport({ scale: 1 }), sc = Math.max(2, Math.min(3, 3400 / Math.max(v1.width, v1.height))), vp = pg.getViewport({ scale: sc }), base = document.createElement('canvas'); base.width = Math.round(vp.width); base.height = Math.round(vp.height); const bx = base.getContext('2d'); bx.fillStyle = '#fff'; bx.fillRect(0, 0, base.width, base.height); await pg.render({ canvasContext: bx, viewport: vp }).promise; origen = base; ancho = base.width; alto = base.height; } catch { /* se sigue con la de escala 2 */ } }
+        if (!esImg) { try { const pgR = pgAlt ?? pg, v1 = pgR.getViewport({ scale: 1 }), sc = Math.max(2, Math.min(3, 3400 / Math.max(v1.width, v1.height))), vp = pgR.getViewport({ scale: sc }), base = document.createElement('canvas'); base.width = Math.round(vp.width); base.height = Math.round(vp.height); const bx = base.getContext('2d'); bx.fillStyle = '#fff'; bx.fillRect(0, 0, base.width, base.height); await pgR.render({ canvasContext: bx, viewport: vp }).promise; origen = base; ancho = base.width; alto = base.height; } catch { /* se sigue con la de escala 2 */ } }
         const pr = (giro, realzar, psm) => intento(`giro${giro}${realzar ? '+contraste' : ''} modo${psm}`, () => leer(preparar(origen, ancho, alto, giro, realzar), psm));
         n = await pr(0, true, 3);
         if (n < 150) n = await pr(0, false, 3);
