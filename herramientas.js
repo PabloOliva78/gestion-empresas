@@ -51,9 +51,25 @@ export function activarExportar() {
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob(['﻿' + filasDe(tablas[0]).map((f) => f.map(esc).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' })), download: `${fich}.csv` });
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
+  // Impresión en A4 apaisado ajustada a una sola hoja (pestañas de conciliación): se busca el mayor zoom con el que todo el resumen cabe en la hoja
+  function imprimirApaisado() {
+    const v = document.querySelector('.vista'); if (!v) return void window.print();
+    const W = 1062, H = 725; // área útil de A4 apaisado con márgenes de 8 mm, en px CSS (96 ppp)
+    const st = Object.assign(document.createElement('style'), { id: 'pr-apaisado' });
+    const fin = () => { st.remove(); window.removeEventListener('afterprint', fin); };
+    document.head.appendChild(st);
+    let z = 1;
+    for (; z > 0.3; z = Math.round((z - 0.05) * 100) / 100) {
+      st.textContent = `.vista{zoom:${z};width:${Math.floor(W / z)}px!important;max-width:none!important;overflow:visible!important}`;
+      if (v.offsetHeight * z <= H && v.scrollWidth * z <= W + 2) break;
+    }
+    st.textContent = `@page{size:A4 landscape;margin:8mm} @media print{ html,body{height:auto!important;overflow:visible!important} .vista{zoom:${z};width:${Math.floor(W / z)}px!important;max-width:none!important;overflow:visible!important;break-inside:avoid} .vista *{overflow:visible!important;max-height:none!important} .vista .wrap,.vista [style*="overflow"]{overflow:visible!important} }`;
+    window.addEventListener('afterprint', fin);
+    setTimeout(() => window.print(), 50);
+  }
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest?.('[data-exportar]'); if (!b) return;
-    if (b.dataset.exportar === 'xlsx') excel(); else window.print(); // el PDF se guarda desde el diálogo de imprimir (destino «Guardar como PDF»); la barra lateral no sale en la impresión
+    if (b.dataset.exportar === 'xlsx') excel(); else if (b.dataset.apaisado) imprimirApaisado(); else window.print(); // el PDF se guarda desde el diálogo de imprimir (destino «Guardar como PDF»); la barra lateral no sale en la impresión
   });
 }
 

@@ -3,7 +3,7 @@ import { crearModulos } from './modulos.js?v=444';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
-import { activarExportar, activarAvisoSesion } from './herramientas.js?v=1';
+import { activarExportar, activarAvisoSesion } from './herramientas.js?v=2';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
@@ -203,6 +203,8 @@ const GRUPOS = [
   ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
   ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
 ];
+// Pestañas de conciliación: su botón de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
+const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cva', 'conc', 'rprof', 'ralq', 'rint', 'rsop', 'adif', 'cis', 'concall', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
   chkf: ['Checking Fiscal', 'Obligaciones, plazos y límites', () => vistaObligaciones({ area: 'fiscal' })],
@@ -379,7 +381,7 @@ function render() {
       ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
       <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
       <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
-      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> <button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button></div>
+      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> ${CONC_TABS.has(S.tab) ? '<button class="small" data-exportar="pdf" data-apaisado="1" title="Imprime el resumen en A4 apaisado, ajustado a una sola hoja. Para PDF elige «Guardar como PDF» como destino">Imprimir / PDF apaisado (1 hoja)</button>' : '<button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button>'}</div>
       </div>
       ${clara ? `<div class="lat-pie"><span class="pie-av">${esc(usuario.replace(/[^a-záéíóúñ]/gi, '').slice(0, 2).toUpperCase())}</span><span class="pie-tx"><b title="${esc(usuario)}">${esc(usuario)}</b><small>${ROLES[S.perfil.rol]}</small><small>Versión ${version}</small></span>
         <button id="out" class="small">Salir</button></div>`
