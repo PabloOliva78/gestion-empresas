@@ -58,12 +58,16 @@ export function activarExportar() {
     const st = Object.assign(document.createElement('style'), { id: 'pr-apaisado' });
     const fin = () => { st.remove(); window.removeEventListener('afterprint', fin); };
     document.head.appendChild(st);
-    let z = 1;
-    for (; z > 0.3; z = Math.round((z - 0.05) * 100) / 100) {
-      st.textContent = `.vista{zoom:${z};width:${Math.floor(W / z)}px!important;max-width:none!important;overflow:visible!important}`;
-      if (v.offsetHeight * z <= H && v.scrollWidth * z <= W + 2) break;
+    // sin barras de desplazamiento en las tablas, para medir su ancho natural; la hoja se hace al menos tan ancha como la tabla más ancha (así el recuadro la engloba entera)
+    const libre = '.vista *{overflow:visible!important;max-height:none!important}';
+    st.textContent = `.vista{zoom:1;width:${W}px!important;max-width:none!important}${libre}`;
+    const N = Math.max(W, Math.ceil(Math.max(0, ...[...v.querySelectorAll('table')].map((t) => t.offsetWidth)) + 90), v.scrollWidth);
+    let z = Math.min(1, W / N);
+    for (; z > 0.25; z = Math.round((z - 0.03) * 100) / 100) {
+      st.textContent = `.vista{zoom:${z};width:${N}px!important;max-width:none!important}${libre}`;
+      if (v.offsetHeight * z <= H) break;
     }
-    st.textContent = `@page{size:A4 landscape;margin:8mm} @media print{ html,body{height:auto!important;overflow:visible!important} .vista{zoom:${z};width:${Math.floor(W / z)}px!important;max-width:none!important;overflow:visible!important;break-inside:avoid} .vista *{overflow:visible!important;max-height:none!important} .vista .wrap,.vista [style*="overflow"]{overflow:visible!important} }`;
+    st.textContent = `@page{size:A4 landscape;margin:8mm} @media print{ html,body{height:auto!important;overflow:visible!important} .vista{zoom:${z};width:${N}px!important;max-width:none!important;break-inside:avoid} ${libre} }`;
     window.addEventListener('afterprint', fin);
     setTimeout(() => window.print(), 50);
   }

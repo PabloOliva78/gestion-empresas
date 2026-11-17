@@ -3,7 +3,7 @@ import { crearModulos } from './modulos.js?v=444';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
-import { activarExportar, activarAvisoSesion } from './herramientas.js?v=2';
+import { activarExportar, activarAvisoSesion } from './herramientas.js?v=3';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
