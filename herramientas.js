@@ -78,7 +78,7 @@ export function activarExportar() {
 }
 
 // ---------- Aviso de sesión a punto de caducar ----------
-export function activarAvisoSesion(inactividadMs = 15 * 60 * 1000, avisoMs = 60 * 1000) {
+export function activarAvisoSesion(inactividadMs = 5 * 60 * 1000, avisoMs = 60 * 1000) {
   let ultima = Date.now(), caja = null;
   ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { ultima = Date.now(); quitar(); }, { passive: true }));
   const quitar = () => { if (caja) { caja.remove(); caja = null; } };

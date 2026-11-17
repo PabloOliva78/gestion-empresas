@@ -3,12 +3,12 @@ import { crearModulos } from './modulos.js?v=445';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
-import { activarExportar, activarAvisoSesion } from './herramientas.js?v=3';
+import { activarExportar, activarAvisoSesion } from './herramientas.js?v=4';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
-// ...y se cierra tras 15 minutos sin tocar nada
-const INACTIVIDAD_MS = 15 * 60 * 1000;
+// ...y se cierra tras 5 minutos sin tocar nada
+const INACTIVIDAD_MS = 5 * 60 * 1000;
 let ultimaActividad = Date.now();
 ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener?.(ev, () => { ultimaActividad = Date.now(); }, { passive: true }));
 setInterval?.(async () => {
@@ -43,7 +43,7 @@ const formaDe = () => {
 };
 const formaVars = () => { const f = formaDe(); return `--f-w:${f.w}px;--f-t:${f.t}${[1, 2, 3].map((n) => (f[`c${n}`] ? `;--fc${n}:${f[`c${n}`]}px` : '')).join('')}`; };
 activarRedimension(root, () => S.tab);
-activarExportar(); activarAvisoSesion(); // herramientas del armazón: exportar la pestaña abierta y aviso de sesión a punto de caducar
+activarExportar(); activarAvisoSesion(INACTIVIDAD_MS); // herramientas del armazón: exportar la pestaña abierta y aviso de sesión a punto de caducar
 activarAlineacion(root); activarImprimir(root); activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratón
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -154,7 +154,7 @@ function renderLogin(msg = '') {
     <img class="login-logo" src="logos/po-asesoria.svg?v=1" alt="Asesoría PO">
     <h1>Gestión fiscal, contable y laboral</h1>
     <label>Correo<input name="email" type="email" required autocomplete="username" value="${esc(correoGuardado())}"></label>
-    <label>Contraseña<input name="password" type="password" required minlength="8" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true"></label>
+    <label>Contraseña<input name="password" type="password" required autocomplete="current-password" data-lpignore="true" data-1p-ignore="true"></label>
     <p class="err" id="msg">${esc(msg)}</p>
     <button class="primary">Entrar</button>
     <button type="button" id="reg" class="link">Solicitar acceso (crear cuenta)</button>
@@ -170,6 +170,7 @@ function renderLogin(msg = '') {
   if (f.email.value) f.password.focus(); else f.email.focus();
   root.querySelector('#reg').onclick = async () => {
     if (!f.reportValidity()) return;
+    if (f.password.value.length < 8) { m.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
     const { error } = await db.auth.signUp({ email: f.email.value, password: f.password.value });
     m.textContent = error ? error.message
       : 'Cuenta creada. Un administrador debe activarla (revise su correo si se pide confirmación).';
