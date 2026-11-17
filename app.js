@@ -367,7 +367,7 @@ function render() {
           <div class="lbl">Empresa${empresaSelector()}</div></div><img class="logo-cab logo-hg" src="logos/herogra-group.jpg?v=1" alt="Herogra Group"><div><span>${clara ? 'Fecha' : 'Fecha del documento'}</span><b>${fmt(hoy())}</b></div></div></header>`;
   const usuario = S.perfil.email || S.perfil.nombre || '';
   root.innerHTML = `<div class="layout${clara ? ' v-clara' : ''}">${clara ? cabHtml : ''}
-    <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}">
+    <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}" style="--emp:${S.sel ? M.colorEmp(S.sel) : '#0071e3'}">
       <div>${clara ? '<h1>Conciliación fiscal-contable</h1>' : `${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1>`}</div>
       ${bloquesLat()}
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>

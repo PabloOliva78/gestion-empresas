@@ -49,9 +49,15 @@ body:has(.layout.v-clara) { background: #f5f5f7; }
 .layout.v-clara .lat.lat-nuevo .bl-nav .gpill { border: 2px solid #0071e3; }
 .layout.v-clara .tabs-wrap .tpills .tpill, .layout.v-clara .tabs-wrap .tpills .tpill:hover { border-color: #0071e3; }
 .layout.v-clara .tabs-wrap .tpills .tpill.on { border-color: var(--emp, #0071e3); }
+/* Color de la empresa elegida (--emp, el mismo de la pestaña abierta): fondo suave del menú, borde y bloque activo */
+.layout.v-clara > .lat.lat-nuevo { --emp: #0071e3; background: color-mix(in srgb, var(--emp) 12%, #fff); border: 2px solid var(--emp); }
+.layout.v-clara .lat.lat-nuevo .bl-nav .gpill { border-color: var(--emp); background: #fff; }
+.layout.v-clara .lat.lat-nuevo .bl-nav .gpill:hover { background: color-mix(in srgb, var(--emp) 10%, #fff); }
+.layout.v-clara .lat.lat-nuevo .bl-nav .gpill.act, .layout.v-clara .lat.lat-nuevo .bl-nav .gpill.abierto { background: var(--emp); color: #fff; }
+.layout.v-clara .lat.lat-nuevo .lat-ctl { border-top-color: color-mix(in srgb, var(--emp) 30%, #fff); }
 /* Solo un bloque marcado: al pulsar otro, el de la pestaña abierta deja de estar en azul */
-.layout.v-clara .lat.lat-nuevo .bl-nav:has(.gpill.abierto) .gpill.act:not(.abierto) { background: #f2f2f7; color: #1d1d1f; }
-.layout.v-clara .lat.lat-nuevo .bl-nav:has(.gpill.abierto) .gpill.act:not(.abierto):hover { background: #e8e8ed; }
+.layout.v-clara .lat.lat-nuevo .bl-nav:has(.gpill.abierto) .gpill.act:not(.abierto) { background: #fff; color: #1d1d1f; }
+.layout.v-clara .lat.lat-nuevo .bl-nav:has(.gpill.abierto) .gpill.act:not(.abierto):hover { background: color-mix(in srgb, var(--emp) 10%, #fff); }
 .layout.v-clara .lat.lat-nuevo .lat-ctl { gap: 7px; padding-top: 10px; border-top: 1px solid #ececf0; }
 .layout.v-clara .lat .zoom-c { margin: 0; color: #6e6e73; font-size: 12.5px; gap: 1px; }
 .layout.v-clara .lat .zoom-c button { background: #f2f2f7; color: #1d1d1f; border: 0; border-radius: 0; font-size: 12.5px; font-weight: 500; padding: 3px 10px; }
