@@ -79,7 +79,7 @@ export function crearRevFactura({ S, esc, render, empresa, cargarOcr, esHabil })
 
   function vista() {
     const e = empresa(), R = ST.res;
-    const zona = `<div class="drop-sii-in no-print" data-dropfac="1" tabindex="0" role="button" style="margin-bottom:8px;padding:1.2rem;text-align:center;cursor:pointer"><b>${ST.cargando ? (ST.estado || 'Leyendo la factura…') : 'Suelta aquí la factura (PDF o imagen)'}</b> o haz clic para elegirla.<br><small>Se lee en tu navegador, no se guarda ni se sube, y se borra al salir de esta pestaña.</small><input type="file" id="facIn" accept=".pdf,application/pdf,image/*" hidden></div>`;
+    const zona = `<div class="drop-sii-in no-print" data-dropfac="1" tabindex="0" role="button" style="margin-bottom:8px;padding:1.2rem;text-align:center;cursor:pointer"><b>${ST.cargando ? (ST.estado || 'Leyendo la factura…') : 'Suelta aquí la factura (PDF o imagen)'}</b> o <label for="facIn" style="text-decoration:underline;cursor:pointer;font-weight:600">haz clic para elegirla</label>.<br><small>Se lee en tu navegador, no se guarda ni se sube, y se borra al salir de esta pestaña.</small><input type="file" id="facIn" accept=".pdf,application/pdf,image/*" hidden></div>`;
     const barra = `<div class="bar"><label>La factura es <select data-facl="1"><option value="">Detectar sola (entre las ${(S.empresas || []).length} empresas del grupo)</option><option value="Emitidas"${ST.libro === 'Emitidas' ? ' selected' : ''}>Emitida (la expide la empresa)</option><option value="Recibidas"${ST.libro === 'Recibidas' ? ' selected' : ''}>Recibida (la recibe la empresa)</option></select></label><span class="space"></span>${ST.res || ST.nombre ? `<button class="small danger" data-facdel="1" title="Borra la factura y el análisis de la memoria">Quitar la factura ahora</button>` : ''}</div>`;
     let cuerpo = '';
     if (ST.msg) cuerpo += `<p class="hint" style="color:#b42318">${esc(ST.msg)}</p>`;
@@ -91,8 +91,13 @@ export function crearRevFactura({ S, esc, render, empresa, cargarOcr, esHabil })
       <p class="hint">Análisis automático por reglas (Ley 37/1992 del IVA, Reglamento de facturación RD 1619/2012 y criterios del SII). Es orientativo: no sustituye la revisión de un profesional, no consulta VIES ni el censo, y los supuestos de inversión del sujeto pasivo y sus umbrales deben contrastarse con la norma vigente. La factura no se guarda en ningún sitio: solo vive en la memoria de esta pestaña y se borra al salir de ella, al cambiar de empresa o al pulsar «Quitar la factura ahora».</p></section></div>`;
   }
 
-  document.addEventListener('change', (ev) => {
-    const t = ev.target;
+  // Firefox puede dar como destino un nodo de texto en los eventos de arrastre: se sube siempre al elemento
+  const el = (ev) => { const t = ev.target; return t && t.nodeType === 3 ? t.parentElement : t; };
+  const seguro = (f) => (ev) => { try { return f(ev); } catch (err) { ST.cargando = false; ST.msg = `Error en la pestaña: ${err?.message || err}. Puedes pegar el texto de la factura en el cuadro de abajo.`; try { render(); } catch { /* sin pintar */ } return undefined; } };
+  // un error que se escapa (promesas, OCR…) se muestra en la pestaña en vez de quedarse mudo
+  window.addEventListener('unhandledrejection', (ev) => { if (ST.cargando) { ST.cargando = false; ST.estado = ''; ST.msg = `Error al leer la factura: ${ev.reason?.message || ev.reason}. Puedes pegar el texto de la factura en el cuadro de abajo.`; render(); } });
+  document.addEventListener('change', seguro((ev) => {
+    const t = el(ev);
     if (t.id === 'facIn' && t.files?.[0]) { const f = t.files[0]; t.value = ''; return void leer(f); }
     if (t.dataset?.facl !== undefined) { ST.libro = t.value; if (ST.texto) { analizar(); render(); } }
     if (t.dataset?.rfc !== undefined) {
@@ -101,16 +106,22 @@ export function crearRevFactura({ S, esc, render, empresa, cargarOcr, esHabil })
       if (ST.texto) analizar(); render();
     }
     return undefined;
-  });
-  document.addEventListener('click', (ev) => {
-    const z = ev.target.closest?.('[data-dropfac]'); if (z && !ev.target.closest('input')) return void document.getElementById('facIn')?.click();
-    if (ev.target.closest?.('[data-facdel]')) { limpiar(); render(); }
-    if (ev.target.closest?.('[data-factxt]')) pegado(document.getElementById('facTxt')?.value);
-    if (ev.target.closest?.('[data-facmail]')) { const m = document.getElementById('facMail'); if (m) { m.select(); try { navigator.clipboard?.writeText(m.value); } catch { /* se queda seleccionado para Ctrl+C */ } } }
+  }));
+  document.addEventListener('click', seguro((ev) => {
+    const o = el(ev), z = o.closest?.('[data-dropfac]'); if (z && !o.closest('input,label')) return void document.getElementById('facIn')?.click();
+    if (o.closest?.('[data-facdel]')) { limpiar(); render(); }
+    if (o.closest?.('[data-factxt]')) pegado(document.getElementById('facTxt')?.value);
+    if (o.closest?.('[data-facmail]')) { const m = document.getElementById('facMail'); if (m) { m.select(); try { navigator.clipboard?.writeText(m.value); } catch { /* se queda seleccionado para Ctrl+C */ } } }
     return undefined;
-  });
-  document.addEventListener('dragover', (ev) => { const z = ev.target.closest?.('[data-dropfac]'); if (z) { ev.preventDefault(); z.classList.add('over'); } });
-  document.addEventListener('dragleave', (ev) => ev.target.closest?.('[data-dropfac]')?.classList.remove('over'));
-  document.addEventListener('drop', (ev) => { const z = ev.target.closest?.('[data-dropfac]'); if (!z) return; ev.preventDefault(); z.classList.remove('over'); const f = ev.dataTransfer.files[0]; if (f) leer(f); });
-  return { limpiar, tabs: { leyfac: ['Revisión factura AEAT', 'Analiza una factura frente a la Ley y el SII', vista] } };
+  }));
+  // arrastrar y soltar: se atiende en toda la zona y también se frena que el navegador abra el archivo si se suelta fuera
+  document.addEventListener('dragover', (ev) => { const z = el(ev)?.closest?.('[data-dropfac]'); if (z) { ev.preventDefault(); if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy'; z.classList.add('over'); } });
+  document.addEventListener('dragenter', (ev) => { if (el(ev)?.closest?.('[data-dropfac]')) ev.preventDefault(); });
+  document.addEventListener('dragleave', (ev) => el(ev)?.closest?.('[data-dropfac]')?.classList.remove('over'));
+  document.addEventListener('drop', seguro((ev) => {
+    const z = el(ev)?.closest?.('[data-dropfac]'); if (!z) return;
+    ev.preventDefault(); z.classList.remove('over');
+    const f = ev.dataTransfer?.files?.[0] ?? (ev.dataTransfer?.items ? [...ev.dataTransfer.items].find((i) => i.kind === 'file')?.getAsFile() : null);
+    if (f) leer(f); else { ST.msg = 'El navegador no ha entregado el archivo al soltarlo: usa «haz clic para elegirla».'; render(); }
+  }));  return { limpiar, tabs: { leyfac: ['Revisión factura AEAT', 'Analiza una factura frente a la Ley y el SII', vista] } };
 }
