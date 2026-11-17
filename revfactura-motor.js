@@ -3,7 +3,7 @@
 const EU = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'];
 const PAISES = { EG: /egypt|egipto/i, CN: /\bchina\b/i, MA: /morocco|marruecos/i, TR: /turkey|t[uü]rkiye|turqu[ií]a/i, RU: /russia|rusia/i, GE: /georgia/i, IN: /\bindia\b/i, US: /united states|\busa\b|estados unidos/i, AE: /emirates|dubai|\buae\b/i, GB: /united kingdom|\buk\b|reino unido|london|londres/i, CH: /switzerland|suiza|geneva|ginebra|zug/i, TM: /turkmenistan|turkmenist[aá]n/i, KR: /korea/i, BR: /brazil|brasil/i, SA: /saudi/i };
 const INCOTERMS = /\b(EXW|FCA|FAS|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/;
-const num = (s) => {
+export const num = (s) => {
   let v = String(s ?? '').replace(/[^\d.,\-]/g, ''); if (!v) return null;
   const neg = v.startsWith('-') || /-$/.test(v); v = v.replace(/-/g, '');
   const c = v.lastIndexOf(','), p = v.lastIndexOf('.');
@@ -51,6 +51,17 @@ export function analizarFactura(texto, ctx = {}) {
   const T = String(texto ?? '').replace(/\r/g, ''), t1 = T.replace(/[ \t]+/g, ' '), hoy = ctx.hoy ?? new Date();
   const F = {}, H = [], add = (nivel, t, art = '') => H.push({ nivel, t, art });
   if (t1.replace(/\s/g, '').length < 40) return { ok: false, error: 'No he podido leer texto en el PDF (¿escaneo de mala calidad?).' };
+
+  // ---- empresa del grupo a la que corresponde la factura (la app lleva varias): por NIF y, si el OCR lo estropea, por el nombre ----
+  const nrmN = (s) => String(s ?? '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, ' ').replace(/\b(?:SA|SL|SLU|SAU|S A|S L|S L U|S A U)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const nifN = (s) => String(s ?? '').toUpperCase().replace(/^ES[\s\-]?/, '').replace(/[\s\-.]/g, '');
+  const grupo = ctx.grupo?.length ? ctx.grupo : ctx.empresa ? [ctx.empresa] : [], tN = nrmN(t1), idsAll = ids(T), selec = ctx.empresa ?? null;
+  const posGrupo = (g) => { const p1 = g.cif ? idsAll.find((x) => nifN(x.id) === nifN(g.cif)) : null; if (p1) return p1.pos; const k = nrmN(g.nombre); if (k.length >= 8) { const i = tN.indexOf(k); if (i >= 0) return i * (T.length / Math.max(tN.length, 1)); } return -1; };
+  const hits = grupo.map((g) => ({ g, pos: posGrupo(g) })).filter((h) => h.pos >= 0).sort((a, b) => a.pos - b.pos);
+  let eff = selec;
+  if (hits.length === 1) eff = hits[0].g; else if (hits.length > 1 && !(selec && hits.some((h) => h.g.id === selec.id))) eff = hits[hits.length - 1].g;
+  F.enGrupo = hits.length > 0; F.empresaDet = eff ?? null; F.cambioEmpresa = !!(selec && eff && selec.id !== eff.id); F.gruposVistos = hits.map((h) => h.g.nombre);
+  ctx = { ...ctx, empresa: eff };
 
   // ---- datos ----
   const m = {
@@ -107,7 +118,9 @@ export function analizarFactura(texto, ctx = {}) {
   F.emisor = emisor; F.receptor = receptor;
   let libro = emisor && esMia(emisor) ? 'Emitidas' : receptor && esMia(receptor) ? 'Recibidas' : nombreMio && !lista.some(esMia) ? 'Recibidas' : (ctx.libro || '');
   F.libro = libro;
-  if (emp && !lista.some(esMia) && !nombreMio) add('aviso', `La empresa elegida (${ctx.empresa?.nombre ?? emp}) no aparece en la factura ni como expedidor ni como destinatario: comprueba que has elegido la empresa correcta arriba.`, 'art. 97.Uno LIVA');
+  if (!hits.length && emp) add('aviso', `Ninguna empresa del grupo aparece en la factura (ni la elegida arriba, ${ctx.empresa?.nombre ?? emp}) ni como expedidor ni como destinatario: comprueba la factura y la empresa.`, 'art. 97.Uno LIVA');
+  if (F.cambioEmpresa) add('info', `La factura corresponde a ${eff.nombre}, no a la empresa elegida arriba (${selec.nombre}): se analiza como ${libro === 'Emitidas' ? 'emitida por' : 'recibida por'} ${eff.nombre}. Cambia la empresa arriba cuando vayas a registrarla.`, '');
+  if (hits.length > 1) add('info', `Operación entre empresas del grupo (${hits.map((h) => h.g.nombre).join(' ↔ ')}): se declara como emitida en una y recibida en la otra, con las mismas reglas del IVA, y son operaciones vinculadas (valor de mercado).`, 'art. 79.Cinco LIVA y art. 18 LIS');
   const paisTxt = (() => { for (const [c, re] of Object.entries(PAISES)) if (re.test(t1)) return c; return ''; })();
   const paisE = emisor?.pais ?? (paisTxt && !esMia(emisor ?? {}) ? paisTxt : ''), paisR = receptor?.pais ?? '';
   F.paisEmisor = paisE; F.paisReceptor = paisR;

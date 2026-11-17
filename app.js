@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=440';
+import { crearModulos } from './modulos.js?v=442';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
