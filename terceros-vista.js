@@ -1,6 +1,7 @@
 // Vista común de «Proveedores» y «Clientes» (bloque 12): cabecera fija con buscador y filtro de país, tabla con scroll propio y alta de filas a mano.
 // Las filas escritas a mano llevan manual:true y no se pierden al volver a cargar el Excel del ERP.
 import { paisDeSiglas, datalistPaises } from './paises.js?v=2';
+import { abrirD365 } from './d365.js?v=1';
 export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reemplazarGrande, P, TIPO, clave, titulo, singular, extras, zona, nota, paisNif }) {
   // extras: columnas propias de cada listado, [campo, cabecera]; P: estado { msg, q, pais, nuevo }
   const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -27,7 +28,7 @@ export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reem
       const b = sinAc(`${x.cuenta} ${x.nif} ${x.nombre} ${extras.map(([c]) => x[c] ?? '').join(' ')}`), pd = paisDeSiglas(x.p);
       const celdaPais = ed ? `<td class="in"><input data-tve="${clave}|${x.i}|pais" value="${esc(x.p || '')}" size="4" maxlength="3" list="listaPaises" autocomplete="off" style="text-transform:uppercase" title="Siglas del país: al escribir salen los países que coinciden"> <small class="pais-n">${x.p ? esc(pd ? pd.nombre : 'sigla desconocida') : '<span class="d-ko">sin país</span>'}${x.inf ? ' <span class="hint" title="No viene en el listado: se deduce del prefijo del NIF">(por NIF)</span>' : ''}</small></td>`
         : `<td>${x.p ? `${esc(nombrePais(x.p))}${x.inf ? ' (por NIF)' : ''}` : '<span class="d-ko">sin país</span>'}</td>`;
-      return `<tr class="${x.p ? 'pok' : 'pko'}" data-b="${esc(b)}"${x.cuenta ? ` data-erp="${esc(x.cuenta)}" title="Doble clic: abrir en Dynamics 365"` : ''}${q && !b.includes(q) ? ' style="display:none"' : ''}>${ce(x, 'cuenta', x.cuenta)}${ce(x, 'nif', x.nif)}${ce(x, 'nombre', x.nombre)}${celdaPais}<td style="text-align:center">${pd?.ue ? '✓' : ''}</td>
+      return `<tr class="${x.p ? 'pok' : 'pko'}" data-b="${esc(b)}"${x.cuenta ? ` data-erp="${esc(x.cuenta)}" title="Doble clic: abrir las transacciones en Dynamics 365 (la cuenta queda copiada)"` : ''}${q && !b.includes(q) ? ' style="display:none"' : ''}>${ce(x, 'cuenta', x.cuenta)}${ce(x, 'nif', x.nif)}${ce(x, 'nombre', x.nombre)}${celdaPais}<td style="text-align:center">${pd?.ue ? '✓' : ''}</td>
         ${extras.map(([c]) => ce(x, c, x[c])).join('')}<td class="acc no-print">${x.manual ? '<span class="hint">a mano</span> ' : ''}${ed && x.manual ? `<button class="pill" data-tvact="${clave}|del|${x.i}">Quitar</button>` : ''}</td></tr>`;
     }).join('');
     const nUE = filas.filter((x) => paisDeSiglas(x.p)?.ue).length, kp = (t, v, c = '') => `<div class="tt-k"><div class="tt-kt">${t}</div><div class="tt-kv ${c}">${v}</div></div>`;
@@ -65,13 +66,11 @@ export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reem
     if ((x[campo] ?? '') === v) return;
     await reemplazarGrande(TIPO, S.sel, L.map((y, j) => (j === +i ? { ...y, [campo]: v, ed: x.manual ? y.ed : { ...(y.ed ?? {}), [campo]: v } } : y)));
   }
-  // Doble clic en una fila: abre la ficha en Dynamics 365 (lista de proveedores o de clientes filtrada por la cuenta)
-  const ERP = 'https://herogra.operations.dynamics.com/', CMP = 'HER', T = clave === 'prov' ? ['VendTableListPage', 'VendTable'] : ['CustTableListPage', 'CustTable'];
+  // Doble clic en una fila: abre las transacciones en Dynamics 365 y deja la cuenta copiada para pegarla en el filtro
   function activar() {
     document.addEventListener('dblclick', (ev) => {
       const tr = ev.target.closest?.(`.tercero.${clave} tbody tr[data-erp]`); if (!tr) return;
-      const q = encodeURIComponent(`||${T[1]}.AccountNum = '${tr.dataset.erp.replace(/'/g, "''")}'`);
-      window.open(`${ERP}?cmp=${encodeURIComponent(String(empresa()?.siglas || CMP).toUpperCase())}&mi=${T[0]}&q=${q}`, '_blank', 'noopener');
+      abrirD365({ tipo: clave, cuenta: tr.dataset.erp, siglas: empresa()?.siglas });
     });
     document.addEventListener('click', (ev) => {
       const b = ev.target.closest?.('[data-tvact]'); if (!b) return;
