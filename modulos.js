@@ -3713,16 +3713,31 @@ export function crearModulos(c) {
       const cuentasTxt = [];
       if (carpetas.includes(d365H)) {
         try {
-          const dc = await d365H.getDirectoryHandle('cuentas');
-          for await (const [n, h] of dc.entries()) {
+          const dc = await d365H.getDirectoryHandle('cuentas'), pdfs = [];
+          for await (const [n, h] of dc.entries()) pdfs.push([n, h]);
+          // El PDF solo sirve para pasar los asientos a las cuentas: cuando ya están en la app se borra de la carpeta (hace falta permiso de escritura)
+          let escribir = false;
+          try { escribir = (await d365H.queryPermission({ mode: 'readwrite' })) === 'granted' || (manual && (await d365H.requestPermission({ mode: 'readwrite' })) === 'granted'); } catch { /* sin permiso */ }
+          let borrados = 0, sinBorrar = 0;
+          for (const [n, h] of pdfs) {
             const mC = /^D365_([^_]+)_Cuentas_.*\.pdf$/i.exec(n);
             if (h.kind !== 'file' || !mC) continue;
             const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
-            if (!forzar && hecho.has(clave)) continue;
+            if (!forzar && hecho.has(clave) && !escribir) continue;
             const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === mC[1].toUpperCase());
             if (!e) { omit.push(`${n} (empresa ${mC[1]})`); continue; }
-            try { const r = await ingestaMayor(f, e.id); hecho.add(clave); cuentasTxt.push(`${e.siglas}: ${r.replace(/^\S+\s+[^:]+:\s*/, '')}`); if (r.startsWith('✔')) { cargados++; tocadas.add(e.id); } } catch (err) { omit.push(`${n} (${err.message})`); }
+            try {
+              const r = await ingestaMayor(f, e.id);
+              cuentasTxt.push(`${e.siglas}: ${r.replace(/^\S+\s+[^:]+:\s*/, '')}`);
+              if (r.startsWith('✔')) { cargados++; tocadas.add(e.id); }
+              if (/^[✔↩]/.test(r)) { // los asientos ya están en las cuentas (nuevos o ya existentes): el PDF sobra
+                hecho.add(clave);
+                if (escribir) { try { await dc.removeEntry(n); borrados++; } catch { sinBorrar++; } } else sinBorrar++;
+              }
+            } catch (err) { omit.push(`${n} (${err.message})`); }
           }
+          if (borrados) cuentasTxt.push(`${borrados} PDF borrado${borrados > 1 ? 's' : ''} de la carpeta (la información ya está en las cuentas)`);
+          if (sinBorrar) cuentasTxt.push(`${sinBorrar} PDF sin borrar (falta permiso de escritura en la carpeta: pulsa «Recoger ahora» y elige «Editar archivos»)`);
         } catch { /* aún no hay carpeta «cuentas» */ }
       }
       d365Marca(hecho);
