@@ -157,8 +157,8 @@ body { font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif; }
 .bx b { background: #1f3a7a; color: #fff; padding: .15rem .5rem; min-width: 2.3rem; text-align: center; font-size: .76rem; display: flex; align-items: center; justify-content: center; }
 .bx .v, .bx input { flex: 1; text-align: right; padding: .2rem .55rem; border: 0; background: transparent; font: inherit; color: #1f3864; min-width: 0; width: 100%; }
 .bx.t { background: #fff; }
-.bx.man { background: #fffbe3; }
-.bx.man input { color: #555; }
+.bx.man { background: transparent; }
+.bx.man input { color: #555; font-style: italic; }
 .bx.tot { background: #dbe3f5; }
 .bx.tot .v { font-weight: 700; }
 .bx.final { background: #1f3a7a; }
@@ -581,7 +581,7 @@ td .emp-in[data-empf$='banco'] { width: 9rem; }
 .ctas .css-flex .tnom td.in.num input { text-align: right; }
 .ctas .css-flex .tnom td.in.c input { text-align: center; }
 .ctas .css-flex .tnom td.in.tl input { text-align: left; }
-.ctas .css-flex .tnom td.in input.ed { background: #fff7c2; }
+.ctas .css-flex .tnom td.in input.ed { background: transparent; font-style: italic; }
 .ctas .css-flex .tnom tr.nueva td { background: #fffbdd; }
 .ctas .css-flex .tnom td.cto, .ctas .css-flex .tnom td.in.cto { white-space: nowrap; }
 .ctas .css-flex .tnom.mov th:nth-child(8) { width: 2.4em; }
@@ -808,7 +808,7 @@ th small { color: #7a6a1a !important; }
 .f583-chk { display: flex; gap: .5rem; align-items: center; padding: .4rem 1rem; }
 .f583-inst { border-bottom: 3px solid #e3e8f2; }
 .tabla tr.fila-sel td { background: #fff3cd; }
-.facin.editado { background: #fffbe3; }
+.facin.editado { background: transparent; font-style: italic; }
 
 /* Modelo 592 con la estructura del impreso de la AEAT */
 .f592 { background: #fff; padding: 14px 18px; font-size: .86rem; border: 1px solid #1f3a7a; color: #1f3864; margin-bottom: 1rem; }
@@ -1220,7 +1220,7 @@ table:not(.sin-lv) :is(th, td) + :is(th, td) { border-left: 1px solid #c7ccd6; }
 
 /* Resumen de cuentas contables: celdas editables */
 .res td.in input { width: 100%; text-align: right; font: inherit; }
-.res td.in input.ed { background: #e0ecff; font-weight: 600; }
+.res td.in input.ed { background: transparent; font-style: italic; }
 
 /* Impuestos Presentados: línea azul (la de la cabecera) entre un modelo y el siguiente */
 .prs-row > table + table { box-shadow: -.3rem 0 0 0 #1b3274; margin-left: .35rem; }

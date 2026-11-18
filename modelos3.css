@@ -38,7 +38,7 @@ tr.res200 .cas200 { background: #fff; color: var(--ink); }
 .f202 .c202 input { border: none; text-align: right; padding: 2px 6px; font: inherit; width: 100%; box-sizing: border-box; background: #fff; }
 .f202 .c202 .v { text-align: right; padding: 2px 6px; font-weight: 700; background: #eef2f9; }
 .f202 .c202.vacia { border: none; background: transparent; } .f202 .c202h { text-align: center; font-weight: 600; }
-.f202 .c202 input.editado { background: #fff3b8; }
+.f202 .c202 input.editado { background: transparent; font-style: italic; }
 .pyg202-lista { margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; }
 .pyg202-it { background: #eef2f9; border: 1px solid #c9d3e6; border-radius: 4px; padding: 2px 6px; } .pyg202-it.act { background: #fff3b8; }
 .pyg202-it small { color: #666; }
