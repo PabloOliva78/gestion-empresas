@@ -3700,6 +3700,10 @@ export function crearModulos(c) {
       const hecho = d365Hecho(), omit = [], tocadas = new Set(), intr = []; let cargados = 0;
       const entradas = [];
       for (const dir of carpetas) for await (const [n, h] of dir.entries()) entradas.push([n, h]);
+      // Los libros de IVA (Excel) se leen y se guardan UNA vez por empresa en toda la recogida, no una vez por archivo: antes cada Excel leía y reescribía los libros enteros
+      // (megas cada vez) y gastaba el tráfico de Supabase. Los archivos se dan por hechos solo cuando el guardado final ha ido bien.
+      lote = new Map(); const hechosX = [], tocX = new Set(); let errsX = [];
+      try {
       for (const [n, h] of entradas) {
         if (h.kind !== 'file') continue;
         // Intrastat de D365 (HER, ESP e HIS): D365_<SIGLA>_Intrastat_<AAAA-MM>.xlsx, o cualquier Excel con «Intrastat» y la sigla en el nombre
@@ -3727,8 +3731,12 @@ export function crearModulos(c) {
         const cfg = liqReg(e.id)?.datos ?? {};
         if (mN && !cfg.auto) { omit.push(`${n} (automático desactivado)`); continue; }
         if ((cfg.meses ?? []).includes(ym)) { omit.push(`${n} (IVA liquidado)`); continue; }
-        try { await ingestaIVA(f, e.id); hecho.add(clave); cargados++; tocadas.add(e.id); } catch (err) { omit.push(`${n} (${err.message})`); }
+        try { await ingestaIVA(f, e.id); hechosX.push(clave); tocX.add(e.id); cargados++; tocadas.add(e.id); } catch (err) { omit.push(`${n} (${err.message})`); }
       }
+      errsX = await volcarLote();
+      } finally { lote = null; }
+      if (errsX.length) errsX.forEach((m) => omit.push(`no se pudo guardar ${m}`));
+      else { hechosX.forEach((c) => hecho.add(c)); for (const id of tocX) { await moverIspA(id); await moverSueA(id); } } // las S.NC.ISP.A y S.UE.* mal puestas se reparten una vez, al final
       // PDF «Lista de transacciones contables» de la tarea semanal (subcarpeta «cuentas»: D365_<SIGLA>_Cuentas_<desde>_<hasta>.pdf): los asientos pasan a las cuentas, sin duplicar los que ya están
       const cuentasTxt = [];
       if (carpetas.includes(d365H)) {
