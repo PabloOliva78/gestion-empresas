@@ -5243,7 +5243,7 @@ export function crearModulos(c) {
     const docs = ed ? `<section class="prs-card"><div class="prs-h">Documentación en Excel o PDF</div>
       <p class="hint">Cada sitio manda el archivo a la pestaña que le corresponde, para la empresa y el ejercicio elegidos (si el archivo es de otra empresa, va a la suya y se avisa).</p>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.7rem">${ZONAS.map(([t, f]) => `<div class="prs-card" style="margin:0"><div class="prs-h">${esc(t)}</div>${f()}</div>`).join('')}</div></section>` : '';
-    return `<div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap"><div style="flex:1 1 520px;min-width:0">${form}${imagen}${lotes}${lista}</div><div style="flex:1 1 420px;min-width:0">${docs}</div></div>`;
+    return `<div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap"><div class="asi-globo" style="flex:1 1 520px;min-width:0">${form}${imagen}${lotes}${lista}</div><div class="asi-globo" style="flex:1 1 420px;min-width:0">${docs}</div></div>`;
   }
 
   // ---- Archivos Documentación: todo lo que se ha dejado en la empresa y cuántas líneas se han leído de cada archivo ----

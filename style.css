@@ -1537,3 +1537,6 @@ body.letra-ayfs td.n-der, body.letra-ayfs td.n-cen, body.letra-ayfs td.num, body
 /* Ajustar a pantalla: botón activo */
 .zoom-c button.on{background:#0071e3;color:#fff;border-color:#0071e3}
 
+
+/* Entrada Información: cada mitad (apuntes a mano / documentación) en su propio globo */
+.asi-globo { background: #fbf6ea; border: 2px solid #0071e3; border-radius: 18px; padding: 14px 20px; }
