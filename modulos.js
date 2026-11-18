@@ -3581,7 +3581,7 @@ export function crearModulos(c) {
       for (const e of S.empresas) {
         const d = liqReg(e.id)?.datos;
         if (!e.cif || !d) continue;
-        const nuevo = { auto: !!d.auto, liquidados: d.meses ?? [] };
+        const nuevo = { auto: !!d.auto, liquidados: d.meses ?? [], tipo: e.tipo ?? e.tipoBase ?? '' }; // tipo GE/PYME: las pymes sacan el libro del trimestre entero
         if (JSON.stringify(j.empresas[e.cif]) !== JSON.stringify(nuevo)) { j.empresas[e.cif] = nuevo; n++; }
       }
       if (!n) return 0;
@@ -3602,7 +3602,7 @@ export function crearModulos(c) {
     else {
       try {
         const j = (await d365CfgLeer(h)) ?? { empresas: {} }, d = liqReg(e.id)?.datos ?? {};
-        j.empresas ??= {}; j.empresas[e.cif] = { auto: !!d.auto, liquidados: d.meses ?? [] }; j.actualizado = new Date().toISOString();
+        j.empresas ??= {}; j.empresas[e.cif] = { auto: !!d.auto, liquidados: d.meses ?? [], tipo: e.tipo ?? e.tipoBase ?? '' }; j.actualizado = new Date().toISOString();
         const w = await (await h.getFileHandle('config.json', { create: true })).createWritable();
         await w.write(JSON.stringify(j, null, 1)); await w.close();
         d365Msg = 'Guardado también en config.json (lo lee la tarea de los lunes).';
@@ -3709,8 +3709,24 @@ export function crearModulos(c) {
         if ((cfg.meses ?? []).includes(ym)) { omit.push(`${n} (IVA liquidado)`); continue; }
         try { await ingestaIVA(f, e.id); hecho.add(clave); cargados++; tocadas.add(e.id); } catch (err) { omit.push(`${n} (${err.message})`); }
       }
+      // PDF «Lista de transacciones contables» de la tarea semanal (subcarpeta «cuentas»: D365_<SIGLA>_Cuentas_<desde>_<hasta>.pdf): los asientos pasan a las cuentas, sin duplicar los que ya están
+      const cuentasTxt = [];
+      if (carpetas.includes(d365H)) {
+        try {
+          const dc = await d365H.getDirectoryHandle('cuentas');
+          for await (const [n, h] of dc.entries()) {
+            const mC = /^D365_([^_]+)_Cuentas_.*\.pdf$/i.exec(n);
+            if (h.kind !== 'file' || !mC) continue;
+            const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
+            if (!forzar && hecho.has(clave)) continue;
+            const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === mC[1].toUpperCase());
+            if (!e) { omit.push(`${n} (empresa ${mC[1]})`); continue; }
+            try { const r = await ingestaMayor(f, e.id); hecho.add(clave); cuentasTxt.push(`${e.siglas}: ${r.replace(/^\S+\s+[^:]+:\s*/, '')}`); if (r.startsWith('✔')) { cargados++; tocadas.add(e.id); } } catch (err) { omit.push(`${n} (${err.message})`); }
+          }
+        } catch { /* aún no hay carpeta «cuentas» */ }
+      }
       d365Marca(hecho);
-      d365Msg = `${cargados ? `${cargados} archivo(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${intr.length ? ` · Intrastat: ${intr.join('; ')}` : ''}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}${cfgTxt}`;
+      d365Msg = `${cargados ? `${cargados} archivo(s) de D365 cargados (${[...tocadas].map(empNombre).join(', ')})` : 'No hay libros nuevos de D365'}${cuentasTxt.length ? ` · Cuentas contables: ${cuentasTxt.join('; ')}` : ''}${intr.length ? ` · Intrastat: ${intr.join('; ')}` : ''}${omit.length ? ` · sin cargar: ${omit.slice(0, 4).join(', ')}` : ''}${cfgTxt}`;
       if (cargados || manual) { await cargar(); render(); }
     } finally { d365Ocupado = false; }
   }
