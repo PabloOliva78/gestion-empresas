@@ -812,7 +812,7 @@ export function crearRegistral(c) {
       .filter((x) => x.tot > 0.000001).sort((a, b) => b.tot - a.tot);
     const sumDir = directos.reduce((s, r) => s + (+r.pct || 0), 0);
     const opts = [...soc].sort((a, b) => String(G.nom[a] || a).localeCompare(String(G.nom[b] || b))).map((k) => `<option value="${esc(k)}"${k === sel ? ' selected' : ''}>${esc(G.nom[k])}</option>`).join('');
-    const avisos = D.archivos.flatMap((a) => (a.avisos || []).map((x) => `${a.name}: ${x}`)).concat(
+    const avisos = ( // los porcentajes sin enlazar de los Excel de titularidad ya no se muestran
       [...soc].map((k) => ({ k, s: D.rel.filter((r) => accNorm(r.participada) === k).reduce((s, r) => s + (+r.pct || 0), 0) })).filter((x) => Math.abs(x.s - 100) > 0.01).map((x) => `${G.nom[x.k]}: sus socios suman ${n2(x.s)} % (no el 100 %)`));
     const caminos = () => {
       const k = accTR;
