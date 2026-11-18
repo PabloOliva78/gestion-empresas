@@ -9,8 +9,8 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  // true = intenta pulsar «Transacciones» solo (D365 ignora los clics simulados, así que de momento NO funciona); false = lo pulsas tú
-  const PULSAR_TRANSACCIONES = false;
+  // true = tras filtrar deja el foco en el botón «Transacciones» (solo hay que pulsar Intro); false = no toca el foco
+  const DEJAR_FOCO_EN_TRANSACCIONES = true;
   const m = /[#&]cuenta=([^&]+)/.exec(location.hash); if (!m) return;
   const cuenta = decodeURIComponent(m[1]);
   const esperar = (fn, ms = 30000) => new Promise((ok, ko) => { const t0 = Date.now(), i = setInterval(() => { const r = fn(); if (r) { clearInterval(i); ok(r); } else if (Date.now() - t0 > ms) { clearInterval(i); ko(new Error('tiempo agotado')); } }, 250); });
@@ -26,12 +26,14 @@
       const inp = await esperar(() => [...document.querySelectorAll('input')].find((i) => i.offsetParent && i.name && /QuickFilterControl\d*_Input$/.test(i.name)));
       await new Promise((r) => setTimeout(r, 1200)); // deja que la lista termine de cargar
       poner(inp, cuenta);
-      if (PULSAR_TRANSACCIONES) {
+      if (DEJAR_FOCO_EN_TRANSACCIONES) {
+        // D365 ignora los clics y teclas simulados, pero un Intro REAL sobre un botón con el foco sí lo pulsa:
+        // se deja el foco en «Transacciones» (se reintenta unos segundos por si D365 se lo quita) y solo hay que pulsar Intro.
         await new Promise((r) => setTimeout(r, 2500));
-        const b = [...document.querySelectorAll('button')].find((e) => e.offsetParent && e.textContent.trim() === 'Transacciones');
-        if (b) { // D365 necesita la secuencia completa de eventos de ratón, no solo click()
-          const r = b.getBoundingClientRect(), o = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
-          for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) b.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+        for (let i = 0; i < 8; i++) {
+          const b = [...document.querySelectorAll('button')].find((e) => e.offsetParent && e.textContent.trim() === 'Transacciones');
+          if (b && document.activeElement !== b) b.focus();
+          await new Promise((r) => setTimeout(r, 700));
         }
       }
     } catch (e) { console.warn('[D365 filtro]', e.message); }

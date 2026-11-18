@@ -10,9 +10,10 @@ Instalación, una vez por ordenador:
 
 ### d365-filtro.user.js — buscar el proveedor/cliente en Dynamics 365
 Al dar doble clic en un proveedor o cliente de la app (Proveedores, Clientes y Transacciones), se abre D365 en su lista con `#cuenta=XXXXX` en la dirección.
-El script escribe esa cuenta en el filtro de la lista y deja el registro seleccionado; tú pulsas «Transacciones».
+El script escribe esa cuenta en el filtro de la lista y deja el foco en el botón «Transacciones»; tú solo pulsas **Intro** y se abren las transacciones de ese proveedor.
+- D365 ignora los clics y teclas simulados por script, así que no puede pulsarlo solo; el Intro tiene que ser real.
 - Si no está instalado, la app copia la cuenta al portapapeles para pegarla con Ctrl+V en el filtro.
-- `PULSAR_TRANSACCIONES = true` intenta pulsar «Transacciones» solo, pero D365 ignora los clics simulados: de momento no funciona.
+- `DEJAR_FOCO_EN_TRANSACCIONES = false` desactiva lo del foco.
 - Si D365 cambia su pantalla tras una actualización y deja de buscar, hay que ajustarlo.
 
 ### esker-buscar-factura.user.js — buscar la factura en Esker
