@@ -4,7 +4,7 @@
 //  · el usuario también puede marcar a mano cada partida (Pendiente / En curso / Subsanada) con su nota;
 //  · queda constancia de lo que había (primera vez que se vio), de lo que se arregló (fecha, quién, nota) y de cada carga.
 // Se guarda un registro por empresa de tipo «fact-tprov» (comparte las protecciones de los libros grandes). Filas: t:'c' carga, t:'p' proveedor, t:'l' partida.
-import { abrirD365 } from './d365.js?v=2';
+import { abrirD365 } from './d365.js?v=3';
 export function crearTransProv({ S, esc, render, empresa, puede, grande, reemplazarGrande }) {
   const TIPO = 'fact-tprov';
   // Doble clic en un proveedor (su fila o su cabecera desplegada): abre las transacciones en Dynamics 365 con la cuenta copiada
