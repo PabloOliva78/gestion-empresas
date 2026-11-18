@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=466';
+import { crearModulos } from './modulos.js?v=467';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -7,8 +7,8 @@ import { activarExportar, activarAvisoSesion } from './herramientas.js?v=4';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
-// ...y se cierra tras 5 minutos sin tocar nada
-const INACTIVIDAD_MS = 5 * 60 * 1000;
+// ...y se cierra tras 10 minutos sin tocar nada
+const INACTIVIDAD_MS = 10 * 60 * 1000;
 let ultimaActividad = Date.now();
 ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach((ev) => window.addEventListener?.(ev, () => { ultimaActividad = Date.now(); }, { passive: true }));
 setInterval?.(async () => {
@@ -143,7 +143,7 @@ async function boot() {
 
 db.auth.onAuthStateChange((ev, session) => {
   const uid = session?.user?.id ?? null;
-  if (ev === 'SIGNED_OUT' || (ev === 'SIGNED_IN' && uid !== uidActual)) setTimeout(boot, 0);
+  if (ev === 'SIGNED_OUT' || (ev === 'SIGNED_IN' && uid !== uidActual)) { M.limpiarAvisoD365?.(true); setTimeout(boot, 0); } // sesión nueva: sin avisos de la anterior
 });
 
 // ---------- Pantallas ----------
@@ -341,6 +341,7 @@ function aplicarTipoEjercicio() {
 }
 function render() {
   aplicarTipoEjercicio();
+  if (S.tab !== 'ini') M.limpiarAvisoD365?.(); // el aviso de lo recogido de D365 se quita al salir de Inicio
   if (S.tab !== 'leyfac') M.limpiarRevFactura?.(); // la factura de «Revisión factura AEAT» se borra en cuanto se sale de la pestaña
   if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'ini';
   const e = S.empresas.find((x) => x.id === S.sel);

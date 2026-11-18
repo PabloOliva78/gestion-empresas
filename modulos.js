@@ -3624,7 +3624,7 @@ export function crearModulos(c) {
     r.onsuccess = () => { const t = r.result.transaction('h', modo), q = fn(t.objectStore('h')); t.oncomplete = () => ok(q.result); t.onerror = () => no(t.error); };
     r.onerror = () => no(r.error);
   });
-  let d365H = null, d365Msg = '', d365Ocupado = false, d365Est = null; // d365Est: estado.json que deja la tarea semanal (última ejecución y aviso si algo falló)
+  let d365H = null, d365Msg = '', d365MsgVisto = false, d365Ocupado = false, d365Est = null; // d365Est: estado.json que deja la tarea semanal (última ejecución y aviso si algo falló)
   const d365EstadoLeer = async (h) => { try { return JSON.parse(await (await (await h.getFileHandle('estado.json')).getFile()).text()); } catch { return null; } };
   const d365Hecho = () => { try { return new Set(JSON.parse(localStorage.getItem('d365hecho') || '[]')); } catch { return new Set(); } };
   const d365Marca = (set) => { try { localStorage.setItem('d365hecho', JSON.stringify([...set].slice(-3000))); } catch { /* sin almacenamiento */ } };
@@ -3747,6 +3747,8 @@ export function crearModulos(c) {
   }
   // Intrastat es informativo (no se paga): expediciones = entregas de bienes (clave E del 349) e introducciones = adquisiciones de bienes (clave A), de los libros del periodo
   function intraDeLibros(E, R, ej, p) { const c = calcular349(E, R, ej, p), x = (k) => c.porClave.find((q) => q.clave === k)?.importe ?? 0; return { exp: x('E'), int: x('A') }; }
+  // El aviso de lo recogido de D365 sale una vez en Inicio y se quita al salir de esa pantalla o al cambiar de sesión (todo = true)
+  const limpiarAvisoD365 = (todo) => { if (todo || d365MsgVisto) { d365Msg = ''; d365MsgVisto = false; } };
   function vistaInicio() {
     if (!S.sel) return sinEmpresa;
     const E = grande('fact-E'), R = grande('fact-R'), M = grande('may-mov'), sE = grande('sii-E'), sR = grande('sii-R');
@@ -3910,7 +3912,7 @@ export function crearModulos(c) {
         <span class="dash-s">Exportaciones de D365: guárdalas en <b>${esc(d365H?.name ?? 'LIBROS IVA D365')}</b>${ed ? ` <button class="small" data-act="m-d365carpeta" data-c="carpeta" title="Elige la carpeta G:\\Mi unidad\\LIBROS IVA D365">${d365H ? 'Cambiar carpeta…' : 'Elegir carpeta…'}</button>${d365O ? ` y <b>${esc(d365O.name)}</b>` : ''} <button class="small" data-act="m-d365carpeta" data-c="otra" title="Otra carpeta más, por ejemplo una subcarpeta de Descargas">${d365O ? 'Cambiar otra carpeta…' : 'Otra carpeta…'}</button> <button class="small" data-act="m-d365recoger">Recoger ahora</button> <button class="small" data-act="m-d365releer" title="Vuelve a leer los libros del periodo elegido, también los ya cargados (no toca otros periodos)">Releer periodo</button> <button class="small" data-act="m-librosrev" title="Revisa los libros ya cargados del periodo elegido: pasa las S.UE.* al soportado y las S.NC.ISP.A al repercutido, sin leer archivos">Revisar libros</button>` : ''}</span>
         <span class="dash-s">${cfgD.auto ? 'Automático' : 'Manual'}${ultimos.length ? ` · liquidados: ${esc(ultimos.join(', '))}` : ''}</span></div>
         ${d365Est?.aviso ? `<div class="d-fila"><span class="d-ko">⚠ ${esc(d365Est.aviso)}</span></div>` : d365Est?.ultima ? `<div class="d-fila"><span class="dash-s">Última descarga de D365: ${esc(new Date(d365Est.ultima.fecha).toLocaleString('es-ES'))} · semana ${esc(d365Est.ultima.semana)} · sin errores</span></div>` : ''}
-        ${d365Msg ? `<div class="d-fila"><span class="dash-s">${esc(d365Msg)}</span></div>` : ''}</section>
+        ${d365Msg ? (d365MsgVisto = true, `<div class="d-fila"><span class="dash-s">${esc(d365Msg)}</span></div>`) : ''}</section>
       <section class="dsec"><h3>Impuestos del periodo · ${esc(per)}</h3>${p ? `<div class="dash-g">${imps.join('') || '<p class="hint">Sin datos de impuestos en este periodo.</p>'}</div>` : '<p class="hint">Elige un mes o un trimestre en Periodo.</p>'}</section>
       <section class="dsec"><h3>Conciliaciones</h3><div class="conc-resumen ${nMal ? 'd-ko' : 'd-ok'}">${nMal ? `✖ ${nMal} conciliación${nMal > 1 ? 'es' : ''} con descuadre` : '✓ Todas las conciliaciones cuadran'}</div><div class="dash-g">${conc.join('')}</div></section>
       <div class="dash-2"><section class="dsec"><h3>Saldos de las cuentas contables</h3>${ctas}</section><section class="dsec"><h3>Liquidaciones a presentar pendientes</h3>${liq}</section></div>
@@ -5740,5 +5742,5 @@ export function crearModulos(c) {
   });
   const subirComo = (kind, files) => (/^registro-rm/.test(kind) ? (forzarTab = kind.slice(9), archKind = 'registro', subirArchivos(files)) : M4.kinds[kind] ? M4.kinds[kind](files) : M6.kinds[kind] ? M6.kinds[kind](files) : R2.kinds[kind] ? R2.kinds[kind](files) : kind === 'iloc' ? ilCargar(files) : kind === 'notif' ? ntCargar(files) : kind === 'calaeat' ? calCargar(files) : kind === 'nomexcel' ? nomCargarExcel(files) : kind === 'dua' ? duaCargar(files) : kind === 'asiimg' ? asiImagenes(files) : (archKind = kind, subirArchivos(files)));
 
-  return { limpiarRevFactura: M20.limpiar, guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, setDuaAnio, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, cargado, titulo, listaArchivos, buscarFc, buscarFcCampo, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
+  return { limpiarRevFactura: M20.limpiar, guardarNomAsiento, setNomAsMes, abrirPrs, calSetAnio, setLt, setLtFreq, setLtModo, setPgEst, setPgMan, setPgMes, colorEmp: colorDe, setCalEmp, ntEventos, setNtVer, guardarNt, duaDeTexto, setDuaMes, setDuaAnio, duaCampo, duaSeleccionar, setIlVer, guardarIl, abrirArch: abrirNuevaPestana, duaAbrir, setLiqVer, setCmgMod, d365Auto, toggleLiqIva, d365Recoger, siiFiltro, siiTodosSet: (s, v) => { siiTodos[s] = v; siiN[s] = 150; render(); }, editarFc, fcNvCampo, editarSii, cta: accionCta, setCssCta, guardarRetClave, guardarNom, guardarPrs, setPrsVer, tabs, accion, cargarPdfs, badges, subirArchivos, subirComo, limpiarAvisoD365, cargado, titulo, listaArchivos, buscarFc, buscarFcCampo, setFc, guardarMan303, guardarIban, setRectif, asiCampo, asiPrevCampo, asiPegar };
 }
