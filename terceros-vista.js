@@ -71,7 +71,7 @@ export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reem
     document.addEventListener('dblclick', (ev) => {
       const tr = ev.target.closest?.(`.tercero.${clave} tbody tr[data-erp]`); if (!tr) return;
       const q = encodeURIComponent(`||${T[1]}.AccountNum = '${tr.dataset.erp.replace(/'/g, "''")}'`);
-      window.open(`${ERP}?cmp=${CMP}&mi=${T[0]}&q=${q}`, '_blank', 'noopener');
+      window.open(`${ERP}?cmp=${encodeURIComponent(String(empresa()?.siglas || CMP).toUpperCase())}&mi=${T[0]}&q=${q}`, '_blank', 'noopener');
     });
     document.addEventListener('click', (ev) => {
       const b = ev.target.closest?.('[data-tvact]'); if (!b) return;
