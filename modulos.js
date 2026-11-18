@@ -2273,7 +2273,11 @@ export function crearModulos(c) {
   const prsComoLista = () => S.registros.filter((r) => r.tipo === 'pres' && r.ejercicio === Number(S.ejercicio) && (!S.periodo || r.datos.periodo === S.periodo))
     .concat(S.registros.filter((r) => r.tipo === 'prs' && r.ejercicio === Number(S.ejercicio)).flatMap((r) => Object.keys(r.datos)
       .map((k) => ({ empresa_id: r.empresa_id, datos: { modelo: k.split('|')[0], periodo: k.split('|')[1] } })).filter((x) => !S.periodo || x.datos.periodo === S.periodo)));
-  async function guardarPrs(clave, valor) {
+  // Los guardados de importes a mano van UNO DETRÁS DE OTRO: cada uno parte de lo que dejó el anterior (si no, al pasar a la línea siguiente se pisaba lo de la anterior)
+  let colaGuardar = Promise.resolve();
+  const enSerie = (fn) => { const p = colaGuardar.then(fn, fn); colaGuardar = p.catch(() => {}); return p; };
+  const guardarPrs = (clave, valor) => enSerie(() => guardarPrsUno(clave, valor));
+  async function guardarPrsUno(clave, valor) {
     const [m, per, col, ej] = clave.split('|');
     const reg = prsRegs().find((r) => r.ejercicio === +ej), k = `${m}|${per}`;
     const datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
@@ -2823,7 +2827,8 @@ export function crearModulos(c) {
   // configuración por empresa: cuenta elegida, tipo de cada asiento, comprobados, saldo del balance, importes a mano y ámbito
   const ctaCfgReg = () => S.registros.find((r) => r.tipo === 'ctacfg' && r.empresa_id === S.sel);
   const ctaCfg = () => ctaCfgReg()?.datos ?? {};
-  async function guardarCta(mut) {
+  const guardarCta = (mut) => enSerie(() => guardarCtaUno(mut));
+  async function guardarCtaUno(mut) {
     const reg = ctaCfgReg(), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
     mut(datos);
     const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'ctacfg', ejercicio: null, datos });
@@ -3058,7 +3063,8 @@ export function crearModulos(c) {
     const nm = meses.map((mm) => nomMes(ej, mm)).filter(Boolean);
     return nm.length ? { s: rr(nm.reduce((a, x) => a + (Number(x.salarios) || 0) + (Number(x.indem) || 0), 0)), r: rr(nm.reduce((a, x) => a + (Number(x.ret) || 0), 0)) } : null;
   };
-  async function guardarNom(clave, valor) {
+  const guardarNom = (clave, valor) => enSerie(() => guardarNomUno(clave, valor));
+  async function guardarNomUno(clave, valor) {
     const [mm, campo, y] = clave.split('|');
     const reg = nomReg(+y);
     const datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
