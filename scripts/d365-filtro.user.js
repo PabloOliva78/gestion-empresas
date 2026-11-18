@@ -9,7 +9,7 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  // true = además pulsa «Transacciones» solo; false = lo pulsas tú
+  // true = intenta pulsar «Transacciones» solo (D365 ignora los clics simulados, así que de momento NO funciona); false = lo pulsas tú
   const PULSAR_TRANSACCIONES = false;
   const m = /[#&]cuenta=([^&]+)/.exec(location.hash); if (!m) return;
   const cuenta = decodeURIComponent(m[1]);
@@ -28,8 +28,11 @@
       poner(inp, cuenta);
       if (PULSAR_TRANSACCIONES) {
         await new Promise((r) => setTimeout(r, 2500));
-        const b = [...document.querySelectorAll('button,[role=button],span')].find((e) => e.offsetParent && e.textContent.trim() === 'Transacciones' && e.closest('[class*=ribbon],[class*=Ribbon],[role=group],[role=tabpanel]'));
-        b?.click();
+        const b = [...document.querySelectorAll('button')].find((e) => e.offsetParent && e.textContent.trim() === 'Transacciones');
+        if (b) { // D365 necesita la secuencia completa de eventos de ratón, no solo click()
+          const r = b.getBoundingClientRect(), o = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+          for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) b.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+        }
       }
     } catch (e) { console.warn('[D365 filtro]', e.message); }
   });
