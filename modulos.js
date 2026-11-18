@@ -3739,23 +3739,29 @@ export function crearModulos(c) {
           let escribir = false;
           try { escribir = (await d365H.queryPermission({ mode: 'readwrite' })) === 'granted' || (manual && (await d365H.requestPermission({ mode: 'readwrite' })) === 'granted'); } catch { /* sin permiso */ }
           let borrados = 0, sinBorrar = 0;
-          for (const [n, h] of pdfs) {
-            const mC = /^D365_([^_]+)_Cuentas_.*\.pdf$/i.exec(n);
-            if (h.kind !== 'file' || !mC) continue;
-            const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
-            if (!forzar && hecho.has(clave) && !escribir) continue;
-            const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === mC[1].toUpperCase());
-            if (!e) { omit.push(`${n} (empresa ${mC[1]})`); continue; }
-            try {
-              const r = await ingestaMayor(f, e.id);
-              cuentasTxt.push(`${e.siglas}: ${r.replace(/^\S+\s+[^:]+:\s*/, '')}`);
-              if (r.startsWith('✔')) { cargados++; tocadas.add(e.id); }
-              if (/^[✔↩]/.test(r)) { // los asientos ya están en las cuentas (nuevos o ya existentes): el PDF sobra
-                hecho.add(clave);
-                if (escribir) { try { await dc.removeEntry(n); borrados++; } catch { sinBorrar++; } } else sinBorrar++;
-              }
-            } catch (err) { omit.push(`${n} (${err.message})`); }
-          }
+          // Un solo libro por empresa en memoria durante toda la recogida: se lee UNA vez y se guarda UNA vez. Antes cada PDF leía y reescribía el libro entero
+          // (megas cada vez) y se gastaba el tráfico de Supabase. Los PDF solo se borran cuando el guardado ha ido bien.
+          lote = new Map();
+          const hechos = [];
+          try {
+            for (const [n, h] of pdfs) {
+              const mC = /^D365_([^_]+)_Cuentas_.*\.pdf$/i.exec(n);
+              if (h.kind !== 'file' || !mC) continue;
+              const f = await h.getFile(), clave = `${n}|${f.lastModified}|${f.size}`;
+              if (!forzar && hecho.has(clave) && !escribir) continue;
+              const e = S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === mC[1].toUpperCase());
+              if (!e) { omit.push(`${n} (empresa ${mC[1]})`); continue; }
+              try {
+                const r = await ingestaMayor(f, e.id);
+                cuentasTxt.push(`${e.siglas}: ${r.replace(/^\S+\s+[^:]+:\s*/, '')}`);
+                if (r.startsWith('✔')) { cargados++; tocadas.add(e.id); }
+                if (/^[✔↩]/.test(r)) hechos.push([n, clave]); // los asientos ya están en la cuenta (nuevos o ya existentes): el PDF sobra
+              } catch (err) { omit.push(`${n} (${err.message})`); }
+            }
+            const errs = await volcarLote();
+            if (errs.length) errs.forEach((m) => omit.push(`no se pudo guardar ${m}`));
+            else for (const [n, clave] of hechos) { hecho.add(clave); if (escribir) { try { await dc.removeEntry(n); borrados++; } catch { sinBorrar++; } } else sinBorrar++; }
+          } finally { lote = null; }
           if (borrados) cuentasTxt.push(`${borrados} PDF borrado${borrados > 1 ? 's' : ''} de la carpeta (la información ya está en las cuentas)`);
           if (sinBorrar) cuentasTxt.push(`${sinBorrar} PDF sin borrar (falta permiso de escritura en la carpeta: pulsa «Recoger ahora» y elige «Editar archivos»)`);
         } catch { /* aún no hay carpeta «cuentas» */ }
