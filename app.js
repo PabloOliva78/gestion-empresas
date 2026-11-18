@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=458';
+import { crearModulos } from './modulos.js?v=461';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -194,7 +194,7 @@ const GRUPOS = [
   ['3.- INFORMACIÓN EMPRESA', ['asi', 'rev', 'chk', 'opemp', 'ficha'], 'emp', 'Entrada de apuntes, archivos cargados, checking de lo declarado y opciones de las empresas.'],
   ['4.- MODELOS TRIBUTARIOS', ['mod111', 'mod115', 'mod123', 'mod200', 'mod202', 'mod303', 'mod349', 'mod347', 'mod583', 'mod592', 'moda22', 'mod180', 'mod190', 'mod193', 'mod232', 'mod390', 'mod390c','modintra'],
     'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
-  ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
+  ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c475010', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
   ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],

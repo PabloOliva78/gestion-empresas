@@ -2,7 +2,7 @@
 // Tres tipos de pestaña: lista de registros (tabla `registros`), ficha (`empresas.datos`)
 // y documental (huecos con fecha, referencia y archivo en Storage, bucket `documentos`).
 import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObligaciones, leerSituacion,
-  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=309';
+  leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, leerMayorPdf, prefijoAsiento, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=311';
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=14';
@@ -21,7 +21,7 @@ import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=9';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=18';
+import { crearConciliaciones } from './conciliaciones.js?v=19';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
 
@@ -2799,7 +2799,13 @@ export function crearModulos(c) {
     tipo: (a, d) => { const p = String(a || '').toUpperCase(); return p.startsWith('CID') ? 'CID' : p.startsWith('RC') ? 'RC' : p.startsWith('OH') ? 'OH' : p.startsWith('OD') ? 'OD' : d ? 'OD' : 'OH'; }, codes: ['CID', 'OD', 'OH', 'RC'],
     cols: [['c', 'CID', 'CID - Créditos Imp. Diferidos'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'RC', 'RC - Reducción Créditos'],
       ['f', 'T', 'Total movimientos (CID + OD − OH − RC)', (v) => v.CID + v.OD - v.OH - v.RC], ['a', 'SC', 'Saldo Cuenta', 'T']] } };
-  const TODAS_CTAS = { ...CTAS_BASE, c47513: CTAS_FERTINOVA.c47513, ...CTAS_HER_RET, ...CTAS_LYS };
+  // 4750.10 IVA diferido (DUA): solo Herogra Fertilizantes, Herogra Especiales e Hispalense
+  const CTAS_DIF = { c475010: { cta: '4750.10', desc: 'H.P. Acreedora por IVA Diferido', tit: 'RESUMEN MENSUAL H.P. ACREEDORA POR IVA DIFERIDO', per: 'mes',
+    tipo: (a, d, h, S) => (P2(a, S) ? 'S' : P2(a, 'DUA') ? 'DUA' : d ? 'OD' : 'OH'), codes: ['S', 'DUA', 'OD', 'OH'],
+    cols: [['c', 'S', '{S} - Liquidaciones IVA'], ['c', 'DUA', 'DUA - IVA diferido de los DUA'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'],
+      ['f', 'SP', 'Saldo del periodo ({S} + OD − OH − DUA)', (v) => v.S + v.OD - v.OH - v.DUA], ['a', 'SC', 'Saldo Cuenta', 'SP']] } };
+  const RX_DIF = /herogra\s+fertiliz|herogra\s+especiales|hispalense/i;
+  const TODAS_CTAS = { ...CTAS_BASE, c47513: CTAS_FERTINOVA.c47513, ...CTAS_HER_RET, ...CTAS_LYS, ...CTAS_DIF };
   // cuentas que tiene cada empresa, en orden
   function ctasEmpresa(e) {
     const cif = e?.cif ?? '', fer = cif === 'B18546614';
@@ -2808,7 +2814,8 @@ export function crearModulos(c) {
     if (cif === 'A18341404') orden.splice(orden.indexOf('c4730'), 0, ...Object.keys(CTAS_HER_RET));
     if (cif === 'B18361329' || cif === 'B91428995') orden.splice(orden.indexOf('c4730'), 0, 'c473001', 'c473002');
     if (cif === 'B18765289') orden.splice(orden.indexOf('c4730') + 1, 0, 'c4745');
-    return Object.fromEntries(orden.map((k) => [k, CTAS_LYS[k] || CTAS_HER_RET[k] || (fer && CTAS_FERTINOVA[k]) || CTAS_BASE[k]]));
+    if (RX_DIF.test(e?.nombre ?? '')) orden.splice(orden.indexOf('c4750') + 1, 0, 'c475010');
+    return Object.fromEntries(orden.map((k) => [k, CTAS_DIF[k] || CTAS_LYS[k] || CTAS_HER_RET[k] || (fer && CTAS_FERTINOVA[k]) || CTAS_BASE[k]]));
   }
   const ctaDe = (k) => ctasEmpresa(empresa())[k] ?? TODAS_CTAS[k];
   Object.keys(TODAS_CTAS).forEach((k) => { tabs[k] = [`Cuenta ${TODAS_CTAS[k].cta}`, TODAS_CTAS[k].desc, () => vistaCuenta(k), false, () => !!ctasEmpresa(empresa())[k]]; });
@@ -3017,7 +3024,7 @@ export function crearModulos(c) {
       <div class="wrap"><table class="tprs tnom res" style="--ncol:${cols.length}"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
       <tbody>${cuerpo || `<tr><td colspan="${cols.length + 1}" class="vacio">Sin movimientos</td></tr>`}</tbody></table></div>`;
     const av = D.avisos.map((a) => `<p>⚠ ${esc(a)}</p>`).join('');
-    return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel de la cuenta o de varias cuentas) o pulsa para elegirlo')}
+    return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel o PDF «Lista de transacciones contables» de varias cuentas) o pulsa para elegirlo', '.xlsx,.xls,.csv,.pdf')}
       ${banner}
       <section class="prs-card ctas"><div class="css-flex"><div class="mov-wrap">
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
@@ -3407,9 +3414,25 @@ export function crearModulos(c) {
     if (reg) { const { error } = await db.from('registros').delete().eq('id', reg.id); if (error) return void alert(error.message); }
     await cargar(); render();
   }
+  // PDF «Lista de transacciones contables» (D365): textos con posición por página, y empresa de la cabecera
+  async function mayorPdfLeer(f) {
+    if (f._mayPdf) return f._mayPdf;
+    const lib = window.pdfjsLib;
+    if (!lib) throw new Error('No se cargó el lector de PDF (pdf.js).');
+    lib.GlobalWorkerOptions.workerSrc ||= 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const doc = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise, pags = [];
+    for (let p = 1; p <= doc.numPages; p++) pags.push((await (await doc.getPage(p)).getTextContent()).items.map((i) => ({ x: i.transform[4], y: i.transform[5], str: i.str })));
+    const emp = (pags[0] ?? []).map((i) => i.str.trim()).filter(Boolean).map((s) => c.idxEmp({ nombre: s, siglas: '' })).find((i) => i >= 0);
+    return (f._mayPdf = { mv: leerMayorPdf(pags), empresa: emp >= 0 && emp !== undefined ? S.empresas.find((x) => c.idxEmp(x) === emp) ?? null : null });
+  }
   async function ingestaMayor(f, empresaId) {
-    const filas = await filasExcel(f);
-    const mv = leerMayor(filas);
+    const esPdf = /\.pdf$/i.test(f.name);
+    let mv;
+    if (esPdf) {
+      mv = (await mayorPdfLeer(f)).mv;
+      const sigla = S.empresas.find((x) => x.id === empresaId)?.siglas ?? '';
+      if (mv) mv = mv.map((l) => ({ ...l, asiento: prefijoAsiento(l, sigla) })); // el prefijo (PN, N, PM, PS…) lo deduce la app del debe/haber y la descripción
+    } else mv = leerMayor(await filasExcel(f));
     if (!mv) return `❔ ${f.name}: guardado, pero no reconozco el extracto (hacen falta fecha, cuenta, debe y haber)`;
     const n = await guardarGrande('may-mov', empresaId, mv.map((l) => ({ ...l, src: f.name })), (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
     return `✔ ${f.name}: extracto contable · ${mv.length} movimientos leídos (${n} en total)`;
@@ -3496,7 +3519,7 @@ export function crearModulos(c) {
       (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; },
       (v) => v.SS + v.R + v.OD - v.OH - v.C, y, lineasCuenta('c6420', M), false, 'Saldo ejercicio anterior', { SS: 'Seguridad Social empresa nóminas', R: 'Regularizaciones', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
     return `${dz('fundae', 'Suelta aquí los listados de FUNDAE', '(Costes y Grupos formativos, PDF o Excel) o pulsa para elegirlos', '.pdf,.xlsx,.xls,.csv')}
-      ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01, 6400.01 y 6420.01 (Excel) o pulsa para elegirlo')}
+      ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01, 6400.01 y 6420.01 (Excel o PDF) o pulsa para elegirlo', '.xlsx,.xls,.csv,.pdf')}
       <div class="css-pils">${[['c4760', '4760.01', 'Organismos de la Seguridad Social, acreedores'], ['c6400', '6400.01', 'Sueldos y salarios'], ['c6420', '6420.01', 'Seguridad Social a cargo de la empresa']].map(([k, n, t]) => { const r = saldoCtaPeriodo(k); return `<div class="css-pil"><b>Cuenta ${n}</b><small>${esc(t)}</small><span>Saldo ${r ? fnum(r.saldo) : '…'} €${r?.origen === 'balance' ? ' (balance)' : ''}</span></div>`; }).join('')}</div>
       ${av.length ? `<div class="aviso">${av.map((a) => `<p>⚠ ${esc(a)}</p>`).join('')}</div>` : ''}
       <p class="hint">Seguros Sociales (pagos: asientos PS en la ${esc(cta)} del mes siguiente) − Seguridad Social de las nóminas = Diferencias; menos IT (asientos IT de la ${esc(cta)} del mes) y menos Bonificaciones (cursos FUNDAE), ambas en negativo = Dif. mes Seg. Social. Cero = verde; si no, rojo.</p>
@@ -4639,7 +4662,8 @@ export function crearModulos(c) {
   async function destinoArchivo(f) {
     const sel = empresa(), porSigla = (s) => S.empresas.find((x) => String(x.siglas ?? '').toUpperCase() === String(s ?? '').toUpperCase()) ?? null;
     let porContenido = null;
-    try {
+    if (/\.pdf$/i.test(f.name)) { try { porContenido = (await mayorPdfLeer(f)).empresa; } catch (err) { /* se decide por el nombre */ } if (porContenido) return porContenido; }
+    else try {
       const filas = await filasExcel(f), sii = leerSII(filas);
       if (sii) {
         const iT = (sii.cab ?? []).findIndex((h) => /^NIF Titular$/i.test(String(h ?? '').trim())), t = iT >= 0 ? sii[0]?.raw?.[iT] : null;
@@ -5187,7 +5211,24 @@ export function crearModulos(c) {
       ${A.slice(0, 300).map((l) => `<tr><td>${esc(l.cuenta)}</td><td class="c">${fdate(Date.parse(l.fecha))}</td><td>${esc(l.asiento)}</td><td>${esc(l.desc)}</td><td class="num">${l.debe ? fnum(l.debe) : ''}</td><td class="num">${l.haber ? fnum(l.haber) : ''}</td>
         <td>${ed ? `<button class="small" data-act="m-asiquit" data-id="${l.id}" title="Quitar esta línea">✖</button>` : ''}</td></tr>`).join('')}</tbody></table></div>${A.length > 300 ? `<p class="hint">Se muestran las 300 primeras de ${A.length}.</p>` : ''}` : '<p class="hint">Todavía no hay líneas metidas a mano en esta empresa.</p>'}
       ${nq && ed ? `<p class="hint">Hay ${nq} apunte(s) de los extractos quitados en las cuentas. <button class="small" data-act="m-asirest">Volver a poner todos los quitados</button></p>` : ''}</section>`;
-    return `${form}${imagen}${lotes}${lista}`;
+    // Mitad derecha: un sitio por cada documentación que se deja en Excel o PDF y que la app reparte a su pestaña
+    const zona = (kind, titulo, sub, acc, conLista = true) => conLista ? dz(kind, titulo, sub, acc)
+      : `<div class="dropzone" data-kind="${kind}" tabindex="0" role="button"><b>${titulo}</b> ${sub}<input type="file" data-dzkind="${kind}" accept="${acc}" multiple hidden></div>`;
+    const ZONAS = [
+      ['Nóminas', () => zona('nomexcel', 'Suelta aquí el Excel de costes salariales', '(una hoja por empresa y mes) → pestaña Nóminas', '.xlsx,.xls')],
+      ['Facturas emitidas', () => zona('emitidas', 'Suelta aquí el libro de IVA repercutido', '(Excel del ERP) → Emitidas', '.xlsx,.xls,.csv')],
+      ['Facturas recibidas', () => zona('recibidas', 'Suelta aquí el libro de IVA soportado', '(Excel del ERP) → Recibidas', '.xlsx,.xls,.csv')],
+      ['SII emitidas', () => zona('sii', 'Suelta aquí la descarga del SII de emitidas', '(Excel o CSV) → SII. La app distingue emitidas y recibidas por el contenido del archivo', '.xlsx,.xls,.csv')],
+      ['SII recibidas', () => zona('sii', 'Suelta aquí la descarga del SII de recibidas', '(Excel o CSV) → SII. La app distingue emitidas y recibidas por el contenido del archivo', '.xlsx,.xls,.csv', false)],
+      ['Cuentas contables', () => zona('extractos', 'Suelta aquí el extracto contable', '(Excel, o PDF «Lista de transacciones contables») → pestañas de cada cuenta. Del PDF se deducen los prefijos de asiento', '.xlsx,.xls,.csv,.pdf')],
+      ['Impuestos presentados', () => zona('prspdf', 'Suelta aquí los PDF de los impuestos presentados', '→ Impuestos Presentados', '.pdf')],
+      ['FUNDAE', () => zona('fundae', 'Suelta aquí los listados de FUNDAE', '(costes y grupos, PDF o Excel) → FUNDAE', '.pdf,.xlsx,.xls,.csv')],
+      ['DUA (H1)', () => zona('dua', 'Suelta aquí los PDF de los DUA', '→ DUA-H1, por mes de levante', '.pdf')],
+    ];
+    const docs = ed ? `<section class="prs-card"><div class="prs-h">Documentación en Excel o PDF</div>
+      <p class="hint">Cada sitio manda el archivo a la pestaña que le corresponde, para la empresa y el ejercicio elegidos (si el archivo es de otra empresa, va a la suya y se avisa).</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.7rem">${ZONAS.map(([t, f]) => `<div class="prs-card" style="margin:0"><div class="prs-h">${esc(t)}</div>${f()}</div>`).join('')}</div></section>` : '';
+    return `<div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap"><div style="flex:1 1 520px;min-width:0">${form}${imagen}${lotes}${lista}</div><div style="flex:1 1 420px;min-width:0">${docs}</div></div>`;
   }
 
   // ---- Archivos Documentación: todo lo que se ha dejado en la empresa y cuántas líneas se han leído de cada archivo ----
@@ -5338,7 +5379,7 @@ export function crearModulos(c) {
       <p class="hint">Márgenes: ±${MARGEN_RET.toFixed(2).replace('.', ',')} € en retenciones y ±${MARGEN_IVA.toFixed(2).replace('.', ',')} € en IVA, SII y cuentas. «Sin datos» = falta el archivo o la declaración en Impuestos Presentados.</p>`;
   }
 
-  tabs.asi = ['Entrada Información', 'Apuntes en cuentas contables', vistaAsi];
+  tabs.asi = ['Entrada Información', 'Apuntes en cuentas contables y documentación en Excel o PDF', vistaAsi];
   tabs.rev = ['Archivos Documentación', 'Columnas y líneas', vistaRev];
   tabs.chk = ['Checking Información', 'Declarado vs contabilizado', vistaChk];
   const acc3 = {

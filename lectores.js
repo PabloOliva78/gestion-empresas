@@ -334,13 +334,76 @@ export function leerMayor(filas) {
     let debe = g('debe') === null || g('debe') === '' ? null : numero(g('debe')), haber = g('haber') === null || g('haber') === '' ? null : numero(g('haber'));
     if (debe === null && haber === null && M.importe >= 0 && g('importe') !== null && g('importe') !== '') { const imp = numero(g('importe')); debe = imp > 0 ? imp : 0; haber = imp < 0 ? -imp : 0; }
     if (!fecha || !cuenta || ((debe ?? 0) === 0 && (haber ?? 0) === 0)) continue;
-    const l = { fecha, cuenta, digitos: cuenta.replace(/\D/g, ''), debe: r2n(debe ?? 0), haber: r2n(haber ?? 0), asiento: String(g('asiento') ?? '').trim(), desc: String(g('desc') ?? '').trim() };
+    const l = { fecha, cuenta, digitos: cuenta.split('-')[0].replace(/\D/g, ''), debe: r2n(debe ?? 0), haber: r2n(haber ?? 0), asiento: String(g('asiento') ?? '').trim(), desc: String(g('desc') ?? '').trim() };
     const k = [l.cuenta, l.fecha, l.asiento, l.debe, l.haber, l.desc].join('|');
     l.n = (vistos.get(k) ?? 0) + 1; // movimientos idénticos dentro del mismo archivo cuentan todos; el mismo archivo cargado dos veces no duplica
     vistos.set(k, l.n);
     out.push(l);
   }
   return out.length ? out : null;
+}
+
+// ---------- Extracto contable en PDF («Lista de transacciones contables» de D365) ----------
+// pags: por página, los textos con su posición [{x, y, str}]. Columnas (x): fecha <91, diario 91, asiento 148, tipo 210, cuenta 280, descripción 395-480, importes tras «EUR»
+// (transacción deb/cre, contabilidad deb/cre, notificación deb/cre: se toma el de contabilidad). La cuenta de gastos «640000001-ES012HER-» pierde el centro de coste, que pasa a la descripción.
+export function leerMayorPdf(pags) {
+  const out = [], vistos = new Map();
+  const num = (s) => { const v = numero(s); return Number.isFinite(v) ? v : 0; };
+  for (const items of pags) {
+    const its = items.filter((i) => i.str && i.str.trim());
+    const filas = new Map();
+    its.forEach((i) => { const y = Math.round(i.y); const k = [...filas.keys()].find((q) => Math.abs(q - y) <= 2) ?? y; (filas.get(k) ?? filas.set(k, []).get(k)).push(i); });
+    let cur = null;
+    for (const y of [...filas.keys()].sort((a, b) => b - a)) {
+      const r = filas.get(y).sort((a, b) => a.x - b.x), fecha = r.find((i) => i.x < 85 && /^\d{2}\/\d{2}\/\d{4}$/.test(i.str.trim()));
+      if (fecha) {
+        const en = (a, b) => r.filter((i) => i.x >= a && i.x < b).map((i) => i.str.trim()).join(' ');
+        const eur = r.findIndex((i) => i.str.trim() === 'EUR'), imp = eur >= 0 ? r.slice(eur + 1).map((i) => num(i.str)) : [];
+        const bruta = en(275, 392), [cta, ...cen] = bruta.split('-').map((s) => s.trim()).filter(Boolean);
+        cur = { fecha: fechaIso(fecha.str.trim()), asiento: en(140, 205), cuenta: cta || '', centro: cen[0] || '', desc: [en(392, 478)], debe: imp[2] ?? 0, haber: imp[3] ?? 0 };
+        out.push(cur);
+      } else if (cur && !r.some((i) => i.x < 85)) cur.desc.push(r.filter((i) => i.x >= 392 && i.x < 478).map((i) => i.str.trim()).join(' '));
+      else cur = null; // totales, saldo, cabeceras de página y de cuenta
+    }
+  }
+  const res = [];
+  for (const l of out) {
+    const desc = l.desc.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (!l.fecha || !/^\d{6,}$/.test(l.cuenta) || (!l.debe && !l.haber)) continue;
+    const m = { fecha: l.fecha, cuenta: l.cuenta, digitos: l.cuenta, debe: r2n(l.debe), haber: r2n(l.haber), asiento: l.asiento, desc: l.centro ? `${desc} [${l.centro}]`.trim() : desc, centro: l.centro, tipoReg: '' };
+    const k = [m.cuenta, m.fecha, m.asiento, m.debe, m.haber, m.desc].join('|');
+    m.n = (vistos.get(k) ?? 0) + 1; vistos.set(k, m.n);
+    res.push(m);
+  }
+  return res.length ? res : null;
+}
+// Nombre de empresa de la cabecera del PDF (para saber a qué empresa pertenece): lo decide quien llama con sus patrones.
+// Prefijo que antes se ponía a mano en el asiento del Excel, deducido ahora del lado (debe/haber), de la descripción y de la cuenta.
+// Los asientos que ya empiezan por la sigla de la empresa (liquidaciones, p. ej. HER-4660) se dejan como están.
+export function prefijoAsiento(l, sigla) {
+  const a = String(l.asiento || '').trim(), s = String(sigla || '').toUpperCase(), d = String(l.digitos || '');
+  if (!a || (s && a.toUpperCase().startsWith(s)) || /^[A-Z]{1,4}-/i.test(a)) return a;
+  const t = sinTildes(l.desc || '').toUpperCase(), D = l.debe > 0 && !(l.haber > 0), H = l.haber > 0 && !(l.debe > 0);
+  const cod = `${d.slice(0, 4)}.${(d.slice(4).replace(/^0+/, '') || '0').padStart(2, '0')}`;
+  const nom = /NOMINA/.test(t), mod = (n) => new RegExp(`MOD\\.?\\s*${n}\\b`).test(t), pago = /\bPAGO\b/.test(t);
+  let p = '';
+  switch (cod) {
+    case '4650.01': p = D && nom ? 'PN' : H && nom ? 'N' : ''; break;
+    case '4700.01': p = /RECLASIF/.test(t) ? 'RS' : /DEVOLUC/.test(t) ? 'DEV' : ''; break;
+    case '4709.01': p = /DEVOLUC/.test(t) ? 'DEV' : ''; break;
+    case '4750.01': p = /RECLASIF/.test(t) ? 'RS' : D && pago && mod(303) ? 'PM' : ''; break;
+    case '4750.10': p = H && /\bDUA/.test(t) ? 'DUA' : ''; break;
+    case '4751.01': p = D && mod(111) ? (/ACT|ECONOM|PROF/.test(t) && !/TRABAJO/.test(t) ? 'PP' : 'PN') : H && nom ? 'N' : ''; break;
+    case '4751.02': p = D && pago && mod(115) ? 'PA' : ''; break;
+    case '4751.04': p = D && pago && mod(123) ? 'PI' : ''; break;
+    case '4730.05': p = D && pago && mod(202) ? 'PM' : ''; break;
+    case '4752.01': p = D && pago && mod(200) ? 'PM' : ''; break;
+    case '4760.01': p = D && /SEGURIDAD/.test(t) ? 'PS' : H && nom ? 'N' : ''; break;
+    case '6400.01': p = nom ? 'N' : ''; break;
+    case '6420.01': p = nom ? 'SS' : ''; break;
+    default: p = '';
+  }
+  return p ? `${p}-${a}` : a;
 }
 
 // ---------- FUNDAE: costes comunicados (GRUPO aaff/grupo) y grupos formativos (aaff, grupo, fechas) ----------
