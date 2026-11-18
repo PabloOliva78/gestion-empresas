@@ -339,7 +339,29 @@ function aplicarTipoEjercicio() {
     e.tipo = t === 'GE' || t === 'PYME' ? t : e.tipoBase;
   });
 }
+// Escribir sin que nada te lo quite: si la pantalla se redibuja (p. ej. al terminar de guardar otro campo) mientras estás escribiendo, el campo
+// vuelve con lo escrito, el cursor donde estaba y sin seleccionarse entero (que era lo que hacía que lo siguiente que tecleabas lo borrara).
+const CAMPO_TXT = 'input:not([type=file]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea';
+const clavesCampo = (el) => [...el.attributes].filter((a) => a.name.startsWith('data-')).map((a) => [a.name, a.value]);
+const mismosCampos = (k) => [...root.querySelectorAll(k.tag)].filter((x) => x.id === k.id && x.name === k.name && k.attrs.every(([nm, v]) => x.getAttribute(nm) === v));
+function guardarCampoActivo() {
+  const ae = document.activeElement;
+  if (!ae || !root.contains(ae) || !ae.matches?.(CAMPO_TXT) || ae.readOnly || ae.disabled) return null;
+  const k = { tag: ae.tagName.toLowerCase(), id: ae.id, name: ae.name, attrs: clavesCampo(ae) };
+  let ini = null, fin = null; try { ini = ae.selectionStart; fin = ae.selectionEnd; } catch { /* tipo sin selección */ }
+  return { ...k, idx: mismosCampos(k).indexOf(ae), valor: ae.value, ini, fin };
+}
+function devolverCampoActivo(g) {
+  if (!g || g.idx < 0) return false;
+  const el = mismosCampos(g)[g.idx];
+  if (!el || el.readOnly || el.disabled) return false;
+  if (el.value !== g.valor) el.value = g.valor;
+  el.focus({ preventScroll: true });
+  try { if (g.ini !== null) el.setSelectionRange(g.ini, g.fin); } catch { /* tipo sin selección */ }
+  return true;
+}
 function render() {
+  const campoActivo = guardarCampoActivo();
   aplicarTipoEjercicio();
   if (S.tab !== 'ini') M.limpiarAvisoD365?.(); // el aviso de lo recogido de D365 se quita al salir de Inicio
   if (S.tab !== 'leyfac') M.limpiarRevFactura?.(); // la factura de «Revisión factura AEAT» se borra en cuanto se sale de la pestaña
@@ -401,7 +423,7 @@ function render() {
   alinearPanel();
   ajustarInicio();
   ajustarZoom();
-  restaurarFoco();
+  if (!devolverCampoActivo(campoActivo)) restaurarFoco();
 }
 
 // Ajustar a pantalla: mide la pestaña a tamaño 100 % y busca el zoom con el que cabe (en ancho, o en ancho y alto). Es un solo zoom para toda la pestaña.
