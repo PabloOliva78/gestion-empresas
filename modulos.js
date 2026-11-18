@@ -3432,6 +3432,21 @@ export function crearModulos(c) {
       mv = (await mayorPdfLeer(f)).mv;
       const sigla = S.empresas.find((x) => x.id === empresaId)?.siglas ?? '';
       if (mv) mv = mv.map((l) => ({ ...l, asiento: prefijoAsiento(l, sigla) })); // el prefijo (PN, N, PM, PS…) lo deduce la app del debe/haber y la descripción
+      if (mv) { // lo que la cuenta ya tiene (de un Excel con prefijos puestos a mano, de otro PDF o apuntado a mano) no se vuelve a meter: se compara cuenta, fecha, nº de asiento SIN prefijo e importes
+        const base = (a) => String(a ?? '').trim().toUpperCase().replace(/^[A-Z]{1,4}-/, ''), cta = (c) => String(c ?? '').split('-')[0].replace(/\D/g, '');
+        const clave = (l) => [cta(l.cuenta), String(l.fecha).slice(0, 10), base(l.asiento), (+l.debe || 0).toFixed(2), (+l.haber || 0).toFixed(2)].join('|');
+        const ya = lote ? (await entradaLote('may-mov', empresaId)).filas
+          : ((await db.from('registros').select('datos').eq('empresa_id', empresaId).eq('tipo', 'may-mov').order('id').limit(1).maybeSingle()).data?.datos?.filas ?? []);
+        const manuales = S.registros.find((r) => r.tipo === 'ctacfg' && r.empresa_id === empresaId)?.datos?.lineas ?? [];
+        const cuenta = new Map();
+        [...ya, ...manuales].forEach((l) => cuenta.set(clave(l), (cuenta.get(clave(l)) || 0) + 1));
+        const uso = new Map(), nuevos = [];
+        mv.forEach((l) => { const k = clave(l), u = (uso.get(k) || 0) + 1; uso.set(k, u); if (u > (cuenta.get(k) || 0)) nuevos.push(l); }); // si el PDF trae dos movimientos iguales y la cuenta solo uno, entra el que falta
+        const repes = mv.length - nuevos.length;
+        if (!nuevos.length) return `↩ ${f.name}: todos sus ${mv.length} movimientos ya estaban en las cuentas (mismo asiento e importe), no se ha añadido nada`;
+        const n = await guardarGrande('may-mov', empresaId, nuevos.map((l) => ({ ...l, src: f.name })), (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
+        return `✔ ${f.name}: extracto contable PDF · ${nuevos.length} movimientos nuevos${repes ? `, ${repes} ya estaban (no se duplican)` : ''} (${n} en total)`;
+      }
     } else mv = leerMayor(await filasExcel(f));
     if (!mv) return `❔ ${f.name}: guardado, pero no reconozco el extracto (hacen falta fecha, cuenta, debe y haber)`;
     const n = await guardarGrande('may-mov', empresaId, mv.map((l) => ({ ...l, src: f.name })), (l) => `${l.cuenta}|${l.fecha}|${l.asiento}|${l.debe}|${l.haber}|${l.desc}#${l.n}`);
