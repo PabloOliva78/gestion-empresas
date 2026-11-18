@@ -1540,3 +1540,8 @@ body.letra-ayfs td.n-der, body.letra-ayfs td.n-cen, body.letra-ayfs td.num, body
 
 /* Entrada Información: cada mitad (apuntes a mano / documentación) en su propio globo */
 .asi-globo { background: #fbf6ea; border: 2px solid #0071e3; border-radius: 18px; padding: 14px 20px; }
+
+/* Comprobado en las cuentas: dos casillas (verde = comprobada, roja = excepción); la fila en excepción va en rojo suave y con la letra de siempre */
+.ctas .tnom input.ck-si { accent-color: #2e9e45; width: 17px; height: 17px; cursor: pointer; }
+.ctas .tnom input.ck-no { accent-color: #d9534f; width: 17px; height: 17px; cursor: pointer; }
+.ctas .tnom tr.cf-ko td { background: #fdeceb !important; color: inherit; }

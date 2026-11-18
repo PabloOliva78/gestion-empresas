@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=468';
+import { crearModulos } from './modulos.js?v=470';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -1053,7 +1053,7 @@ root.addEventListener('change', (ev) => {
   if (t.dataset.fc) return void M.setFc(t.dataset.fc, t.value);
   if (t.dataset.prs) return void M.guardarPrs(t.dataset.prs, t.value);
   if (t.dataset.nom) return void M.guardarNom(t.dataset.nom, t.value);
-  if (t.dataset.cta) return void M.cta(t.dataset.cta, t.dataset.id, t.type === 'checkbox' ? (t.checked ? '1' : '0') : t.value);
+  if (t.dataset.cta) return void M.cta(t.dataset.cta, t.dataset.id, t.type === 'checkbox' ? (t.dataset.v ? (t.checked ? t.dataset.v : '') : (t.checked ? '1' : '0')) : t.value);
   if (t.dataset.siifil) return void M.siiFiltro(t.dataset.siifil, t.value);
   if (t.dataset.siitodos) return void M.siiTodosSet(t.dataset.siitodos, t.checked);
   if (t.dataset.fce) return void M.editarFc(t.dataset.fce, t.value);

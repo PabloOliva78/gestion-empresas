@@ -2827,13 +2827,27 @@ export function crearModulos(c) {
   // configuración por empresa: cuenta elegida, tipo de cada asiento, comprobados, saldo del balance, importes a mano y ámbito
   const ctaCfgReg = () => S.registros.find((r) => r.tipo === 'ctacfg' && r.empresa_id === S.sel);
   const ctaCfg = () => ctaCfgReg()?.datos ?? {};
-  const guardarCta = (mut) => enSerie(() => guardarCtaUno(mut));
-  async function guardarCtaUno(mut) {
-    const reg = ctaCfgReg(), datos = JSON.parse(JSON.stringify(reg?.datos ?? {}));
-    mut(datos);
-    const err = await guardarRegistro(reg, { ...(reg ? {} : { id: crypto.randomUUID() }), empresa_id: S.sel, tipo: 'ctacfg', ejercicio: null, datos });
-    if (err) return void alert(err);
-    await cargar(); render();
+  // El cambio se ve AL MOMENTO (se aplica en memoria y se redibuja) y se guarda después, en segundo plano y de uno en uno; si hay varios seguidos
+  // (p. ej. marcar «Sí» en varias líneas), el último guardado lleva todos. Ya no se recarga todo tras cada cambio.
+  const ctaSucio = new Set();
+  function guardarCta(mut) {
+    const emp = S.sel;
+    let reg = ctaCfgReg();
+    if (!reg) { reg = { id: crypto.randomUUID(), empresa_id: emp, tipo: 'ctacfg', ejercicio: null, datos: {}, _nuevo: true }; S.registros.push(reg); }
+    const datos = JSON.parse(JSON.stringify(reg.datos ?? {}));
+    mut(datos); reg.datos = datos;
+    ctaSucio.add(emp);
+    render();
+    return enSerie(async () => {
+      if (!ctaSucio.has(emp)) return; // un guardado posterior ya llevó todos los cambios
+      ctaSucio.delete(emp);
+      const r = S.registros.find((x) => x.tipo === 'ctacfg' && x.empresa_id === emp);
+      if (!r) return;
+      const fila = { empresa_id: emp, tipo: 'ctacfg', ejercicio: null, datos: r.datos };
+      const err = await guardarRegistro(r._nuevo ? null : r, r._nuevo ? { id: r.id, ...fila } : fila);
+      if (err) { ctaSucio.add(emp); alert(`No se ha podido guardar el último cambio: ${err}`); return; }
+      if (r._nuevo) { r._nuevo = false; await cargar(); render(); } // la primera vez se resincroniza con la base de datos
+    });
   }
   const setIn = (o, ...ruta) => { const v = ruta.pop(), k = ruta.pop(); let c = o; ruta.forEach((r) => { c = c[r] ??= {}; }); if (v === '' || v == null) delete c[k]; else c[k] = v; };
   function accionCta(tipo, id, valor) {
@@ -2984,7 +2998,7 @@ export function crearModulos(c) {
     const cel = (x, campo, v, cls = '') => (ed ? `<td class="in ${cls}"><input class="${(x.l.editado ?? []).includes(campo) ? 'ed' : ''}" data-cta="ov" data-id="${esc(x.l.firma)}§${campo}" value="${esc(v)}"></td>` : `<td class="${cls}">${esc(v)}</td>`);
     const filas = vis.map((x) => `<tr class="${x.comp === 'No' ? 'cf-ko' : x.comp === 'Sí' ? 'cf-ok' : ''}${x.l.manual ? ' manual' : ''}">${cel(x, 'fecha', fdate(x.l.ms), 'c')}${cel(x, 'asiento', x.l.asiento, 'tl')}${cel(x, 'desc', x.l.desc, 'tl cto')}
       ${cel(x, 'debe', x.l.debe ? fnum(x.l.debe) : '', 'num')}${cel(x, 'haber', x.l.haber ? fnum(x.l.haber) : '', 'num')}<td class="num" style="color:${x.saldo < 0 ? '#a32b2b' : 'inherit'}">${fnum(x.saldo)}</td>
-      <td class="c">${ed ? `<select data-cta="comp" data-id="${esc(x.l.firma)}"><option value=""></option><option${x.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${x.comp === 'No' ? ' selected' : ''}>No</option></select>` : esc(x.comp)}</td>
+      <td class="c">${ed ? `<input type="checkbox" class="ck-si" data-cta="comp" data-v="Sí" data-id="${esc(x.l.firma)}"${x.comp === 'Sí' ? ' checked' : ''} title="Comprobada (fila en verde)"> <input type="checkbox" class="ck-no" data-cta="comp" data-v="No" data-id="${esc(x.l.firma)}"${x.comp === 'No' ? ' checked' : ''} title="Excepción (fila en rojo suave)">` : esc(x.comp)}</td>
       <td class="c">${ed ? `<button class="small" data-act="m-ctaquit" data-id="${esc(x.l.firma)}" title="Quitar este apunte de la cuenta${x.l.manual ? ' (línea a mano)' : ''}">✖</button>` : ''}</td></tr>`).join('');
     const nv = ctaNueva ? (() => { const ni = (c, ph, cls = '') => `<td class="in ${cls}"><input data-cta="nv" data-id="${c}" value="${esc(ctaNueva[c] ?? '')}" placeholder="${ph}"></td>`;
       return `<tr class="nueva">${ni('fecha', 'dd/mm/aaaa', 'c')}${ni('asiento', 'asiento', 'tl')}<td class="in tl cto"><input data-cta="nv" data-id="desc" value="${esc(ctaNueva.desc ?? '')}" placeholder="concepto"></td>${ni('debe', 'debe', 'num')}${ni('haber', 'haber', 'num')}${ni('cuenta', 'cuenta', 'tl')}
@@ -3035,7 +3049,7 @@ export function crearModulos(c) {
         <div class="fc-cab" style="margin:0 0 .5rem"><label>Comprobado <select data-cta="filtro" data-id="x"><option value="todos">Todas</option><option value="pend"${ctaFil.comp === 'pend' ? ' selected' : ''}>Pendientes</option><option${ctaFil.comp === 'Sí' ? ' selected' : ''}>Sí</option><option${ctaFil.comp === 'No' ? ' selected' : ''}>No</option></select></label>
         <input type="search" data-cta="buscar" data-id="x" placeholder="Buscar concepto, asiento, fecha, importe, tipo…" value="${esc(ctaFil.q)}" size="34">
         ${ed ? `<button class="small" data-act="m-ctavis">Marcar visibles como comprobadas</button> <button class="small" data-act="m-ctanv">＋ Añadir línea</button>` : ''}</div>
-        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th title="Comprobado">C</th><th title="Eliminar apunte">E</th></tr></thead>
+        <div class="wrap"><table class="tprs tnom mov"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo acumulado</th><th title="Comprobada (casilla verde) o excepción (casilla roja)">C</th><th title="Eliminar apunte">E</th></tr></thead>
         <tbody>${filas || '<tr><td colspan="8" class="vacio">Sin movimientos</td></tr>'}${nv}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
         <div class="res-wrap">${resumen}</div></div></section>
