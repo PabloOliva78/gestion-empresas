@@ -1545,3 +1545,17 @@ body.letra-ayfs td.n-der, body.letra-ayfs td.n-cen, body.letra-ayfs td.num, body
 .ctas .tnom input.ck-si { accent-color: #2e9e45; width: 17px; height: 17px; cursor: pointer; }
 .ctas .tnom input.ck-no { accent-color: #d9534f; width: 17px; height: 17px; cursor: pointer; }
 .ctas .tnom tr.cf-ko td { background: #fdeceb !important; color: inherit; }
+
+/* Resúmenes de las cuentas: las columnas de diferencias parciales y las filas de TOTAL van en amarillo con un globo de borde fino azul (esquinas redondeadas);
+   la columna del saldo de la cuenta va en verde con borde verde. La cabecera conserva su azul y la línea de abajo de la última fila va continua. */
+.tprs.res { border-collapse: separate; border-spacing: 0; }
+.tprs.res th.col-dif { border: 1px solid #0071e3 !important; border-bottom: 0 !important; border-radius: 12px 12px 0 0; }
+.tprs.res td.col-dif { background: #fff9c4 !important; border-left: 1px solid #0071e3 !important; border-right: 1px solid #0071e3 !important; }
+.tprs.res th.col-sal { border: 1px solid #4f9d5f !important; border-bottom: 0 !important; border-radius: 12px 12px 0 0; }
+.tprs.res td.col-sal { background: #d6f2d6 !important; border-left: 1px solid #4f9d5f !important; border-right: 1px solid #4f9d5f !important; }
+.tprs.res tr.ttot td { background: #fff9c4 !important; border-top: 1px solid #0071e3 !important; border-bottom: 1px solid #0071e3 !important; }
+.tprs.res tr.ttot td.col-sal { background: #d6f2d6 !important; }
+.tprs.res tr.ttot td:first-child { border-left: 1px solid #0071e3 !important; border-radius: 12px 0 0 12px; }
+.tprs.res tr.ttot td:last-child { border-right: 1px solid #0071e3 !important; border-radius: 0 12px 12px 0; }
+.tprs.res tbody tr:last-child td.col-dif, .tprs.res tbody tr:last-child td.col-sal { border-bottom: 1px solid #0071e3 !important; }
+.tprs.res td.col-dif input, .tprs.res td.col-sal input { background: transparent !important; }

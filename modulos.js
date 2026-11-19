@@ -3020,6 +3020,9 @@ export function crearModulos(c) {
           `<span class="xc-est ${c.estado === 'CUADRA' ? 'ok' : 'ko'}">${c.estado === 'CUADRA' ? 'Cuadra' : 'Revisar diferencia'}</span>`)}</div></div>`;
     // resumen por periodo
     const cols = C.cols, xc = (cc) => (cc[0] === 'f' || cc[1] === 'DA' ? ' xdif' : '');
+    // columnas con color propio en todos los resúmenes: diferencias parciales (crema) y saldo de la cuenta (verde), con borde; «Total diferencias» y «Acumulado» quedan como estaban
+    const colCls = (cc) => (/^Diferencia \(/.test(cc[2]) ? ' col-dif' : cc[0] === 'a' && /^(Total )?Saldo (cuenta|acumulado)$/i.test(cc[2]) ? ' col-sal' : '');
+    const conCol = (html, cc) => { const c = colCls(cc).trim(); return c ? html.replace('<td class="', `<td class="${c} `) : html; };
     const celda = (cc, fila) => {
       const [t, cn] = cc, v = fila.v[cn], f = fila.fuente[cn];
       if (t === 'x' && f === 'nodecl') return '<td class="num vacio" title="Sin declaración en este mes (se presenta por trimestres)">-</td>';
@@ -3035,12 +3038,12 @@ export function crearModulos(c) {
     const anos = [...new Set(D.filas.map((x) => x.y))];
     const cuerpo = anos.map((y) => {
       const rs = D.filas.filter((x) => x.y === y);
-      const tr = rs.map((x) => `<tr><td class="pp">${esc(x.lbl)}</td>${cols.map((cc) => celda(cc, x)).join('')}</tr>`).join('');
+      const tr = rs.map((x) => `<tr><td class="pp">${esc(x.lbl)}</td>${cols.map((cc) => conCol(celda(cc, x), cc)).join('')}</tr>`).join('');
       if (C.per === 'ano') return tr;
-      return `${tr}<tr class="ttot"><td class="pp">TOTAL ${y}</td>${cols.map(([tt, cn]) => `<td class="num">${tt === 'c' || tt === 'x' ? z(rr(rs.reduce((s, f) => s + (f.v[cn] || 0), 0))) : ''}</td>`).join('')}</tr>`;
+      return `${tr}<tr class="ttot"><td class="pp">TOTAL ${y}</td>${cols.map((cc) => { const [tt, cn] = cc; return `<td class="num${colCls(cc)}">${tt === 'c' || tt === 'x' ? z(rr(rs.reduce((s, f) => s + (f.v[cn] || 0), 0))) : ''}</td>`; }).join('')}</tr>`;
     }).join('');
     const resumen = `<div class="css-4760-t">${esc(lblS(D.T === 'tri' ? C.tit.replace('MENSUAL', 'TRIMESTRAL') : C.tit))}</div>
-      <div class="wrap"><table class="tprs tnom res" style="--ncol:${cols.length}"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${xc(cc).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
+      <div class="wrap"><table class="tprs tnom res" style="--ncol:${cols.length}"><thead><tr><th class="pp">${C.per === 'ano' ? 'Ejercicio' : 'Periodo'}</th>${cols.map((cc) => `<th class="${(xc(cc) + colCls(cc)).trim()}">${esc(lblS(cc[2]))}</th>`).join('')}</tr></thead>
       <tbody>${cuerpo || `<tr><td colspan="${cols.length + 1}" class="vacio">Sin movimientos</td></tr>`}</tbody></table></div>`;
     const av = D.avisos.map((a) => `<p>⚠ ${esc(a)}</p>`).join('');
     return `${dz('extractos', 'Suelta aquí el extracto contable (mayor)', '(Excel o PDF «Lista de transacciones contables» de varias cuentas) o pulsa para elegirlo', '.xlsx,.xls,.csv,.pdf')}
