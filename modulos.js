@@ -22,7 +22,7 @@ import { crearTransProv } from './transprov.js?v=9';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { abrirD365 } from './d365.js?v=6';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=19';
+import { crearConciliaciones } from './conciliaciones.js?v=20';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
 
