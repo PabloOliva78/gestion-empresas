@@ -497,7 +497,9 @@ export function espejosNS(lineas) {
   const g = new Map(), out = new Set();
   lineas.forEach((l) => { const k = `${normFac(l.factura)}|${normNif(l.nif)}`; (g.get(k) ?? g.set(k, []).get(k)).push(l); });
   g.forEach((ls) => {
-    const con = ls.filter((l) => l.codigo !== 'S.NAC.NS' && Math.abs(+l.cuota || 0) > 0.005);
+    // la línea «espejo» de una no sujeta es otra línea CON IVA de la misma factura y base; las retenciones (I.INT, I.ALQ, I.PR…: no son IVA y no cuentan en la conciliación) no valen como pareja:
+    // si lo fueran, la no sujeta se descartaba y esa base desaparecía de la contabilidad aunque la retención no cuente
+    const con = ls.filter((l) => l.codigo !== 'S.NAC.NS' && !/^(R\.)?I\./.test(String(l.codigo || '')) && Math.abs(+l.cuota || 0) > 0.005);
     ls.filter((l) => l.codigo === 'S.NAC.NS').forEach((n) => { if (con.some((c) => Math.abs((+c.base || 0) - (+n.base || 0)) < 0.01)) out.add(n); });
   });
   return out;
