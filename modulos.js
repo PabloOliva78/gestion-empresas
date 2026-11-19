@@ -3021,19 +3021,20 @@ export function crearModulos(c) {
     // resumen por periodo
     const cols = C.cols, xc = (cc) => (cc[0] === 'f' || cc[1] === 'DA' ? ' xdif' : '');
     // columnas con color propio en todos los resúmenes: diferencias parciales (crema) y saldo de la cuenta (verde), con borde; «Total diferencias» y «Acumulado» quedan como estaban
+    const fz = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '' : fnum(v)); // en los campos editables un cero se ve como el guion «-» (placeholder)
     const colCls = (cc) => (/^Diferencia \(/.test(cc[2]) ? ' col-dif' : cc[0] === 'a' && /^(Total )?Saldo (cuenta|acumulado)$/i.test(cc[2]) ? ' col-sal' : '');
     const conCol = (html, cc) => { const c = colCls(cc).trim(); return c ? html.replace('<td class="', `<td class="${c} `) : html; };
     const celda = (cc, fila) => {
       const [t, cn] = cc, v = fila.v[cn], f = fila.fuente[cn];
       if (t === 'x' && f === 'nodecl') return '<td class="num vacio" title="Sin declaración en este mes (se presenta por trimestres)">-</td>';
       if (t === 'x' && (f === 'sinpres' || f === 'vacio')) return ed ? `<td class="in"><input data-cta="manual" data-id="${k}§${fila.key}" value="" placeholder="sin presentar" title="No hay importe de este periodo en Impuestos Presentados: escríbelo a mano o rellénalo allí"></td>` : '<td class="num vacio">sin presentar</td>';
-      if (t === 'x' && f === 'nom') return ed ? `<td class="in"><input class="pdfok" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${fnum(v)}" title="Total del mes en la pestaña Nóminas: escribe otro importe para rectificarlo (vacío = vuelve al de Nóminas)"></td>` : `<td class="num pdfok" title="Total del mes en la pestaña Nóminas">${fnum(v)}</td>`;
-      if (t === 'x' && f === 'pres') return ed ? `<td class="in"><input class="pdfok" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${fnum(v)}" title="De Impuestos Presentados: escribe otro importe para rectificarlo (vacío = vuelve al presentado)"></td>` : `<td class="num pdfok" title="De Impuestos Presentados">${fnum(v)}</td>`;
-      if (t === 'x' && f === 'man') return `<td class="in"><input data-cta="manual" data-id="${k}§${fila.key}" value="${fnum(v)}"></td>`;
+      if (t === 'x' && f === 'nom') return ed ? `<td class="in"><input class="pdfok" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${fz(v)}" placeholder="-" title="Total del mes en la pestaña Nóminas: escribe otro importe para rectificarlo (vacío = vuelve al de Nóminas)"></td>` : `<td class="num pdfok" title="Total del mes en la pestaña Nóminas">${z(v)}</td>`;
+      if (t === 'x' && f === 'pres') return ed ? `<td class="in"><input class="pdfok" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${fz(v)}" placeholder="-" title="De Impuestos Presentados: escribe otro importe para rectificarlo (vacío = vuelve al presentado)"></td>` : `<td class="num pdfok" title="De Impuestos Presentados">${z(v)}</td>`;
+      if (t === 'x' && f === 'man') return `<td class="in"><input data-cta="manual" data-id="${k}§${fila.key}" value="${fz(v)}" placeholder="-"></td>`;
       // cualquier importe del resumen se puede escribir a mano (queda en azul); vacío = vuelve al calculado
-      if (ed && !(t === 'x' && v === null)) return `<td class="in"><input class="${f === 'ov' ? 'ed' : ''}" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${v === null || v === undefined ? '' : fnum(v)}" placeholder="-"${f === 'ov' ? ' title="Escrito a mano: bórralo para volver al calculado"' : ''}></td>`;
+      if (ed && !(t === 'x' && v === null)) return `<td class="in"><input class="${f === 'ov' ? 'ed' : ''}" data-cta="res" data-id="${k}§${fila.key}§${cn}" value="${fz(v)}" placeholder="-"${f === 'ov' ? ' title="Escrito a mano: bórralo para volver al calculado"' : ''}></td>`;
       const dif = t === 'f' && cc[4];
-      return `<td class="num${dif && v !== null && Math.abs(v) > 0.01 ? ' dif-ko' : ''}${xc(cc)}">${v === null || v === undefined ? '-' : (t === 'f' || t === 'a' ? fnum(v) : z(v))}</td>`;
+      return `<td class="num${dif && v !== null && Math.abs(v) > 0.01 ? ' dif-ko' : ''}${xc(cc)}">${z(v)}</td>`;
     };
     const anos = [...new Set(D.filas.map((x) => x.y))];
     const cuerpo = anos.map((y) => {
