@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Herogra · abrir factura en D365",
+  "version": "1.0",
+  "description": "Abre en una pestaña de tu Chrome la vista previa del original de una factura emitida de cliente en D365, cuando lo pide la aplicación de impuestos (botón 🔎 D365 de Emitidas).",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvGkCJtT8rxSTHSK+Rk22kyCPI78ZWd1MuvUJn0RGjoRcLCX06WIAr8K6ASVC6XPyBpNingJKHR/Rv4y2Tg76L40b+xnLUI9D9rlm3qePuVYJUWm5UXmcub1UgFQgSHlaKNTkZWjrNd8iHyElXRAXsPlcgS9VdtRhXLmYdCpID6PDIHK6PZlwuivl1qIRInvFVwj5y0ECVclVcdO17pai1KkiffcKBM29ugn6VM5W1EEBv18epFA+O4EPjBMsXluQuacvpKR/FbOFYkyBPQje7Z7YQvObZZEjnqZNQcDbj7K2G/M0SaeuZdVCPE88Dpw9uMZ9kMvjPmKk6ktJYepQFwIDAQAB",
+  "permissions": [
+    "debugger",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://herogra.operations.dynamics.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://pablooliva78.github.io/*"
+    ]
+  }
+}

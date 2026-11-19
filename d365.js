@@ -5,6 +5,7 @@
 //  2) Alternativa (localStorage 'd365-modo' = 'tampermonkey'): abre la lista de D365 con #cuenta=… y el script de Tampermonkey
 //     (scripts/d365-filtro.user.js) escribe la cuenta en el filtro; sin él la cuenta queda copiada para pegarla con Ctrl+V.
 const ERP = 'https://herogra.operations.dynamics.com/';
+const EXT_ID = 'fndcidhkaoadpaceikbelbnbobhdnnaj'; // extensión «Herogra · abrir factura en D365» (scripts/extension-d365): abre la factura en una pestaña de tu Chrome
 const LOCAL = 'http://127.0.0.1:47831'; // servicio local de Windows (servidor-d365.js): evita depender del permiso de Chrome para abrir el enlace d365://
 export function abrirD365({ tipo = 'prov', cuenta, siglas }) {
   const c = String(cuenta ?? '').trim(); if (!c) return;
@@ -18,8 +19,10 @@ export function abrirD365({ tipo = 'prov', cuenta, siglas }) {
   const quien = tipo === 'prov' ? 'proveedor' : tipo === 'fac' ? 'factura' : 'cliente';
   if (modo !== 'tampermonkey') {
     const lanzarEnlace = () => { const a = Object.assign(document.createElement('a'), { href: `d365://${tipo}/${encodeURIComponent(c)}?cmp=${encodeURIComponent(sig)}` }); document.body.appendChild(a); a.click(); a.remove(); };
-    // primero el servicio local; si no está en marcha (o el navegador no deja llamarlo), el enlace d365:// de siempre
-    fetch(`${LOCAL}/abrir?tipo=${encodeURIComponent(tipo)}&c=${encodeURIComponent(c)}&cmp=${encodeURIComponent(sig)}`).then((r) => { if (!r.ok) throw new Error('rechazada'); }).catch(lanzarEnlace);
+    // 1º la extensión de Chrome (solo facturas: abre la pestaña en TU Chrome); 2º el servicio local; 3º el enlace d365:// de siempre
+    const viaServicio = () => fetch(`${LOCAL}/abrir?tipo=${encodeURIComponent(tipo)}&c=${encodeURIComponent(c)}&cmp=${encodeURIComponent(sig)}`).then((r) => { if (!r.ok) throw new Error('rechazada'); }).catch(lanzarEnlace);
+    const viaExtension = () => new Promise((ok) => { try { if (tipo !== 'fac' || !window.chrome?.runtime?.sendMessage) return ok(false); chrome.runtime.sendMessage(EXT_ID, { tipo: 'fac', num: c, cmp: sig }, (r) => { void chrome.runtime.lastError; ok(!!r?.ok); }); } catch { ok(false); } });
+    viaExtension().then((hecho) => { if (!hecho) viaServicio(); });
     aviso(`Abriendo D365: ${quien} ${c}…${tipo === 'fac' ? ' tarda unos segundos en buscarla y abrir su vista previa' : ''} (si no pasa nada, falta registrar el enlace: scripts/automatizaciones-windows/registrar-enlace.ps1)`);
     return;
   }
