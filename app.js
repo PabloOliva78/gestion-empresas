@@ -339,6 +339,26 @@ function aplicarTipoEjercicio() {
     e.tipo = t === 'GE' || t === 'PYME' ? t : e.tipoBase;
   });
 }
+// Bloque 6 (SII): cada tabla va en su globo; las columnas de diferencias y las filas de TOTAL toman la vista nueva (amarillo, borde fino) y los ceros salen como «-».
+// Se marca desde aquí, sobre lo ya dibujado, para que valga igual en las siete pestañas del bloque.
+const SII_TABS = new Set(['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo']);
+function aplicarVistaSii() {
+  const v = root.querySelector('.vista.bl-sii'); if (!v) return;
+  v.querySelectorAll('table').forEach((tabla) => {
+    const fila = tabla.tHead?.rows[tabla.tHead.rows.length - 1];
+    if (fila) {
+      let c = 0; const dif = new Set();
+      [...fila.cells].forEach((th) => { const cs = th.colSpan || 1; if (cs === 1 && /^(Dif\.|Diferencia)/i.test(th.textContent.trim())) dif.add(c); c += cs; });
+      if (dif.size) {
+        tabla.classList.add('vsii'); c = 0;
+        [...fila.cells].forEach((th) => { if (dif.has(c)) th.classList.add('col-dif'); c += th.colSpan || 1; });
+        [...tabla.tBodies].forEach((tb) => [...tb.rows].forEach((tr) => { let k = 0; [...tr.cells].forEach((td) => { if ((td.colSpan || 1) === 1 && dif.has(k)) td.classList.add('col-dif'); k += td.colSpan || 1; }); }));
+      }
+    }
+    [...tabla.tBodies].forEach((tb) => [...tb.rows].forEach((tr) => { if (/^TOTAL/i.test(tr.cells[0]?.textContent.trim() ?? '')) { tr.classList.add('ttot'); tabla.classList.add('vsii'); } }));
+    tabla.querySelectorAll('td.num').forEach((td) => { if (!td.children.length && td.textContent.trim() === '0,00') td.textContent = '-'; });
+  });
+}
 // Escribir sin que nada te lo quite: si la pantalla se redibuja (p. ej. al terminar de guardar otro campo) mientras estás escribiendo, el campo
 // vuelve con lo escrito, el cursor donde estaba y sin seleccionarse entero (que era lo que hacía que lo siguiente que tecleabas lo borrara).
 const CAMPO_TXT = 'input:not([type=file]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea';
@@ -415,7 +435,7 @@ function render() {
     <main class="princ">
       ${clara ? '' : cabHtml}
       ${tabsNav()}
-      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}${SII_TABS.has(S.tab) ? ' bl-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   const cab = root.querySelector('header.doc');
@@ -423,6 +443,7 @@ function render() {
   alinearPanel();
   ajustarInicio();
   ajustarZoom();
+  aplicarVistaSii();
   if (!devolverCampoActivo(campoActivo)) restaurarFoco();
 }
 
