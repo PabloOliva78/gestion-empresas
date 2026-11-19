@@ -537,7 +537,8 @@ export function leerSII(filas) {
   if (h < 0) return null;
   const cab = Array.from(filas[h], (c) => String(c ?? '').trim());
   const ix = (re) => cab.findIndex((c) => re.test(c));
-  const emitidas = cab.some((c) => /^NIF Destinatario/i.test(c));
+  // emitidas = la descarga trae el destinatario; si no trae «NIF Destinatario» (p. ej. clientes solo extranjeros: «Identificador Destinatario») pero tampoco hay emisor, también es de emitidas
+  const emitidas = cab.some((c) => /^NIF Destinatario/i.test(c)) || (cab.some((c) => /Destinatario/i.test(c)) && !cab.some((c) => /Emisor/i.test(c)));
   const bases = [], cuotas = [];
   cab.forEach((c, i) => {
     if (emitidas) {
@@ -546,7 +547,7 @@ export function leerSII(filas) {
     } else if (/^\((NO ISP|ISP)\) Base Imponible ?\d+/.test(c)) bases.push(i);
     else if (/^\((NO ISP|ISP)\) Cuota Soportada ?\d+/.test(c)) cuotas.push(i);
   });
-  const c = { fa: ix(/^N[ºo°] Serie/i), ej: ix(/^Ejercicio$/i), pe: ix(/^Periodo$/i), fe: ix(/^Fecha Expedici[oó]n$/i),
+  const c = { fa: ix(/^N[ºo°] Serie/i), ej: ix(/^Ejercicio$/i), pe: ix(/^Periodo$/i), fe: ix(/^Fecha (de )?Expedici[oó]n/i),
     nif: ix(emitidas ? /^NIF Destinatario/i : /^NIF Emisor/i), nom: ix(emitidas ? /^Nombre o Raz[oó]n Social Destinatario/i : /^Nombre o Raz[oó]n Social Factura Emisor/i),
     tipo: ix(/^Tipo de factura/i), est: ix(/^Estado( del registro)?$/i), ded: ix(/^Cuota Deducible$/i),
     nif2: ix(emitidas ? /^Identificador Destinatario/i : /^Identificador Emisor/i) }; // identificación de los no residentes (sin NIF español)
@@ -556,7 +557,7 @@ export function leerSII(filas) {
   for (const f of filas.slice(h + 1)) {
     const factura = String(f?.[c.fa] ?? '').trim();
     if (!factura) continue;
-    out.push({ factura, ej: Number(f[c.ej]) || null, per: String(f[c.pe] ?? '').trim(), fecha: fechaIso(f[c.fe]), nif: String(f[c.nif] ?? '').trim().toUpperCase() || String(c.nif2 >= 0 ? f[c.nif2] ?? '' : '').trim().toUpperCase(),
+    out.push({ factura, ej: Number(f[c.ej]) || null, per: String(f[c.pe] ?? '').trim(), fecha: fechaIso(f[c.fe]) || (Number(f[c.ej]) && /^\d\d$/.test(String(f[c.pe] ?? '').trim()) ? `${Number(f[c.ej])}-${String(f[c.pe]).trim()}-01` : null), nif: String(f[c.nif] ?? '').trim().toUpperCase() || String(c.nif2 >= 0 ? f[c.nif2] ?? '' : '').trim().toUpperCase(),
       nombre: String(f[c.nom] ?? '').trim(), tipo: String(f[c.tipo] ?? '').trim(), estado: String(f[c.est] ?? '').trim(),
       base: r2n(suma(f, bases)), cuota: r2n(suma(f, cuotas)), deducible: c.ded >= 0 ? r2n(numero(f[c.ded])) : 0, sentido: emitidas ? 'E' : 'R', cats: catsFilaSii(emitidas, cab, f), raw: filaRaw(f) });
   }
