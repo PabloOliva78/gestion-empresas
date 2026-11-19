@@ -5545,7 +5545,7 @@ export function crearModulos(c) {
     return imp(calcular303(l.E, l.R, ej, S.periodo, manuales(), { rectif: rectif303, c110: disponible303(l.E, l.R, ej, S.periodo) }).c71);
   };
   // SII y libros de IVA: cuota del periodo y estado de la conciliación
-  const cacheCs = new Map();
+  const cacheCs = new WeakMap(); // por array de libro (cada edición del libro crea uno nuevo) → { sii, m: Map(sentido|ejercicio|periodo → píldora) }
   ['E', 'R'].forEach((s) => {
     const rg = () => rangoPeriodo(Number(S.ejercicio), S.periodo);
     badges[s === 'E' ? 'siie' : 'siir'] = () => {
@@ -5568,9 +5568,12 @@ export function crearModulos(c) {
       const lib = peek('fact-' + s), sii = peek('sii-' + s);
       if (!lib || !sii) return { t: '…' };
       if (!lib.length || !sii.length) return { t: '—' };
-      const k = `${S.sel}|${s}|${S.ejercicio}|${S.periodo}|${lib.length}|${sii.length}|${sii[0]?.base}|${lib[0]?.base}`;
-      if (!cacheCs.has(k)) { const D = conciliarSiiCompleta(s, lib, sii, Number(S.ejercicio), S.periodo); cacheCs.set(k, D.cuadra ? { t: 'Cuadra', c: 'verde' } : { t: textoDescuadreSii(D), c: 'rojo' }); }
-      return cacheCs.get(k);
+      // La píldora se recalcula en cuanto cambia el libro o el SII (editar un código, una base, quitar una factura…): la clave de antes (nº de líneas y primer importe) no notaba esos cambios
+      // y dejaba un «Dif. base» viejo aunque la pestaña ya cuadrara.
+      let cc = cacheCs.get(lib); if (!cc || cc.sii !== sii) { cc = { sii, m: new Map() }; cacheCs.set(lib, cc); }
+      const k = `${s}|${S.ejercicio}|${S.periodo}`;
+      if (!cc.m.has(k)) { const D = conciliarSiiCompleta(s, lib, sii, Number(S.ejercicio), S.periodo); cc.m.set(k, D.cuadra ? { t: 'Cuadra', c: 'verde' } : { t: textoDescuadreSii(D), c: 'rojo' }); }
+      return cc.m.get(k);
     };
   });
   ['111', '115', '123'].forEach((m) => {
