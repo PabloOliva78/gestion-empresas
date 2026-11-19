@@ -1573,3 +1573,4 @@ table[data-rs][style*="table-layout"] td:not(.num):not(.in) { vertical-align: to
 /* Bloque SII: el enunciado de cada tabla va en su globo y cada título de columna es una cápsula con borde fino azul (el hueco entre cápsulas es el propio borde, del color del globo) */
 .vista.bl-sii .css-4760-t { background: #fbf6ea; border: 2px solid #0071e3; border-radius: 18px; padding: 7px 16px; margin: 0 0 8px; color: #14286a; font-weight: 600; }
 .vista.bl-sii table thead th:not(.col-dif) { border: 2px solid #fbf6ea !important; border-radius: 14px !important; box-shadow: inset 0 0 0 1px #0071e3; }
+.fc-cab.fc-una { overflow-x: auto; }

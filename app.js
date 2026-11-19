@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=482';
+import { crearModulos } from './modulos.js?v=483';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -1220,3 +1220,21 @@ root.addEventListener('dblclick', (ev) => {
 });
 
 boot();
+
+// ---- Filtros de Emitidas/Recibidas: ancho ajustable arrastrando el borde derecho de cada campo (se recuerda en el navegador) ----
+(() => {
+  const BORDE = 9;
+  const enBorde = (e) => { const el = e.target?.closest?.('.fc-una [data-fw]'); if (!el) return null; const r = el.getBoundingClientRect(); return e.clientX >= r.right - BORDE && e.clientX <= r.right + 2 ? el : null; };
+  document.addEventListener('mousemove', (e) => { if (e.buttons) return; const el = e.target?.closest?.('.fc-una [data-fw]'); if (el) el.style.cursor = enBorde(e) ? 'col-resize' : ''; }, true);
+  document.addEventListener('mousedown', (e) => {
+    const el = enBorde(e); if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    const x0 = e.clientX, w0 = el.getBoundingClientRect().width;
+    const mueve = (m) => { const w = Math.max(40, Math.round(w0 + m.clientX - x0)); el.style.flex = 'none'; el.style.width = w + 'px'; };
+    const suelta = () => {
+      document.removeEventListener('mousemove', mueve, true); document.removeEventListener('mouseup', suelta, true);
+      try { const fw = JSON.parse(localStorage.getItem('fcw-v1') || '{}'); fw[el.dataset.fw] = Math.round(el.getBoundingClientRect().width); localStorage.setItem('fcw-v1', JSON.stringify(fw)); } catch { /* sin almacenamiento */ }
+    };
+    document.addEventListener('mousemove', mueve, true); document.addEventListener('mouseup', suelta, true);
+  }, true);
+})();

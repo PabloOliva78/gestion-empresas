@@ -1189,7 +1189,7 @@ export function crearModulos(c) {
   const celdasNum = (v) => `<td class="num">${eur(v)}</td>`;
 
   // ---------- Facturas emitidas / recibidas: cabecera de filtros, columnas y acciones por línea ----------
-  let fcCod = '', fcPais = '', fcQ = '', fcLim = 300; const fcF = { pais: '', nombre: '', nif: '', codigo: '', base: '', cuota: '', fecha: '' }; const fcTxt = new WeakMap();
+  let fcCod = '', fcPais = '', fcQ = '', fcLim = 300; const fcF = { factura: '', pais: '', nombre: '', nif: '', codigo: '', base: '', cuota: '', fecha: '' }; const fcTxt = new WeakMap();
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const PREFIJOS = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'FI', 'FR', 'GB', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'XI', 'CH', 'NO', 'US', 'AD', 'MA']);
   const paisDe = (nif) => {
@@ -1257,6 +1257,7 @@ export function crearModulos(c) {
     const U = (s) => String(s ?? '').toUpperCase();
     if (fcF.pais.trim()) { const q = sinAc(fcF.pais); f = f.filter((l) => sinAc(paisVis(l)).includes(q)); }
     if (fcF.nombre.trim()) { const q = sinAc(fcF.nombre); f = f.filter((l) => sinAc(l.nombre).includes(q)); }
+    if (fcF.factura.trim()) { const q = sinAc(fcF.factura).replace(/\s/g, ''); f = f.filter((l) => sinAc(l.factura).replace(/\s/g, '').includes(q)); }
     if (fcF.nif.trim()) { const q = U(fcF.nif).replace(/\s/g, ''); f = f.filter((l) => U(l.nif).replace(/\s/g, '').includes(q)); }
     if (fcF.codigo.trim()) { const q = U(fcF.codigo).trim(); f = f.filter((l) => U(l.codigo).includes(q)); }
     if (fcF.base.trim()) f = f.filter((l) => buscaNum(l.base, fcF.base));
@@ -1365,11 +1366,14 @@ export function crearModulos(c) {
     const c = cuerpoFc(s, datos), O = opcionesFc(s, datos);
     const vuelta = S.vuelta && S.vuelta.fac === fcQ ? `<div class="no-print vuelta-fac"><button class="small primary" data-act="m-fcvuelta">← Volver a ${esc(TABS_NOMBRE(S.vuelta.tab))}</button> <span class="hint">Corrige la factura aquí (los campos se editan en la propia fila) y vuelve.</span></div>` : '';
     // filtros en cascada: cada lista solo ofrece lo que hay con los demás filtros puestos (NIF, nombre, fecha, país, código, base y cuota)
-    const inF = (k, t, w) => `<input data-fqf="${k}" type="search" list="dlfc-${k}" autocomplete="off" value="${esc(fcF[k])}" placeholder="${t}" title="${t}"${w ? ` style="width:${w}"` : ''}>`;
+    // anchos que el usuario ha ajustado arrastrando el borde derecho de cada campo (se guardan en el navegador)
+    let fw = {}; try { fw = JSON.parse(localStorage.getItem('fcw-v1') || '{}'); } catch { /* sin almacenamiento */ }
+    const sw = (k, w) => (fw[k] ? ` style="flex:none;width:${fw[k]}px"` : (w ? ` style="width:${w}"` : ''));
+    const inF = (k, t, w) => `<input data-fqf="${k}" data-fw="${k}" type="search" list="dlfc-${k}" autocomplete="off" value="${esc(fcF[k])}" placeholder="${t}" title="${t} · arrastra el borde derecho para cambiar el ancho"${sw(k, w)}>`;
     return `${vuelta}<div class="fc-cab fc-una"><label>Ver <select data-glob="periodo">${per}</select></label>
-      ${inF('nif', 'NIF')}${inF('nombre', 'Nombre')}${inF('fecha', 'Fecha')}
-      <select data-fc="pais" title="País (solo los de la selección actual)">${htmlSelPais(O)}</select>
-      <select data-fc="cod" title="Código de impuesto (solo los de la selección actual)">${htmlSelCod(O)}</select>
+      ${inF('factura', 'Nº factura')}${inF('nif', 'NIF')}${inF('nombre', 'Nombre')}${inF('fecha', 'Fecha')}
+      <select data-fc="pais" data-fw="pais" title="País (solo los de la selección actual)"${sw('pais')}>${htmlSelPais(O)}</select>
+      <select data-fc="cod" data-fw="cod" title="Código de impuesto (solo los de la selección actual)"${sw('cod')}>${htmlSelCod(O)}</select>
       ${inF('base', 'Base')}${inF('cuota', 'Cuota')}
       ${fcQ ? `<button class="small no-print" data-act="m-fcqlimpiar" title="Quitar la búsqueda por nº de factura">Factura: «${esc(fcQ)}» ✕</button>` : ''}
       <span id="fcCuenta" class="hint">${c.n} facturas</span>
