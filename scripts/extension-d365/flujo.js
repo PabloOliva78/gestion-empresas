@@ -16,7 +16,7 @@ export async function abrirFactura(send, num, { log = () => {}, esperaMax = 9000
   const teclear = async (texto) => { for (const ch of texto) { await send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, text: ch, unmodifiedText: ch }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch }); await dormir(10); } };
   const ctrlA = async () => { await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2, commands: ['selectAll'] }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 2 }); };
   const visible = (sel) => `[...document.querySelectorAll(${JSON.stringify(sel)})].find((e) => { const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; })`;
-  const celdaFactura = `document.querySelector('input[aria-label="Factura"]')`;
+  const celdaFactura = visible('input[aria-label="Factura"]'); // si la pestaña se reutiliza, el DOM guarda formularios anteriores (ocultos): siempre el visible
 
   // que la página crea que tiene el foco aunque la ventana no lo tenga (si no, a veces las teclas no llegan al campo)
   await send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
@@ -24,11 +24,11 @@ export async function abrirFactura(send, num, { log = () => {}, esperaMax = 9000
   // 0) si la pestaña se reutiliza y está en la vista previa de la factura anterior, se vuelve al diario (sin recargar D365)
   if (await ev(`/Mostrar la factura/i.test(document.title)`)) { await clic(visible('button[id$="_SystemDefinedCloseButton"]'), 8000); await dormir(800); }
   // 1) diario de facturas cargado (hay filtro rápido y cuadrícula)
-  if (!(await esperar(`!!document.querySelector('input[name=QuickFilter_Input]') && !!${celdaFactura}`, 120000))) throw new Error('El diario de facturas de D365 no ha cargado');
+  if (!(await esperar(`!!document.querySelector('input[name=QuickFilter_Input]') && !!(${celdaFactura})`, 120000))) throw new Error('El diario de facturas de D365 no ha cargado');
   await dormir(150);
   // 2) cabecera «Factura» → desplegable → «es exactamente» → número → Aplicar
-  const cabecera = `[...document.querySelectorAll('[role=columnheader]')].find((x) => /^Factura$/.test((x.innerText || '').trim()))`;
-  const campo = `document.querySelector('input[role=combobox][aria-label*="Campo de filtro: Factura"]')`;
+  const cabecera = `[...document.querySelectorAll('[role=columnheader]')].find((x) => /^Factura(\\s|$)/.test((x.innerText || x.getAttribute('aria-label') || '').trim()) && x.getBoundingClientRect().width > 2)`;
+  const campo = visible('input[role=combobox][aria-label*="Campo de filtro: Factura"]');
   const botonAplicar = `[...document.querySelectorAll('button')].find((b) => (b.innerText || '').trim() === 'Aplicar' && b.getBoundingClientRect().width > 2)`;
   if (!(await clic(cabecera))) throw new Error('No encuentro la cabecera «Factura»');
   if (!(await esperar(centro(campo), 10000))) throw new Error('No se abrió el desplegable del filtro');
