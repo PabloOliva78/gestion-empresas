@@ -1643,7 +1643,11 @@ export function crearModulos(c) {
     if (!datos || !cab0) return cargandoTxt;
     const cab = cab0.length ? cab0 : CAB_SII[s]; // todas las columnas de la descarga, vengan con datos o sin ellos
     const ej = Number(S.ejercicio), e = empresa(), ed = puede(), emit = s === 'E';
-    const meses = siiMeses(), shards = meses.map((mm) => grande(`sii-raw-${s}-${ej}-${mm}`));
+    const meses = siiMeses(), rP = rangoPeriodo(ej, S.periodo);
+    // Las columnas completas de la descarga se guardan por el periodo TAL COMO VIENE en el archivo del SII: meses («01») o, en empresas trimestrales como Lys del Sur, trimestres («1T»).
+    // Antes solo se buscaban por meses, y en esas empresas no se encontraba ninguna columna aunque estuvieran guardadas.
+    const perFile = [...new Set(datos.filter((x) => x.ej === ej).map((x) => String(x.per)))].filter((p) => { const rp = rangoPeriodo(ej, p); return !S.periodo || (rp.desde <= rP.hasta && rp.hasta >= rP.desde); });
+    const shards = perFile.map((p) => grande(`sii-raw-${s}-${ej}-${p}`));
     if (shards.some((x) => x === null)) return cargandoTxt;
     const raw = new Map(); shards.forEach((sh) => sh.forEach((r) => raw.set(r.k, r.raw)));
     const dropz = dz('sii', 'Suelta aquí las descargas del SII', '(facturas emitidas y recibidas, .xlsx, .xls o .csv) o pulsa para elegirlas');
@@ -1723,7 +1727,7 @@ export function crearModulos(c) {
     if (!S.sel || !S.periodo) return void alert('Elige un mes en el selector Periodo de la barra lateral.');
     const ej = Number(S.ejercicio), emit = s === 'E', r = rangoPeriodo(ej, S.periodo), meses = siiMeses(), per = PERIODOS[S.periodo] ?? S.periodo, nom = emit ? 'emitidas' : 'recibidas';
     const tipo = `sii-${s}`, { data } = await db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle();
-    const arr = data?.datos?.filas ?? [], dentro = (x) => (emit ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && meses.includes(x.per));
+    const arr = data?.datos?.filas ?? [], dentro = (x) => (emit ? x.fecha >= r.desde && x.fecha <= r.hasta : x.ej === ej && (meses.includes(x.per) || x.per === S.periodo));
     const quitar = arr.filter(dentro);
     if (!quitar.length) return void alert(`No hay registros del SII ${nom} en ${per} ${ej}.`);
     if (!confirm(`¿Quitar del SII ${nom} los ${quitar.length} registros de ${per} ${ej}? Los demás meses no se tocan.`)) return;
