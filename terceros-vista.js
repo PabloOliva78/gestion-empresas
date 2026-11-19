@@ -1,7 +1,7 @@
 // Vista común de «Proveedores» y «Clientes» (bloque 12): cabecera fija con buscador y filtro de país, tabla con scroll propio y alta de filas a mano.
 // Las filas escritas a mano llevan manual:true y no se pierden al volver a cargar el Excel del ERP.
 import { paisDeSiglas, datalistPaises } from './paises.js?v=2';
-import { abrirD365 } from './d365.js?v=3';
+import { abrirD365 } from './d365.js?v=4';
 export function crearVistaTercero({ S, esc, render, empresa, puede, grande, reemplazarGrande, P, TIPO, clave, titulo, singular, extras, zona, nota, paisNif }) {
   // extras: columnas propias de cada listado, [campo, cabecera]; P: estado { msg, q, pais, nuevo }
   const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

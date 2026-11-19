@@ -20,6 +20,7 @@ import { crearProveedores } from './proveedores.js?v=11';
 import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=9';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
+import { abrirD365 } from './d365.js?v=4';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=19';
 import { crearEstados } from './estados.js?v=4';
@@ -1311,7 +1312,8 @@ export function crearModulos(c) {
     const n = new Set(f.map((l) => l.factura)).size;
     const otro = s === 'E' ? 'Recibidas' : 'Emitidas';
     const acc = (l) => {
-      const lupa = s === 'R' && l.factura ? `<button class="pill" data-act="m-esker" data-n="${esc(l.factura)}" title="Buscar esta factura en Esker">🔎</button>` : '';
+      const lupa = s === 'R' && l.factura ? `<button class="pill" data-act="m-esker" data-n="${esc(l.factura)}" title="Buscar esta factura en Esker">🔎</button>`
+        : s === 'E' && l.factura ? `<button class="pill" data-act="m-d365fac" data-n="${esc(l.factura)}" title="Abrir esta factura en D365: la busca en el diario de facturas y abre la vista previa del original">🔎 D365</button>` : '';
       if (!puede()) return lupa;
       const a = (op, t) => `<button class="pill" data-act="m-fc" data-op="${op}" data-s="${s}" data-k="${esc(claveL(l))}">${t}</button>`;
       const nsl = s === 'E' && l.codigo === 'R.NAC.NS' ? `<button class="pill" data-act="m-fc" data-op="nsl" data-s="${s}" data-k="${esc(claveL(l))}" title="Márcala si el SII la declara como no sujeta por reglas de localización (la lleva en base): la conciliación la da por buena">${l.nsl ? '☑' : '☐'} NS localización</button>` : '';
@@ -4995,6 +4997,7 @@ export function crearModulos(c) {
       'm-man303': () => formMan303(),
       'm-fc': () => opFc(d.s, d.op, d.k),
       'm-esker': () => buscarEsker(d.n),
+      'm-d365fac': () => abrirD365({ tipo: 'fac', cuenta: d.n, siglas: empresa()?.siglas }),
       'm-siixl': () => excelConcSii(d.s),
       'm-fcnv': () => fcNvAbrir(d.s),
       'm-fcvuelta': () => { const v = S.vuelta; if (!v) return; S.vuelta = null; fcQ = ''; ['E', 'R'].forEach((x) => { if (siiFil[x].fac === v.fac) siiFil[x].fac = ''; }); S.periodo = v.periodo; S.tab = v.tab; S.grp = -1; render(); },

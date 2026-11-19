@@ -14,13 +14,13 @@ export function abrirD365({ tipo = 'prov', cuenta, siglas }) {
     d.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:99999;background:#1d1d1f;color:#fff;padding:10px 16px;border-radius:12px;font:13px system-ui;box-shadow:0 6px 20px rgba(0,0,0,.3)';
     document.body.appendChild(d); setTimeout(() => d.remove(), 6000);
   };
-  const quien = tipo === 'prov' ? 'proveedor' : 'cliente';
+  const quien = tipo === 'prov' ? 'proveedor' : tipo === 'fac' ? 'factura' : 'cliente';
   if (modo !== 'tampermonkey') {
     const a = Object.assign(document.createElement('a'), { href: `d365://${tipo}/${encodeURIComponent(c)}?cmp=${encodeURIComponent(sig)}` });
     document.body.appendChild(a); a.click(); a.remove();
-    aviso(`Abriendo D365: ${quien} ${c}… (si no pasa nada, falta registrar el enlace: scripts/automatizaciones-windows/registrar-enlace.ps1)`);
+    aviso(`Abriendo D365: ${quien} ${c}…${tipo === 'fac' ? ' tarda unos segundos en buscarla y abrir su vista previa' : ''} (si no pasa nada, falta registrar el enlace: scripts/automatizaciones-windows/registrar-enlace.ps1)`);
     return;
   }
-  window.open(`${ERP}?cmp=${encodeURIComponent(sig)}&mi=${tipo === 'prov' ? 'VendTableListPage' : 'CustTableListPage'}#cuenta=${encodeURIComponent(c)}`, '_blank', 'noopener');
+  window.open(`${ERP}?cmp=${encodeURIComponent(sig)}&mi=${tipo === 'prov' ? 'VendTableListPage' : tipo === 'fac' ? 'CustInvoiceJournal' : 'CustTableListPage'}#cuenta=${encodeURIComponent(c)}`, '_blank', 'noopener');
   (navigator.clipboard?.writeText(c) ?? Promise.reject()).then(() => aviso(`Cuenta de ${quien} ${c} copiada (si D365 no la busca sola, pégala con Ctrl+V en el filtro).`), () => aviso(`Cuenta de ${quien}: ${c} (no se pudo copiar; escríbela en el filtro de D365).`));
 }
