@@ -2,6 +2,7 @@
 // Lo usa la extensión de Chrome (background.js, vía chrome.debugger) y las pruebas de Node (vía una sesión CDP): `send(método, parámetros)` es lo único que necesita.
 export async function abrirFactura(send, num, { log = () => {}, esperaMax = 90000 } = {}) {
   const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+  const t00 = Date.now(), marca = (m) => log(`[${((Date.now() - t00) / 1000).toFixed(1)} s] ${m}`);
   const ev = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); return r?.result?.value; };
   const esperar = async (expr, ms = 20000, paso = 200) => { const t0 = Date.now(); for (;;) { const v = await ev(expr).catch(() => undefined); if (v) return v; if (Date.now() - t0 > ms) return null; await dormir(paso); } };
   // centro de un elemento visible: la expresión devuelve el elemento (o null)
@@ -26,6 +27,7 @@ export async function abrirFactura(send, num, { log = () => {}, esperaMax = 9000
   // 1) diario de facturas cargado (hay filtro rápido y cuadrícula)
   if (!(await esperar(`!!document.querySelector('input[name=QuickFilter_Input]') && !!(${celdaFactura})`, 120000))) throw new Error('El diario de facturas de D365 no ha cargado');
   await dormir(150);
+  marca('diario listo');
   // 2) cabecera «Factura» → desplegable → «es exactamente» → número → Aplicar
   const cabecera = `[...document.querySelectorAll('[role=columnheader]')].find((x) => /^Factura(\\s|$)/.test((x.innerText || x.getAttribute('aria-label') || '').trim()) && x.getBoundingClientRect().width > 2)`;
   const campo = visible('input[role=combobox][aria-label*="Campo de filtro: Factura"]');
@@ -44,11 +46,13 @@ export async function abrirFactura(send, num, { log = () => {}, esperaMax = 9000
     log(`texto del filtro incorrecto, se repite (intento ${i + 1})`);
   }
   if (!(await clic(botonAplicar))) throw new Error('No encuentro «Aplicar»');
+  marca('filtro aplicado');
   // 3) la búsqueda no es inmediata: se espera a que la primera fila sea esa factura
   if (!(await esperar(`(${celdaFactura})?.value === ${JSON.stringify(num)}`, 40000, 100))) { log(`Factura ${num} no encontrada`); return false; }
   await dormir(150);
   await clic(celdaFactura); // selecciona la fila
-  await dormir(150);
+  await dormir(700); // la cinta tarda en activar «Ver» para la fila seleccionada: con menos espera el primer clic se pierde y cuesta 3 s repetirlo
+  marca('factura encontrada y fila seleccionada');
   // 4) Factura › Documento › Ver › Vista previa de original
   const ver = visible('button[id$="_View_button"]');
   const pestana = visible('button[id$="_Invoice_button"]');
@@ -59,11 +63,12 @@ export async function abrirFactura(send, num, { log = () => {}, esperaMax = 9000
     if (await clic(ver, 3000) && (await esperar(centro(original), 2500, 100))) menu = true; else { log(`cinta de D365 aún no lista, se repite (intento ${i + 1})`); await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' }); await dormir(400); }
   }
   if (!menu) throw new Error('No se pudo abrir el menú Ver de D365');
+  marca('menú Ver abierto');
   await clic(original);
   // 5) visor del PDF (si D365 se queda en «Procesando operación…», se cancela y se pide otra vez)
   const hayVisor = `!!document.querySelector('iframe[src*="pdfjs/web/viewer"]') || /Mostrar la factura/i.test(document.title)`;
   for (let intento = 1; intento <= 2; intento++) {
-    if (await esperar(hayVisor, Math.min(esperaMax, 60000), 200)) return true;
+    if (await esperar(hayVisor, Math.min(esperaMax, 60000), 200)) { marca('visor abierto'); return true; }
     if (intento === 1) {
       log('la vista previa tarda más de 60 s: se cancela y se repite');
       await clic(`[...document.querySelectorAll('button')].find((b) => (b.innerText || '').trim() === 'Cancelar' && b.getBoundingClientRect().width > 2)`, 3000);
