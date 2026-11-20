@@ -1310,7 +1310,7 @@ export function crearRegistral(c) {
   function huecoDe(tab, nombre, D) {
     const n = ` ${normN(nombre)} `, slots = (c.docs?.[tab] ?? []).map(([k]) => k);
     const pistas = [['instancia', /instancia/], ['acuse', /acuse/], ['nota', /nota.*despacho|despacho/], ['asiento', /asiento/], ['escritura', /escritura|compraventa/], ['titular', /titular/],
-      ['diario', /diario/], ['mayor', /mayor/], ['sys', /sumas|\bsys\b/], ['bsit', /bsit|situacion/], ['libro', /libro|acta|socios/]];
+      ['diario', /diario/], ['mayor', /mayor/], ['sys', /sumas|\bsys\b/], ['bsit', /bsit|situacion/], ['libro', /libro|acta|socios|partic/]];
     const hit = pistas.find(([k, rx]) => slots.includes(k) && rx.test(n));
     return hit ? hit[0] : (slots.find((k) => !D[k]?.archivo) ?? slots[0]);
   }
@@ -1374,6 +1374,41 @@ export function crearRegistral(c) {
       <p class="hint">Los socios con saldo 0 ya no tienen acciones (aparecen atenuados). Despliega la hoja de cada socio para ver todos sus movimientos: constitución, ampliaciones y transmisiones.</p></section>
       <section class="block"><h4 class="it-tit">Hojas de identificación de los socios · ${L.hojas.length}</h4>${L.hojas.map(hoja).join('') || '<p class="hint">El Excel no trae hojas de socios.</p>'}</section>`;
   }
+  // ---- «Consulta de partícipes» de la Sede de la AEAT (PDF): NIF, nombre, estado, % de participación y de atribución, tipo ----
+  const aeatProbados = new Set();
+  async function leerParticipesAeat(blob) {
+    const { texto } = await c.leerPdf(blob);
+    const t = String(texto).replace(/--- página \d+ ---/g, ' ').replace(/\s+/g, ' ');
+    if (!/part[ií]cipes/i.test(t)) return null;
+    const co = /Contribuyente:\s*([A-Z0-9]{9})\s*-\s*(.+?)\s+(?:Figura|Inicial|Logotipo)/i.exec(t);
+    const rx = /(?:^|\s)(\d{1,3})\s+([A-Z0-9]\d{7}[A-Z0-9])\s+(.+?)\s+(Alta|Baja)\s+(\d{1,3}(?:,\d+)?)\s+(\d{1,3}(?:,\d+)?)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]+)/g;
+    const socios = [], vistos = new Set(); let m;
+    while ((m = rx.exec(t))) {
+      if (vistos.has(m[2])) continue; vistos.add(m[2]);
+      socios.push({ n: +m[1], nif: m[2], nombre: m[3].trim(), estado: m[4], part: parseFloat(m[5].replace(',', '.')), atrib: parseFloat(m[6].replace(',', '.')), tipo: m[7] });
+    }
+    return socios.length ? { cif: co?.[1] ?? '', sociedad: co?.[2]?.trim() ?? '', socios } : null;
+  }
+  const pcEs = (v) => (v === null || v === undefined || Number.isNaN(v) ? '' : v.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  function aeatHtml(A) {
+    const sum = A.socios.reduce((s, x) => s + (x.estado === 'Alta' ? x.part : 0), 0);
+    return `<section class="block"><h4 class="it-tit">SOCIOS / PARTÍCIPES · consulta de la AEAT${A.sociedad ? ` · ${esc(A.sociedad)}` : ''}</h4>
+      <div class="wrap"><table class="tabla rg-tabla" style="width:auto"><thead><tr><th>Nº</th><th>NIF</th><th>Apellidos y nombre / razón social</th><th>Estado</th><th>% participación</th><th>% atribución</th><th>Tipo</th></tr></thead><tbody>${A.socios.map((x) => `<tr><td class="c">${x.n}</td><td>${esc(x.nif)}</td><td>${esc(x.nombre)}</td><td class="c">${esc(x.estado)}</td><td class="num">${pcEs(x.part)} %</td><td class="num">${pcEs(x.atrib)} %</td><td>${esc(x.tipo)}</td></tr>`).join('')}
+      <tr class="ttot"><td colspan="4">Total socios en alta</td><td class="num">${pcEs(sum)} %</td><td colspan="2"></td></tr></tbody></table></div>
+      <p class="hint">Leído del PDF de la Sede. ${Math.abs(sum - 100) > 0.01 ? '<b class="dif-ko">Los socios en alta no suman el 100 %.</b>' : 'Suman el 100 %.'}</p></section>`;
+  }
+  // lee los socios de un PDF ya guardado (una sola vez por archivo) y los deja guardados con el documento
+  async function completarAeat(tab, sec, y) {
+    if (!puede()) return;
+    const reg = docReg(tab, y), cur = reg?.datos?.[sec], p = cur?.archivo?.path;
+    if (!p || cur.aeat || aeatProbados.has(p) || !/\.pdf$/i.test(cur.archivo?.nombre ?? '')) return;
+    aeatProbados.add(p);
+    try {
+      const { data, error } = await db.storage.from('documentos').download(p); if (error || !data) return;
+      const A = await leerParticipesAeat(data); if (!A) return;
+      await docGuardar(tab, y, { ...reg.datos, [sec]: { ...cur, aeat: A } }); render();
+    } catch { /* no es la consulta de la AEAT: se deja como estaba */ }
+  }
   let rgDocEj = null; const rgDocSec = {};
   const docEj = () => rgDocEj ?? Number(S.ejercicio);
   const docReg = (tab, y) => S.registros.find((x) => x.tipo === `doc-${tab}` && x.empresa_id === S.sel && x.ejercicio === y);
@@ -1398,6 +1433,7 @@ export function crearRegistral(c) {
     const D = docReg(tab, y)?.datos ?? {}, cur = D[sec] ?? {}, nomSec = slots.find(([k]) => k === sec)[1];
     const anios = []; for (let a = (Number(S.ejercicio) || new Date().getFullYear()) + 1; a >= (Number(S.ejercicio) || new Date().getFullYear()) - 8; a--) anios.push(a);
     const esPdf = /\.pdf$/i.test(cur.archivo?.nombre ?? '');
+    if (tab === 'rmsocios' && esPdf && cur.archivo?.path && !cur.aeat) setTimeout(() => completarAeat(tab, sec, y), 0);
     return `<div class="bar"><label><b>Ejercicio</b> <select data-rgdej="1">${anios.map((a) => `<option value="${a}"${a === y ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
       <nav class="subtabs">${slots.map(([k, l]) => `<button class="${k === sec ? 'on' : ''}${D[k]?.archivo ? ' hecho' : ''}" data-act="m-rg-dsec" data-t="${tab}" data-s="${k}">${esc(l)}${D[k]?.archivo ? ' ✓' : ''}</button>`).join('')}</nav></div>
       ${avisoHtml()}
@@ -1407,7 +1443,7 @@ export function crearRegistral(c) {
         ${libroSociosHtml(cur.libro)}` : `<div class="rg-split"><div class="rg-izq">${ed ? `<div class="dropzone" data-kind="doc-${tab}" tabindex="0" role="button"><b>Suelta aquí el archivo</b> (se coloca en su apartado por el nombre; si no se reconoce, en «${esc(nomSec)}») o haz clic para elegirlo.
         <input type="file" data-dzkind="doc-${tab}" multiple hidden></div>` : ''}
         <div class="rg-visor"${esPdf ? ` data-rgvisor="doc:${tab}:${sec}|${y}"` : ''}>${cur.archivo ? (esPdf ? '<p class="hint">Cargando el PDF…</p>' : '<p class="hint">Este archivo no es un PDF: ábrelo con el botón.</p>') : '<p class="hint">Sin archivo en este apartado.</p>'}</div></div>
-      <div class="rg-der"><section class="block"><h4 class="it-tit">${esc(nomSec)} · ejercicio ${y}</h4>
+      <div class="rg-der">${cur.aeat ? aeatHtml(cur.aeat) : ''}<section class="block"><h4 class="it-tit">${esc(nomSec)} · ejercicio ${y}</h4>
         <table class="tabla rg-tabla rotulos" style="width:auto"><tbody>
           <tr><td>Fecha</td><td><input type="date" class="facin" data-rgdoc="${tab}|${sec}|fecha" value="${esc(cur.fecha ?? '')}"${ed ? '' : ' disabled'}></td></tr>
           <tr><td>Referencia (nº de asiento, justificante, observaciones)</td><td><input class="facin" data-rgdoc="${tab}|${sec}|ref" value="${esc(cur.ref ?? '')}" size="44"${ed ? '' : ' disabled'}></td></tr>

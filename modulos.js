@@ -5,7 +5,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
   leerRepresentantes, leerParticipes, leerLocal, leerXlsx, leerSYS, resumenSYS, leerSituacionCompleta, leerLibroIVA, leerLibroBC, leerMayor, leerMayorPdf, prefijoAsiento, fundaeFilas, leerSII, conciliarSII, conciliarSiiCompleta, normFac, normNif, rangoPeriodo, MARGEN_SII, calcular303, calcularRet, calcular349, calcular349Ops, casillasPDF, cabeceraPresentado, valoresPresentado } from './lectores.js?v=313';
 
 import { CAB_SII } from './siicab.js?v=1';
-import { crearRegistral } from './registral.js?v=14';
+import { crearRegistral } from './registral.js?v=15';
 import { crearModelos } from './modelos.js?v=382';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
@@ -2608,7 +2608,7 @@ export function crearModulos(c) {
     let slot = /instancia/.test(n) ? 'instancia' : /acuse/.test(n) ? 'acuse' : /nota.*despacho/.test(n) ? 'nota' : /asiento/.test(n) ? 'asiento' : null;
     let tab = null;
     if (/acta/.test(n) && !/certific/.test(n)) { tab = 'rmactas'; slot ||= 'libro'; }
-    else if (/socios|titular|compraventa/.test(n)) { tab = 'rmsocios'; slot = /titular/.test(n) ? 'titular' : /compraventa|escritura/.test(n) ? 'escritura' : slot || 'libro'; }
+    else if (/socios|partic|titular|compraventa/.test(n)) { tab = 'rmsocios'; slot = /titular/.test(n) ? 'titular' : /compraventa|escritura/.test(n) ? 'escritura' : slot || 'libro'; }
     else if (/diario|mayor|sumas y saldos|\bsys\b|bsit|situacion/.test(n)) {
       tab = 'rmlibros'; slot = /diario/.test(n) ? 'diario' : /mayor/.test(n) ? 'mayor' : /sumas|\bsys\b/.test(n) ? 'sys' : /bsit|situacion/.test(n) ? 'bsit' : slot;
     } else if (/certific/.test(n)) { tab = 'rmcert'; slot = /acta/.test(n) ? 'acta' : 'cert'; }
