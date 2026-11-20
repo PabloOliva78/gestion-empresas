@@ -5266,6 +5266,7 @@ export function crearModulos(c) {
     asiOcr = mal.length ? `${mal.length} línea(s) sin fecha, cuenta o importe: corrígelas y vuelve a registrar` : '';
     render();
   }
+  let asiLinAbierto = false, asiLinOyente = false; // «Líneas metidas a mano» va plegada; se recuerda si el usuario la abre
   const asiQuitarLote = (lote) => confirm('¿Quitar todas las líneas de este lote de las cuentas contables?')
     && guardarCta((d) => { d.lineas = (d.lineas ?? []).filter((x) => String(x.lote) !== String(lote)); });
 
@@ -5292,6 +5293,7 @@ export function crearModulos(c) {
       <div style="margin:.4rem 0"><button class="small" data-act="m-asipegatxt">Leer el texto</button> <span class="hint">Las líneas salen abajo para revisarlas antes de registrarlas.</span></div>
       ${asiOcr ? `<p class="hint"><b>${esc(asiOcr)}</b></p>` : ''}${prev}</section>` : '';
     const todas = cfg.lineas ?? [], G = new Map();
+    if (!asiLinOyente) { asiLinOyente = true; document.addEventListener('toggle', (e) => { if (e.target?.dataset?.det === 'asilin') asiLinAbierto = e.target.open; }, true); }
     todas.filter((l) => l.lote).forEach((l) => {
       const g = G.get(l.lote) ?? G.set(l.lote, { k: l.lote, n: 0, d: 0, h: 0, cts: new Set(), f1: l.fecha, f2: l.fecha, o: l.origen || 'imagen' }).get(l.lote);
       g.n++; g.d += +l.debe || 0; g.h += +l.haber || 0; g.cts.add(l.cuenta); if (l.fecha < g.f1) g.f1 = l.fecha; if (l.fecha > g.f2) g.f2 = l.fecha;
@@ -5302,9 +5304,9 @@ export function crearModulos(c) {
       <p class="hint">Quitar un lote borra todas sus líneas de las cuentas contables de una vez.</p></section>` : '';
     const A = [...todas].sort((a, b) => String(a.cuenta).localeCompare(String(b.cuenta)) || String(a.fecha).localeCompare(String(b.fecha)));
     const nq = Object.keys(cfg.quit ?? {}).length;
-    const lista = `<section class="prs-card"><div class="prs-h">Líneas metidas a mano · ${A.length}</div>${A.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Cuenta</th><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th></th></tr></thead><tbody>
+    const lista = `<section class="prs-card"><details data-det="asilin"${asiLinAbierto ? ' open' : ''}><summary class="prs-h" style="cursor:pointer">Líneas metidas a mano · ${A.length} · pulsa para ver las líneas</summary>${A.length ? `<div class="wrap"><table class="tprs tnom" style="width:auto"><thead><tr><th>Cuenta</th><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th></th></tr></thead><tbody>
       ${A.slice(0, 300).map((l) => `<tr><td>${esc(l.cuenta)}</td><td class="c">${fdate(Date.parse(l.fecha))}</td><td>${esc(l.asiento)}</td><td>${esc(l.desc)}</td><td class="num">${l.debe ? fnum(l.debe) : ''}</td><td class="num">${l.haber ? fnum(l.haber) : ''}</td>
-        <td>${ed ? `<button class="small" data-act="m-asiquit" data-id="${l.id}" title="Quitar esta línea">✖</button>` : ''}</td></tr>`).join('')}</tbody></table></div>${A.length > 300 ? `<p class="hint">Se muestran las 300 primeras de ${A.length}.</p>` : ''}` : '<p class="hint">Todavía no hay líneas metidas a mano en esta empresa.</p>'}
+        <td>${ed ? `<button class="small" data-act="m-asiquit" data-id="${l.id}" title="Quitar esta línea">✖</button>` : ''}</td></tr>`).join('')}</tbody></table></div>${A.length > 300 ? `<p class="hint">Se muestran las 300 primeras de ${A.length}.</p>` : ''}` : '<p class="hint">Todavía no hay líneas metidas a mano en esta empresa.</p>'}</details>
       ${nq && ed ? `<p class="hint">Hay ${nq} apunte(s) de los extractos quitados en las cuentas. <button class="small" data-act="m-asirest">Volver a poner todos los quitados</button></p>` : ''}</section>`;
     // Mitad derecha: un sitio por cada documentación que se deja en Excel o PDF y que la app reparte a su pestaña
     const zona = (kind, titulo, sub, acc, conLista = true) => conLista ? dz(kind, titulo, sub, acc)
