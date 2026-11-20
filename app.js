@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=495';
+import { crearModulos } from './modulos.js?v=496';
 import { limpiarCache } from './cachelibros.js?v=1';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
@@ -346,6 +346,7 @@ function aplicarTipoEjercicio() {
 }
 // Bloque 6 (SII): cada tabla va en su globo; las columnas de diferencias y las filas de TOTAL toman la vista nueva (amarillo, borde fino) y los ceros salen como «-».
 // Se marca desde aquí, sobre lo ya dibujado, para que valga igual en las siete pestañas del bloque.
+const CONC8_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall']);
 const SII_TABS = new Set(['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo', 'cssoc']);
 function aplicarVistaSii() {
   const v = root.querySelector('.vista.bl-sii'); if (!v) return;
@@ -440,7 +441,7 @@ function render() {
     <main class="princ">
       ${clara ? '' : cabHtml}
       ${tabsNav()}
-      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}${SII_TABS.has(S.tab) ? ' bl-sii' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
+      <section class="vista${['siie', 'siir'].includes(S.tab) ? ' fijo-sii' : ''}${SII_TABS.has(S.tab) ? ' bl-sii' : ''}${CONC8_TABS.has(S.tab) ? ' bl-conc' : ''}" style="zoom:${zoomDe()};--z:${zoomDe()};${formaVars()}"><h3 class="tab-tit">${esc(TABS[S.tab][0])} <small>${esc(TABS[S.tab][1])}</small></h3>${TABS[S.tab][2]()}</section>
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   const cab = root.querySelector('header.doc');

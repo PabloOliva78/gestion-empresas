@@ -23,7 +23,7 @@ import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leerRegistro } from './cachelibros.js?v=1';
 import { abrirD365, precalentarD365, listarLibrosD365, bajarLibroD365 } from './d365.js?v=8';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=22';
+import { crearConciliaciones } from './conciliaciones.js?v=23';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
 

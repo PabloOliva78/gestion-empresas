@@ -123,14 +123,17 @@ export function crearConciliaciones(c) {
     const bR = (t, x) => n(t.s[x]) + n(t.t[x]) + d(t.s[x] - t.t[x]);
     const subE = ['SII emitidas', 'Libro emitidas', 'Autorepercutidas', 'Libro sin autorep.', 'Diferencia'], subR = ['SII recibidas', 'Libro recibidas', 'Diferencia'];
     // dos tablas, una encima de la otra: repercutido (emitidas) y soportado (recibidas)
-    const cab = (nB, nC, sub) => `<thead><tr><th rowspan="2">Periodo</th><th colspan="${nB}">Base imponible</th><th colspan="${nC}">Cuota</th></tr><tr>${[sub, sub].map((L) => L.map((t) => `<th>${t}</th>`).join('')).join('')}</tr></thead>`;
-    const fila = (f, cuerpo) => `<tr${f.tot ? ' class="tot"' : ''}><td${f.tot ? ' style="font-weight:700"' : ''}>${esc(f.txt)}</td>${cuerpo}</tr>`;
-    const bodyE = A.filas.map((f) => fila(f, bE(f.e, 'b') + bE(f.e, 'c'))).join(''), bodyR = A.filas.map((f) => fila(f, bR(f.r, 'b') + bR(f.r, 'c'))).join('');
-    const tabla = (titulo, cabecera, body) => `<h4 style="margin:12px 0 4px">${titulo}</h4><div style="overflow:auto"><table class="aud audi-t" style="width:auto">${cabecera}<tbody>${body}</tbody></table></div>`;
-    return `<section class="block audi-sec"><h3 class="bt">CONCILIACIÓN MODELO 303 - SII PRESENTADO vs CONTABILIDAD</h3>
-      <p class="leyenda" style="margin:0 0 8px">Presentado: descargas del SII (LRFE emitidas y LRFR recibidas) del periodo. Contabilidad: libros de IVA del periodo, sin retenciones ni recargo. En emitidas se restan las autorepercutidas del libro (ISP, intracomunitarias…), que el SII de emitidas no recoge; la diferencia es SII − libro sin autorepercutidas. Se da por cuadrado con un margen de ±0,10 €. Ejercicio ${A.ej} · ${esTrim() ? 'PYME (trimestral)' : 'Gran empresa (mensual)'}.</p>
-      ${tabla('IVA REPERCUTIDO · FACTURAS EMITIDAS', cab(5, 5, subE), bodyE)}
-      ${tabla('IVA SOPORTADO · FACTURAS RECIBIDAS', cab(3, 3, subR), bodyR)}</section>`;
+    // cada bloque en su globo: Periodo, Base imponible y Cuota (tres tablas con las mismas filas, una junto a otra)
+    const tg = (titulo, sub, filas, cls) => `<div class="cg-g ${cls || ''}"><div class="cg-pil">${titulo}</div><div class="cg-sc"><table class="aud audi-t cg-t"><thead><tr>${sub.map((t) => `<th>${t}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div></div>`;
+    const fPer = A.filas.map((f) => `<tr${f.tot ? ' class="tot"' : ''}><td>${esc(f.txt)}</td></tr>`).join('');
+    const fx = (get, x) => A.filas.map((f) => `<tr${f.tot ? ' class="tot"' : ''}>${get(f, x)}</tr>`).join('');
+    const estP = (ok) => `<span class="cg-est ${ok ? 'ok' : 'ko'}">${ok ? 'Cuadra' : 'Descuadre'}</span>`;
+    const T = A.filas[A.filas.length - 1], okE = Math.abs(T.e.s.c - T.e.k.c) <= 0.10 + 1e-9, okR = Math.abs(T.r.s.c - T.r.t.c) <= 0.10 + 1e-9;
+    const bloque = (titulo, ok, sub, getB) => `<div class="cg-card"><div class="cg-hd"><div class="cg-pil cg-pil-t">${titulo}</div>${A.hay ? estP(ok) : ''}</div><div class="cg-fila">${tg('Periodo', ['&nbsp;'], fPer, 'cg-per')}${tg('Base imponible', sub, fx(getB, 'b'))}${tg('Cuota', sub, fx(getB, 'c'))}</div></div>`;
+    return `<section class="block audi-sec cg-wrap"><div class="cg-card"><h3 class="cg-pil cg-pil-g">CONCILIACIÓN MODELO 303 · SII PRESENTADO vs CONTABILIDAD</h3>
+      <p class="cg-ley">Presentado: descargas del SII (LRFE emitidas y LRFR recibidas) del periodo. Contabilidad: libros de IVA del periodo, sin retenciones ni recargo. En emitidas se restan las autorepercutidas del libro (ISP, intracomunitarias…), que el SII de emitidas no recoge; la diferencia es SII − libro sin autorepercutidas. Se da por cuadrado con un margen de ±0,10 €. Ejercicio ${A.ej} · ${esTrim() ? 'PYME (trimestral)' : 'Gran empresa (mensual)'}.</p></div>
+      ${bloque('IVA repercutido · facturas emitidas', okE, subE, (f, x) => bE(f.e, x))}
+      ${bloque('IVA soportado · facturas recibidas', okR, subR, (f, x) => bR(f.r, x))}</section>`;
   }
   const estadoAudi = (A) => { const T = A.filas[A.filas.length - 1]; return !A.hay ? 'Sin datos' : ['1', '2', '3', '4'].every((j) => T[`d${j}`] === undefined || Math.abs(T[`d${j}`]) <= MARGEN_RET) ? 'Cuadra' : 'Descuadre'; };
   const estado303 = () => { const A = calcAudi303(); if (!A.hay) return 'Sin datos'; const T = A.filas[A.filas.length - 1]; return Math.abs(T.e.s.c - T.e.k.c) <= 0.10 + 1e-9 && Math.abs(T.r.s.c - T.r.t.c) <= 0.10 + 1e-9 ? 'Cuadra' : 'Descuadre'; };
