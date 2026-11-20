@@ -1623,3 +1623,8 @@ table.cg-t tr.tot td { background: #f0f2f6 !important; font-weight: 700; border-
 .vista.bl-conc table.aud tbody td { border-color: #eef0f4; }
 .vista.bl-conc table.aud tr.tot td { background: #f0f2f6; }
 .vista.bl-conc .cg-wrap { background: transparent; border: 0; box-shadow: none; padding: 0; }
+
+/* Resto de conciliaciones del bloque 8 (202, 200, 592, 583, 232, anticipos, cuentas, retenciones, diferencias, IS): cada tabla en su globo y los títulos de grupo de columnas en cápsula */
+.vista.bl-conc table.aud:not(.cg-t) { border-collapse: separate; border-spacing: 0; background: #fafbfd; border: 1px solid #dde6f3; border-radius: 12px; overflow: hidden; }
+.vista.bl-conc table.aud:not(.cg-t) thead th[colspan] { border: 3px solid #fafbfd !important; border-radius: 999px; box-shadow: inset 0 0 0 1px #b9d3f5; }
+.vista.bl-conc table.aud:not(.cg-t) td { border-left: 0; border-right: 0; }
