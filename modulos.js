@@ -22,7 +22,7 @@ import { crearTransProv } from './transprov.js?v=9';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { abrirD365 } from './d365.js?v=6';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=20';
+import { crearConciliaciones } from './conciliaciones.js?v=21';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
 
@@ -1903,6 +1903,15 @@ export function crearModulos(c) {
     if (![...E, ...R].some((l) => l.fecha >= r.desde && l.fecha <= r.hasta)) return 0;
     const c = calcular303(E, R, e2, p2, manualDe(e2, p2), { rectif: rectif303, c110: disponible303(E, R, e2, p2, prof + 1) });
     return Math.round((c.c87 + (c.c71 < 0 ? -c.c71 : 0)) * 100) / 100;
+  }
+  // cuota a compensar que queda al terminar el periodo p (87 + resultado a compensar si salió negativo), calculada de los libros: es lo que pasa al periodo siguiente
+  function pend303(ej, p) {
+    try {
+      const E = grande('fact-E'), R = grande('fact-R'); if (!E || !R) return null;
+      const r = rangoPeriodo(ej, p); if (![...E, ...R].some((l) => l.fecha >= r.desde && l.fecha <= r.hasta)) return null;
+      const c = calcular303(E, R, ej, p, manualDe(ej, p), { rectif: rectif303, c110: disponible303(E, R, ej, p) });
+      return Math.round((c.c87 + (c.c71 < 0 ? -c.c71 : 0)) * 100) / 100;
+    } catch { return null; }
   }
   async function guardarMan303(k, v) {
     const reg = regMan(), per = claveMan();
@@ -5719,7 +5728,7 @@ export function crearModulos(c) {
   const M6 = crearModelos3({ db, S, esc, render, empresa, puede, grande, prsVal, casaCta, leerSYS, empOrden, urlPdf: async (path) => { const { data } = await db.storage.from('documentos').createSignedUrl(path, 300); return data?.signedUrl ?? null; } });
   Object.assign(tabs, M6.tabs);
   Object.assign(badges, M6.badges);
-  const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303: (...a) => c303(...a), calc349: calcular349, extra: M4.adif });
+  const M8 = crearConciliaciones({ S, esc, render, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303: (...a) => c303(...a), calc349: calcular349, extra: M4.adif, pend303 });
   Object.assign(tabs, M8.tabs);
   Object.assign(badges, M8.badges);
   const M7 = crearEstados({ S, esc, render, empresa, dz, db, cargar, puede, filasExcel: (f) => filasExcel(f) });

@@ -1,7 +1,7 @@
 // Bloque 8 · conciliaciones fiscales portadas de la aplicación antigua (diseño y cálculo copiados; solo cambia la capa de datos).
 // Datos: libros de IVA, SII y mayor llegan de `grande()`; lo presentado, de «Impuestos Presentados» (prsVal); las nóminas, de la pestaña Nóminas.
 export function crearConciliaciones(c) {
-  const { S, esc, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303, calc349, extra } = c;
+  const { S, esc, empresa, grande, prsVal, nomPer, nomMes, ctaDe, ctaPref, ctaCfg, casaCta, ctasEmpresa, calcCuenta, calc303, calc349, extra, pend303 } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
   const cargandoTxt = '<p class="vacio">Cargando datos…</p>';
   const r2 = (x) => Math.round((Number(x) || 0) * 100 + (x < 0 ? -1e-9 : 1e-9)) / 100 + 0;
@@ -180,6 +180,8 @@ export function crearConciliaciones(c) {
         const per = trim ? `${Math.ceil(R.m1 / 3)}T` : String(R.m1).padStart(2, '0'), liq = pv(R.ej, '303', per, 'liq'), c87 = pv(R.ej, '303', per, 'c87');
         // pendiente de compensar a la fecha: casilla 87 + la 71 del periodo si sale negativa (en diciembre/4T, a devolver)
         imp = liq === null && c87 === null ? null : r2((c87 || 0) + (liq < 0 ? -liq : 0));
+        // si el 303 del periodo sale a cero (o sin casillas) porque había más a deducir que a pagar, lo que queda por compensar para el mes siguiente se calcula de los libros
+        if (!imp && pend303) { const x = pend303(R.ej, per); if (x) imp = x; }
       } else if (k === 'c4650') imp = null;
       else if (k === 'c4730') { // pagos fraccionados del ejercicio ya vencidos: 1P (abril), 2P (octubre) y 3P (diciembre)
         const ps = [['1P', 4], ['2P', 10], ['3P', 12]].filter(([, m]) => R.m1 >= m).map(([p]) => pv(R.ej, '202', p, 'res'));
