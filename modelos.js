@@ -806,13 +806,17 @@ export function crearModelos(c) {
       const dE = r2(iE - mE), dI = r2(iI - mI);
       [iE, mE, dE, iI, mI, dI].forEach((v, k) => { tot[k] = r2(tot[k] + v); });
       const exE = dE > tol, exI = dI > tol; if (exE) nMayor++; if (exI) nMayor++;
-      return `<tr><td>${MES_L[i].toUpperCase()}</td><td class="n">${guion(iE)}</td><td class="n">${guion(mE)}</td><td class="n ${Math.abs(dE) > tol ? 'dif-ko' : ''}">${guion(dE)}</td><td class="c">${est(iE, mE, dE)}${exE ? mayor : ''}</td>
-        <td class="n">${guion(iI)}</td><td class="n">${guion(mI)}</td><td class="n ${Math.abs(dI) > tol ? 'dif-ko' : ''}">${guion(dI)}</td><td class="c">${est(iI, mI, dI)}${exI ? mayor : ''}</td></tr>`;
-    }).join('');
+      return { mes: MES_L[i].toUpperCase(), e: `<td class="n">${guion(iE)}</td><td class="n">${guion(mE)}</td><td class="n ${Math.abs(dE) > tol ? 'dif-ko' : ''}">${guion(dE)}</td><td class="c">${est(iE, mE, dE)}${exE ? mayor : ''}</td>`,
+        i: `<td class="n">${guion(iI)}</td><td class="n">${guion(mI)}</td><td class="n ${Math.abs(dI) > tol ? 'dif-ko' : ''}">${guion(dI)}</td><td class="c">${est(iI, mI, dI)}${exI ? mayor : ''}</td>` };
+    });
     const avisoMayor = nMayor ? `<div class="aviso"><p>✖ El Intrastat supera al 349 en ${nMayor} comprobación(es) mensual(es) (marcadas «Intrastat &gt; 349»). Cada mes el Intrastat no debe ser mayor que el 349: revisa facturas sin declarar en el 349, anticipos (R.UE.VA) o líneas del Intrastat de más.</p></div>` : '<p class="hint" style="color:#1a7f37">✓ En ningún mes el Intrastat supera al 349.</p>';
-    const resumen = `${avisoMayor}<table class="aud mov it-t"><thead><tr><th rowspan="2">Mes</th><th colspan="4">EXPEDICIONES / ENTREGAS (clave E)</th><th colspan="4">INTRODUCCIONES / ADQUISICIONES (clave A)</th></tr>
-      <tr><th>Intrastat (valor facturado)</th><th>Modelo 349 clave E (entregas de bienes)</th><th>Diferencia</th><th>Estado</th><th>Intrastat (valor facturado)</th><th>Modelo 349 clave A (adquisiciones de bienes)</th><th>Diferencia</th><th>Estado</th></tr></thead>
-      <tbody>${filasRes}<tr class="tot200"><td>TOTAL ${ej}</td>${tot.map((v, k) => `<td class="n">${nf2(v)}</td>${k === 2 || k === 5 ? '<td></td>' : ''}`).join('')}</tr></tbody></table>`;
+    // cada bloque en su globo (Periodo, Expediciones e Introducciones), como en la conciliación 303; las columnas se ensanchan arrastrando el borde de la cabecera
+    const globo = (titulo, cab, filas, cls) => `<div class="cg-g ${cls || ''}"><div class="cg-pil">${titulo}</div><div class="cg-sc"><table class="aud mov it-t cg-t"><thead><tr>${cab.map((t) => `<th>${t}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div></div>`;
+    const cabI = ['Intrastat (valor facturado)', 'Modelo 349 clave E (entregas de bienes)', 'Diferencia', 'Estado'], cabA = ['Intrastat (valor facturado)', 'Modelo 349 clave A (adquisiciones de bienes)', 'Diferencia', 'Estado'];
+    const filaT = (c) => `<tr class="tot">${c}</tr>`;
+    const totE = `<td class="n">${nf2(tot[0])}</td><td class="n">${nf2(tot[1])}</td><td class="n">${nf2(tot[2])}</td><td></td>`, totI = `<td class="n">${nf2(tot[3])}</td><td class="n">${nf2(tot[4])}</td><td class="n">${nf2(tot[5])}</td><td></td>`;
+    const resumen = `${avisoMayor}<div class="cg-fila">${globo('Periodo', ['&nbsp;'], filasRes.map((f) => `<tr><td>${f.mes}</td></tr>`).join('') + filaT(`<td>TOTAL ${ej}</td>`), 'cg-per')}
+      ${globo('Expediciones / entregas (clave E)', cabI, filasRes.map((f) => `<tr>${f.e}</tr>`).join('') + filaT(totE))}${globo('Introducciones / adquisiciones (clave A)', cabA, filasRes.map((f) => `<tr>${f.i}</tr>`).join('') + filaT(totI))}</div>`;
     const serv = `<table class="aud mov it-t"><thead><tr><th>Factura</th><th>Fecha</th><th>NIF</th><th>Nombre</th><th>País</th><th>Base 349 (€)</th><th></th></tr></thead><tbody>
       ${SV.map((s, i) => `<tr><td>${esc(s.fac)}</td><td class="c">${s.ok ? fdmy(s.fecha) : '<b class="dif-ko">No encontrada</b>'}</td><td>${esc(s.nif)}</td><td>${esc(s.nombre)}</td><td class="c">${esc(s.pais)}</td><td class="n">${guion(s.base)}</td><td class="no-print">${puede() ? `<button class="small" data-act="m-intraservdel" data-i="${i}">Quitar</button>` : ''}</td></tr>`).join('')}
       ${puede() ? '<tr class="no-print"><td><input class="facin" data-intraservadd="1" placeholder="Nº de factura" size="16"></td><td colspan="6" class="hint">Escribe el nº de factura del libro de repercutido; el resto se rellena solo.</td></tr>' : ''}</tbody></table>`;
@@ -891,9 +895,9 @@ export function crearModelos(c) {
       concFac = `<section class="block"><h3 class="bt">Conciliación por nº de factura · fichero Intrastat vs modelo 349 · ${MES_L[sel - 1]} ${ej}</h3>${tabsM}${control}
         <p class="leyenda">Verde = coincide; rojo = a revisar. Intrastat = líneas que van al .txt (valor facturado) agrupadas por la columna Factura; 349 = facturas que el modelo 349 declara con clave E (expediciones) o clave A (introducciones). Las líneas negativas se declaran en el Intrastat en el flujo contrario (una negativa de emitidas como llegada y al revés); aquí suman en su partida original, en negativo, por su nº de factura. Una factura que está en el 349 y no en el Intrastat suele ser un servicio metido como bien.${sinFac ? ' <b class="dif-ko">Hay líneas Intrastat de este mes sin nº de factura: pégalas de nuevo con la columna Factura para poder cruzarlas.</b>' : ''}</p>${bloques.join('')}</section>`;
     }
-    return `<section class="block"><h3 class="bt">CONCILIACIÓN 349 - INTRASTAT (bienes) · ${ej}</h3>
-      <p class="leyenda">Distribuciones = Expedición, Llegadas = Introducción. País ISO3 → ISO2. Servicios (Categoría con «${esc(C.txtServ)}») se excluyen; producto sin NC toma el NC por defecto. El 349 se calcula desde los libros registro (R.UE y S.UE.NR/RD/SR).</p>
-      <h4 style="margin-top:12px">Resumen mensual</h4>${resumen}</section>
+    return `<section class="block cg-wrap"><div class="cg-card"><h3 class="cg-pil cg-pil-g">CONCILIACIÓN 349 · INTRASTAT (bienes) · ${ej}</h3>
+      <p class="cg-ley">Distribuciones = Expedición, Llegadas = Introducción. País ISO3 → ISO2. Servicios (Categoría con «${esc(C.txtServ)}») se excluyen; producto sin NC toma el NC por defecto. El 349 se calcula desde los libros registro (R.UE y S.UE.NR/RD/SR).</p></div>
+      <div class="cg-card"><div class="cg-pil cg-pil-t">Resumen mensual</div>${resumen}</div></section>
       <section class="block"><h3 class="bt">Servicios incluidos en el 349 (R.UE) · se descuentan en la conciliación</h3>${serv}</section>
       ${concFac}`;
   }

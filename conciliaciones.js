@@ -25,6 +25,8 @@ export function crearConciliaciones(c) {
   const lsGet = (k, d) => { try { const v = localStorage.getItem(`conc8-${S.sel}-${k}`); return v === null ? d : JSON.parse(v); } catch { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem(`conc8-${S.sel}-${k}`, JSON.stringify(v)); } catch { /* sin almacenamiento */ } };
 
+  // globo de una tabla de la vista de conciliaciones: cápsula con el título arriba y la tabla dentro (las columnas se ensanchan arrastrando el borde de la cabecera)
+  const cgGlobo = (titulo, sub, filas, cls) => `<div class="cg-g ${cls || ''}"><div class="cg-pil">${titulo}</div><div class="cg-sc"><table class="aud audi-t cg-t"><thead><tr>${sub.map((t) => `<th>${t}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table></div></div>`;
   // ================= Conciliaciones 111 / 115 / 123: lo presentado frente a la contabilidad =================
   function calcAudi(m) {
     const ej = ejNum(), trim = esTrim(), nP = trim ? 4 : 12;
@@ -69,17 +71,19 @@ export function crearConciliaciones(c) {
     };
     const grupos = m === '111' ? [['RENDIMIENTOS DEL TRABAJO', [['Base Mod. 111', 'Base contabilidad', 1], ['Retención Mod. 111', 'Retención contabilidad', 2]]], ['ACTIVIDADES PROFESIONALES', [['Base Mod. 111', 'Base contabilidad', 3], ['Retención Mod. 111', 'Retención contabilidad', 4]]]]
       : [['BASES IMPONIBLES', [[`Modelo ${m}`, 'Contabilidad', 1]]], ['RETENCIONES', [[`Modelo ${m}`, 'Contabilidad', 2]]]];
-    const h1 = `<tr><th rowspan="2">Periodo</th>${grupos.map((g) => `<th colspan="${g[1].length * 3}">${g[0]}</th>`).join('')}</tr>`;
-    const h2 = `<tr>${grupos.map((g) => g[1].map((cc) => `<th>${cc[0]}</th><th>${cc[1]}</th><th class="adif-d">Diferencia</th>`).join('')).join('')}</tr>`;
-    const body = A.filas.map((f) => `<tr${f.tot ? ' class="tot"' : ''}><td${f.tot ? ' style="font-weight:700"' : ''}>${esc(f.txt)}</td>${grupos.map((g) => g[1].map((cc) => n(f[`c${cc[2]}`]) + n(f[`k${cc[2]}`]) + d(f[`d${cc[2]}`], cc[2])).join('')).join('')}</tr>`).join('');
+    // cada bloque en su globo (Periodo y un globo por grupo), con la misma vista que la conciliación 303
+    const fRows = (fn) => A.filas.map((f) => `<tr${f.tot ? ' class="tot"' : ''}>${fn(f)}</tr>`).join('');
+    const globos = cgGlobo('Periodo', ['&nbsp;'], fRows((f) => `<td>${esc(f.txt)}</td>`), 'cg-per')
+      + grupos.map((g) => cgGlobo(g[0], g[1].flatMap((cc) => [cc[0], cc[1], 'Diferencia']), fRows((f) => g[1].map((cc) => n(f[`c${cc[2]}`]) + n(f[`k${cc[2]}`]) + d(f[`d${cc[2]}`], cc[2])).join('')))).join('');
+    const es = estadoAudi(A);
     const sub = { 111: 'Compara lo declarado en el Modelo 111 (Presentados) con la contabilidad: nóminas (pestaña Nóminas) y retenciones profesionales del libro de soportado (códigos I.PR*).',
       115: 'Compara lo declarado en el Modelo 115 (Presentados) con el libro de soportado (código I.ALQ).',
       123: 'Compara lo declarado en el Modelo 123 (Presentados) con la contabilidad. Retención: extracto de la cuenta 4751.04 (haber, movimientos de la empresa). Base contable = dividendos exentos a empresas (I.DV.E, sin retención) + dividendos a personas que aparezcan en la contabilidad (I.DV) + la retención restante pasada a base con el tipo indicado.' }[m];
-    return `<section class="block audi-sec"><h3 class="bt">AUDITORÍA MODELO ${m} - BASES Y RETENCIONES vs CONTABILIDAD</h3>
-      <p class="leyenda" style="margin:0 0 8px">${sub} Cuadra por el total del ejercicio con un margen de ±0,20 €; en ámbar, diferencias de un mes que se compensan en otro.</p>
-      <div class="filtros" style="display:flex;gap:16px;align-items:center;margin-bottom:8px"><span>Ejercicio: <b>${A.ej}</b></span><span>Tipo de empresa: <b>${esTrim() ? 'PYME (trimestral)' : 'Gran empresa (mensual)'}</b></span>
-        ${m === '123' ? `<label>Tipo de retención: <input data-audi123tipo="1" value="${String(A.tipo123 * 100).replace('.', ',')}" size="4"> %</label>` : ''}</div>
-      <div style="overflow:auto"><table class="aud audi-t" style="width:auto"><thead>${h1}${h2}</thead><tbody>${body}</tbody></table></div></section>`;
+    return `<section class="block audi-sec cg-wrap"><div class="cg-card"><h3 class="cg-pil cg-pil-g">AUDITORÍA MODELO ${m} · BASES Y RETENCIONES vs CONTABILIDAD</h3>
+      <p class="cg-ley">${sub} Cuadra por el total del ejercicio con un margen de ±0,20 €; en ámbar, diferencias de un mes que se compensan en otro.</p>
+      <div class="filtros" style="display:flex;gap:16px;align-items:center;margin-top:8px;font-size:.85rem"><span>Ejercicio: <b>${A.ej}</b></span><span>Tipo de empresa: <b>${esTrim() ? 'PYME (trimestral)' : 'Gran empresa (mensual)'}</b></span>
+        ${m === '123' ? `<label>Tipo de retención: <input data-audi123tipo="1" value="${String(A.tipo123 * 100).replace('.', ',')}" size="4"> %</label>` : ''}</div></div>
+      <div class="cg-card"><div class="cg-hd"><div class="cg-pil cg-pil-t">Modelo ${m} frente a contabilidad · ${A.ej}</div>${es === 'Sin datos' ? '' : `<span class="cg-est ${es === 'Cuadra' ? 'ok' : 'ko'}">${es}</span>`}</div><div class="cg-fila">${globos}</div></div></section>`;
   }
 
   // ================= Conciliación 303: lo presentado en el SII frente a la contabilidad (libros de IVA), periodo a periodo =================

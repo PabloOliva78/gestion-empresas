@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=14';
-import { crearModelos } from './modelos.js?v=381';
+import { crearModelos } from './modelos.js?v=382';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=4';
@@ -23,7 +23,7 @@ import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
 import { leerRegistro } from './cachelibros.js?v=1';
 import { abrirD365, precalentarD365, listarLibrosD365, bajarLibroD365 } from './d365.js?v=8';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=23';
+import { crearConciliaciones } from './conciliaciones.js?v=24';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
 

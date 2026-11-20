@@ -1622,3 +1622,4 @@ table.cg-t tr.tot td { background: #f0f2f6 !important; font-weight: 700; border-
 .vista.bl-conc table.aud thead th { background: #eaf3fe !important; color: #0b4a99 !important; border-color: #d3e4fb !important; }
 .vista.bl-conc table.aud tbody td { border-color: #eef0f4; }
 .vista.bl-conc table.aud tr.tot td { background: #f0f2f6; }
+.vista.bl-conc .cg-wrap { background: transparent; border: 0; box-shadow: none; padding: 0; }
