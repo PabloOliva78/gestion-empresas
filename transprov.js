@@ -242,9 +242,11 @@ export function crearTransProv({ S, esc, render, empresa, puede, grande, reempla
     const pill = (t, k) => `<span class="tt-pill ${k}">${esc(t)}</span>`;
     const tarj = (t, v, c = '', s = '') => `<div class="tt-k"><div class="tt-kt">${t}</div><div class="tt-kv ${c}">${v}</div>${s ? `<div class="tt-ks">${s}</div>` : ''}</div>`;
     const detalle = (p) => {
-      const h = pv.get(p.cod) ?? {}, dt = p.ls.reduce((s, x) => ({ deb: s.deb + x.deb, cre: s.cre + x.cre }), { deb: 0, cre: 0 }), sd = r2(dt.deb - dt.cre);
+      // con un filtro de estado (Conciliadas, Revisadas, Pendientes, Por confirmar) el proveedor solo enseña las partidas de ese estado, no una mezcla
+      const LS = P.f === 'sub' ? p.ls.filter((x) => x.estado === 'sub') : P.f === 'rev' ? p.ls.filter((x) => x.estado === 'curso' && !x.desap) : P.f === 'pen' ? p.ls.filter((x) => x.estado !== 'sub' && x.estado !== 'curso' && !x.desap) : P.f === 'conf' ? p.ls.filter((x) => x.desap && x.estado !== 'sub') : p.ls;
+      const h = pv.get(p.cod) ?? {}, dt = LS.reduce((s, x) => ({ deb: s.deb + x.deb, cre: s.cre + x.cre }), { deb: 0, cre: 0 }), sd = r2(dt.deb - dt.cre);
       const v = (n) => (n ? fm(n) : '-');
-      const fl = p.ls.map((x) => {
+      const fl = LS.map((x) => {
         const conc = x.estado === 'sub' && !x.desap, rev = x.estado === 'curso' || conc, k = esc(x.k);
         const chk = (w, on) => (ed ? `<input type="checkbox" data-ttchk="${w}|${k}"${on ? ' checked' : ''}>` : (on ? '✓' : ''));
         const est = x.desap ? `<span class="tt-pill warn">Por confirmar</span>${ed ? ` <button class="tt-b" data-ttact="ok|${k}">✔ Saldada</button> <button class="tt-b" data-ttact="no|${k}">Sigue pendiente</button>` : ''}`
