@@ -927,7 +927,7 @@ export function crearModelos(c) {
     'm-a22add': async () => { const D = a22Datos(); D.filas.push({ per: `1T ${S.ejercicio}` }); await a22Guardar(D); render(); },
     'm-a22del': async (d) => { const D = a22Datos(); D.filas.splice(+d.i, 1); await a22Guardar(D); render(); },
     'm-a22csv': (d) => a22Csv(d.t),
-    'm-c232libros': () => { c232Libros = true; render(); },
+    'm-c232libros': () => { c232Libros = true; c232Todas = true; render(); },
     'm-a22borrar': async () => { if (!confirm('¿Quitar las compras y ventas cargadas para el A22?')) return; await bigGuardar('a22src', { compras: [], ventas: [], archivos: [] }); render(); },
     'm-a22pasar': async () => {
       const Sx = a22Src(); if (!Sx) return; const R = a22Calc(Sx), D = a22Datos();
@@ -984,6 +984,7 @@ export function crearModelos(c) {
   const nfm = (v) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0);
   // ================= Conciliación mod 232: operaciones vinculadas, calculado (Emitidas y Recibidas) frente a presentado, por empresa (resumen de control; solo lee) =================
   // el 232 de un ejercicio se presenta del 1 al 30 de noviembre del año siguiente; se declara cada entidad del grupo con la que se superan 250.000 €
+  let c232Todas = false; // true = también se leen los libros de las empresas sin 232 registrado (para ver si superan 250.000 € y deberían presentarlo)
   let c232Libros = false; // los libros de IVA de todas las empresas solo se leen cuando se pulsa el botón (son pesados)
   function filas232() {
     const ej = m232EjDef(), selAnt = S.sel, out = [], lista = c.empOrden ? c.empOrden() : [...S.empresas], plazo = Date.UTC(ej + 1, 10, 30) + 864e5; let cargando = false;
@@ -992,7 +993,7 @@ export function crearModelos(c) {
         S.sel = e.id;
         const D = m232Reg(ej), pres = m232Pres(ej, D), F = D.filas ?? [];
         let calc = null;
-        if (c232Libros) {
+        if (c232Libros && (c232Todas || pres || F.length)) { // por defecto solo las empresas con 232 registrado o presentado: leer todos los libros de todas las empresas pesa mucho
           const E = grande('fact-E'), Rr = grande('fact-R');
           if (!E || !Rr) cargando = true;
           else {
@@ -1020,7 +1021,7 @@ export function crearModelos(c) {
     const { filas: F, cargando, ej } = filas232(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length;
     return `<section class="dsec"><h3>Conciliación mod 232 · operaciones vinculadas · ejercicio ${ej} (se presenta en noviembre de ${ej + 1})</h3>
       <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia o sin presentar · ${ic.aviso} ${k('aviso')} pendientes${cargando ? ' · ⏳ leyendo los libros de alguna empresa…' : ''}</p>
-      <p class="no-print"><button class="small" data-act="m-c232libros"${c232Libros ? ' disabled' : ''}>${c232Libros ? '✓ Libros de IVA de todas las empresas cargados' : 'Cargar los libros de IVA de todas las empresas (para calcular)'}</button></p>
+      <p class="no-print"><button class="small" data-act="m-c232libros"${c232Todas ? ' disabled' : ''}>${c232Todas ? '✓ Libros de IVA de todas las empresas cargados' : 'Comprobar también las empresas sin 232 registrado (lee sus libros de IVA)'}</button></p>
       <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>232 presentado</th><th>Registros del 232</th><th>Entidades que superan 250.000 €</th><th>Líneas comparadas</th><th>Líneas con diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
       ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td style="text-align:center">${x.pres ? 'Sí' : 'No'}</td><td class="n">${x.nFilas}</td><td class="n">${x.calc ? x.calc.nObl : '—'}</td><td class="n">${x.calc ? x.calc.nLin : '—'}</td><td class="n">${x.calc ? x.calc.nDif : '—'}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || `<tr><td colspan="8" class="vacio">${c232Libros ? 'Ninguna empresa supera 250.000 € con otra sociedad del grupo en ' + ej + ' ni tiene 232 registrado.' : 'Ninguna empresa tiene 232 registrado en ' + ej + '. Pulsa «Cargar los libros» para calcular quién está obligada.'}</td></tr>`}</tbody></table></div>
       <p class="hint">Calculado = lo que sale de Emitidas (ingresos) y Recibidas (pagos) con las demás sociedades del grupo, por entidad, tipo de operación e ingreso/pago, igual que en la pestaña «Modelo 232». Solo cuentan las entidades que superan 250.000 € (las que se declaran). Presentado = los registros del 232 cargados o presentados. Cuadra si todas las líneas difieren en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;

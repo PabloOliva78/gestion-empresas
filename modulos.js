@@ -6,7 +6,7 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=14';
-import { crearModelos } from './modelos.js?v=379';
+import { crearModelos } from './modelos.js?v=380';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=3';
@@ -20,7 +20,7 @@ import { crearProveedores } from './proveedores.js?v=11';
 import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=10';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
-import { abrirD365 } from './d365.js?v=6';
+import { abrirD365, precalentarD365, listarLibrosD365, bajarLibroD365 } from './d365.js?v=8';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=21';
 import { crearEstados } from './estados.js?v=4';
@@ -1356,6 +1356,7 @@ export function crearModulos(c) {
 
   function vistaFacturas(s, dzh = '') { // dzh: la zona de soltar del libro; queda dentro de la parte fija de arriba
     if (!S.sel) return dzh + sinEmpresa;
+    if (s === 'E') precalentarD365(empresa()?.siglas);
     const datos = grande('fact-' + s);
     if (!datos) return dzh + cargandoTxt;
     if (!datos.length && fcNueva?.s !== s) return `${dzh}<p class="vacio">Sin datos: carga el libro de IVA ${SENT[s].lib} con el botón ${SENT[s].boton}.</p>${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura a mano</button>` : ''}`;
@@ -1377,7 +1378,7 @@ export function crearModulos(c) {
       ${inF('base', 'Base')}${inF('cuota', 'Cuota')}
       ${fcQ ? `<button class="small no-print" data-act="m-fcqlimpiar" title="Quitar la búsqueda por nº de factura">Factura: «${esc(fcQ)}» ✕</button>` : ''}
       <span id="fcCuenta" class="hint">${c.n} facturas</span>
-      ${puede() ? `<button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
+      ${puede() ? `<button class="small no-print" data-act="m-d365traer" data-s="${s}" title="Carga los libros de IVA ${s === 'E' ? 'repercutido' : 'soportado'} que ha descargado D365 (carpeta LIBROS IVA D365 y Descargas) sin soltarlos a mano">⬇ Traer de D365</button> <button class="small" data-act="m-fcnv" data-s="${s}">＋ Añadir factura</button>` : ''}</div>
       <span id="dlfc">${htmlDatalistsFc(O)}</span>
       <div id="fcTabla">${c.html}</div>`;
   }
@@ -4785,6 +4786,24 @@ export function crearModulos(c) {
     if (i >= 0) { const e = S.empresas.find((x) => c.idxEmp(x) === i); if (e) return e; }
     return sel;
   }
+  // «Traer de D365»: los libros de IVA que ha descargado D365 en este PC (los sirve el servicio local) se cargan como si se hubieran soltado; cada uno va a su empresa y no se duplica nada
+  async function traerD365(s) {
+    const clave = s === 'E' ? 'repercutido' : 'soportado', desdeKey = `d365-traido-${s}`;
+    let desde = 0; try { desde = Number(localStorage.getItem(desdeKey)) || 0; } catch { /* sin almacenamiento */ }
+    if (!desde) desde = Date.now() - 45 * 864e5; // la primera vez, lo de los últimos 45 días
+    let lista;
+    try { lista = (await listarLibrosD365()).filter((x) => x.n.toLowerCase().includes(clave) && x.mt > desde).sort((a, b) => a.mt - b.mt); }
+    catch (err) { return void alert('No se puede hablar con el servicio local de D365 de este PC (' + err.message + '). Comprueba que la tarea «Servidor D365 local» está en marcha.'); }
+    if (!lista.length) return void alert(`No hay libros de IVA ${clave} nuevos en este PC desde el ${new Date(desde).toLocaleDateString('es-ES')}.`);
+    if (!confirm(`Hay ${lista.length} libro(s) de IVA ${clave} descargados de D365 desde el ${new Date(desde).toLocaleDateString('es-ES')}:\n${lista.slice(0, 12).map((x) => x.n).join('\n')}${lista.length > 12 ? '\n…' : ''}\n\nSe cargan en la empresa de cada archivo (sin duplicar). ¿Continuar?`)) return;
+    try {
+      const files = [];
+      for (const x of lista) files.push(new File([await bajarLibroD365(x.n)], x.n, { lastModified: x.mt }));
+      archKind = s === 'E' ? 'emitidas' : 'recibidas';
+      await subirArchivos(files);
+      try { localStorage.setItem(desdeKey, String(Math.max(...lista.map((x) => x.mt)))); } catch { /* sin almacenamiento */ }
+    } catch (err) { alert('No se pudieron traer los libros: ' + err.message); }
+  }
   async function subirArchivos(files) {
     if (archKind === 'prspdf') return cargarPresentados(files);
     if (archKind === 'fundae') return cargarFundae(files);
@@ -5007,6 +5026,7 @@ export function crearModulos(c) {
       'm-man303': () => formMan303(),
       'm-fc': () => opFc(d.s, d.op, d.k),
       'm-esker': () => buscarEsker(d.n),
+      'm-d365traer': (d) => traerD365(d.s),
       'm-d365fac': () => abrirD365({ tipo: 'fac', cuenta: d.n, siglas: empresa()?.siglas }),
       'm-siixl': () => excelConcSii(d.s),
       'm-fcnv': () => fcNvAbrir(d.s),

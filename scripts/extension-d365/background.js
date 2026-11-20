@@ -7,18 +7,18 @@ const D365 = 'https://herogra.operations.dynamics.com/';
 const ORIGEN = 'https://pablooliva78.github.io';
 let ocupado = false;
 
-async function pestanaDe(cmp) {
+async function pestanaDe(cmp, activa = true) {
   const { pestanaId } = await chrome.storage.session.get('pestanaId');
   const url = `${D365}?cmp=${cmp}&mi=CustInvoiceJournal`;
   if (pestanaId) {
     try {
       const t = await chrome.tabs.get(pestanaId);
       if (t?.url && new RegExp(`cmp=${cmp}(&|$)`, 'i').test(t.url) && /CustInvoiceJournal/i.test(t.url)) return { id: t.id, nueva: false };
-      await chrome.tabs.update(pestanaId, { url, active: true }); // otra empresa: se carga su diario en la misma pestaña
+      await chrome.tabs.update(pestanaId, activa ? { url, active: true } : { url }); // otra empresa: se carga su diario en la misma pestaña
       return { id: pestanaId, nueva: true };
     } catch { /* la pestaña se cerró: se abre otra */ }
   }
-  const t = await chrome.tabs.create({ url, active: true });
+  const t = await chrome.tabs.create({ url, active: activa });
   await chrome.storage.session.set({ pestanaId: t.id });
   return { id: t.id, nueva: true };
 }
@@ -42,9 +42,13 @@ async function abrir(num, cmp) {
   }
 }
 
+// Precalentar: al abrir Emitidas en la app se carga ya (en segundo plano, sin quitarte el foco) el diario de facturas de esa empresa, para que el primer 🔎 sea casi inmediato
+async function precalentar(cmp) { if (ocupado) return; await pestanaDe(cmp, false); }
+
 chrome.runtime.onMessageExternal.addListener((msg, remitente, responder) => {
   if (!remitente?.origin || remitente.origin !== ORIGEN) { responder({ ok: false, error: 'origen no permitido' }); return; }
   if (msg?.tipo === 'estado') { responder({ ok: true, version: chrome.runtime.getManifest().version }); return; }
+  if (msg?.tipo === 'precalentar' && /^[A-Z]{2,5}$/.test(String(msg.cmp || ''))) { responder({ ok: true }); precalentar(String(msg.cmp)).catch(() => {}); return; }
   if (msg?.tipo !== 'fac' || !/^[\w./ -]{1,40}$/.test(String(msg.num || '')) || !/^[A-Z]{2,5}$/.test(String(msg.cmp || ''))) { responder({ ok: false, error: 'datos no válidos' }); return; }
   responder({ ok: true, aceptado: true }); // respuesta inmediata: el proceso tarda unos segundos y sigue por su cuenta
   abrir(String(msg.num), String(msg.cmp)).then((r) => console.log('factura', msg.num, r ? 'abierta' : 'no encontrada'), (e) => console.warn('factura', msg.num, e.message));

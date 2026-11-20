@@ -7,6 +7,16 @@
 const ERP = 'https://herogra.operations.dynamics.com/';
 const EXT_ID = 'fndcidhkaoadpaceikbelbnbobhdnnaj'; // extensión «Herogra · abrir factura en D365» (scripts/extension-d365): abre la factura en una pestaña de tu Chrome
 const LOCAL = 'http://127.0.0.1:47831'; // servicio local de Windows (servidor-d365.js): evita depender del permiso de Chrome para abrir el enlace d365://
+// Precalentar: al abrir Emitidas se le pide a la extensión que cargue ya el diario de facturas de D365 de esa empresa (en segundo plano); como mucho una vez cada 20 minutos por empresa
+const calientes = new Map();
+export function precalentarD365(siglas) {
+  const sig = String(siglas || '').toUpperCase(); if (!/^[A-Z]{2,5}$/.test(sig)) return;
+  if (Date.now() - (calientes.get(sig) || 0) < 20 * 60 * 1000) return; calientes.set(sig, Date.now());
+  try { if (window.chrome?.runtime?.sendMessage) chrome.runtime.sendMessage(EXT_ID, { tipo: 'precalentar', cmp: sig }, () => { void chrome.runtime.lastError; }); } catch { /* sin extensión */ }
+}
+// Libros de IVA descargados de D365 que están en este PC (los sirve el servicio local): lista y descarga de cada uno
+export const listarLibrosD365 = () => fetch(`${LOCAL}/ficheros`).then((r) => { if (!r.ok) throw new Error('el servicio local no respondió'); return r.json(); });
+export const bajarLibroD365 = (n) => fetch(`${LOCAL}/fichero?n=${encodeURIComponent(n)}`).then((r) => { if (!r.ok) throw new Error('no se pudo leer ' + n); return r.blob(); });
 export function abrirD365({ tipo = 'prov', cuenta, siglas }) {
   const c = String(cuenta ?? '').trim(); if (!c) return;
   const sig = String(siglas || 'HER').toUpperCase();
