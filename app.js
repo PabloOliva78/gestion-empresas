@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=484';
+import { crearModulos } from './modulos.js?v=486';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -341,7 +341,7 @@ function aplicarTipoEjercicio() {
 }
 // Bloque 6 (SII): cada tabla va en su globo; las columnas de diferencias y las filas de TOTAL toman la vista nueva (amarillo, borde fino) y los ceros salen como «-».
 // Se marca desde aquí, sobre lo ya dibujado, para que valga igual en las siete pestañas del bloque.
-const SII_TABS = new Set(['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo']);
+const SII_TABS = new Set(['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo', 'cssoc']);
 function aplicarVistaSii() {
   const v = root.querySelector('.vista.bl-sii'); if (!v) return;
   v.querySelectorAll('table').forEach((tabla) => {

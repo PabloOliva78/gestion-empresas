@@ -9,7 +9,7 @@ import { crearRegistral } from './registral.js?v=14';
 import { crearModelos } from './modelos.js?v=378';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
-import { crearCierre } from './cierre.js?v=2';
+import { crearCierre } from './cierre.js?v=3';
 import { crearSiiPlazo } from './sii-plazo.js?v=1';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearUmbrales } from './umbrales.js?v=1';
@@ -3565,19 +3565,16 @@ export function crearModulos(c) {
     const r6400 = resumenCtaCss('6400', ctaPref('c6400'), ['N', 'IT', 'OD', 'OH', 'C'],
       (a, d) => { const p = a.split('-')[0]; return p === 'N' || p === 'RTB' ? 'N' : p === 'IT' ? 'IT' : p === 'OD' ? 'OD' : p === 'OH' ? 'OH' : p === 'C' || p[0] === 'I' ? 'C' : d ? 'OD' : 'OH'; },
       (v) => v.N + v.IT + v.OD - v.OH - v.C, y, lineasCuenta('c6400', M), false, 'Saldo ejercicio anterior', { N: 'Salarios nóminas', IT: 'Bajas', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
-    const r6420 = resumenCtaCss('6420', ctaPref('c6420'), ['SS', 'R', 'OD', 'OH', 'C'],
-      (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; },
-      (v) => v.SS + v.R + v.OD - v.OH - v.C, y, lineasCuenta('c6420', M), false, 'Saldo ejercicio anterior', { SS: 'Seguridad Social empresa nóminas', R: 'Regularizaciones', OD: 'Otros mov. debe', OH: 'Otros mov. haber', C: 'Cierre del ejercicio' });
     return `${dz('fundae', 'Suelta aquí los listados de FUNDAE', '(Costes y Grupos formativos, PDF o Excel) o pulsa para elegirlos', '.pdf,.xlsx,.xls,.csv')}
-      ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01, 6400.01 y 6420.01 (Excel o PDF) o pulsa para elegirlo', '.xlsx,.xls,.csv,.pdf')}
-      <div class="css-pils">${[['c4760', '4760.01', 'Organismos de la Seguridad Social, acreedores'], ['c6400', '6400.01', 'Sueldos y salarios'], ['c6420', '6420.01', 'Seguridad Social a cargo de la empresa']].map(([k, n, t]) => { const r = saldoCtaPeriodo(k); return `<div class="css-pil"><b>Cuenta ${n}</b><small>${esc(t)}</small><span>Saldo ${r ? fnum(r.saldo) : '…'} €${r?.origen === 'balance' ? ' (balance)' : ''}</span></div>`; }).join('')}</div>
+      ${dz('extractos', 'Suelta aquí el extracto contable (mayor)', 'de las cuentas 4760.01 y 6400.01 (Excel o PDF) o pulsa para elegirlo', '.xlsx,.xls,.csv,.pdf')}
+      <div class="css-pils">${[['c4760', '4760.01', 'Organismos de la Seguridad Social, acreedores'], ['c6400', '6400.01', 'Sueldos y salarios']].map(([k, n, t]) => { const r = saldoCtaPeriodo(k); return `<div class="css-pil"><b>Cuenta ${n}</b><small>${esc(t)}</small><span>Saldo ${r ? fnum(r.saldo) : '…'} €${r?.origen === 'balance' ? ' (balance)' : ''}</span></div>`; }).join('')}</div>
       ${av.length ? `<div class="aviso">${av.map((a) => `<p>⚠ ${esc(a)}</p>`).join('')}</div>` : ''}
       <p class="hint">Seguros Sociales (pagos: asientos PS en la ${esc(cta)} del mes siguiente) − Seguridad Social de las nóminas = Diferencias; menos IT (asientos IT de la ${esc(cta)} del mes) y menos Bonificaciones (cursos FUNDAE), ambas en negativo = Dif. mes Seg. Social. Cero = verde; si no, rojo.</p>
       <section class="prs-card"><div class="prs-h">Conciliación Seguridad Social · ${y}</div>
       <p style="margin:.5rem 1rem" class="hint">Cuenta de pagos de seguros sociales: <input class="emp-in" data-csscta="1" value="${esc(cta)}" style="width:7rem"></p>
       <div class="css-flex"><div class="wrap"><table class="tprs tnom css-conc"><thead><tr><th class="pp">Mes</th><th>Seguros Sociales</th><th>Seguridad Social Nóminas</th><th>Diferencias Seg. Soc. − Nóminas</th><th>IT</th><th>Bonificaciones</th><th>Dif. Mes Seg. Social</th><th>Estado</th></tr></thead>
       <tbody><tr class="cmp"><td colspan="8">Ejercicio ${y}</td></tr>${filas}<tr class="ttot"><td class="pp">TOTAL</td><td class="num">${fnum(rr(T.p))}</td><td class="num">${fnum(rr(T.ss))}</td><td class="num">${fnum(rr(T.dsn))}</td><td class="num">${fnum(rr(T.it))}</td><td class="num">${fnum(rr(T.cur))}</td><td class="num">${fnum(rr(T.d))}</td><td></td></tr></tbody></table></div>
-      <div class="wrap">${r4760}</div><div class="wrap">${r6400}</div><div class="wrap">${r6420}</div></div></section>
+      <div class="wrap">${r4760}</div><div class="wrap">${r6400}</div></div></section>
       ${cursos ? `<section class="prs-card"><div class="prs-h">Cursos bonificados FUNDAE · ${y}</div><div class="wrap"><table class="tprs tnom"><thead><tr><th>Mes</th><th>AAFF / Grupo</th><th>Denominación</th><th>Fecha fin</th><th>Coste bonificado</th></tr></thead><tbody>${cursos}</tbody></table></div>
       ${ed ? `<button class="small" data-act="m-fundaedel" data-y="${y}" style="margin:.6rem 1rem">Quitar los datos de FUNDAE de ${y}</button>` : ''}</section>` : ''}`;
   }

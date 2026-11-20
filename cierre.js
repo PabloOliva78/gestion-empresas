@@ -14,6 +14,8 @@ export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, 
     return data?.datos?.filas ?? [];
   }
   // cuenta, mes a mes, lo que hay cargado de una empresa en el ejercicio (no se guardan las filas, solo los recuentos)
+  // el periodo del SII puede venir como mes («10», «1») o como trimestre («3T»): un trimestre cuenta para los tres meses que lo forman
+  const perDeMes = (x, mm) => { const p = String(x.per ?? '').trim().toUpperCase(); if (/^[1-4]T$/.test(p)) return Math.ceil(+mm / 3) === +p[0]; return /^\d{1,2}$/.test(p) && +p === +mm; };
   async function resumir(emp) {
     const ej = Number(S.ejercicio), k = clave(emp.id);
     if (E.resumen.has(k) || E.cargando.has(k)) return false;
@@ -23,7 +25,7 @@ export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, 
       const out = {};
       MM12.forEach((mm) => {
         const ym = `${ej}-${mm}`, rg = rangoPeriodo(ej, mm), enRango = (L) => L.filter((x) => x.fecha >= rg.desde && x.fecha <= rg.hasta).length; // libros de IVA y SII emitidas: por fecha; SII recibidas: por ejercicio y periodo
-        const r = { E: enRango(fE), R: enRango(fR), sE: enRango(sE.filter((x) => x.sentido === 'E')), sR: sR.filter((x) => x.ej === ej && x.per === mm).length, M: may.filter((l) => String(l.fecha ?? '').slice(0, 7) === ym).length, cE: null, cR: null };
+        const r = { E: enRango(fE), R: enRango(fR), sE: sE.filter((x) => x.sentido === 'E' && (x.fecha ? x.fecha >= rg.desde && x.fecha <= rg.hasta : perDeMes(x, mm))).length, sR: sR.filter((x) => (x.ej == null || Number(x.ej) === ej) && perDeMes(x, mm)).length, M: may.filter((l) => String(l.fecha ?? '').slice(0, 7) === ym).length, cE: null, cR: null };
         try { if (r.E && r.sE) r.cE = conciliar('E', fE, sE, ej, mm).cuadra; } catch { /* sin datos */ }
         try { if (r.R && r.sR) r.cR = conciliar('R', fR, sR, ej, mm).cuadra; } catch { /* sin datos */ }
         out[mm] = r;
