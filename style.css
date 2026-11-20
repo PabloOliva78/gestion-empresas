@@ -1579,3 +1579,20 @@ table[data-rs][style*="table-layout"] td:not(.num):not(.in) { vertical-align: to
 .vista.bl-sii .prs-card { background: #fbf6ea; border: 2px solid #0071e3; border-radius: 18px; }
 .vista.bl-sii .prs-card .wrap { border: 0; padding: 0; margin: 0; background: transparent; }
 .vista.bl-sii .prs-card .css-flex .wrap { background: #fbf6ea; border: 2px solid #0071e3; border-radius: 18px; padding: 10px 10px 12px; }
+/* Tipo de letra propia «Libro Mayor» (5 variantes, cada una normal y negrita); se genera con scripts/fuente/crear-fuente.mjs. Solo se descarga la que se elige. */
+@font-face { font-family: 'LM-redonda'; src: url('fuentes/LibroMayor-Redonda-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'LM-redonda'; src: url('fuentes/LibroMayor-Redonda-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'LM-fina'; src: url('fuentes/LibroMayor-Fina-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'LM-fina'; src: url('fuentes/LibroMayor-Fina-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'LM-ancha'; src: url('fuentes/LibroMayor-Ancha-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'LM-ancha'; src: url('fuentes/LibroMayor-Ancha-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'LM-tecnica'; src: url('fuentes/LibroMayor-Tecnica-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'LM-tecnica'; src: url('fuentes/LibroMayor-Tecnica-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'LM-cursiva'; src: url('fuentes/LibroMayor-Cursiva-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'LM-cursiva'; src: url('fuentes/LibroMayor-Cursiva-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+body.letra-lm-redonda, body.letra-lm-redonda .layout, body.letra-lm-redonda button, body.letra-lm-redonda select, body.letra-lm-redonda input, body.letra-lm-redonda textarea, body.letra-lm-redonda table, body.letra-lm-redonda h1, body.letra-lm-redonda h2, body.letra-lm-redonda h3 { font-family: 'LM-redonda', "Segoe UI", system-ui, sans-serif !important; }
+body.letra-lm-fina, body.letra-lm-fina .layout, body.letra-lm-fina button, body.letra-lm-fina select, body.letra-lm-fina input, body.letra-lm-fina textarea, body.letra-lm-fina table, body.letra-lm-fina h1, body.letra-lm-fina h2, body.letra-lm-fina h3 { font-family: 'LM-fina', "Segoe UI", system-ui, sans-serif !important; }
+body.letra-lm-ancha, body.letra-lm-ancha .layout, body.letra-lm-ancha button, body.letra-lm-ancha select, body.letra-lm-ancha input, body.letra-lm-ancha textarea, body.letra-lm-ancha table, body.letra-lm-ancha h1, body.letra-lm-ancha h2, body.letra-lm-ancha h3 { font-family: 'LM-ancha', "Segoe UI", system-ui, sans-serif !important; }
+body.letra-lm-tecnica, body.letra-lm-tecnica .layout, body.letra-lm-tecnica button, body.letra-lm-tecnica select, body.letra-lm-tecnica input, body.letra-lm-tecnica textarea, body.letra-lm-tecnica table, body.letra-lm-tecnica h1, body.letra-lm-tecnica h2, body.letra-lm-tecnica h3 { font-family: 'LM-tecnica', "Segoe UI", system-ui, sans-serif !important; }
+body.letra-lm-cursiva, body.letra-lm-cursiva .layout, body.letra-lm-cursiva button, body.letra-lm-cursiva select, body.letra-lm-cursiva input, body.letra-lm-cursiva textarea, body.letra-lm-cursiva table, body.letra-lm-cursiva h1, body.letra-lm-cursiva h2, body.letra-lm-cursiva h3 { font-family: 'LM-cursiva', "Segoe UI", system-ui, sans-serif !important; }
+

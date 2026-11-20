@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>Prueba de letras</title>
+<style>
+body{font-family:"Segoe UI",sans-serif;margin:20px;background:#fff;color:#111}
+h2{font:600 13px "Segoe UI";color:#666;margin:26px 0 4px;text-transform:uppercase;letter-spacing:.05em}
+.v{border:1px solid #ddd;border-radius:8px;padding:10px 16px;margin-bottom:14px}
+.g{font-size:30px;line-height:1.3}
+.p{font-size:15px;margin-top:8px}
+table{border-collapse:collapse;font-size:14px;margin-top:8px}td,th{border:1px solid #ddd;padding:3px 10px}td.n{text-align:right}
+</style>
+<script>
+const V=[['Redonda','Libro Mayor Redonda'],['Fina','Libro Mayor Fina'],['Ancha','Libro Mayor Ancha'],['Tecnica','Libro Mayor Tecnica'],['Cursiva','Libro Mayor Cursiva']];
+let css='';for(const [f,n] of V){css+=`@font-face{font-family:"${n}";src:url(LibroMayor-${f}-Regular.otf);font-weight:400}@font-face{font-family:"${n}";src:url(LibroMayor-${f}-Bold.otf);font-weight:700}`;}
+document.head.insertAdjacentHTML('beforeend','<style>'+css+'</style>');
+addEventListener('DOMContentLoaded',()=>{document.body.innerHTML=[['Actual (Bricolage Grotesque / Segoe UI)',"'Bricolage Grotesque','Segoe UI',sans-serif"],...V.map(([f,n])=>[n,`'${n}'`])].map(([t,fam])=>`<h2>${t}</h2><div class="v" style="font-family:${fam}"><div class="g">Conciliación de proveedores<br>ABCDEFGHIJKLMNÑOPQRSTUVWXYZ<br>abcdefghijklmnñopqrstuvwxyz áéíóúü ç<br>0123456789 .,;:¿?¡! €%&amp;@#()/-<br><b>Negrita: Saldo pendiente 12.345,67 € · Factura Ñ-2026</b></div><div class="p">Texto normal pequeño: Factura 2026/00417 · Proveedor Ibérica de Ñandúes, S.L. · Pendiente de revisión · <b>Total</b></div><table><tr><th>Proveedor</th><th>Importe</th><th>Estado</th></tr><tr><td>Acme Ibérica S.A.</td><td class="n">1.234,56</td><td>Conciliado</td></tr><tr><td>Muñoz &amp; Hijos</td><td class="n">-980,00</td><td>Pendiente</td></tr></table></div>`).join('');});
+</script>

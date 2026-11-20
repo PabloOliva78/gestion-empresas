@@ -276,14 +276,14 @@ function vistaVistas() {
     ${op('d', 'Vista clara', 'Diseño claro: cabecera a todo el ancho con el logo de la empresa, botonera blanca a la izquierda y las pestañas del bloque como tarjetas sobre el contenido.')}
     <p class="hint">La elección se recuerda en este navegador.</p></section>
     <section class="dsec"><h3>Tipo de letra</h3>
-    <label class="vistas-chk"><input type="radio" name="letraApp" data-letra=""${letraApp() ? '' : ' checked'}> <b>Letra normal</b></label>
-    <label class="vistas-chk"><input type="radio" name="letraApp" data-letra="ayfs"${letraApp() === 'ayfs' ? ' checked' : ''}> <b>Are You Freakin' Serious</b></label>
-    <p class="hint">Letra de Misti's Fonts (www.mistifonts.com). Se aplica a toda la aplicación, en cualquier vista; los importes y porcentajes de las tablas se quedan con la letra normal para que se lean bien.</p>
+    ${LETRAS.map(([id, nombre]) => `<label class="vistas-chk"><input type="radio" name="letraApp" data-letra="${id}"${letraApp() === id ? ' checked' : ''}> <b${id.startsWith('lm-') ? ` class="letra-muestra" style="font-family:'LM-${id.slice(3)}'"` : ''}>${nombre}</b></label>`).join('')}
+    <p class="hint">«Libro Mayor» es letra propia de la aplicación; «Are You Freakin' Serious» es de Misti's Fonts (www.mistifonts.com). Se aplica a toda la aplicación, en cualquier vista; los importes y porcentajes de las tablas se quedan con la letra normal para que se lean bien.</p>
     <p class="hint">La elección se recuerda en este navegador.</p></section>`;
 }
-// Tipo de letra (se elige en Administración › Vistas): '' = la normal; 'ayfs' = «Are You Freakin' Serious»
-const letraApp = () => { try { return localStorage.getItem('imp-letra') === 'ayfs' ? 'ayfs' : ''; } catch { return ''; } };
-const aplicarLetra = () => document.body.classList.toggle('letra-ayfs', letraApp() === 'ayfs');
+// Tipo de letra (se elige en Administración › Vistas): '' = la normal; 'ayfs' = «Are You Freakin' Serious»; 'lm-…' = «Libro Mayor» (letra propia, 5 variantes)
+const LETRAS = [['', 'Letra normal'], ['lm-redonda', 'Libro Mayor Redonda'], ['lm-fina', 'Libro Mayor Fina'], ['lm-ancha', 'Libro Mayor Ancha'], ['lm-tecnica', 'Libro Mayor Técnica'], ['lm-cursiva', 'Libro Mayor Cursiva'], ['ayfs', "Are You Freakin' Serious"]];
+const letraApp = () => { try { const v = localStorage.getItem('imp-letra'); return LETRAS.some(([id]) => id === v) ? v : ''; } catch { return ''; } };
+const aplicarLetra = () => { const cl = document.body.classList; [...cl].filter((c) => c.startsWith('letra-')).forEach((c) => cl.remove(c)); if (letraApp()) cl.add('letra-' + letraApp()); };
 aplicarLetra();
 // Vista del menú (se elige en Administración › Vistas): 'c' = la de siempre (bloques arriba); 'n' = bloques a la izquierda y pestañas en píldoras arriba; 'd' = como la nueva, con el diseño claro
 const vistaMenu = () => { try { const v = localStorage.getItem('imp-vista'); return ['c', 'n', 'd'].includes(v) ? v : localStorage.getItem('imp-menuNuevo') === '1' ? 'n' : 'c'; } catch { return 'c'; } };
