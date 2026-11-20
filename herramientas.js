@@ -61,7 +61,7 @@ export function activarExportar() {
     // sin barras de desplazamiento en las tablas, para medir su ancho natural; la hoja se hace al menos tan ancha como la tabla más ancha (así el recuadro la engloba entera)
     const libre = '.vista *{overflow:visible!important;max-height:none!important}';
     st.textContent = `.vista{zoom:1;width:${W}px!important;max-width:none!important}${libre}`;
-    const N = Math.max(W, Math.ceil(Math.max(0, ...[...v.querySelectorAll('table')].map((t) => t.offsetWidth)) + 90), v.scrollWidth);
+    const N = Math.max(W, Math.ceil(Math.max(0, ...[...v.querySelectorAll('table')].map((t) => t.offsetWidth), ...[...v.querySelectorAll('.cg-fila')].map((f) => [...f.children].reduce((s, c) => s + c.offsetWidth + 12, 0) + 60)) + 90), v.scrollWidth);
     let z = Math.min(1, W / N);
     for (; z > 0.25; z = Math.round((z - 0.03) * 100) / 100) {
       st.textContent = `.vista{zoom:${z};width:${N}px!important;max-width:none!important}${libre}`;
