@@ -193,11 +193,11 @@ function imprimirTabla(tabla, titulo) {
   const c = tabla.cloneNode(true); c.querySelectorAll('button,input,select,.no-print').forEach((x) => x.remove());
   const esc = (s) => String(s).replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + esc(titulo) + '</title><style>'
-    + '@page{size:A4 portrait;margin:8mm}body{font:11px Arial,sans-serif;color:#000;margin:0}h1{font-size:13px;margin:0 0 6px}'
+    + '@page{size:A4 landscape;margin:8mm}body{font:11px Arial,sans-serif;color:#000;margin:0}h1{font-size:13px;margin:0 0 6px}'
     + 'table{border-collapse:collapse;width:100%}thead{display:table-header-group}tr{page-break-inside:avoid}th{background:#fdf0c9;border:1px solid #999;padding:3px 5px;font-size:11px}'
     + 'td{border:1px solid #ccc;padding:3px 5px;font-size:11.5px}td.num,td.n{text-align:right;white-space:nowrap}tr.ttot td{font-weight:700;background:#fff7dc}'
-    + '.dif-ko{color:#b00020;font-weight:700}.est-ok{color:#1b7f3b}tr.cf-ok td{background:#e1f3e6}tr.cf-ko td{background:#fdecea}#c{width:733px}'
-    + '</style></head><body><h1>' + esc(titulo) + '</h1><div id="c">' + c.outerHTML + '</div><script>onload=function(){var c=document.getElementById("c"),W=733,z=Math.min(1,W/c.scrollWidth);'
+    + '.dif-ko{color:#b00020;font-weight:700}.est-ok{color:#1b7f3b}tr.cf-ok td{background:#e1f3e6}tr.cf-ko td{background:#fdecea}#c{width:1062px}'
+    + '</style></head><body><h1>' + esc(titulo) + '</h1><div id="c">' + c.outerHTML + '</div><script>onload=function(){var c=document.getElementById("c"),W=1062,z=Math.min(1,W/c.scrollWidth);'
     + 'if(z<1)c.style.zoom=z;setTimeout(function(){print()},250)}<\/script></body></html>');
   w.document.close();
 }
@@ -241,15 +241,15 @@ function exportarPdf(tabla, titulo) {
   });
   const head = filasDe([...tabla.querySelectorAll('thead tr')], true), body = filasDe([...tabla.querySelectorAll('tbody tr')], false);
   const nCols = head.length ? head[head.length - 1].reduce((s, c) => s + (c.colSpan || 1), 0) : 8;
-  const fs = nCols <= 8 ? 8.5 : nCols <= 10 ? 7.5 : 6.5;
-  const doc = new J({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const fs = nCols <= 10 ? 9 : nCols <= 14 ? 8 : 7;
+  const doc = new J({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   doc.setFontSize(11); doc.setFont(undefined, 'bold');
-  const tl = doc.splitTextToSize(titulo, 194); doc.text(tl, 8, 11);
+  const tl = doc.splitTextToSize(titulo, 281); doc.text(tl, 8, 11);
   doc.autoTable({
     head, body, startY: 11 + tl.length * 5 + 1, theme: 'grid', margin: { left: 8, right: 8, top: 14, bottom: 12 }, tableWidth: 'auto',
     styles: { fontSize: fs, cellPadding: 1.2, overflow: 'linebreak', valign: 'middle', lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 0 },
     headStyles: { fillColor: [253, 240, 201], textColor: 0, fontStyle: 'bold', halign: 'center', lineColor: [150, 150, 150] },
-    didDrawPage: () => { const n = doc.internal.getNumberOfPages(); doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.text('Página ' + n, 202, 292, { align: 'right' }); },
+    didDrawPage: () => { const n = doc.internal.getNumberOfPages(); doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.text('Página ' + n, 289, 205, { align: 'right' }); },
   });
   doc.save(titulo.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) + '.pdf');
 }
