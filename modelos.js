@@ -1016,6 +1016,7 @@ export function crearModelos(c) {
   }
   function vistaC232() {
     if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    c232Libros = true; // al entrar en la pestaña se leen solos los libros de IVA ya cargados (antes había que pulsar el botón)
     const { filas: F, cargando, ej } = filas232(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length;
     return `<section class="dsec"><h3>Conciliación mod 232 · operaciones vinculadas · ejercicio ${ej} (se presenta en noviembre de ${ej + 1})</h3>
       <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia o sin presentar · ${ic.aviso} ${k('aviso')} pendientes${cargando ? ' · ⏳ leyendo los libros de alguna empresa…' : ''}</p>
