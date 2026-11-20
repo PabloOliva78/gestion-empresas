@@ -1,5 +1,6 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=493';
+import { crearModulos } from './modulos.js?v=494';
+import { limpiarCache } from './cachelibros.js?v=1';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=12';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -143,6 +144,7 @@ async function boot() {
 
 db.auth.onAuthStateChange((ev, session) => {
   const uid = session?.user?.id ?? null;
+  if (ev === 'SIGNED_IN' && uid) { try { const u = localStorage.getItem('cache-uid'); if (u && u !== uid) limpiarCache(); localStorage.setItem('cache-uid', uid); } catch { /* sin almacenamiento */ } } // otro usuario: se borra lo guardado del anterior
   if (ev === 'SIGNED_OUT' || (ev === 'SIGNED_IN' && uid !== uidActual)) { M.limpiarAvisoD365?.(true); setTimeout(boot, 0); } // sesión nueva: sin avisos de la anterior
 });
 
@@ -163,8 +165,10 @@ function renderLogin(msg = '') {
   const m = root.querySelector('#msg');
   f.onsubmit = async (ev) => {
     ev.preventDefault();
-    const { error } = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value });
-    if (error) m.textContent = 'Correo o contraseña incorrectos.';
+    m.textContent = ''; let error = null;
+    try { ({ error } = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value })); } catch (e) { error = e; }
+    // solo «incorrectos» si Supabase contesta que los datos no valen; un fallo de red, un límite de intentos o un error del servidor se dicen tal cual
+    if (error) m.textContent = error.status === 400 || /invalid login credentials/i.test(error.message || '') ? 'Correo o contraseña incorrectos.' : error.status === 429 ? 'Demasiados intentos seguidos: espera unos minutos y vuelve a probar.' : `No se pudo conectar con el servidor (${error.message || 'sin respuesta'}). Revisa la conexión y prueba de nuevo.`;
     else { try { localStorage.setItem('login-correo', f.email.value.trim()); } catch { /* sin almacenamiento */ } }
   };
   if (f.email.value) f.password.focus(); else f.email.focus();
@@ -181,7 +185,7 @@ function renderPendiente() {
   root.innerHTML = `<main class="login"><div class="card"><h1>Cuenta pendiente de activación</h1>
     <p>Su cuenta (${esc(S.perfil.email)}) existe, pero un administrador debe activarla y asignarle empresas.</p>
     <button id="out">Salir</button></div></main>`;
-  root.querySelector('#out').onclick = () => db.auth.signOut();
+  root.querySelector('#out').onclick = () => { limpiarCache(); try { localStorage.removeItem('cache-uid'); } catch { /* sin almacenamiento */ } db.auth.signOut(); };
 }
 
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
@@ -1024,7 +1028,7 @@ root.addEventListener('click', (ev) => {
   if (t.dataset.act === 'menu') { S.menu = !S.menu; return render(); }
   if (t.dataset.sel !== undefined) { S.sel = t.dataset.sel; S.menu = false; return render(); }
   if (t.dataset.grp !== undefined) { S.grp = Number(t.dataset.grp); return refrescarTabs(); }
-  if (t.id === 'out') return void db.auth.signOut();
+  if (t.id === 'out') { limpiarCache(); try { localStorage.removeItem('cache-uid'); } catch { /* sin almacenamiento */ } return void db.auth.signOut(); }
   if (t.dataset.tab) { S.tab = t.dataset.tab; S.grp = -1; return render(); }
   if (t.dataset.act?.startsWith('m-')) return void M.accion(t.dataset);
   const id = t.dataset.id;

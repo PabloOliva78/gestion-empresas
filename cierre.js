@@ -1,5 +1,6 @@
 // Cierre del mes (bloque 1): lista de comprobación por empresa y mes + semáforo del grupo. Pestaña nueva; no modifica ninguna otra.
 // Solo LEE datos (libros de IVA, SII, mayor, nóminas y modelos presentados) y los cuenta; no guarda nada.
+import { leerRegistro } from './cachelibros.js?v=1';
 export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar, rangoPeriodo, empresa }) {
   const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const MM12 = MES.map((_, i) => String(i + 1).padStart(2, '0'));
@@ -9,7 +10,7 @@ export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, 
   const mesSel = () => E.mes || mesDef();
 
   async function leerLibro(eid, tipo) {
-    const { data, error } = await db.from('registros').select('datos').eq('empresa_id', eid).eq('tipo', tipo).order('id').limit(1).maybeSingle();
+    const { data, error } = await leerRegistro(db, S.perfil?.id, eid, tipo);
     if (error) throw new Error(`${tipo}: ${error.message}`);
     return data?.datos?.filas ?? [];
   }

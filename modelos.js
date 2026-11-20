@@ -1,5 +1,6 @@
 // Bloque 4 · modelos tributarios portados de la aplicación antigua: 232 (operaciones vinculadas) y 583 (producción eléctrica).
 // Los datos de cada modelo se guardan en `registros` (tipo m232 / m583, un registro por empresa y ejercicio).
+import { leerRegistro } from './cachelibros.js?v=1';
 export function crearModelos(c) {
   const { db, S, esc, render, empresa, puede, eur, grande, leerPdf, obl592, bancoDe = () => '', calc303, calc349, calc349Ops } = c;
   const sinEmpresa = '<p class="vacio">Elija una empresa en el desplegable de la izquierda.</p>';
@@ -322,7 +323,7 @@ export function crearModelos(c) {
   function big(tipo, def) {
     const k = `${tipo}|${S.sel}`; if (BIG.has(k)) return BIG.get(k);
     BIG.set(k, null);
-    db.from('registros').select('id,datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle()
+    leerRegistro(db, S.perfil?.id, S.sel, tipo)
       .then(({ data }) => { BIG.set(k, { id: data?.id, datos: data?.datos ?? def() }); render(); });
     return null;
   }

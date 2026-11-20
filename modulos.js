@@ -6,11 +6,11 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=14';
-import { crearModelos } from './modelos.js?v=380';
+import { crearModelos } from './modelos.js?v=381';
 import { crearModelos2 } from './modelos2.js?v=6';
 import { crearModelos3 } from './modelos3.js?v=6';
-import { crearCierre } from './cierre.js?v=3';
-import { crearSiiPlazo } from './sii-plazo.js?v=1';
+import { crearCierre } from './cierre.js?v=4';
+import { crearSiiPlazo } from './sii-plazo.js?v=2';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearUmbrales } from './umbrales.js?v=1';
 import { crearCbam } from './cbam.js?v=10';
@@ -20,6 +20,7 @@ import { crearProveedores } from './proveedores.js?v=11';
 import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=10';
 import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=2';
+import { leerRegistro } from './cachelibros.js?v=1';
 import { abrirD365, precalentarD365, listarLibrosD365, bajarLibroD365 } from './d365.js?v=8';
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=21';
@@ -1012,7 +1013,7 @@ export function crearModulos(c) {
     const k = `${tipo}|${S.sel}`;
     if (GR.has(k)) return GR.get(k);
     GR.set(k, null);
-    db.from('registros').select('datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle()
+    leerRegistro(db, S.perfil?.id, S.sel, tipo)
       .then(({ data }) => {
         const bd = data?.datos?.filas ?? [], lim = sinDupSii(tipo, bd);
         GR.set(k, lim); render();
@@ -2514,7 +2515,7 @@ export function crearModulos(c) {
   async function datosR(empresaId) {
     const k = `fact-R|${empresaId}`;
     if (Array.isArray(GR.get(k))) return GR.get(k);
-    const { data } = await db.from('registros').select('datos').eq('empresa_id', empresaId).eq('tipo', 'fact-R').maybeSingle();
+    const { data } = await leerRegistro(db, S.perfil?.id, empresaId, 'fact-R');
     GR.set(k, data?.datos?.filas ?? []);
     return GR.get(k);
   }
@@ -5073,7 +5074,7 @@ export function crearModulos(c) {
   async function traer(tipo) {
     const k = `${tipo}|${S.sel}`;
     if (GR.get(k)) return GR.get(k);
-    const { data } = await db.from('registros').select('datos').eq('empresa_id', S.sel).eq('tipo', tipo).maybeSingle();
+    const { data } = await leerRegistro(db, S.perfil?.id, S.sel, tipo);
     const filas = data?.datos?.filas ?? [];
     GR.set(k, filas);
     return filas;

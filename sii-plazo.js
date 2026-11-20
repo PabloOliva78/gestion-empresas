@@ -1,6 +1,7 @@
 // Plazo del SII (bloque 6): comprueba si cada factura se envió dentro de 4 días naturales.
 // Emitidas: 4 días desde la fecha de la factura. Recibidas: 4 días desde su contabilización (fecha de registro).
 // Pestaña nueva: solo lee los envíos ya cargados (sii-raw-*); no guarda nada.
+import { leerRegistro } from './cachelibros.js?v=1';
 export function crearSiiPlazo({ db, S, esc, render, empresa }) {
   const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const DIAS = 4;
@@ -23,7 +24,7 @@ export function crearSiiPlazo({ db, S, esc, render, empresa }) {
     if (E.datos.has(k) || E.cargando.has(k)) return;
     E.cargando.add(k);
     try {
-      const { data, error } = await db.from('registros').select('datos').eq('empresa_id', S.sel).eq('tipo', `sii-raw-${s}-${ej}-${mm}`).order('id').limit(1).maybeSingle();
+      const { data, error } = await leerRegistro(db, S.perfil?.id, S.sel, `sii-raw-${s}-${ej}-${mm}`);
       if (error) throw new Error(error.message);
       const filas = (data?.datos?.filas ?? []).map((f) => {
         const r = f.raw ?? {}, ref = dia(r[3]), env = dia(envio(r)), nombre = s === 'E' ? r[6] : r[5];
