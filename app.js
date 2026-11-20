@@ -997,6 +997,8 @@ root.addEventListener('click', (ev) => {
   if (fuera) { S.menu = false; if (!ev.target.closest('.tabs-wrap, .bl-wrap') && !menuNuevo()) S.grp = -1; render(); }
   const dz = ev.target.closest('.dropzone');
   if (dz && ev.target.tagName !== 'INPUT') return void dz.querySelector('input').click();
+  const filaEsc = ev.target.closest('tr[data-act="m-rg-escsel"]'); // lista de escrituras: un clic en la fila elige esa escritura (el visor y los datos pasan a ser los suyos)
+  if (filaEsc && !ev.target.closest('button,input,select,textarea,a')) return void M.accion(filaEsc.dataset);
   if (ev.target.closest('.logo-aside')) { S.tab = 'ini'; S.grp = -1; return render(); }
   const ds = ev.target.closest('[data-duasel]');
   if (ds && !ev.target.closest('button,input,select')) return void M.duaSeleccionar(ds.dataset.duasel, ev.detail);
