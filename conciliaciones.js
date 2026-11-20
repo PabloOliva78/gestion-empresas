@@ -145,7 +145,7 @@ export function crearConciliaciones(c) {
 
   // ================= Conciliación Cuentas - Impuestos (hojas ExCta) =================
   const CONC_DEF = { c4650: 'PAGO NOMINAS', c4700: 'MODELO 303 IVA A COMPENSAR', c4709: 'MODELO 200 IMPUESTO SOBRE SOCIEDADES A DEVOLVER', c4730: 'MODELO 202 PAGO A CUENTA IMPUESTO SOBRE SOCIEDADES',
-    c4750: 'MODELO 303 IVA A INGRESAR', c47511: 'MODELO 111 RETENCIONES RDTOS DEL TRABAJO Y ACTIV. ECONOMICAS', c47512: 'MODELO 115 RETENCIONES DEL CAPITAL INMOBILIARIO', c47513: 'MODELO 115 RETENCIONES DEL CAPITAL INMOBILIARIO',
+    c4750: 'MODELO 303 IVA A INGRESAR', c47511: 'MODELO 111 RETENCIONES RDTOS DEL TRABAJO Y ACTIV. ECONOMICAS', c47512: 'MODELO 115 RETENCIONES ALQUILERES', c47513: 'MODELO 115 RETENCIONES DEL CAPITAL INMOBILIARIO',
     c47514: 'MODELO 123 RETENCIONES DEL CAPITAL MOBILIARIO', c4752: 'MODELO 200 IMPUESTO SOBRE SOCIEDADES A INGRESAR', c4760: 'SEGURIDAD SOCIAL MES EN CURSO' };
   const concSinImp = (k) => /^(c4650|c47300[1-4]|c4745|c475010|c6400|c6420)$/.test(k);
   function rangoConc(per) {
@@ -154,6 +154,9 @@ export function crearConciliaciones(c) {
     if (/^\d\d$/.test(p)) { m0 = m1 = +p; txt = `${p} - ${MESES[+p - 1]}`; } else if (/^[1-4]T$/.test(p)) { m1 = +p[0] * 3; m0 = m1 - 2; txt = `${p} - ${MESES[m0 - 1]} a ${MESES[m1 - 1]}`; }
     return { ej, m0, m1, txt, desde: Date.UTC(ej, m0 - 1, 1), hasta: Date.UTC(ej, m1, 0) };
   }
+  // la 4751.03 (115) solo existe en las empresas que la tienen (Fertinova): ahí la 4751.01 es el 111 de nóminas y la 4751.02 el 111 de profesionales.
+  // En las demás, la 4751.01 recoge el 111 entero (nóminas + profesionales) y la 4751.02 es el 115 (alquileres). ctaDe() también devuelve las cuentas de otras empresas, por eso se mira la lista de la empresa.
+  const tiene47513 = () => !!ctasEmpresa(empresa())?.c47513;
   // impuesto de la AEAT que se concilia con cada cuenta, a fin del periodo
   function impuestoCuenta(k, y, m, multi) {
     const mm = String(m).padStart(2, '0'), trim = esTrim(), [yk, pk] = trim ? (m >= 3 ? [y, `${Math.floor(m / 3)}T`] : [y - 1, '4T']) : [y, mm];
@@ -161,8 +164,8 @@ export function crearConciliaciones(c) {
     switch (k) {
       case 'c4750': { const v = P('303', 'liq'); return { lado: 'H', v: v === null ? null : r2(Math.max(0, v)) }; }
       case 'c4700': { const c87 = P('303', 'c87'), liq = P('303', 'liq'); if (c87 === null && liq === null) return { lado: 'D', v: null }; return { lado: 'D', v: r2((c87 || 0) + (m === 12 && liq < 0 ? -liq : 0)) }; }
-      case 'c47511': if (ctaDe('c47513')) return { lado: 'H', v: P('111', 'retN') }; { const a = P('111', 'retN'), b = P('111', 'retP'); return { lado: 'H', v: a === null && b === null ? null : r2((a || 0) + (b || 0)) }; }
-      case 'c47512': if (ctaDe('c47513')) return { lado: 'H', v: P('111', 'retP') }; return { lado: 'H', v: P('115', 'ret') };
+      case 'c47511': if (tiene47513()) return { lado: 'H', v: P('111', 'retN') }; { const a = P('111', 'retN'), b = P('111', 'retP'); return { lado: 'H', v: a === null && b === null ? null : r2((a || 0) + (b || 0)) }; }
+      case 'c47512': if (tiene47513()) return { lado: 'H', v: P('111', 'retP') }; return { lado: 'H', v: P('115', 'ret') };
       case 'c47513': return { lado: 'H', v: P('115', 'ret') };
       case 'c47514': return { lado: 'H', v: P('123', 'ret') };
       // IS a años vencidos: en cualquier periodo de un año se concilia con el 200 del ejercicio anterior (que se paga o cobra en ese año)
@@ -197,7 +200,7 @@ export function crearConciliaciones(c) {
         imp = ps.length && ps.some((v) => v !== null) ? r2(ps.reduce((s, v) => s + (v || 0), 0)) : (ps.length ? null : 0);
       } else { const x = impuestoCuenta(k, R.ej, R.m1); if (x && x.v !== null) imp = x.lado === 'H' ? r2(-x.v) : r2(x.v); }
       const ctaStd = C.cta.split('.')[0] + String(C.cta.split('.')[1] || '').padStart(5, '0'); // 4752.01 → 475200001, aunque no tenga movimientos
-      const modelo = ctaDe('c47513') && k === 'c47511' ? 'MODELO 111 RETENCIONES RDTOS DEL TRABAJO' : ctaDe('c47513') && k === 'c47512' ? 'MODELO 111 RETENCIONES ACTIV. ECONOMICAS' : CONC_DEF[k] || '';
+      const modelo = tiene47513() && k === 'c47511' ? 'MODELO 111 RETENCIONES RDTOS DEL TRABAJO' : tiene47513() && k === 'c47512' ?'MODELO 111 RETENCIONES ACTIV. ECONOMICAS' : CONC_DEF[k] || '';
       return { k, hoja: `ExCta${C.cta}`, cuenta: subc || ctaStd, nombre: C.desc, saldo, modelo, imp, dif: r2(saldo - (imp || 0)) };
     });
     return { R, filas, tot: { saldo: r2(filas.reduce((s, f) => s + f.saldo, 0)), imp: r2(filas.reduce((s, f) => s + (f.imp || 0), 0)), dif: r2(filas.reduce((s, f) => s + f.dif, 0)) } };
