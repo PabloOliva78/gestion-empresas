@@ -37,7 +37,7 @@ export function clasificar(t) {
   if (/Situación tributaria/i.test(t) && /Impuesto sobre el Valor Añadido/.test(t)) return 'situacion';
   if (/Consulta de Mis Representantes/.test(t)) return 'representantes';
   if (/Consulta de Mis Representados/.test(t)) return 'representados';
-  if (/Consulta de Participes/.test(t)) return 'participes';
+  if (/Consulta de Part[ií]cipes|Total Part[ií]cipes en Pantalla|con estos socios\/part[ií]cipes/i.test(t)) return 'participes';
   if (/RECIBO DE|JUSTIFICANTE DE PAGO/.test(t)) return 'local';
   return null;
 }
