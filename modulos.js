@@ -26,6 +26,7 @@ import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=25';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=10';
+import { crearReglFac } from './reglfac.js?v=1';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, nombreEmp } = c;
@@ -5758,6 +5759,8 @@ export function crearModulos(c) {
   const M10 = crearLeyIva({ S, esc, render, empresa, db, puede, grande });
   Object.assign(tabs, M10.tabs);
   Object.assign(badges, M10.badges);
+  const M10b = crearReglFac({ S, esc, render, db, puede }); // Reglamento de facturación (RD 1619/2012), como la Ley del IVA
+  Object.assign(tabs, M10b.tabs); Object.assign(badges, M10b.badges);
   // Cierre del mes (bloque 1): pestaña nueva que solo lee; modelos de cada mes según la misma regla del cuadro de mando
   const obDelMes = (e, ej, mm) => obligaciones(e, ej, presIndex()).filter((o) => (o.mod === '583' ? 9 : o.mod === '200' ? 5 : o.mod === '232' ? 9 : colMes(o.per)) + 1 === +mm);
   const M11 = crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar: conciliarSiiCompleta, rangoPeriodo, empresa });

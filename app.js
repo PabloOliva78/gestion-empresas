@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=500';
+import { crearModulos } from './modulos.js?v=501';
 import { limpiarCache } from './cachelibros.js?v=1';
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=14';
 import { crearHistorial } from './historial.js?v=1';
@@ -204,7 +204,7 @@ const GRUPOS = [
   ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
   ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
-  ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
+  ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyrfac', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA y Reglamento de facturación: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
   ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
   ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
   ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
