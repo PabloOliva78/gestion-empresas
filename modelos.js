@@ -933,6 +933,8 @@ export function crearModelos(c) {
     'm-a22del': async (d) => { const D = a22Datos(); D.filas.splice(+d.i, 1); await a22Guardar(D); render(); },
     'm-a22csv': (d) => a22Csv(d.t),
     'm-c232libros': () => { c232Libros = true; c232Todas = true; render(); },
+    'm-crucelibros': () => { cruceLibros = true; render(); },
+    'm-crucetodo': () => { cruceTodo = !cruceTodo; render(); },
     'm-a22borrar': async () => { if (!confirm('¿Quitar las compras y ventas cargadas para el A22?')) return; await bigGuardar('a22src', { compras: [], ventas: [], archivos: [] }); render(); },
     'm-a22pasar': async () => {
       const Sx = a22Src(); if (!Sx) return; const R = a22Calc(Sx), D = a22Datos();
@@ -1031,6 +1033,69 @@ export function crearModelos(c) {
       ${F.map((x) => `<tr><td>${esc(x.e.nombre)}</td><td style="text-align:center">${x.pres ? 'Sí' : 'No'}</td><td class="n">${x.nFilas}</td><td class="n">${x.calc ? x.calc.nObl : '—'}</td><td class="n">${x.calc ? x.calc.nLin : '—'}</td><td class="n">${x.calc ? x.calc.nDif : '—'}</td><td style="text-align:center">${ic[x.est[0]]}</td><td>${esc(x.est[1])}</td></tr>`).join('') || `<tr><td colspan="8" class="vacio">${c232Libros ? 'Ninguna empresa supera 250.000 € con otra sociedad del grupo en ' + ej + ' ni tiene 232 registrado.' : 'Ninguna empresa tiene 232 registrado en ' + ej + '. Pulsa «Cargar los libros» para calcular quién está obligada.'}</td></tr>`}</tbody></table></div>
       <p class="hint">Calculado = lo que sale de Emitidas (ingresos) y Recibidas (pagos) con las demás sociedades del grupo, por entidad, tipo de operación e ingreso/pago, igual que en la pestaña «Modelo 232». Solo cuentan las entidades que superan 250.000 € (las que se declaran). Presentado = los registros del 232 cargados o presentados. Cuadra si todas las líneas difieren en 1 € o menos. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
   }
+  // ================= Cruce de facturas del grupo: lo que una empresa emite a otra del grupo frente a lo que la otra tiene en Recibidas (solo lee) =================
+  let cruceLibros = false; // los libros de todas las empresas solo se leen al pulsar el botón (son pesados y gastan tráfico de Supabase)
+  let cruceTodo = false; // false = solo las diferencias; true = también las facturas que cuadran
+  const facN = (s) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+/, '');
+  const espCruce = (l) => /\.I\.(ALQ|INT)/i.test(String(l.codigo ?? ''));
+  // facturas de un libro con una empresa del grupo, agrupadas por nº de factura (si una factura trae línea especial de alquiler o intereses, solo cuenta esa, como en el 232)
+  function facturasCon(libro, nifOtra, ej) {
+    const L = (libro ?? []).filter((l) => String(l.fecha ?? '').slice(0, 4) === String(ej) && nifN(l.nif) === nifOtra), M = new Map();
+    const conEsp = new Set(L.filter(espCruce).map((l) => facN(l.factura)));
+    L.forEach((l) => {
+      const k = facN(l.factura) || `s/n ${l.asiento ?? ''}`; if (conEsp.has(k) && !espCruce(l)) return;
+      const o = M.get(k) ?? { k, factura: String(l.factura ?? '').trim(), fecha: l.ff || l.fecha, base: 0, cuota: 0 };
+      o.base = r2(o.base + (+l.base || 0)); o.cuota = r2(o.cuota + (+l.cuota || 0)); M.set(k, o);
+    });
+    return [...M.values()];
+  }
+  function cruceGrupo() {
+    const ej = ejercicio(), selAnt = S.sel, lista = (c.empOrden ? c.empOrden() : [...S.empresas]).filter((e) => e.cif), B = new Map(); let cargando = false;
+    if (!cruceLibros) return { ej, pares: [], inc: [], cargando: false, nEmp: lista.length, parado: true };
+    try { for (const e of lista) { S.sel = e.id; const E = grande('fact-E'), R = grande('fact-R'); if (!E || !R) cargando = true; B.set(e.id, { E, R }); } } finally { S.sel = selAnt; }
+    const pares = [], inc = [];
+    for (const a of lista) for (const b of lista) {
+      if (a.id === b.id) continue;
+      const LA = B.get(a.id), LB = B.get(b.id); if (!LA?.E || !LB?.R) continue;
+      const em = facturasCon(LA.E, nifN(b.cif), ej), re = facturasCon(LB.R, nifN(a.cif), ej);
+      if (!em.length && !re.length) continue;
+      const rs = new Map(re.map((x) => [x.k, x])), filas = [];
+      em.forEach((x) => { const y = rs.get(x.k); if (y) { rs.delete(x.k); filas.push({ a, b, e: x, r: y }); } else filas.push({ a, b, e: x, r: null }); });
+      // sin el mismo nº de factura: se empareja por el mismo importe (posible factura registrada con otro número)
+      const solasE = filas.filter((f) => !f.r), solasR = [...rs.values()];
+      solasE.forEach((f) => { const i = solasR.findIndex((y) => Math.abs(y.base - f.e.base) < 0.01 && Math.abs(y.cuota - f.e.cuota) < 0.01); if (i >= 0) { f.r = solasR.splice(i, 1)[0]; f.otroN = true; } });
+      solasR.forEach((y) => filas.push({ a, b, e: null, r: y }));
+      filas.forEach((f) => {
+        const dB = f.e && f.r ? r2(f.e.base - f.r.base) : null, dC = f.e && f.r ? r2(f.e.cuota - f.r.cuota) : null;
+        f.est = !f.r ? ['ko', 'Emitida y no recibida'] : !f.e ? ['ko', 'Recibida y no emitida']
+          : Math.abs(dB) > 0.01 || Math.abs(dC) > 0.01 ? ['ko', 'Importe distinto'] : f.otroN ? ['aviso', 'Mismo importe con otro nº de factura']
+            : String(f.e.fecha).slice(0, 7) !== String(f.r.fecha).slice(0, 7) ? ['aviso', 'Distinto mes (afecta al 303 de cada periodo)'] : ['ok', 'Cuadra'];
+        f.dB = dB; f.dC = dC; inc.push(f);
+      });
+      const tot = (xs, k) => r2(xs.reduce((s, x) => s + (x ? x[k] : 0), 0));
+      pares.push({ a, b, n: filas.length, nOk: filas.filter((f) => f.est[0] === 'ok').length, bE: tot(filas.map((f) => f.e), 'base'), bR: tot(filas.map((f) => f.r), 'base'), nKo: filas.filter((f) => f.est[0] === 'ko').length, nAv: filas.filter((f) => f.est[0] === 'aviso').length });
+    }
+    return { ej, pares, inc, cargando, nEmp: lista.length };
+  }
+  function vistaCruce() {
+    if (S.empresas.length < 2) return '<p class="vacio">Hacen falta al menos dos empresas.</p>';
+    const { ej, pares, inc, cargando, nEmp, parado } = cruceGrupo(), ic = { ok: '🟢', ko: '🔴', aviso: '🟡' }, n = (v) => (v === null || v === undefined ? '—' : eur(v));
+    if (parado) return `<section class="dsec"><h3>Cruce de facturas del grupo · ejercicio ${ej}</h3>
+      <p class="hint">Compara, para cada pareja de empresas del grupo, lo que una emite con lo que la otra tiene en Recibidas. Para hacerlo hay que leer los libros de IVA (Emitidas y Recibidas) de las ${nEmp} empresas. Es pesado la primera vez en cada navegador; después salen de la memoria del navegador y solo se vuelve a bajar lo que cambie.</p>
+      <p class="no-print"><button data-act="m-crucelibros">Leer los libros de todas las empresas y cruzar</button></p></section>`;
+    const ver = inc.filter((f) => cruceTodo || f.est[0] !== 'ok').sort((x, y) => (x.est[0] === 'ok') - (y.est[0] === 'ok') || String(x.a.nombre).localeCompare(y.a.nombre) || String(x.b.nombre).localeCompare(y.b.nombre) || String((x.e ?? x.r).fecha).localeCompare(String((y.e ?? y.r).fecha)));
+    const k = (x) => inc.filter((f) => f.est[0] === x).length;
+    return `<section class="dsec"><h3>Cruce de facturas del grupo · ejercicio ${ej}</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.aviso} ${k('aviso')} a revisar · ${ic.ko} ${k('ko')} con diferencia o sin pareja${cargando ? ` · ⏳ leyendo los libros de las ${nEmp} empresas (solo la primera vez)…` : ''}</p>
+      <h4 class="cu-t gr">Por pareja de empresas</h4>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Emisora</th><th>Receptora</th><th>Facturas</th><th>Cuadran</th><th>A revisar</th><th>Con diferencia</th><th>Base emitida</th><th>Base recibida</th><th>Diferencia</th></tr></thead><tbody>
+      ${pares.map((p) => `<tr><td>${esc(p.a.nombre)}</td><td>${esc(p.b.nombre)}</td><td class="n">${p.n}</td><td class="n">${p.nOk}</td><td class="n">${p.nAv}</td><td class="n">${p.nKo}</td><td class="n">${eur(p.bE)}</td><td class="n">${eur(p.bR)}</td><td class="n">${eur(r2(p.bE - p.bR))}</td></tr>`).join('') || `<tr><td colspan="9" class="vacio">${cargando ? 'Leyendo los libros…' : 'No hay facturas entre empresas del grupo en ' + ej + '.'}</td></tr>`}</tbody></table></div>
+      <h4 class="cu-t gr" style="margin-top:14px">Facturas${cruceTodo ? '' : ' con diferencia o a revisar'}</h4>
+      <p class="no-print"><button class="small" data-act="m-crucetodo">${cruceTodo ? 'Ver solo las diferencias' : 'Ver también las que cuadran'}</button></p>
+      <div class="wrap"><table class="tabla"><thead><tr><th></th><th>Emisora</th><th>Receptora</th><th>Factura (emitida)</th><th>Factura (recibida)</th><th>Fecha emitida</th><th>Fecha recibida</th><th>Base emitida</th><th>Base recibida</th><th>Dif. base</th><th>Dif. cuota</th><th>Estado</th></tr></thead><tbody>
+      ${ver.map((f) => `<tr><td style="text-align:center">${ic[f.est[0]]}</td><td>${esc(f.a.nombre)}</td><td>${esc(f.b.nombre)}</td><td>${esc(f.e?.factura ?? '—')}</td><td>${esc(f.r?.factura ?? '—')}</td><td>${esc(f.e?.fecha ?? '—')}</td><td>${esc(f.r?.fecha ?? '—')}</td><td class="n">${n(f.e?.base)}</td><td class="n">${n(f.r?.base)}</td><td class="n">${n(f.dB)}</td><td class="n">${n(f.dC)}</td><td>${esc(f.est[1])}</td></tr>`).join('') || `<tr><td colspan="12" class="vacio">${cargando ? 'Leyendo los libros…' : 'Sin diferencias.'}</td></tr>`}</tbody></table></div>
+      <p class="hint">Cruza, para cada pareja de empresas del grupo, las facturas del libro de <b>Emitidas</b> de una con las del libro de <b>Recibidas</b> de la otra, por NIF y número de factura (sin tener en cuenta ceros ni símbolos). Marca las facturas que están solo en un lado, las de distinto importe (base o cuota), las que coinciden en importe pero con otro número de factura y las registradas en distinto mes. Esta pestaña solo lee: no cambia ningún dato. La primera vez lee los libros de todas las empresas; después salen de la memoria.</p></section>`;
+  }
   // ================= Conciliación mod 583: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
   // mismo cálculo que la pestaña «Modelo 583» (retribuciones por trimestre a mano o desde el mayor); presentado = el 583 de «Impuestos presentados» del mismo ejercicio
   function filas583() {
@@ -1101,6 +1166,7 @@ export function crearModelos(c) {
     c592: ['Conciliación mod 592', 'Calculado frente a presentado', vistaC592],
     c583: ['Conciliación mod 583', 'Calculado frente a presentado', vistaC583],
     c232: ['Conciliación mod 232', 'Calculado frente a presentado', vistaC232],
+    cruce: ['Cruce facturas del grupo', 'Emitidas contra recibidas entre empresas del grupo', vistaCruce],
     moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
     mod583: ['Modelo 583', 'Producción energía eléctrica', vista583],
