@@ -1,6 +1,8 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { crearModulos } from './modulos.js?v=503';
-import { limpiarCache } from './cachelibros.js?v=1';
+import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
+import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
+const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
 import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } from './tablas.js?v=14';
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
@@ -84,7 +86,10 @@ const opts = (obj, sel) => Object.entries(obj)
 
 // ---------- Datos ----------
 // La base devuelve como mucho 1.000 filas por consulta: los registros se piden por tandas (ordenados por id) hasta traerlos todos; si no, lo último que se guarda puede no aparecer
-async function pedirRegistros() {
+const baseRegistros = (cols) => db.from('registros').select(cols).not('tipo', 'in', '(fact-E,fact-R,fact-prov,fact-cli,fact-tprov,sii-E,sii-R,may-mov,m592-mov,a22src,intra)').not('tipo', 'like', 'sii-raw-%');
+// Incremental: solo se bajan los registros nuevos o modificados (cacheregistros.js); si la caché falla se cargan todos como antes
+const pedirRegistros = () => cargarRegistros(uidActual, baseRegistros, pedirRegistrosTodos);
+async function pedirRegistrosTodos() {
   const out = [];
   for (let d = 0; ; d += 1000) {
     const { data, error } = await db.from('registros').select('id,empresa_id,tipo,ejercicio,datos').not('tipo', 'in', '(fact-E,fact-R,fact-prov,fact-cli,fact-tprov,sii-E,sii-R,may-mov,m592-mov,a22src,intra)')
