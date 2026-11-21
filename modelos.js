@@ -1096,6 +1096,37 @@ export function crearModelos(c) {
       ${ver.map((f) => `<tr><td style="text-align:center">${ic[f.est[0]]}</td><td>${esc(f.a.nombre)}</td><td>${esc(f.b.nombre)}</td><td>${esc(f.e?.factura ?? '—')}</td><td>${esc(f.r?.factura ?? '—')}</td><td>${esc(f.e?.fecha ?? '—')}</td><td>${esc(f.r?.fecha ?? '—')}</td><td class="n">${n(f.e?.base)}</td><td class="n">${n(f.r?.base)}</td><td class="n">${n(f.dB)}</td><td class="n">${n(f.dC)}</td><td>${esc(f.est[1])}</td></tr>`).join('') || `<tr><td colspan="12" class="vacio">${cargando ? 'Leyendo los libros…' : 'Sin diferencias.'}</td></tr>`}</tbody></table></div>
       <p class="hint">Cruza, para cada pareja de empresas del grupo, las facturas del libro de <b>Emitidas</b> de una con las del libro de <b>Recibidas</b> de la otra, por NIF y número de factura (sin tener en cuenta ceros ni símbolos). Marca las facturas que están solo en un lado, las de distinto importe (base o cuota), las que coinciden en importe pero con otro número de factura y las registradas en distinto mes. Esta pestaña solo lee: no cambia ningún dato. La primera vez lee los libros de todas las empresas; después salen de la memoria.</p></section>`;
   }
+  // ================= Conciliación cuenta 631 (otros tributos): gasto del balance frente a los recibos de impuestos locales (IBI, IAE, IVTM, vados…). Solo lee lo que ya está cargado =================
+  const SYS631 = (id, ej) => S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === id && r.ejercicio === ej)?.datos?.cuentas ?? null;
+  function filas631(ej) {
+    const lista = c.empOrden ? c.empOrden() : [...S.empresas];
+    return lista.map((e) => {
+      const ss = SYS631(e.id, ej), cts = ss ? ss.filter((x) => String(x.cuenta ?? '').replace(/\D/g, '').startsWith('631')) : null;
+      const gasto = cts ? r2(cts.reduce((s, x) => s + (Number(x.previo) || 0), 0)) : null;
+      const rec = S.registros.filter((r) => r.tipo === 'iloc' && r.empresa_id === e.id && String(r.datos?.ej) === String(ej));
+      const imp = (r) => parseNum(String(r.datos?.imp ?? 0)) || 0, tot = r2(rec.reduce((s, r) => s + imp(r), 0)), pag = r2(rec.filter((r) => r.datos?.pag === 'Sí').reduce((s, r) => s + imp(r), 0));
+      const dif = gasto === null ? null : r2(gasto - tot);
+      const est = gasto === null ? ['nd', 'Sin balance de sumas y saldos de este ejercicio'] : !rec.length && Math.abs(gasto) < 0.005 ? ['nd', 'Sin gasto ni recibos']
+        : !rec.length ? ['aviso', 'Hay gasto en la 631 pero no hay recibos cargados'] : Math.abs(dif) <= 1 ? ['ok', 'Cuadra'] : ['ko', dif > 0 ? 'La contabilidad tiene más gasto que los recibos' : 'Los recibos suman más que la contabilidad'];
+      return { e, cts, gasto, rec, tot, pag, dif, est, imp };
+    });
+  }
+  function vistaC631() {
+    if (!S.empresas.length) return '<p class="vacio">Sin empresas.</p>';
+    const ej = ejercicio(), F = filas631(ej), ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, k = (x) => F.filter((f) => f.est[0] === x).length;
+    const sel = S.sel ? F.find((f) => f.e.id === S.sel) : null;
+    const porTipo = sel ? ['IBI', 'IAE', 'IVTM', 'Vado', 'Otro'].map((t) => [t, r2(sel.rec.filter((r) => (r.datos?.tipo || 'Otro') === t).reduce((s, r) => s + sel.imp(r), 0))]).filter((x) => x[1]) : [];
+    return `<section class="dsec"><h3>Conciliación cuenta 631 · otros tributos · ejercicio ${ej}</h3>
+      <p class="dash-s" style="font-size:.8rem">${ic.ok} ${k('ok')} cuadran · ${ic.ko} ${k('ko')} con diferencia · ${ic.aviso} ${k('aviso')} a revisar · ${ic.nd} ${k('nd')} sin datos</p>
+      <div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th class="num">Gasto cuenta 631 (balance)</th><th class="num">Recibos de impuestos locales</th><th class="num">De ellos pagados</th><th class="num">Diferencia</th><th></th><th>Estado</th></tr></thead><tbody>
+      ${F.map((f) => `<tr${f.e.id === S.sel ? ' class="fila-sel"' : ''}><td>${esc(f.e.nombre)}</td><td class="num">${f.gasto === null ? '—' : eur(f.gasto)}</td><td class="num">${f.rec.length ? eur(f.tot) : '—'}</td><td class="num">${f.rec.length ? eur(f.pag) : '—'}</td><td class="num">${f.dif === null ? '—' : eur(f.dif)}</td><td style="text-align:center">${ic[f.est[0]]}</td><td>${esc(f.est[1])}</td></tr>`).join('')}</tbody></table></div>
+      ${sel ? `<h4 class="cu-t gr" style="margin-top:14px">Detalle de ${esc(sel.e.nombre)}</h4>
+        <div class="wrap"><table class="tabla"><thead><tr><th>Cuenta del balance</th><th>Nombre</th><th class="num">Saldo antes del cierre</th></tr></thead><tbody>
+        ${(sel.cts ?? []).map((x) => `<tr><td>${esc(x.cuenta)}</td><td>${esc(x.nombre)}</td><td class="num">${eur(Number(x.previo) || 0)}</td></tr>`).join('') || '<tr><td colspan="3" class="vacio">Sin cuentas 631 en el balance.</td></tr>'}</tbody></table></div>
+        <div class="wrap" style="margin-top:8px"><table class="tabla"><thead><tr><th>Impuesto</th><th class="num">Importe de los recibos</th></tr></thead><tbody>
+        ${porTipo.map(([t, v]) => `<tr><td>${esc(t)}</td><td class="num">${eur(v)}</td></tr>`).join('') || '<tr><td colspan="2" class="vacio">Sin recibos de este ejercicio.</td></tr>'}</tbody></table></div>` : '<p class="hint">Elige una empresa para ver el detalle por cuenta y por impuesto.</p>'}
+      <p class="hint">Gasto = saldo antes del cierre de las cuentas 631* del balance de sumas y saldos cargado (pestaña SYS). Recibos = importe de los recibos de impuestos locales (IBI, IAE, IVTM, vados…) del ejercicio, pagados o no. Cuadra si la diferencia es de 1 € o menos. Si algún tributo local se contabiliza en otra cuenta (por ejemplo, el IBI como gasto de arrendamiento), saldrá diferencia y habrá que revisarla a mano. Esta pestaña solo lee: no cambia ningún dato.</p></section>`;
+  }
   // ================= Conciliación mod 583: calculado frente a presentado, por empresa y periodo (resumen de control; solo lee) =================
   // mismo cálculo que la pestaña «Modelo 583» (retribuciones por trimestre a mano o desde el mayor); presentado = el 583 de «Impuestos presentados» del mismo ejercicio
   function filas583() {
@@ -1166,6 +1197,7 @@ export function crearModelos(c) {
     c592: ['Conciliación mod 592', 'Calculado frente a presentado', vistaC592],
     c583: ['Conciliación mod 583', 'Calculado frente a presentado', vistaC583],
     c232: ['Conciliación mod 232', 'Calculado frente a presentado', vistaC232],
+    c631: ['Conciliación cuenta 631', 'Otros tributos frente a recibos de impuestos locales', vistaC631],
     cruce: ['Cruce facturas del grupo', 'Emitidas contra recibidas entre empresas del grupo', vistaCruce],
     moda22: ['Modelo A22', 'Devoluciones plástico', vistaA22],
     mod232: ['Modelo 232', 'Operaciones vinculadas', vista232],
