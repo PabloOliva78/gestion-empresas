@@ -47,3 +47,5 @@ button.ley-art i { font-style: normal; color: var(--ink, #1f3864); font-weight: 
 .ley-ov-cuerpo h2 { color: var(--ink, #1f3864); margin-top: 0; }
 .ley-ov-cuerpo mark { background: #ffe58a; color: inherit; }
 .ley-grupo { margin: 1rem 0 .2rem; font-size: .85rem; color: var(--ink, #1f3864); text-transform: uppercase; letter-spacing: .02em; }
+.ley-ov-cuerpo mark.imp { background: #ffe600; color: #111; border-radius: 2px; padding: 0 .1em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.ley-ov.sin-imp .ley-ov-cuerpo mark.imp { background: transparent; color: inherit; padding: 0; }

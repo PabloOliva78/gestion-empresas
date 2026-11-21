@@ -25,8 +25,8 @@ import { abrirD365, precalentarD365, listarLibrosD365, bajarLibroD365 } from './
 import { leer200 } from './pdf200.js?v=1';
 import { crearConciliaciones } from './conciliaciones.js?v=25';
 import { crearEstados } from './estados.js?v=4';
-import { crearLeyIva } from './leyiva.js?v=10';
-import { crearReglFac } from './reglfac.js?v=1';
+import { crearLeyIva } from './leyiva.js?v=12';
+import { crearReglFac } from './reglfac.js?v=3';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, nombreEmp } = c;

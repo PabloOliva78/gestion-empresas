@@ -2,6 +2,7 @@
 // Se carga el texto de la Ley 37/1992 del IVA (PDF, TXT o HTML del BOE), se parte en artículos, se sacan las exenciones (arts. 20 a 26)
 // y las facturas emitidas y recibidas del libro de IVA se revisan frente a sus reglas. La consulta busca en el texto cargado (no inventa nada).
 import { lineasPagina, rangoPeriodo } from './lectores.js?v=46';
+import { marcar, botonSubrayado, claseSubrayado } from './subrayar.js?v=2';
 
 const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const r2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -365,10 +366,10 @@ export function crearLeyIva(c) {
     const L = secs(), i = L.findIndex((s) => s.id === id), s = L[i]; if (!s) return;
     const prev = L[i - 1], next = L[i + 1], nom = (x) => (x.tipo === 'art' ? `Art. ${x.id}` : x.titulo.slice(0, 28));
     document.getElementById('leyOv')?.remove();
-    const ov = document.createElement('div'); ov.id = 'leyOv'; ov.className = 'ley-ov';
+    const ov = document.createElement('div'); ov.id = 'leyOv'; ov.className = `ley-ov${claseSubrayado()}`;
     ov.innerHTML = `<div class="ley-ov-barra"><button class="primary" data-leyvolver="1">‹ Volver</button><b>${s.tipo === 'art' ? `Artículo ${esc(s.id)}` : 'Disposición'}</b>
-      <span class="space"></span><button data-leyart2="${prev ? esc(prev.id) : ''}"${prev ? '' : ' disabled'}>‹ ${prev ? esc(nom(prev)) : ''}</button><button data-leyart2="${next ? esc(next.id) : ''}"${next ? '' : ' disabled'}>${next ? esc(nom(next)) : ''} ›</button></div>
-      <article class="ley-ov-cuerpo"><h2>${s.tipo === 'art' ? `Artículo ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h2><p class="hint">${esc(LEY?.nombre ?? '')}</p>${s.texto.split('\n').map((p) => `<p>${resalta(p, ts)}</p>`).join('')}</article>`;
+      <span class="space"></span>${botonSubrayado()}<button data-leyart2="${prev ? esc(prev.id) : ''}"${prev ? '' : ' disabled'}>‹ ${prev ? esc(nom(prev)) : ''}</button><button data-leyart2="${next ? esc(next.id) : ''}"${next ? '' : ' disabled'}>${next ? esc(nom(next)) : ''} ›</button></div>
+      <article class="ley-ov-cuerpo"><h2>${s.tipo === 'art' ? `Artículo ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h2><p class="hint">${esc(LEY?.nombre ?? '')}</p>${s.texto.split('\n').map((p) => `<p>${marcar(resalta(p, ts))}</p>`).join('')}</article>`;
     document.body.appendChild(ov); document.documentElement.style.overflow = 'hidden';
     ov.querySelector('.ley-ov-cuerpo').scrollTop = 0; ov._ts = ts;
   }
