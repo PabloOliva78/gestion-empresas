@@ -27,6 +27,7 @@ import { crearConciliaciones } from './conciliaciones.js?v=25';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=12';
 import { crearReglFac } from './reglfac.js?v=3';
+import { ficheroAeat, bytesLatin1 } from './ficherosaeat.js?v=1';
 
 export function crearModulos(c) {
   const { db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, nombreEmp } = c;
@@ -2185,6 +2186,42 @@ export function crearModulos(c) {
     }
   });
 
+  // Fichero de la Sede (111, 115 o 123) con las mismas casillas que se ven en pantalla (misma cuenta que vistaRet)
+  function descargarRet(modelo) {
+    try {
+      const e = empresa(), p = S.periodo, R = grande('fact-R');
+      if (!e) throw new Error('Elige una empresa.');
+      if (!p) throw new Error('Elige un periodo (trimestre o mes) en la barra lateral.');
+      if (!R) throw new Error('Los libros aún se están cargando; espera un momento y vuelve a pulsar.');
+      const ej = Number(S.ejercicio), pe = perEf(e, p);
+      if (pe !== p) throw new Error(`${e.nombre} presenta ${e.tipo === 'PYME' ? 'por trimestres (1T…4T)' : 'por meses (01…12)'}: elige ese tipo de periodo.`);
+      const c = calcularRet(modelo, R, ej, p), m = manPer('m' + modelo), mv = (k) => Number(m[k]) || 0, k2 = (n) => String(n).padStart(2, '0'), K = {};
+      let imp;
+      if (modelo === '111') {
+        const np = nomPer(ej, pe), lT = !np ? lineasListado('111', R, ej, pe).filter((x) => x.k[0] === '111T') : [];
+        const aut = { n: new Set(lT.map((x) => x.ni || x.no)).size + mv('t1'), s: (np ? np.s : rr(lT.reduce((a, x) => a + x.b, 0))) + mv('t2'), r: (np ? np.r : rr(lT.reduce((a, x) => a + x.re, 0))) + mv('t3') };
+        const ret = aut.r + mv('k06') + c.ret + mv('k12') + mv('k15') + mv('k18') + mv('k21') + mv('k24') + mv('k27');
+        Object.assign(K, { '01': aut.n, '02': aut.s, '03': aut.r, '07': c.perceptores, '08': c.base, '09': c.ret });
+        for (let n = 4; n <= 27; n++) if (!(n in { 7: 1, 8: 1, 9: 1 })) K[k2(n)] = mv('k' + k2(n));
+        K['28'] = ret; K['29'] = mv('c29'); K['30'] = ret - mv('c29'); imp = ret - mv('c29');
+      } else if (modelo === '115') {
+        Object.assign(K, { '01': c.perceptores, '02': c.base, '03': c.ret, '04': mv('c4'), '05': c.ret - mv('c4') }); imp = c.ret - mv('c4');
+      } else {
+        const dv = c.porCodigo.filter((x) => /^I\.DV/.test(x.codigo)), rs = c.porCodigo.filter((x) => !/^I\.DV/.test(x.codigo));
+        const sm = (a, k) => a.reduce((t, x) => t + x[k], 0), nd = c.lineas.filter((l) => /^I\.DV/.test(l.codigo)).length, nr = c.lineas.length - nd;
+        const n1 = nd + mv('d01'), n2 = nr + mv('x01'), b1 = sm(dv, 'base') + mv('d04'), b2 = sm(rs, 'base') + mv('x02'), r1 = sm(dv, 'ret') + mv('d07'), r2_ = sm(rs, 'ret') + mv('x03');
+        imp = (r1 + r2_) - mv('c4');
+        Object.assign(K, { '01': n1, '02': n2, '03': n1 + n2, '04': b1, '05': b2, '06': b1 + b2, '07': r1, '08': r2_, '09': r1 + r2_, '10': 0, '11': 0, '12': r1 + r2_, '13': mv('c4'), '14': imp });
+      }
+      Object.keys(K).forEach((k) => { K[k] = rr(K[k]); });
+      const iban = e?.datos?.[`cuenta${modelo}`] ?? '', neg = Math.abs(imp) <= 0.005, deduce = modelo === '111' ? mv('c29') : mv('c4');
+      const txt = ficheroAeat(modelo, { tipo: neg ? 'N' : iban ? 'U' : 'I', nif: e.cif, nombre: e.nombre, ej, per: pe, iban, comp: !!deduce, just: '', c: K });
+      const url = URL.createObjectURL(new Blob([bytesLatin1(txt)], { type: 'text/plain;charset=iso-8859-1' })), a = document.createElement('a');
+      a.href = url; a.download = `${modelo}_${String(e.cif ?? '').replace(/[^A-Za-z0-9]/g, '')}_${ej}_${pe}.txt`; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+      alert(`Fichero del modelo ${modelo} generado (${e.nombre}, ${pe} de ${ej}, a ingresar ${fnum(imp)} €).\n\nEn la Sede: abre el formulario del ${modelo}, pulsa «Importar» y elige este fichero. Revisa las casillas antes de presentar.${deduce ? '\n\nEs complementaria: falta el nº de justificante de la declaración anterior (se escribe en la Sede).' : ''}${neg ? '\n\nSale negativa (sin importe a ingresar).' : iban ? '\n\nSale domiciliada con el IBAN de la empresa.' : '\n\nSale como ingreso (la empresa no tiene IBAN guardado para este modelo).'}`);
+    } catch (err) { alert(err.message || String(err)); }
+  }
+
   function vistaRet(modelo) {
     if (!S.sel) return sinEmpresa;
     const R = grande('fact-R');
@@ -2270,6 +2307,7 @@ export function crearModulos(c) {
     const tipoDecl = `${sec('Tipo de declaración')}<div class="f-chk">${chkR('A ingresar', importe > 0.005)}${chkR('Negativa (sin retenciones en el periodo)', Math.abs(importe) <= 0.005)}</div>`
       + (importe > 0.005 ? `${sec('Domiciliación del pago')}${fila(`Cuenta de cargo (IBAN) del ${modelo} · importe a ingresar ${fnum(importe)} · <b>${esc(bancoDe(iban))}</b>`, '', '', `<input class="iban" data-ibanmod="${modelo}" value="${esc(iban)}"${ro}>`)}` : '');
     return `${S.periodo ? '' : '<div class="f303-top-bar"><span class="hint">Elige un periodo (trimestre o mes) en la barra lateral.</span></div>'}
+      <p class="no-print"><button class="small" data-act="m-retfichero" data-m="${modelo}" title="Genera el fichero con el diseño de registro oficial para el botón Importar del formulario de la Sede">⬇ Fichero para la Sede (.txt)</button></p>
       <div class="f303">${tabla}${tipoDecl}</div>
       <h4 class="it-sec">Detalle de origen (trazabilidad)</h4>
       <div class="wrap"><table class="tabla"><thead><tr><th>Código</th><th>Concepto</th><th>Hoja origen</th><th class="num">Base</th><th class="num">Retención</th></tr></thead><tbody>
@@ -5039,6 +5077,7 @@ export function crearModulos(c) {
       'm-fcnvx': () => { fcNueva = null; render(); },
       'm-manret': () => formManRet(d.m),
       'm-retprint': () => imprimirRet(d.m),
+      'm-retfichero': () => descargarRet(d.m),
       'm-fundaedel': () => quitarFundae(d.y),
       'm-ctavis': () => accionCta('compvis', '', ''),
       'm-siicod': () => { siiCod[d.t] = d.cod; render(); },
