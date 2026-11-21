@@ -1630,3 +1630,16 @@ table.cg-t tr.tot td { background: #f0f2f6 !important; font-weight: 700; border-
 .vista.bl-conc table.aud:not(.cg-t) td { border-left: 0; border-right: 0; }
 .cg-g > .caja-rs, .cg-card > .caja-rs { border-radius: 0 12px 12px 0; }
 .cg-g table.cg-t { width: auto; min-width: 100%; }
+
+/* Explicaciones por línea (botón 💬 en las tablas de conciliación) */
+.exp-b { border: 0; background: transparent; cursor: pointer; font-size: .8em; line-height: 1; padding: 0 .2em; margin-left: .35em; opacity: .22; vertical-align: baseline; }
+tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
+.exp-b.on.pend { filter: hue-rotate(0deg); }
+.exp-n { display: block; font-size: .72em; font-style: italic; font-weight: 400; margin-top: 2px; max-width: 28em; white-space: normal; }
+.exp-n.ok { color: var(--ok, #1b7f3b); }
+.exp-n.pend { color: #b26a00; }
+.exp-pop { position: fixed; z-index: 9999; width: 330px; max-width: calc(100vw - 16px); background: var(--card, #fff); color: var(--text, #1d2330); border: 1px solid var(--line, #e3e6ec); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.22); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.exp-pop textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.exp-pop .exp-bt { display: flex; gap: 6px; justify-content: flex-end; }
+.exp-pop .exp-err { color: var(--danger, #c62828); }
+@media print { .exp-b:not(.on) { display: none; } .exp-pop { display: none; } }

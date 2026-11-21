@@ -11,6 +11,7 @@ export function activarExportar() {
     if (s) return s.options[s.selectedIndex]?.text ?? '';
     const k = c.querySelector('input[type=checkbox]');
     if (k) return k.checked ? 'Sí' : 'No';
+    if (c.querySelector('.exp-b')) { const cl = c.cloneNode(true); cl.querySelectorAll('.exp-b').forEach((x) => x.remove()); return cl.textContent.replace(/\s+/g, ' ').trim(); } // el botón 💬 de las explicaciones no va al Excel
     return c.textContent.replace(/\s+/g, ' ').trim();
   };
   const valor = (t) => (NUM.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : t);
