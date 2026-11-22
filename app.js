@@ -8,6 +8,7 @@ import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
 import { crearTareas } from './tareas.js?v=1';
 import { crearExplicaciones } from './explicaciones.js?v=1';
+import { activarSubrayadoManual } from './subrayadoman.js?v=1';
 import { activarExportar, activarAvisoSesion } from './herramientas.js?v=6';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
@@ -971,6 +972,7 @@ Object.assign(TABS, M.tabs);
 Object.assign(TABS, crearCopia({ db, S, esc, render }).tabs); // Copia de seguridad (bloque 11): pestaña nueva, solo administradores
 Object.assign(TABS, crearTareas({ esc, render }).tabs); // Tareas programadas (bloque 11): pestaña nueva, solo administradores
 // Explicaciones por línea (💬) en las conciliaciones y dossier PDF con todas ellas
+activarSubrayadoManual({ S, db }); // artículos de la ley en columnas y subrayado propio
 Object.assign(TABS, crearExplicaciones({ S, db, esc, render, root, TABS, conc: CONC_TABS, dossierTabs: () => GRUPOS.find((g) => g[0].startsWith('8.'))[1].filter((id) => id !== 'explic'), puede: puedeEditar, esAdmin }).tabs);
 Object.assign(TABS, crearHistorial({ db, S, esc, render, empNombre }).tabs); // Historial de cambios (bloque 11): pestaña nueva, solo administradores
 

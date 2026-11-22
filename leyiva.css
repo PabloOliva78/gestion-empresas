@@ -43,8 +43,17 @@ button.ley-art i { font-style: normal; color: var(--ink, #1f3864); font-weight: 
 .ley-ov { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; flex-direction: column; }
 .ley-ov-barra { display: flex; align-items: center; gap: .6rem; padding: .7rem 1.2rem; background: var(--card); border-bottom: 3px solid var(--ink, #1f3864); }
 .ley-ov-barra .space { flex: 1; }
-.ley-ov-cuerpo { flex: 1; overflow: auto; width: min(900px, 100%); margin: 0 auto; padding: 1.5rem 1.5rem 3rem; font-size: 1.05rem; line-height: 1.6; }
-.ley-ov-cuerpo h2 { color: var(--ink, #1f3864); margin-top: 0; }
+.ley-ov-cuerpo { flex: 1; min-height: 0; overflow: hidden; width: 100%; box-sizing: border-box; margin: 0; padding: 1rem 1.5rem 1.2rem; font-size: 1.05rem; line-height: 1.55; column-gap: 2.2rem; column-width: 24rem; } /* el texto va en columnas a lo ancho de la pantalla (subrayadoman.js ajusta columnas y letra para que quepa sin barra) */
+.ley-ov-cuerpo h2 { color: var(--ink, #1f3864); margin-top: 0; column-span: all; }
+.ley-ov-cuerpo > .hint { column-span: all; }
+.ley-ov-cuerpo > p { margin: 0 0 .6rem; }
+.ley-ov-cuerpo mark.sub { color: inherit; border-radius: 2px; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.ley-ov-cuerpo mark.sub-v, #subBar .sub-v { background: #b7f0b1; }
+.ley-ov-cuerpo mark.sub-r, #subBar .sub-r { background: #ffc1d9; }
+.ley-ov-cuerpo mark.sub-a, #subBar .sub-a { background: #b9dcff; }
+#subBar { position: fixed; z-index: 1100; display: flex; align-items: center; gap: .5rem; background: var(--card, #fff); color: var(--text, #1d2330); border: 1px solid var(--line, #cfd5e0); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.22); padding: .35rem .6rem; font-size: .85rem; }
+#subBar .sub-c { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 1px solid rgba(0,0,0,.35); cursor: pointer; }
+#subBar .sub-q { font-size: .85rem; }
 .ley-ov-cuerpo mark { background: #ffe58a; color: inherit; }
 .ley-grupo { margin: 1rem 0 .2rem; font-size: .85rem; color: var(--ink, #1f3864); text-transform: uppercase; letter-spacing: .02em; }
 .ley-ov-cuerpo mark.imp { background: #ffe600; color: #111; border-radius: 2px; padding: 0 .1em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
