@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=516';
+import { crearModulos } from './modulos.js?v=517';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -8,7 +8,7 @@ import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
 import { crearTareas } from './tareas.js?v=1';
 import { crearExplicaciones } from './explicaciones.js?v=2';
-import { activarSubrayadoManual } from './subrayadoman.js?v=4';
+import { activarSubrayadoManual } from './subrayadoman.js?v=5';
 import { activarExportar, activarAvisoSesion } from './herramientas.js?v=6';
 
 // La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña

@@ -10,14 +10,16 @@ export function activarSubrayadoManual({ S, db }) {
   const LS = 'ley-subrayados', ZONAS = '.ley-ov-cuerpo, #leyExLista';
   const reg = () => S.registros.find((r) => r.tipo === 'leysub');
   const local = () => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch { return {}; } };
-  const marcasDe = (k) => reg()?.datos?.marcas?.[k] ?? local()[k] ?? [];
+  // Los subrayados de artículos se apuntan a la LÍNEA ORIGINAL del texto (p = número de línea, v: 2). Los antiguos (sin v) apuntaban al párrafo, que era la línea + 1 (el 0 era el subtítulo).
+  const norm = (k, m) => (k === 'exen' || m.v === 2 || typeof m.p !== 'number' ? m : { ...m, p: m.p - 1, v: 2 });
+  const marcasDe = (k) => (reg()?.datos?.marcas?.[k] ?? local()[k] ?? []).map((m) => norm(k, m));
   const zonaDe = (n) => (n?.nodeType === 3 ? n.parentElement : n)?.closest?.(ZONAS) ?? null;
   const esExen = (z) => z?.id === 'leyExLista';
   const claveDe = (z) => (esExen(z) ? 'exen' : `${z.closest('.ley-ov')?.id}|${(z.querySelector('h2')?.textContent ?? '').trim().slice(0, 80)}`);
-  // «párrafos» de una zona: en un artículo, sus <p> (identificados por su posición); en exenciones, las celdas de texto (identificadas por la referencia de la exención)
-  const parrafos = (z) => (esExen(z) ? [...z.querySelectorAll('td.ley-ext')] : [...z.querySelectorAll(':scope > p')]);
-  const idDe = (z, el, i) => (esExen(z) ? el.dataset.ref : i);
-  const elDe = (z, id) => parrafos(z).find((el, i) => idDe(z, el, i) === id) ?? null;
+  // «párrafos» de una zona: en un artículo, las líneas originales del texto (<span data-l>, identificadas por su número de línea); en exenciones, las celdas de texto (identificadas por la referencia de la exención)
+  const parrafos = (z) => (esExen(z) ? [...z.querySelectorAll('td.ley-ext')] : [...z.querySelectorAll('span[data-l]')]);
+  const idDe = (z, el) => (esExen(z) ? el.dataset.ref : Number(el.dataset.l));
+  const elDe = (z, id) => parrafos(z).find((el) => idDe(z, el) === id) ?? null;
   const hayOverlay = () => document.querySelector('.ley-ov .ley-ov-cuerpo');
 
   // ---------- guardar ----------
@@ -66,7 +68,7 @@ export function activarSubrayadoManual({ S, db }) {
     let sal = arr.map((m) => ({ ...m }));
     trozos.forEach(({ p, a, b }) => {
       sal = sal.flatMap((m) => { if (m.c === 'x' || m.p !== p || m.b <= a || m.a >= b) return [m]; const r = []; if (m.a < a) r.push({ ...m, b: a }); if (m.b > b) r.push({ ...m, a: b }); return r; });
-      const pe = elDe(z, p); if (pe && [...pe.querySelectorAll('mark.imp:not(.imp-off)')].some((el) => { const [x, y] = posicion(pe, el); return x < b && y > a; })) sal.push({ p, a, b, c: 'x' });
+      const pe = elDe(z, p); if (pe && [...pe.querySelectorAll('mark.imp:not(.imp-off)')].some((el) => { const [x, y] = posicion(pe, el); return x < b && y > a; })) sal.push({ p, a, b, c: 'x', v: 2 });
     });
     return sal;
   }
@@ -99,11 +101,11 @@ export function activarSubrayadoManual({ S, db }) {
     if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
     const r = sel.getRangeAt(0), z = zonaDe(r.commonAncestorContainer); if (!z) return null;
     const trozos = [];
-    parrafos(z).forEach((p, i) => {
-      if (!r.intersectsNode(p) || p.classList.contains('hint')) return;
+    parrafos(z).forEach((p) => {
+      if (!r.intersectsNode(p)) return;
       const off = (nodo, o) => { const q = document.createRange(); q.selectNodeContents(p); q.setEnd(nodo, o); return q.toString().length; };
       const a = p.contains(r.startContainer) ? off(r.startContainer, r.startOffset) : 0, b = p.contains(r.endContainer) ? off(r.endContainer, r.endOffset) : p.textContent.length;
-      if (b > a) trozos.push({ p: idDe(z, p, i), a, b });
+      if (b > a) trozos.push({ p: idDe(z, p), a, b, v: 2 });
     });
     return trozos.length ? { trozos, z, rect: r.getBoundingClientRect() } : null;
   }
@@ -137,7 +139,7 @@ export function activarSubrayadoManual({ S, db }) {
     const qi = t.closest('[data-subquitarimp]');
     if (qi && barra?._z) { // quitar un subrayado amarillo automático concreto
       const z = barra._z, k = claveDe(z), d = JSON.parse(qi.dataset.subquitarimp); quitarBarra();
-      await guardar(k, [...marcasDe(k), { p: d[0], a: d[1], b: d[2], c: 'x' }]); pintar(z, k); return;
+      await guardar(k, [...marcasDe(k), { p: d[0], a: d[1], b: d[2], c: 'x', v: 2 }]); pintar(z, k); return;
     }
     const q = t.closest('[data-subquitar]');
     if (q && barra?._z) {
@@ -152,8 +154,8 @@ export function activarSubrayadoManual({ S, db }) {
     }
     const im = t.closest('mark.imp:not(.imp-off)');
     if (im && z && colapsada) { // pulsar un amarillo automático: ofrece quitarlo
-      const pe = im.closest('p, td.ley-ext'), lista = pe ? parrafos(z) : [], i = lista.indexOf(pe);
-      if (i >= 0) { const [a, b] = posicion(pe, im), r = im.getBoundingClientRect(); mostrarBarra(r.left + r.width / 2, r.bottom + 8, `<button class="sub-q" data-subquitarimp='${JSON.stringify([idDe(z, pe, i), a, b]).replace(/'/g, '&#39;')}'>Quitar este subrayado</button>`); barra._z = z; pendiente = { marca: true }; return; }
+      const pe = im.closest('span[data-l], td.ley-ext');
+      if (pe && z.contains(pe)) { const [a, b] = posicion(pe, im), r = im.getBoundingClientRect(); mostrarBarra(r.left + r.width / 2, r.bottom + 8, `<button class="sub-q" data-subquitarimp='${JSON.stringify([idDe(z, pe), a, b]).replace(/'/g, '&#39;')}'>Quitar este subrayado</button>`); barra._z = z; pendiente = { marca: true }; return; }
     }
     if (barra && !t.closest('#subBar')) quitarBarra();
   });
@@ -163,7 +165,7 @@ export function activarSubrayadoManual({ S, db }) {
     if (pintando) return;
     for (const mu of muts) {
       for (const nodo of mu.addedNodes) {
-        if (nodo instanceof HTMLElement && nodo.classList.contains('ley-ov')) { quitarBarra(); const art = nodo.querySelector('.ley-ov-cuerpo'); if (art) { pintar(art, claveDe(art)); ajustar(art); } }
+        if (nodo instanceof HTMLElement && nodo.classList.contains('ley-ov')) { quitarBarra(); nodo.lang = 'es'; /* para que el texto justificado parta las palabras en español */ const art = nodo.querySelector('.ley-ov-cuerpo'); if (art) { pintar(art, claveDe(art)); ajustar(art); } }
       }
     }
     // lista de exenciones: cada vez que se pinta (o se filtra) llegan celdas nuevas sin marcar

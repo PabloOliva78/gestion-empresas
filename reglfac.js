@@ -1,7 +1,7 @@
 // Bloque 10 · Exenciones y Leyes: Reglamento de facturación (Real Decreto 1619/2012).
 // Se carga el texto del Reglamento (PDF, TXT o HTML del BOE), se parte en artículos y disposiciones, se guarda para todos los usuarios (tabla «leyes», id «rfac»)
 // y se puede recorrer por temas, por índice o consultar. La consulta busca en el texto cargado: no interpreta ni inventa nada.
-import { marcar, botonSubrayado, claseSubrayado } from './subrayar.js?v=2';
+import { marcar, botonSubrayado, claseSubrayado, cuerpoHtml } from './subrayar.js?v=3';
 const sinAc = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const SUF = /^(bis|ter|quater|quinquies|sexies|septies|octies|nonies|decies)$/;
 
@@ -206,7 +206,7 @@ export function crearReglFac(c) {
     const ov = document.createElement('div'); ov.id = 'rfOv'; ov.className = `ley-ov${claseSubrayado()}`;
     ov.innerHTML = `<div class="ley-ov-barra"><button class="primary" data-rfvolver="1">‹ Volver</button><b>${s.tipo === 'art' ? `Artículo ${esc(s.id)}` : 'Disposición'}</b>
       <span class="space"></span>${botonSubrayado()}<button data-rfart2="${prev ? esc(prev.id) : ''}"${prev ? '' : ' disabled'}>‹ ${prev ? esc(nom(prev)) : ''}</button><button data-rfart2="${next ? esc(next.id) : ''}"${next ? '' : ' disabled'}>${next ? esc(nom(next)) : ''} ›</button></div>
-      <article class="ley-ov-cuerpo"><h2>${s.tipo === 'art' ? `Artículo ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h2><p class="hint">${esc(s.grupo ? `${s.grupo} · ` : '')}${esc(LEY?.nombre ?? '')}</p>${s.texto.split('\n').map((p) => `<p>${marcar(resalta(p, ts))}</p>`).join('')}</article>`;
+      <article class="ley-ov-cuerpo"><h2>${s.tipo === 'art' ? `Artículo ${esc(s.id)}. ` : ''}${esc(s.titulo)}</h2><p class="hint">${esc(s.grupo ? `${s.grupo} · ` : '')}${esc(LEY?.nombre ?? '')}</p>${cuerpoHtml(s.texto, (p) => marcar(resalta(p, ts)))}</article>`;
     document.body.appendChild(ov); document.documentElement.style.overflow = 'hidden';
     ov.querySelector('.ley-ov-cuerpo').scrollTop = 0; ov._ts = ts;
   }

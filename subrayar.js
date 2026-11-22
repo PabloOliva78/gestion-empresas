@@ -20,6 +20,25 @@ export function marcar(html) {
   return String(html).split(/(<[^>]+>)/).map((t) => (t.startsWith('<') ? t : t.replace(RE, (m) => `<mark class="imp">${m}</mark>`))).join('');
 }
 
+// Texto de un artículo (una línea del BOE por renglón) → párrafos completos: se unen las líneas cortadas y cada apartado (1., 2.º, a), b)…) empieza párrafo nuevo.
+// Cada línea original va en su <span data-l="n">: el subrayado propio se apunta a esa línea (no cambia aunque cambie cómo se juntan), así los subrayados antiguos se conservan.
+// fn(línea) devuelve el HTML de esa línea (ya escapado y con lo importante marcado).
+const MARCA = /^(?:\d+[.º°ª)]{1,2}\s+\S|[a-zñ]{1,2}\)\s*\S|[A-Z]\)\s*\S|[ivxIVX]{1,4}\)\s*\S|(?:Art[íi]culo|Disposici[oó]n|CAP[ÍI]TULO|T[ÍI]TULO|SECCI[ÓO]N|Secci[oó]n)\s)/;
+const INCISO = /^(?:[a-zñ]{1,2}\)|[A-Z]\)|[ivxIVX]{1,4}\))\s*\S/;
+export function cuerpoHtml(texto, fn) {
+  const lineas = String(texto ?? '').split('\n'), ps = [];
+  let act = null, previa = '';
+  lineas.forEach((l, i) => {
+    const t = l.trim();
+    if (!t) { act = null; previa = ''; return; }
+    const nuevo = !act || MARCA.test(t) || (/[.:;]$/.test(previa) && /^[A-ZÁÉÍÓÚÑ"«(¿¡0-9]/.test(t));
+    if (nuevo) { act = { inc: INCISO.test(t), partes: [] }; ps.push(act); }
+    act.partes.push({ i, h: fn(l), unir: !nuevo ? (/[a-záéíóúñ]-$/.test(previa) ? '' : ' ') : '' });
+    previa = t;
+  });
+  return ps.map((p) => `<p${p.inc ? ' class="inc"' : ''}>${p.partes.map((x) => `${x.unir}<span data-l="${x.i}">${x.h}</span>`).join('')}</p>`).join('');
+}
+
 const CLAVE = 'ley-subrayado';
 export const subrayadoActivo = () => { try { return localStorage.getItem(CLAVE) !== '0'; } catch { return true; } };
 export const claseSubrayado = () => (subrayadoActivo() ? '' : ' sin-imp');
