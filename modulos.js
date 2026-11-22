@@ -2842,13 +2842,14 @@ export function crearModulos(c) {
       tipo: (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; }, codes: ['SS', 'R', 'OD', 'OH', 'C'],
       cols: [['c', 'SS', 'SS - Seguridad Social Empresa Nóminas'], ['c', 'R', 'R - Regularizaciones'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
         ['f', 'SP', 'Saldo del mes (SS + R + OD − OH − C)', (v) => v.SS + v.R + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SP']] },
-    // 631 · Otros tributos: los asientos llevan delante IBI-, IAE-, IVTM-, OT- (otros impuestos), IP- (impuesto del plástico), IE- (impuesto de la electricidad) y C- (cierre del año).
+    // 6310.00 · Otros tributos: los asientos llevan delante IBI-, IAE-, IVTM-, VADO- (vados; también VADOS-, VD- o V-), OT- (otros impuestos), IP- (impuesto del plástico), IE- (impuesto de la electricidad) y C- (cierre del año).
     // Se suman todos menos el cierre (C), que lo anula: así el saldo del ejercicio cuadra con el saldo de la cuenta. Un asiento sin prefijo conocido va a OT si es un cargo y a C si es un abono (se puede cambiar en la tabla).
-    c6310: { cta: '631', desc: 'Otros tributos', tit: 'RESUMEN ANUAL OTROS TRIBUTOS - IMPUESTOS LOCALES', per: 'ano',
-      tipo: (a, d) => { const p = String(a || '').split('-')[0].trim().toUpperCase(); return ['IBI', 'IAE', 'IVTM', 'OT', 'IP', 'IE', 'C'].includes(p) ? p : d ? 'OT' : 'C'; }, codes: ['IBI', 'IAE', 'IVTM', 'OT', 'IP', 'IE', 'C'],
-      cols: [['c', 'IBI', 'IBI - Impuesto de Bienes Inmuebles'], ['c', 'IAE', 'IAE - Actividades Económicas'], ['c', 'IVTM', 'IVTM - Vehículos'], ['c', 'OT', 'OT - Otros impuestos'],
+    // Debajo del resumen, la conciliación con los recibos de la pestaña Impuestos locales (concIlocal).
+    c6310: { cta: '6310.00', desc: 'Otros tributos', tit: 'RESUMEN ANUAL OTROS TRIBUTOS - IMPUESTOS LOCALES', per: 'ano',
+      tipo: (a, d) => { let p = String(a || '').split('-')[0].trim().toUpperCase(); if (['VADOS', 'VD', 'V'].includes(p)) p = 'VADO'; return { IBI: 'IBI', IAE: 'IAE', IVTM: 'IVTM', VADO: 'VADOS', OT: 'OT', IP: 'IP', IE: 'IE', C: 'C' }[p] ?? (d ? 'OT' : 'C'); }, codes: ['IBI', 'IAE', 'IVTM', 'VADOS', 'OT', 'IP', 'IE', 'C'],
+      cols: [['c', 'IBI', 'IBI - Impuesto de Bienes Inmuebles'], ['c', 'IAE', 'IAE - Actividades Económicas'], ['c', 'IVTM', 'IVTM - Vehículos'], ['c', 'VADOS', 'VADOS - Vados'], ['c', 'OT', 'OT - Otros impuestos'],
         ['c', 'IP', 'IP - Impuesto del plástico'], ['c', 'IE', 'IE - Impuesto de la electricidad'], ['c', 'C', 'C - Cierre del Ejercicio'],
-        ['f', 'SE', 'Saldo del ejercicio (IBI + IAE + IVTM + OT + IP + IE − C)', (v) => v.IBI + v.IAE + v.IVTM + v.OT + v.IP + v.IE - v.C], ['a', 'SC', 'Saldo Cuenta', 'SE']] },
+        ['f', 'SE', 'Saldo del ejercicio (IBI + IAE + IVTM + VADOS + OT + IP + IE − C)', (v) => v.IBI + v.IAE + v.IVTM + v.VADOS + v.OT + v.IP + v.IE - v.C], ['a', 'SC', 'Saldo Cuenta', 'SE']] },
   };
   // Fertinova: sus cuentas 4751 son propias
   const CTAS_FERTINOVA = {
@@ -3050,10 +3051,37 @@ export function crearModulos(c) {
     if (extNom) avisos.push(`La columna «${C.cols.find((c) => c[0] === 'x' && String(c[3]).startsWith('nom:'))[2]}» trae el total del mes de la pestaña Nóminas.`);
     if (C.cols.some((c) => c[0] === 'x' && !String(c[3]).startsWith('nom:') && !String(c[3]).startsWith('iloc:'))) avisos.push('La columna del impuesto presentado se trae de «Impuestos Presentados», del mismo periodo. Donde pone «sin presentar» falta ese dato (o se puede escribir a mano).');
     if (C.cols.some((c) => c[0] === 'c' && c[3])) avisos.push('Las columnas marcadas como pagadas el periodo siguiente suman los pagos del mes (o ejercicio) posterior.');
-    if (C.cols.some((c) => c[0] === 'x' && String(c[3]).startsWith('iloc:'))) avisos.push('Las columnas «Recibos» suman los recibos cargados en Impuestos locales para ese ejercicio. Los asientos se clasifican por su prefijo: IBI-, IAE-, IVTM-, OT- (otros) y C- (cierre del año).');
+    if (k === 'c6310') avisos.push('Los asientos se clasifican por su prefijo: IBI-, IAE-, IVTM-, VADO- (vados), OT- (otros), IP- (plástico), IE- (electricidad) y C- (cierre del año).');
     avisos.push('El tipo de cada movimiento se deduce del asiento; se puede cambiar en la tabla.');
     return { k, C, T, ej, pref, ambito, movs, ctl, filas, avisos, subcuentas: [...new Set(todos.map((l) => l.cuenta))].sort(),
       desde: ambito === 'todo' ? (movs.length ? fdate(movs[0].l.ms) : '-') : `01/01/${ej}`, hasta: ambito === 'todo' ? (movs.length ? fdate(movs[movs.length - 1].l.ms) : '-') : `31/12/${ej}` };
+  }
+
+  // ---- 6310.00 · conciliación con los recibos de la pestaña Impuestos locales: por tipo (IBI, IAE, IVTM, vados, otros) y casando cada asiento con un recibo del mismo importe ----
+  function concIlocal(D) {
+    const ej = Number(S.ejercicio), TIPOS = [['IBI', 'IBI'], ['IAE', 'IAE'], ['IVTM', 'IVTM'], ['VADOS', 'Vados'], ['OT', 'Otros (tasas…)']], tc = ['IBI', 'IAE', 'IVTM', 'VADOS', 'OT'];
+    const tipoRec = (t) => (['IBI', 'IAE', 'IVTM'].includes(t) ? t : t === 'Vado' ? 'VADOS' : 'OT');
+    const rec = S.registros.filter((q) => q.tipo === 'iloc' && q.empresa_id === S.sel && ilDe(q, 'ej') === String(ej)).map((q) => ({ q, t: tipoRec(ilDe(q, 'tipo')), imp: rr(Number(ilDe(q, 'imp')) || 0) }));
+    const asi = D.movs.filter((m) => new Date(m.l.ms).getUTCFullYear() === ej && tc.includes(m.tipo)).map((m) => ({ m, t: m.tipo, imp: rr(m.l.debe - m.l.haber) })).filter((a) => Math.abs(a.imp) > 0.004);
+    const sinA = [], sinR = [];
+    const filas = TIPOS.map(([t, nom]) => {
+      const A = asi.filter((a) => a.t === t), B = rec.filter((b) => b.t === t), libres = new Set(B), casados = [];
+      A.forEach((a) => { const b = [...libres].find((y) => Math.abs(y.imp - a.imp) < 0.005); if (b) { libres.delete(b); casados.push([a, b]); } else sinA.push(a); });
+      libres.forEach((b) => sinR.push(b));
+      const sa = rr(A.reduce((s, a) => s + a.imp, 0)), sb = rr(B.reduce((s, b) => s + b.imp, 0)), dif = rr(sa - sb), sueltos = A.length - casados.length + libres.size;
+      const est = !A.length && !B.length ? ['nd', 'Sin asientos ni recibos'] : Math.abs(dif) <= 1 && !sueltos ? ['ok', 'Cuadra'] : Math.abs(dif) <= 1 ? ['aviso', 'Cuadra en total; algún importe no casa uno a uno'] : !B.length ? ['ko', 'Hay gasto en la cuenta y ningún recibo'] : !A.length ? ['ko', 'Hay recibos y ningún asiento'] : ['ko', dif > 0 ? 'La cuenta tiene más gasto que los recibos' : 'Los recibos suman más que la cuenta'];
+      return { nom, A: A.length, B: B.length, sa, sb, dif, casados: casados.length, est };
+    });
+    const ic = { ok: '🟢', ko: '🔴', aviso: '🟡', nd: '⚪' }, tot = (f) => rr(filas.reduce((s, y) => s + y[f], 0));
+    const sinIp = D.movs.filter((m) => new Date(m.l.ms).getUTCFullYear() === ej && ['IP', 'IE'].includes(m.tipo)).length;
+    return `<section class="dsec"><h3>Conciliación con Impuestos locales · ejercicio ${ej}</h3>
+      <p class="dash-s" style="font-size:.8rem">Compara los asientos de la cuenta (por su prefijo IBI-, IAE-, IVTM-, VADO-, OT-) con los recibos cargados en la pestaña Impuestos locales del mismo ejercicio: primero por tipo y luego asiento a asiento, buscando un recibo del mismo importe. El impuesto del plástico (IP) y el de la electricidad (IE) no tienen recibo de impuestos locales, por eso no se comparan${sinIp ? ` (${sinIp} asiento(s))` : ''}.</p>
+      <div class="wrap"><table class="tabla"><thead><tr><th></th><th>Impuesto</th><th>Asientos</th><th>Importe asientos</th><th>Recibos</th><th>Importe recibos</th><th>Diferencia</th><th>Casados</th><th>Situación</th></tr></thead><tbody>
+      ${filas.map((f) => `<tr><td style="text-align:center">${ic[f.est[0]]}</td><td>${esc(f.nom)}</td><td class="num">${f.A}</td><td class="num">${fnum(f.sa)}</td><td class="num">${f.B}</td><td class="num">${fnum(f.sb)}</td><td class="num${Math.abs(f.dif) > 1 ? ' dif-ko' : ''}">${fnum(f.dif)}</td><td class="num">${f.casados}</td><td>${esc(f.est[1])}</td></tr>`).join('')}
+      <tr class="totano"><td></td><td><b>Total</b></td><td class="num"><b>${tot('A')}</b></td><td class="num"><b>${fnum(tot('sa'))}</b></td><td class="num"><b>${tot('B')}</b></td><td class="num"><b>${fnum(tot('sb'))}</b></td><td class="num"><b>${fnum(tot('dif'))}</b></td><td class="num"><b>${tot('casados')}</b></td><td></td></tr></tbody></table></div>
+      ${sinA.length ? `<p class="dash-s" style="margin-top:.6rem"><b>Asientos sin recibo del mismo importe (${sinA.length})</b></p><div class="wrap"><table class="tabla"><thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${sinA.map((a) => `<tr><td>${esc(fdate(a.m.l.ms))}</td><td>${esc(a.m.l.asiento)}</td><td>${esc(a.m.l.desc)}</td><td>${esc(a.t)}</td><td class="num">${fnum(a.imp)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${sinR.length ? `<p class="dash-s" style="margin-top:.6rem"><b>Recibos sin asiento del mismo importe (${sinR.length})</b></p><div class="wrap"><table class="tabla"><thead><tr><th>Impuesto</th><th>Objeto</th><th>Municipio</th><th>Importe</th><th>Pagado</th></tr></thead><tbody>${sinR.map((b) => `<tr><td>${esc(ilDe(b.q, 'tipo'))}</td><td>${esc(ilDe(b.q, 'objeto'))}</td><td>${esc(ilDe(b.q, 'muni'))}</td><td class="num">${fnum(b.imp)}</td><td>${esc(ilDe(b.q, 'pag'))}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${!rec.length ? `<p class="hint">No hay recibos de ${ej} en la pestaña Impuestos locales de esta empresa.</p>` : ''}</section>`;
   }
 
   function vistaCuenta(k) {
@@ -3134,6 +3162,7 @@ export function crearModulos(c) {
         <tbody>${filas || '<tr><td colspan="8" class="vacio">Sin movimientos</td></tr>'}${nv}</tbody></table></div>
         ${movs.length > vis.length ? `<button class="small" data-act="m-ctamas" style="margin-top:.5rem">Ver más (${vis.length} de ${movs.length})</button>` : ''}</div>
         <div class="res-wrap">${resumen}</div></div></section>
+      ${k === 'c6310' ? concIlocal(D) : ''}
       ${av ? `<div class="aviso">${av}</div>` : ''}`;
   }
 
