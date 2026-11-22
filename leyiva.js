@@ -266,7 +266,7 @@ export function crearLeyIva(c) {
       <div class="wrap" id="leyExLista">${exTabla(l)}</div>
       <p class="hint">Textos extraídos de la ley cargada. Una exención aplicada a una factura se ve en «Revisión de facturas» (códigos R.EX, R.UE, R.NC.EX…).</p>`;
   }
-  const exTabla = (l) => `<table class="tabla"><thead><tr><th>Referencia</th><th>Exención</th></tr></thead><tbody>${l.slice(0, 300).map((e) => `<tr><td class="ley-ref">${esc(e.ref)}</td><td>${esc(e.texto)}</td></tr>`).join('')}</tbody></table>`;
+  const exTabla = (l) => `<table class="tabla"><thead><tr><th>Referencia</th><th>Exención</th></tr></thead><tbody>${l.slice(0, 300).map((e) => `<tr><td class="ley-ref">${esc(e.ref)}</td><td class="ley-ext" data-ref="${esc(e.ref)}">${marcar(esc(e.texto))}</td></tr>`).join('')}</tbody></table>`;
 
   function vistaRevision() {
     if (!S.sel) return sinEmpresa;
