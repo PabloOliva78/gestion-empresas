@@ -25,13 +25,21 @@ export function crearVies({ S, db, esc, render, empresa, grande, puede }) {
   }
 
   // Consulta un NIF-IVA. Devuelve { v, n } o { err } si el VIES no pudo responder (no cuenta como inválido)
-  async function consultar(nif) {
+  async function consultaUna(nif) {
     try {
       const r = await fetch(`${URL_VIES}?pais=${nif.slice(0, 2)}&nif=${nif.slice(2)}`);
       const j = await r.json();
       if (typeof j.valid === 'boolean' && !j.errorWrappers && j.actionSucceed !== false) return { v: j.valid, n: j.valid ? String(j.name ?? '').trim() : '' };
       return { err: j.errorWrappers?.[0]?.error ?? j.error ?? 'sin respuesta del VIES' };
     } catch { return { err: 'no se pudo conectar' }; }
+  }
+  // Errores pasajeros del VIES (país caído, servicio saturado, tiempo agotado): se reintenta hasta 3 veces esperando unos segundos. Los demás (p. ej. formato incorrecto) no.
+  const PASAJERO = /UNAVAILABLE|MAX_CONCURRENT|TIMEOUT|BUSY|SERVICE|no se pudo|sin respuesta/i;
+  const ESPERAS = [2500, 6000]; // segundos de espera antes del 2.º y del 3.er intento
+  async function consultar(nif, espera = (ms) => new Promise((ok) => setTimeout(ok, ms))) {
+    let r = await consultaUna(nif);
+    for (let i = 0; r.err && PASAJERO.test(r.err) && i < ESPERAS.length; i++) { await espera(ESPERAS[i]); r = await consultaUna(nif); }
+    return r;
   }
 
   // NIF europeos (no españoles) de los libros del ejercicio, con sus líneas
@@ -95,6 +103,7 @@ export function crearVies({ S, db, esc, render, empresa, grande, puede }) {
 
   return {
     tabs: { vies: ['NIF-IVA europeos (VIES)', 'Comprobación de NIF de la UE contra el censo VIES', vista] },
+    _t: { consultar },
     acciones: {
       'm-viescomp': () => { const L = nifsLibros() ?? []; comprobar(L.filter((x) => estado(res()[x.nif]) === 'pend').map((x) => x.nif)); },
       'm-viesrecomp': () => { const L = nifsLibros() ?? []; if (L.length && confirm(`Se volverán a consultar los ${L.length} NIF al VIES. ¿Continuar?`)) comprobar(L.map((x) => x.nif)); },
