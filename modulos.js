@@ -2840,6 +2840,15 @@ export function crearModulos(c) {
       tipo: (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; }, codes: ['SS', 'R', 'OD', 'OH', 'C'],
       cols: [['c', 'SS', 'SS - Seguridad Social Empresa Nóminas'], ['c', 'R', 'R - Regularizaciones'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
         ['f', 'SP', 'Saldo del mes (SS + R + OD − OH − C)', (v) => v.SS + v.R + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SP']] },
+    // 631 · Otros tributos: los asientos llevan delante IBI-, IAE-, IVTM-, OT- (otros impuestos) y C- (cierre del año). Se compara cada tipo con los recibos de impuestos locales del mismo ejercicio (pestaña Impuestos locales)
+    c6310: { cta: '631', desc: 'Otros tributos', tit: 'RESUMEN ANUAL OTROS TRIBUTOS - IMPUESTOS LOCALES', per: 'ano',
+      tipo: (a, d) => { const p = String(a || '').split('-')[0].trim().toUpperCase(); return ['IBI', 'IAE', 'IVTM', 'OT', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; }, codes: ['IBI', 'IAE', 'IVTM', 'OT', 'OD', 'OH', 'C'],
+      cols: [['c', 'IBI', 'IBI - Impuesto de Bienes Inmuebles'], ['x', 'RIBI', 'Recibos IBI', 'iloc:IBI'], ['f', 'DIBI', 'Diferencia (IBI − recibos)', (v) => (v.RIBI === null ? null : v.IBI - v.RIBI), true],
+        ['c', 'IAE', 'IAE - Actividades Económicas'], ['x', 'RIAE', 'Recibos IAE', 'iloc:IAE'], ['f', 'DIAE', 'Diferencia (IAE − recibos)', (v) => (v.RIAE === null ? null : v.IAE - v.RIAE), true],
+        ['c', 'IVTM', 'IVTM - Vehículos'], ['x', 'RIVTM', 'Recibos IVTM', 'iloc:IVTM'], ['f', 'DIVTM', 'Diferencia (IVTM − recibos)', (v) => (v.RIVTM === null ? null : v.IVTM - v.RIVTM), true],
+        ['c', 'OT', 'OT - Otros impuestos'], ['x', 'ROT', 'Recibos otros (vados, tasas…)', 'iloc:OT'], ['f', 'DOT', 'Diferencia (OT − recibos)', (v) => (v.ROT === null ? null : v.OT - v.ROT), true],
+        ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
+        ['f', 'SE', 'Saldo del ejercicio (IBI + IAE + IVTM + OT + OD − OH − C)', (v) => v.IBI + v.IAE + v.IVTM + v.OT + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SE']] },
   };
   // Fertinova: sus cuentas 4751 son propias
   const CTAS_FERTINOVA = {
@@ -3008,6 +3017,10 @@ export function crearModulos(c) {
         } else if (t === 's') v[c] = rr(todos.filter((l) => l.ms < t1).reduce((s, l) => s + l.debe - l.haber, 0));
         else if (t === 'x') {
           let val = null, src = '';
+          if (String(x).startsWith('iloc:')) { // recibos de impuestos locales (IBI, IAE, IVTM; OT = el resto: vados, tasas…) del año
+            const tp = x.slice(5), yy = key.slice(0, 4), rec = S.registros.filter((rg) => rg.tipo === 'iloc' && rg.empresa_id === S.sel && String(rg.datos?.ej) === yy && (tp === 'OT' ? !['IBI', 'IAE', 'IVTM'].includes(rg.datos?.tipo) : rg.datos?.tipo === tp));
+            v[c] = rr(rec.reduce((s, rg) => s + (parseES(String(rg.datos?.imp ?? 0)) || 0), 0)); fuente[c] = 'pres'; return;
+          }
           if (String(x).startsWith('nom:')) { const n = nomMes(+key.slice(0, 4), key.slice(5)); if (n) { val = rr(Number(n[x.slice(4)]) || 0); src = 'nom'; } }
           const y = +key.slice(0, 4), esT = T === 'tri';
           const kPres = esT ? key.slice(5) : T === 'mes' && e?.tipo === 'PYME' ? (+key.slice(5) % 3 === 0 ? `${+key.slice(5) / 3}T` : null) : key.slice(5);
@@ -3035,8 +3048,9 @@ export function crearModulos(c) {
     else if (!todos.length) avisos.push(`El extracto no tiene movimientos de la cuenta ${pref}. Cambia la cuenta en el recuadro «Cuenta contable».`);
     if (!sigla) avisos.push('Falta la sigla de la empresa (pestaña Empresas): es la que usan los asientos de liquidación.');
     if (extNom) avisos.push(`La columna «${C.cols.find((c) => c[0] === 'x' && String(c[3]).startsWith('nom:'))[2]}» trae el total del mes de la pestaña Nóminas.`);
-    if (C.cols.some((c) => c[0] === 'x' && !String(c[3]).startsWith('nom:'))) avisos.push('La columna del impuesto presentado se trae de «Impuestos Presentados», del mismo periodo. Donde pone «sin presentar» falta ese dato (o se puede escribir a mano).');
+    if (C.cols.some((c) => c[0] === 'x' && !String(c[3]).startsWith('nom:') && !String(c[3]).startsWith('iloc:'))) avisos.push('La columna del impuesto presentado se trae de «Impuestos Presentados», del mismo periodo. Donde pone «sin presentar» falta ese dato (o se puede escribir a mano).');
     if (C.cols.some((c) => c[0] === 'c' && c[3])) avisos.push('Las columnas marcadas como pagadas el periodo siguiente suman los pagos del mes (o ejercicio) posterior.');
+    if (C.cols.some((c) => c[0] === 'x' && String(c[3]).startsWith('iloc:'))) avisos.push('Las columnas «Recibos» suman los recibos cargados en Impuestos locales para ese ejercicio. Los asientos se clasifican por su prefijo: IBI-, IAE-, IVTM-, OT- (otros) y C- (cierre del año).');
     avisos.push('El tipo de cada movimiento se deduce del asiento; se puede cambiar en la tabla.');
     return { k, C, T, ej, pref, ambito, movs, ctl, filas, avisos, subcuentas: [...new Set(todos.map((l) => l.cuenta))].sort(),
       desde: ambito === 'todo' ? (movs.length ? fdate(movs[0].l.ms) : '-') : `01/01/${ej}`, hasta: ambito === 'todo' ? (movs.length ? fdate(movs[movs.length - 1].l.ms) : '-') : `31/12/${ej}` };
