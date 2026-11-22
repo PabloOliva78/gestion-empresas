@@ -26,7 +26,8 @@ export function crearDetector({ S, esc, render, empresa, grande }) {
   }
 
   // Líneas que no se revisan: autorrepercutidas en Emitidas (S.UE.*, S.NC.ISP.*: ya van en Recibidas) y retenciones de alquileres, intereses y dividendos en Recibidas
-  const excluida = (lado, l) => { const cod = String(l.codigo ?? ''); return lado === 'Emitidas' ? /^(S\.UE\.|S\.NC\.ISP)/.test(cod) : /(^|\.)I\.(ALQ|INT|DV|PR)/.test(cod); };
+  // En Emitidas tampoco las UE sin repercutir (R.UE.NR, R.UE.RD, R.UE.SR y sus variantes .SR) ni las ISP (R.ISP.NR, R.ISP.RD): sí se revisan R.UE.S y R.UE, que son repercutidas
+  const excluida = (lado, l) => { const cod = String(l.codigo ?? ''); return lado === 'Emitidas' ? /^(S\.UE\.|S\.NC\.ISP|R\.UE\.(NR|RD|SR)(\.|$)|R\.ISP\.(NR|RD)(\.|$))/.test(cod) : /(^|\.)I\.(ALQ|INT|DV|PR)/.test(cod); };
 
   // Revisa un libro y devuelve una lista de incidencias { tipo, gravedad, linea, detalle }
   function revisar(libro, lado, ej) {
