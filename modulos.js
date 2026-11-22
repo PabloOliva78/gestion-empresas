@@ -18,6 +18,7 @@ import { crearRevFactura } from './revfactura.js?v=11';
 import { crearFase3 } from './fase3.js?v=2';
 import { crearDetector } from './detectores.js?v=4';
 import { crearVies } from './vies.js?v=1';
+import { crearControlesIva } from './controlesiva.js?v=1';
 import { crearProveedores } from './proveedores.js?v=11';
 import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=10';
@@ -1051,9 +1052,9 @@ export function crearModulos(c) {
   }
   async function guardarGrande(tipo, empresaId, nuevas, clave) {
     if (lote) {
-      const c = await entradaLote(tipo, empresaId), mapa = new Map(c.filas.map((x) => [clave(x), x]));
+      const c = await entradaLote(tipo, empresaId), mapa = new Map(c.filas.map((x) => [clave(x), x])), antesL = c.filas;
       nuevas.forEach((x) => mapa.set(clave(x), x));
-      c.filas = sinDupSii(tipo, [...mapa.values()]); c.sucio = true; GR.set(`${tipo}|${empresaId}`, c.filas);
+      c.filas = sinDupSii(tipo, [...mapa.values()]); c.sucio = true; GR.set(`${tipo}|${empresaId}`, c.filas); MCTRL.registrarCambios(tipo, empresaId, antesL, c.filas);
       return c.filas.length;
     }
     const { data, error: eLee } = await db.from('registros').select('id,datos').eq('empresa_id', empresaId).eq('tipo', tipo).order('id').limit(1).maybeSingle();
@@ -1063,7 +1064,7 @@ export function crearModulos(c) {
     const filas = sinDupSii(tipo, [...mapa.values()]);
     const err = await guardarRegistro(data, { ...(data ? {} : { id: crypto.randomUUID() }), empresa_id: empresaId, tipo, ejercicio: null, datos: { filas } });
     if (err) throw new Error(err);
-    GR.set(`${tipo}|${empresaId}`, filas);
+    GR.set(`${tipo}|${empresaId}`, filas); MCTRL.registrarCambios(tipo, empresaId, data?.datos?.filas ?? [], filas);
     return filas.length;
   }
   function parseCsv(txt) {
@@ -1524,7 +1525,7 @@ export function crearModulos(c) {
     await cargar(); render();
   }
   async function reemplazarGrande(tipo, empresaId, filas, existente) {
-    const k = `${tipo}|${empresaId}`;
+    const k = `${tipo}|${empresaId}`, antesR = GR.get(k);
     GR.set(k, filas); if (String(empresaId) === String(S.sel)) render(); // se ve al momento en todas las pestañas; el guardado sigue después
     // los guardados del mismo libro van de uno en uno (si hay otro esperando, guardará lo último): dos a la vez se bloquean entre sí en la base de datos
     let q = colaGr.get(k); if (!q) { q = { p: Promise.resolve(), pend: null }; colaGr.set(k, q); }
@@ -1544,6 +1545,7 @@ export function crearModulos(c) {
           : /lock timeout/i.test(err) ? 'La base de datos estaba ocupada guardando este mismo libro y ha cancelado el guardado. Espera unos segundos y repite el cambio. Si se repite, ejecuta supabase/07_lock_timeout.sql en el editor SQL de Supabase.' : err);
         return false;
       }
+      MCTRL.registrarCambios(tipo, empresaId, antesR, fl);
       return true;
     });
     q.p = q.pend.catch(() => {});
@@ -5049,6 +5051,7 @@ export function crearModulos(c) {
       ...R2.acciones,
       ...MDET.acciones,
       ...MVIES.acciones,
+      ...MCTRL.acciones,
       ...M4.acciones,
       ...M6.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
@@ -5838,6 +5841,8 @@ export function crearModulos(c) {
   Object.assign(tabs, MDET.tabs);
   const MVIES = crearVies({ S, db, esc, render, empresa, grande, puede }); // NIF-IVA europeos contra el censo VIES (por un intermediario de Cloudflare)
   Object.assign(tabs, MVIES.tabs);
+  const MCTRL = crearControlesIva({ S, db, esc, render, empresa, puede, grande, prsVal }); // cambios en libros tras presentar, plazo de deducción, devoluciones pendientes y facturas simplificadas
+  Object.assign(tabs, MCTRL.tabs);
   const M15 = crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Proveedores - Clientes: pestaña nueva
   Object.assign(tabs, M15.tabs);
   const M16 = crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Clientes: pestaña nueva
