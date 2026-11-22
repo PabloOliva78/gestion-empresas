@@ -27,12 +27,17 @@ export function crearDetector({ S, esc, render, empresa, grande }) {
 
   // Líneas que no se revisan: autorrepercutidas en Emitidas (S.UE.*, S.NC.ISP.*: ya van en Recibidas) y retenciones de alquileres, intereses y dividendos en Recibidas
   // En Emitidas tampoco las UE sin repercutir (R.UE.NR, R.UE.RD, R.UE.SR y sus variantes .SR) ni las ISP (R.ISP.NR, R.ISP.RD): sí se revisan R.UE.S y R.UE, que son repercutidas
-  const excluida = (lado, l) => { const cod = String(l.codigo ?? ''); return lado === 'Emitidas' ? /^(S\.UE\.|S\.NC\.ISP|R\.UE\.(NR|RD|SR)(\.|$)|R\.ISP\.(NR|RD)(\.|$))/.test(cod) : /(^|\.)I\.(ALQ|INT|DV|PR)/.test(cod); };
+  // Las líneas de retención (alquileres, intereses, dividendos, profesionales: código I.ALQ, I.INT, I.DV, I.PR, o con un tipo negativo como −19 %) no se revisan en ningún libro
+  const excluida = (lado, l) => {
+    const cod = String(l.codigo ?? '');
+    if (Number(l.pct) < 0 || /(^|\.)I\.(ALQ|INT|DV|PR)/.test(cod)) return true;
+    return lado === 'Emitidas' && /^(S\.UE\.|S\.NC\.ISP|R\.UE\.(NR|RD|SR)(\.|$)|R\.ISP\.(NR|RD)(\.|$))/.test(cod);
+  };
 
   // Revisa un libro y devuelve una lista de incidencias { tipo, gravedad, linea, detalle }
   function revisar(libro, lado, ej) {
     // En Emitidas no se revisan las facturas autorrepercutidas (adquisiciones intracomunitarias S.UE.* e inversión del sujeto pasivo S.NC.ISP.*): ya se revisan en Recibidas
-    // En Recibidas tampoco se revisan las líneas de retenciones de alquileres (I.ALQ), de intereses y dividendos (I.INT, I.DV) ni de profesionales (I.PR): no son facturas con IVA
+    // Las retenciones no son facturas con IVA: fuera de la revisión (ver excluida)
     const out = [], L = (libro ?? []).filter((l) => String(l.fecha ?? l.ff ?? '').slice(0, 4) === String(ej) && !excluida(lado, l)), vistos = new Map();
     const add = (tipo, gravedad, l, detalle) => out.push({ tipo, gravedad, lado, l, detalle });
     L.forEach((l) => {
