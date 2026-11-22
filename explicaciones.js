@@ -35,14 +35,21 @@ export function crearExplicaciones({ S, db, esc, render, root, TABS, conc, dossi
       root.querySelectorAll('.vista table').forEach((t) => {
         if (t.closest('.ttp, .exp-pop') || t.dataset.noexp) return;
         const cab = limpio(t.querySelector('thead th')?.textContent).slice(0, 24);
-        t.querySelectorAll('tbody tr').forEach((tr) => {
-          const tds = tr.querySelectorAll(':scope > td');
-          if (tds.length < 2 || tr.querySelector('.exp-b')) return;
-          const txt = (i) => limpio(tds[i]?.textContent).slice(0, 40);
+        // La clave de una línea son sus dos primeras celdas. Si varias líneas de la tabla tienen esas dos celdas iguales (p. ej. «Recibidas · Registro muy posterior»),
+        // la explicación de una valdría para todas: en ese caso la clave incluye también las celdas siguientes (factura, fecha, NIF, importes…).
+        const filas = [...t.querySelectorAll('tbody tr')].map((tr) => ({ tr, tds: tr.querySelectorAll(':scope > td'), marca: tr.querySelector('.exp-b') }));
+        const txtDe = (f, i) => limpio(f.tds[i]?.textContent).slice(0, 40), baseDe = (f) => [S.tab, S.ejercicio, S.periodo || '', cab, txtDe(f, 0), txtDe(f, 1)].join('|');
+        const cuenta = new Map(), ocupadas = new Set(filas.filter((f) => f.marca).map((f) => f.marca.dataset.exp));
+        filas.forEach((f) => { if (!f.marca && f.tds.length >= 2) { const k = baseDe(f); cuenta.set(k, (cuenta.get(k) ?? 0) + 1); } });
+        filas.forEach((f) => {
+          const { tr, tds } = f;
+          if (tds.length < 2 || f.marca) return;
+          const txt = (i) => txtDe(f, i);
           if (!txt(0) && !txt(1)) return;
-          const key = [S.tab, S.ejercicio, S.periodo || '', cab, txt(0), txt(1)].join('|'), n = N[key];
+          const base = baseDe(f), repetida = (cuenta.get(base) ?? 0) > 1 || ocupadas.has(base);
+          const key = repetida ? [base, ...[2, 3, 4, 5, 6, 7].map(txt)].join('|') : base, n = N[key];
           const b = document.createElement('button');
-          b.className = `exp-b${n ? ` on ${n.e === 'x' ? 'ok' : 'pend'}` : ''}`; b.type = 'button'; b.dataset.exp = key; b.dataset.lbl = [txt(0), txt(1)].filter(Boolean).join(' · ');
+          b.className = `exp-b${n ? ` on ${n.e === 'x' ? 'ok' : 'pend'}` : ''}`; b.type = 'button'; b.dataset.exp = key; b.dataset.lbl = (repetida ? [0, 1, 2, 3, 4] : [0, 1]).map(txt).filter(Boolean).join(' · ');
           b.title = n ? `${n.e === 'x' ? 'Explicada' : 'Pendiente'}: ${n.t}` : 'Explicar esta línea';
           b.textContent = '💬';
           tds[0].append(b);

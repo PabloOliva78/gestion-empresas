@@ -7,7 +7,7 @@ import { activarRedimension, activarCajas, activarAlineacion, activarImprimir } 
 import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
 import { crearTareas } from './tareas.js?v=1';
-import { crearExplicaciones } from './explicaciones.js?v=1';
+import { crearExplicaciones } from './explicaciones.js?v=2';
 import { activarSubrayadoManual } from './subrayadoman.js?v=4';
 import { activarExportar, activarAvisoSesion } from './herramientas.js?v=6';
 
