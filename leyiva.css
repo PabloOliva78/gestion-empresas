@@ -43,7 +43,7 @@ button.ley-art i { font-style: normal; color: var(--ink, #1f3864); font-weight: 
 .ley-ov { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; flex-direction: column; }
 .ley-ov-barra { display: flex; align-items: center; gap: .6rem; padding: .7rem 1.2rem; background: var(--card); border-bottom: 3px solid var(--ink, #1f3864); }
 .ley-ov-barra .space { flex: 1; }
-.ley-ov-cuerpo { flex: 1; min-height: 0; overflow: hidden; width: 100%; box-sizing: border-box; margin: 0; padding: 1rem 1.5rem 1.2rem; font-size: 1.05rem; line-height: 1.55; column-gap: 2.2rem; column-width: 24rem; } /* el texto va en columnas a lo ancho de la pantalla (subrayadoman.js ajusta columnas y letra para que quepa sin barra) */
+.ley-ov-cuerpo { flex: 1; min-height: 0; overflow: hidden; width: 100%; box-sizing: border-box; margin: 0; padding: 1rem 1.5rem 1.2rem; font-size: 1.05rem; line-height: 1.55; column-gap: 2.2rem; column-width: 24rem; column-fill: auto; } /* el texto va en columnas a lo ancho de la pantalla (subrayadoman.js ajusta columnas y letra para que quepa sin barra) */
 .ley-ov-cuerpo h2 { color: var(--ink, #1f3864); margin-top: 0; column-span: all; }
 .ley-ov-cuerpo > .hint { column-span: all; }
 .ley-ov-cuerpo > p { margin: 0 0 .6rem; }

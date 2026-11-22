@@ -49,11 +49,14 @@ export function activarSubrayadoManual({ S, db }) {
   // ---------- columnas sin barra de desplazamiento ----------
   function ajustar(art) {
     if (!art?.isConnected) return;
-    const W = art.clientWidth - 48, nMin = Math.max(1, Math.min(6, Math.floor(W / 400))), nMax = Math.max(nMin, Math.floor(W / 260));
+    // Las columnas se llenan una a una (column-fill: auto en el CSS): la primera hasta abajo, luego la segunda… Se busca la letra más grande con la que todo cabe
+    // sin barra: para cada tamaño, columnas de unos 24 caracteres de ancho «en em» (las que caben en la pantalla) y, si no cabe, más estrechas hasta 14 em.
+    const W = art.clientWidth - 48;
     art.style.columnWidth = 'auto';
-    for (let fs = 17; fs >= 11; fs--) {
+    for (let fs = 20; fs >= 11; fs--) {
       art.style.fontSize = `${fs}px`;
-      for (let n = nMin; n <= nMax; n++) { art.style.columnCount = String(n); if (art.scrollWidth <= art.clientWidth + 2) return; }
+      const nBase = Math.max(1, Math.floor(W / (fs * 24))), nMax = Math.max(nBase, Math.floor(W / (fs * 14)));
+      for (let n = nBase; n <= nMax; n++) { art.style.columnCount = String(n); if (art.scrollWidth <= art.clientWidth + 2) return; }
     }
     art.style.overflowX = 'auto'; // no cabe ni con la letra más pequeña: solo entonces aparece la barra horizontal
   }
