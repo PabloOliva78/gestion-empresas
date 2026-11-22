@@ -25,9 +25,14 @@ export function crearDetector({ S, esc, render, empresa, grande }) {
     return null; // K, L, M u otros formatos: no se comprueban
   }
 
+  // Líneas que no se revisan: autorrepercutidas en Emitidas (S.UE.*, S.NC.ISP.*: ya van en Recibidas) y retenciones de alquileres, intereses y dividendos en Recibidas
+  const excluida = (lado, l) => { const cod = String(l.codigo ?? ''); return lado === 'Emitidas' ? /^(S\.UE\.|S\.NC\.ISP)/.test(cod) : /(^|\.)I\.(ALQ|INT|DV|PR)/.test(cod); };
+
   // Revisa un libro y devuelve una lista de incidencias { tipo, gravedad, linea, detalle }
   function revisar(libro, lado, ej) {
-    const out = [], L = (libro ?? []).filter((l) => String(l.fecha ?? l.ff ?? '').slice(0, 4) === String(ej)), vistos = new Map();
+    // En Emitidas no se revisan las facturas autorrepercutidas (adquisiciones intracomunitarias S.UE.* e inversión del sujeto pasivo S.NC.ISP.*): ya se revisan en Recibidas
+    // En Recibidas tampoco se revisan las líneas de retenciones de alquileres (I.ALQ), de intereses y dividendos (I.INT, I.DV) ni de profesionales (I.PR): no son facturas con IVA
+    const out = [], L = (libro ?? []).filter((l) => String(l.fecha ?? l.ff ?? '').slice(0, 4) === String(ej) && !excluida(lado, l)), vistos = new Map();
     const add = (tipo, gravedad, l, detalle) => out.push({ tipo, gravedad, lado, l, detalle });
     L.forEach((l) => {
       const base = Number(l.base) || 0, cuota = Number(l.cuota) || 0, pct = Number(l.pct) || 0, cod = String(l.codigo ?? '');
@@ -68,7 +73,7 @@ export function crearDetector({ S, esc, render, empresa, grande }) {
     const ej = Number(S.ejercicio), tit = `<h3>Errores en los libros de IVA · ${esc(empresa()?.nombre ?? '')} · ${ej}</h3>`;
     if (!E.length && !R.length) return `<div class="inicio"><section class="dsec">${tit}<p class="vacio">Sin datos: carga los libros de IVA (emitidas y recibidas).</p></section></div>`;
     const inc = [...revisar(E, 'Emitidas', ej), ...revisar(R, 'Recibidas', ej)];
-    const nL = (E ?? []).filter((l) => String(l.fecha ?? '').slice(0, 4) === String(ej)).length + (R ?? []).filter((l) => String(l.fecha ?? '').slice(0, 4) === String(ej)).length;
+    const nL = (E ?? []).filter((l) => String(l.fecha ?? '').slice(0, 4) === String(ej) && !excluida('Emitidas', l)).length + (R ?? []).filter((l) => String(l.fecha ?? '').slice(0, 4) === String(ej) && !excluida('Recibidas', l)).length;
     const porTipo = new Map(); inc.forEach((i) => { const g = porTipo.get(i.tipo) ?? porTipo.set(i.tipo, { n: 0, g: i.gravedad }).get(i.tipo); g.n++; });
     const orden = { ko: 0, aviso: 1 }, filas = inc.slice().sort((a, b) => orden[a.gravedad] - orden[b.gravedad] || a.tipo.localeCompare(b.tipo) || String(a.l.fecha).localeCompare(String(b.l.fecha)));
     const mostrar = verTodos ? filas : filas.slice(0, LIM);
