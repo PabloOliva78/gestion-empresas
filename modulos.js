@@ -2842,15 +2842,13 @@ export function crearModulos(c) {
       tipo: (a, d) => { const p = a.split('-')[0]; return ['SS', 'R', 'OD', 'OH', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; }, codes: ['SS', 'R', 'OD', 'OH', 'C'],
       cols: [['c', 'SS', 'SS - Seguridad Social Empresa Nóminas'], ['c', 'R', 'R - Regularizaciones'], ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
         ['f', 'SP', 'Saldo del mes (SS + R + OD − OH − C)', (v) => v.SS + v.R + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SP']] },
-    // 631 · Otros tributos: los asientos llevan delante IBI-, IAE-, IVTM-, OT- (otros impuestos) y C- (cierre del año). Se compara cada tipo con los recibos de impuestos locales del mismo ejercicio (pestaña Impuestos locales)
+    // 631 · Otros tributos: los asientos llevan delante IBI-, IAE-, IVTM-, OT- (otros impuestos), IP- (impuesto del plástico), IE- (impuesto de la electricidad) y C- (cierre del año).
+    // Se suman todos menos el cierre (C), que lo anula: así el saldo del ejercicio cuadra con el saldo de la cuenta. Un asiento sin prefijo conocido va a OT si es un cargo y a C si es un abono (se puede cambiar en la tabla).
     c6310: { cta: '631', desc: 'Otros tributos', tit: 'RESUMEN ANUAL OTROS TRIBUTOS - IMPUESTOS LOCALES', per: 'ano',
-      tipo: (a, d) => { const p = String(a || '').split('-')[0].trim().toUpperCase(); return ['IBI', 'IAE', 'IVTM', 'OT', 'C'].includes(p) ? p : d ? 'OD' : 'OH'; }, codes: ['IBI', 'IAE', 'IVTM', 'OT', 'OD', 'OH', 'C'],
-      cols: [['c', 'IBI', 'IBI - Impuesto de Bienes Inmuebles'], ['x', 'RIBI', 'Recibos IBI', 'iloc:IBI'], ['f', 'DIBI', 'Diferencia (IBI − recibos)', (v) => (v.RIBI === null ? null : v.IBI - v.RIBI), true],
-        ['c', 'IAE', 'IAE - Actividades Económicas'], ['x', 'RIAE', 'Recibos IAE', 'iloc:IAE'], ['f', 'DIAE', 'Diferencia (IAE − recibos)', (v) => (v.RIAE === null ? null : v.IAE - v.RIAE), true],
-        ['c', 'IVTM', 'IVTM - Vehículos'], ['x', 'RIVTM', 'Recibos IVTM', 'iloc:IVTM'], ['f', 'DIVTM', 'Diferencia (IVTM − recibos)', (v) => (v.RIVTM === null ? null : v.IVTM - v.RIVTM), true],
-        ['c', 'OT', 'OT - Otros impuestos'], ['x', 'ROT', 'Recibos otros (vados, tasas…)', 'iloc:OT'], ['f', 'DOT', 'Diferencia (OT − recibos)', (v) => (v.ROT === null ? null : v.OT - v.ROT), true],
-        ['c', 'OD', 'OD - Otros Mov. Debe'], ['c', 'OH', 'OH - Otros Mov. Haber'], ['c', 'C', 'C - Cierre del Ejercicio'],
-        ['f', 'SE', 'Saldo del ejercicio (IBI + IAE + IVTM + OT + OD − OH − C)', (v) => v.IBI + v.IAE + v.IVTM + v.OT + v.OD - v.OH - v.C], ['a', 'SC', 'Saldo Cuenta', 'SE']] },
+      tipo: (a, d) => { const p = String(a || '').split('-')[0].trim().toUpperCase(); return ['IBI', 'IAE', 'IVTM', 'OT', 'IP', 'IE', 'C'].includes(p) ? p : d ? 'OT' : 'C'; }, codes: ['IBI', 'IAE', 'IVTM', 'OT', 'IP', 'IE', 'C'],
+      cols: [['c', 'IBI', 'IBI - Impuesto de Bienes Inmuebles'], ['c', 'IAE', 'IAE - Actividades Económicas'], ['c', 'IVTM', 'IVTM - Vehículos'], ['c', 'OT', 'OT - Otros impuestos'],
+        ['c', 'IP', 'IP - Impuesto del plástico'], ['c', 'IE', 'IE - Impuesto de la electricidad'], ['c', 'C', 'C - Cierre del Ejercicio'],
+        ['f', 'SE', 'Saldo del ejercicio (IBI + IAE + IVTM + OT + IP + IE − C)', (v) => v.IBI + v.IAE + v.IVTM + v.OT + v.IP + v.IE - v.C], ['a', 'SC', 'Saldo Cuenta', 'SE']] },
   };
   // Fertinova: sus cuentas 4751 son propias
   const CTAS_FERTINOVA = {
