@@ -17,6 +17,7 @@ import { crearCbam } from './cbam.js?v=10';
 import { crearRevFactura } from './revfactura.js?v=11';
 import { crearFase3 } from './fase3.js?v=2';
 import { crearDetector } from './detectores.js?v=1';
+import { crearVies } from './vies.js?v=1';
 import { crearProveedores } from './proveedores.js?v=11';
 import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=10';
@@ -5033,6 +5034,7 @@ export function crearModulos(c) {
       ...acc3,
       ...R2.acciones,
       ...MDET.acciones,
+      ...MVIES.acciones,
       ...M4.acciones,
       ...M6.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
@@ -5820,6 +5822,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M14.tabs);
   const MDET = crearDetector({ S, esc, render, empresa, grande }); // detector de errores en los libros de IVA (solo lee)
   Object.assign(tabs, MDET.tabs);
+  const MVIES = crearVies({ S, db, esc, render, empresa, grande, puede }); // NIF-IVA europeos contra el censo VIES (por un intermediario de Cloudflare)
+  Object.assign(tabs, MVIES.tabs);
   const M15 = crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Proveedores - Clientes: pestaña nueva
   Object.assign(tabs, M15.tabs);
   const M16 = crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Clientes: pestaña nueva
