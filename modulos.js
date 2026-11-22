@@ -16,6 +16,7 @@ import { crearUmbrales } from './umbrales.js?v=1';
 import { crearCbam } from './cbam.js?v=10';
 import { crearRevFactura } from './revfactura.js?v=11';
 import { crearFase3 } from './fase3.js?v=2';
+import { crearDetector } from './detectores.js?v=1';
 import { crearProveedores } from './proveedores.js?v=11';
 import { crearClientes } from './clientes.js?v=10';
 import { crearTransProv } from './transprov.js?v=10';
@@ -5031,6 +5032,7 @@ export function crearModulos(c) {
     ({
       ...acc3,
       ...R2.acciones,
+      ...MDET.acciones,
       ...M4.acciones,
       ...M6.acciones,
       'm-liqmarca': () => toggleMarca(d.e, d.k),
@@ -5816,6 +5818,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M20.tabs);
   const M14 = crearFase3({ S, esc, render, empresa, grande, c303: (...a) => c303(...a), prsVal, calcular349Ops }); // 349 rectificaciones y cuadre 390–303 (bloque 4): pestañas nuevas que solo leen
   Object.assign(tabs, M14.tabs);
+  const MDET = crearDetector({ S, esc, render, empresa, grande }); // detector de errores en los libros de IVA (solo lee)
+  Object.assign(tabs, MDET.tabs);
   const M15 = crearProveedores({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Proveedores - Clientes: pestaña nueva
   Object.assign(tabs, M15.tabs);
   const M16 = crearClientes({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Clientes: pestaña nueva

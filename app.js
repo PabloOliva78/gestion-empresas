@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=506';
+import { crearModulos } from './modulos.js?v=507';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -208,7 +208,7 @@ const GRUPOS = [
   ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c475010', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
-  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'explic'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
+  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'explic'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyrfac', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA y Reglamento de facturación: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
   ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
@@ -216,7 +216,7 @@ const GRUPOS = [
   ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
 ];
 // Pestañas de conciliación: su botón de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
-const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'certret', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
+const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'certret', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
   chkf: ['Checking Fiscal', 'Obligaciones, plazos y límites', () => vistaObligaciones({ area: 'fiscal' })],
@@ -352,7 +352,7 @@ function aplicarTipoEjercicio() {
 }
 // Bloque 6 (SII): cada tabla va en su globo; las columnas de diferencias y las filas de TOTAL toman la vista nueva (amarillo, borde fino) y los ceros salen como «-».
 // Se marca desde aquí, sobre lo ya dibujado, para que valga igual en las siete pestañas del bloque.
-const CONC8_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall']);
+const CONC8_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall']);
 const SII_TABS = new Set(['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo', 'cssoc']);
 function aplicarVistaSii() {
   const v = root.querySelector('.vista.bl-sii'); if (!v) return;
