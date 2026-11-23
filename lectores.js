@@ -898,6 +898,11 @@ export function valoresPresentado(modelo, cas, texto = '') {
     let t = null;
     for (const l of lineas) { const m = re.exec(l); if (m) { t ??= { base: 0, cuota: 0, pagos: 0, res: 0 }; t.base += num(m[2]); t.cuota += num(m[4]); t.pagos += num(m[5]); t.res += num(m[6]); } }
     if (t) Object.entries(t).forEach(([c, v]) => pon(c, r2n(v)));
+  } else if (modelo === 'A22') {
+    // solicitud de devolución del impuesto de envases de plástico: «Totales: cant. adquirida · kg · IIEE soportado · cant. vendida · kg vendido · IIEE solicitado · nº facturas»
+    const T = /Totales:\s*(\d+)\s+([\d.]+)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(\d+)\s+([\d.]+)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})/.exec(String(texto)), I = /Importe\s+total:\s*(-?\d{1,3}(?:\.\d{3})*,\d{2})/i.exec(String(texto));
+    if (T) { pon('sop', num(T[3])); pon('qV', +T[4]); pon('kgV', r2n(+T[5])); pon('imp', num(T[6])); }
+    if (I) pon('imp', num(I[1]));
   } else if (modelo === '592') {
     // fila «1 P0 Plásticos cantidad base tipo cuota deducción [compensación] [total]»: los importes en 0 pueden venir sin las últimas columnas
     let t = null;
