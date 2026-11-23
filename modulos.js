@@ -4128,7 +4128,7 @@ export function crearModulos(c) {
     const texto = await textoPdf(file);
     const ls = texto.split('\n').filter((l) => l && !l.startsWith('--- página')), t = ls.join('\n'), iso = (d) => { const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(d ?? '')); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
     const sig = (re) => { const i = ls.findIndex((l) => re.test(l)); return i >= 0 ? ls[i + 1] || '' : ''; }, nums = (l) => (l.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g) || []);
-    const nif = (/Identificador Fiscal:?\s*([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])/.exec(t) || /\b([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])\b/.exec(sig(/Identificador Fiscal/)) || [])[1] ?? '';
+    let nif = (/Identificador Fiscal:?\s*([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])/.exec(t) || /\b([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])\b/.exec(sig(/Identificador Fiscal/)) || [])[1] ?? '';
     const r = { dom: 'No' };
     const pag = /consta como PAGADA la siguiente deuda relativa a\s*(.+)/i.exec(t);
     if (pag) {
@@ -4150,6 +4150,21 @@ export function crearModulos(c) {
       if (r.imp === undefined) { const n2 = nums(sig(/Importe a Ingresar$/)); if (n2.length) r.imp = parseES(n2[n2.length - 1]); }
       const ref = (/Referencia de Pago\s*:?\s*(\d+)/.exec(t) || [])[1], rec = /Recargo pendiente[\s\S]{0,80}?\b(\d+)%\s+([\d.,]+)/.exec(t) || [];
       r.obs = `Recibo pendiente${r.id ? ' · ' + r.id : ''}${ref ? ' · ref. pago ' + ref : ''}${rec[1] ? ` · recargo ${rec[1]}% ${rec[2]} fuera de plazo` : ''}`;
+    } else if (/Informe de estado de valor/i.test(t)) { // «Consulta de Tributos» del ayuntamiento (p. ej. Dos Hermanas): estado del valor, con entregas y bonificación por domiciliación
+      const fl = ls.find((l) => /\b(?:19|20)\d{2}\s+\d{2}\/\d{2}\/\d{4}\s*$/.test(l.trim()) && /\b(AYTO|AYUNTAMIENTO)\b/i.test(l)) ?? '';
+      const fm = /((?:19|20)\d{2})\s+(\d{2}\/\d{2}\/\d{4})\s*$/.exec(fl.trim());
+      r.tipo = ilTipo(fl); if (fm) { r.ej = fm[1]; r.fin = iso(fm[2]); }
+      r.muni = ((/\b(?:AYTO\.?|AYUNTAMIENTO)\s+DE\s+(.+?)\s+(?:IBI|IAE|IVTM|VADO|IMPUESTO|TASA|BASURA|RESIDUOS)/i.exec(fl) || [])[1] || '').trim();
+      const o = (/Objeto Tributario:?\s*(.+)/i.exec(t) || [])[1] || '', rc = (/REF\. CATASTRAL\.*:?\s*([0-9A-Z]{14,20})/i.exec(t) || [])[1];
+      r.objeto = (rc ? rc + ' · ' : '') + o.replace(/\s+/g, ' ').trim();
+      r.id = (/Ref\. Valor[^:]*:\s*R\s*-\s*(\S+)/i.exec(t) || [])[1] || '';
+      const pr = /PRINCIPAL:\.*\s*(-?[\d.]+,\d{2})/.exec(t); if (pr) r.imp = parseES(pr[1]);
+      const td = /TOTAL DEUDA:\.*\s*(-?[\d.]+,\d{2})/.exec(t); r.pag = td && parseES(td[1]) === 0 ? 'Sí' : 'No';
+      const ing = /(\d{2}\/\d{2}\/\d{4})\s+Ingreso/.exec(t); if (ing && r.pag === 'Sí') r.cargo = iso(ing[1]);
+      if (/se encuentra domiciliado/i.test(t)) r.dom = 'Sí';
+      const bo = /Bonificaci[oó]n\s+por\s+Domiciliaci[oó]n[^\n]*?([\d.]+,\d{2})\s*€/i.exec(t);
+      nif = (/D\.N\.I\s*\/\s*C\.I\.F\s*\/\s*N\.I\.F[\s\S]{0,160}?\b([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])\b/.exec(t) || [])[1] || nif;
+      r.obs = `Estado de valor${r.id ? ' · ' + r.id : ''}${bo ? ' · incluye bonificación por domiciliación ' + bo[1] + ' (se pagó ' + fnum(r.imp - parseES(bo[1])) + ')' : ''}`;
     } else return { error: 'no reconozco el recibo ni el justificante de pago' };
     if (!r.ej) return { error: 'no encuentro el ejercicio' };
     return { r, nif };
