@@ -5647,12 +5647,33 @@ export function crearModulos(c) {
       return { t: `${n} de ${DOCS[id].length}`, c: n === DOCS[id].length ? 'verde' : '' };
     };
   });
-  // Cuentas Anuales Presentadas: 7 documentos (cuentas, certificación, auditoría, gestión, memoria, acuse, nota) del ejercicio de las cuentas (el anterior al seleccionado)
-  badges.rmca = () => {
+  // Pestañas de 2.- Registro Mercantil: las píldoras leen lo que guardan las vistas nuevas de registral.js
+  const rgAnio = (tipo, ok) => { // ejercicio a contar: el seleccionado (o el anterior para las cuentas) si tiene datos; si no, el más reciente que los tenga
+    const reg = S.registros.filter((r) => r.tipo === tipo && r.empresa_id === S.sel && r.ejercicio != null && ok(r.datos ?? {}));
+    return reg.length ? reg.sort((a, b) => b.ejercicio - a.ejercicio) : [];
+  };
+  const pildoraRg = (tipo, ys, total, cuenta) => {
+    const R = rgAnio(tipo, (D) => cuenta(D) > 0), pref = R.find((r) => ys.includes(r.ejercicio)) ?? R[0];
+    const n = pref ? cuenta(pref.datos) : 0, y = pref?.ejercicio;
+    return { t: `${n} de ${total}${pref && !ys.includes(y) ? ' · ' + y : ys.length ? ' · ' + ys[0] : ''}`, c: n === total ? 'verde' : '' };
+  };
+  badges.rmca = () => !S.sel ? { t: 'Por empresa' } : pildoraRg('rmdoc', [Number(S.ejercicio) - 1], 7, (D) => ['ca', 'cert', 'aud', 'ig', 'mem', 'acu', 'nota'].filter((k) => D[k] && (D[k].archivo || D[k].fecha || D[k].t || D[k].v)).length);
+  ['rmactas', 'rmsocios', 'rmlibros'].forEach((id) => {
+    badges[id] = () => !S.sel ? { t: 'Por empresa' } : pildoraRg('doc-' + id, [Number(S.ejercicio)], DOCS[id].length, (D) => DOCS[id].filter(([k]) => D[k] && (D[k].fecha || D[k].ref || D[k].archivo)).length);
+  });
+  badges.trl = () => {
     if (!S.sel) return { t: 'Por empresa' };
-    const y = Number(S.ejercicio) - 1, D = S.registros.find((r) => r.tipo === 'rmdoc' && r.empresa_id === S.sel && r.ejercicio === y)?.datos ?? {};
-    const n = ['ca', 'cert', 'aud', 'ig', 'mem', 'acu', 'nota'].filter((k) => D[k] && (D[k].archivo || D[k].fecha || D[k].t || D[k].v)).length;
-    return { t: `${n} de 7 · ${y}`, c: n === 7 ? 'verde' : '' };
+    const D = S.registros.find((r) => r.tipo === 'titreal' && r.empresa_id === S.sel)?.datos ?? {}, n = (D.titulares ?? []).length;
+    return n ? { t: `${n} titular${n === 1 ? '' : 'es'}`, c: 'verde' } : (D.archivos ?? []).length ? { t: 'Sin titulares leídos' } : { t: 'Sin datos' };
+  };
+  badges.acc = () => {
+    const D = S.registros.find((r) => r.tipo === 'accionariado')?.datos ?? {}, n = (D.rel ?? []).length;
+    return n ? { t: `${n} participaciones`, c: 'verde' } : { t: 'Sin datos' };
+  };
+  badges.dreg = () => {
+    const e = empresa(); if (!e) return { t: 'Por empresa' };
+    const d = e.datos?.dreg ?? {}, ks = ['denominacion', 'nif', 'irus', 'cnae', 'registro', 'tomo', 'folio', 'hoja', 'inscripcion', 'domicilio', 'fconst'], n = ks.filter((k) => d[k] || (k === 'fconst' && d.constitucion)).length;
+    return { t: `${n} de ${ks.length} datos`, c: n === ks.length ? 'verde' : '' };
   };
   // Insignias del bloque 6: usan los datos si ya se han leído; si no, los piden en segundo plano
   const nFilas = (tipo) => { const d = S.sel ? peek(tipo) : null; return d ? d.length : null; };
@@ -5790,7 +5811,7 @@ export function crearModulos(c) {
     const reg = S.registros.find((r) => r.tipo === 'sys' && r.empresa_id === S.sel && r.ejercicio === Number(S.ejercicio));
     return reg ? { t: `${reg.datos.cuentas.length} cuentas`, c: 'verde' } : { t: 'Sin datos' };
   };
-  Object.keys(FICHAS).forEach((id) => {
+  Object.keys(FICHAS).filter((id) => id !== 'dreg').forEach((id) => { // dreg tiene su propia píldora (más arriba)
     badges[id] = () => {
       const e = empresa();
       if (!e) return { t: 'Por empresa' };
