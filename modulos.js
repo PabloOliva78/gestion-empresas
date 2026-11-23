@@ -3061,7 +3061,7 @@ export function crearModulos(c) {
   function concIlocal(D) {
     const ej = Number(S.ejercicio), TIPOS = [['IBI', 'IBI'], ['IAE', 'IAE'], ['IVTM', 'IVTM'], ['VADOS', 'Vados'], ['OT', 'Otros (tasas…)']], tc = ['IBI', 'IAE', 'IVTM', 'VADOS', 'OT'];
     const tipoRec = (t) => (['IBI', 'IAE', 'IVTM'].includes(t) ? t : t === 'Vado' ? 'VADOS' : 'OT');
-    const rec = S.registros.filter((q) => q.tipo === 'iloc' && q.empresa_id === S.sel && ilDe(q, 'ej') === String(ej)).map((q) => ({ q, t: tipoRec(ilDe(q, 'tipo')), imp: rr(Number(ilDe(q, 'imp')) || 0) }));
+    const rec = S.registros.filter((q) => q.tipo === 'iloc' && q.empresa_id === S.sel && ilDe(q, 'ej') === String(ej)).map((q) => ({ q, t: tipoRec(ilDe(q, 'tipo')), imp: rr((Number(ilDe(q, 'imp')) || 0) - (Number(q.datos?.bonif) || 0)) })); // la bonificación por domiciliación no sale del banco: se contabiliza el principal menos la bonificación
     const asi = D.movs.filter((m) => new Date(m.l.ms).getUTCFullYear() === ej && tc.includes(m.tipo)).map((m) => ({ m, t: m.tipo, imp: rr(m.l.debe - m.l.haber) })).filter((a) => Math.abs(a.imp) > 0.004);
     const sinA = [], sinR = [];
     const filas = TIPOS.map(([t, nom]) => {
@@ -4164,6 +4164,7 @@ export function crearModulos(c) {
       if (/se encuentra domiciliado/i.test(t)) r.dom = 'Sí';
       const bo = /Bonificaci[oó]n\s+por\s+Domiciliaci[oó]n[^\n]*?([\d.]+,\d{2})\s*€/i.exec(t);
       nif = (/D\.N\.I\s*\/\s*C\.I\.F\s*\/\s*N\.I\.F[\s\S]{0,160}?\b([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])\b/.exec(t) || [])[1] || nif;
+      if (bo) r.bonif = parseES(bo[1]);
       r.obs = `Estado de valor${r.id ? ' · ' + r.id : ''}${bo ? ' · incluye bonificación por domiciliación ' + bo[1] + ' (se pagó ' + fnum(r.imp - parseES(bo[1])) + ')' : ''}`;
     } else return { error: 'no reconozco el recibo ni el justificante de pago' };
     if (!r.ej) return { error: 'no encuentro el ejercicio' };
