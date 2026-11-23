@@ -5647,6 +5647,13 @@ export function crearModulos(c) {
       return { t: `${n} de ${DOCS[id].length}`, c: n === DOCS[id].length ? 'verde' : '' };
     };
   });
+  // Cuentas Anuales Presentadas: 7 documentos (cuentas, certificación, auditoría, gestión, memoria, acuse, nota) del ejercicio de las cuentas (el anterior al seleccionado)
+  badges.rmca = () => {
+    if (!S.sel) return { t: 'Por empresa' };
+    const y = Number(S.ejercicio) - 1, D = S.registros.find((r) => r.tipo === 'rmdoc' && r.empresa_id === S.sel && r.ejercicio === y)?.datos ?? {};
+    const n = ['ca', 'cert', 'aud', 'ig', 'mem', 'acu', 'nota'].filter((k) => D[k] && (D[k].archivo || D[k].fecha || D[k].t || D[k].v)).length;
+    return { t: `${n} de 7 · ${y}`, c: n === 7 ? 'verde' : '' };
+  };
   // Insignias del bloque 6: usan los datos si ya se han leído; si no, los piden en segundo plano
   const nFilas = (tipo) => { const d = S.sel ? peek(tipo) : null; return d ? d.length : null; };
   [['siie', 'sii-E', 'facturas'], ['siir', 'sii-R', 'facturas'], ['fe', 'fact-E', 'líneas'], ['fr', 'fact-R', 'líneas']].forEach(([id, tipo, u]) => {
