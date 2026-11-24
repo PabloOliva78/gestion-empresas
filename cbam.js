@@ -60,7 +60,16 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     });
     return out.sort((a, b) => (b.f ? b.f.y * 1e4 + b.f.mo * 100 + b.f.d : 0) - (a.f ? a.f.y * 1e4 + a.f.mo * 100 + a.f.d : 0));
   }
-  function emisionDe(d, l) { // instalación elegida para la línea → emisión de su producto (mismo código NC)
+  const CAMPOS_DUA = ['producto', 'metodo', 'directa', 'factor', 'indirecta', 'mwh', 'fuenteFactor', 'fuenteElec', 'otraFuente', 'tipoDet', 'normas', 'precioC', 'periodo'];
+  // emisión de la línea: lo que escribes en «Emisiones por DUA» manda sobre lo de «Emisiones por producto» (misma instalación y código NC)
+  function emisionDe(d, l) {
+    const base = emisionProd(d, l), o = d.emiDua?.[l.key] ?? {}, hay = (k) => o[k] !== undefined && String(o[k]).trim() !== '';
+    if (!base && !hay('directa') && !hay('indirecta')) return null;
+    const e = { ...(base ?? { nc: l.nc }) }; CAMPOS_DUA.forEach((k) => { if (hay(k)) e[k] = o[k]; });
+    if (hay('indirecta') && num(e.factor)) e.mwh = String(Math.round(num(e.indirecta) / num(e.factor) * 1e4) / 1e4);
+    return e;
+  }
+  function emisionProd(d, l) { // instalación elegida para la línea → emisión de su producto (mismo código NC)
     const a = d.asig[l.key] ?? {}; if (!a.inst) return null;
     return d.emi.find((e) => e.instK === a.inst && String(e.nc) === l.nc) ?? d.emi.find((e) => e.instK === a.inst && String(e.nc).slice(0, 6) === l.nc.slice(0, 6)) ?? null;
   }
@@ -117,6 +126,23 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
       <div class="bar"><span class="space"></span>${ed() ? '<button class="primary small" data-cbpl="1">Cargar plantilla del productor (Excel)</button><input type="file" id="cbPlIn" accept=".xlsx,.xls" multiple hidden>' : ''}</div>${ST.msg ? `<p class="hint">${esc(ST.msg)}</p>` : ''}
       ${tablaEd(d, 'emi', EMCOLS, 'Añadir emisión')}
       <p class="hint">Emisión específica = tCO₂ por tonelada de producto: directas (de la instalación), indirectas (electricidad × factor) y electricidad consumida por tonelada. La plantilla del productor («CBAM communication template for installations») trae una fila por producto en la hoja Summary_Communication; el factor de electricidad se calcula como indirectas ÷ MWh/t y puedes corregirlo. Comprueba el periodo de los datos frente al de tus importaciones.</p></section></div>`;
+  }
+
+  // ---------- 3 bis · Emisiones por DUA ----------
+  function vistaEmiDua() {
+    if (!S.sel) return sinEmp; const d = D(), L = lineas(d), y = ano(), LY = L.filter((l) => l.y === y);
+    const inp = (l, k, w, ph = '') => `<input style="width:${w}em" data-cbed="${esc(l.key)}|${k}" value="${esc(d.emiDua?.[l.key]?.[k] ?? '')}" placeholder="${esc(ph)}">`;
+    const filas = LY.map((l) => { const b = emisionProd(d, l) ?? {}, e = emisionDe(d, l), c = calc(d, l), o = d.emiDua?.[l.key] ?? {}, pr = (k) => b[k] ?? '';
+      return `<tr><td>${esc(l.q)}</td><td>${esc(l.num)}</td><td class="c">${l.n}</td><td>${esc(l.nc)}</td><td>${esc(o.producto || b.producto || l.desc)}</td>
+        <td>${ed() ? `<select data-cbasig="${esc(l.key)}">${optsInst(d, d.asig[l.key]?.inst)}</select>` : esc(instNombre(d, d.asig[l.key]?.inst))}</td><td>${ed() ? inp(l, 'metodo', 4, pr('metodo')) : esc(e?.metodo ?? '')}</td>
+        <td>${ed() ? inp(l, 'directa', 6, pr('directa')) : esc(e?.directa ?? '')}</td><td>${ed() ? inp(l, 'factor', 6, pr('factor')) : esc(e?.factor ?? '')}</td><td>${ed() ? inp(l, 'indirecta', 6, pr('indirecta')) : esc(e?.indirecta ?? '')}</td>
+        <td class="num">${e && num(e.mwh) ? nf(e.mwh, 3) : ''}</td><td>${ed() ? inp(l, 'fuenteFactor', 4, pr('fuenteFactor')) : esc(e?.fuenteFactor ?? '')}</td><td>${ed() ? inp(l, 'fuenteElec', 5, pr('fuenteElec')) : esc(e?.fuenteElec ?? '')}</td>
+        <td>${ed() ? inp(l, 'tipoDet', 3, pr('tipoDet')) : esc(e?.tipoDet ?? '')}</td><td>${ed() ? inp(l, 'normas', 5, pr('normas')) : esc(e?.normas ?? '')}</td><td>${ed() ? inp(l, 'precioC', 5, pr('precioC')) : esc(e?.precioC ?? '')}</td><td>${ed() ? inp(l, 'periodo', 9, pr('periodo')) : esc(e?.periodo ?? '')}</td>
+        <td class="num">${nf(l.tm, 3)}</td><td class="num">${e ? nf(c.tot, 3) : '<span class="rojo">sin emisión</span>'}</td></tr>`; }).join('');
+    return `<div class="inicio cb"><section class="dsec"><h3>Emisiones por DUA</h3><div class="bar">${selAno(anosDe(L))}<span class="space"></span>${ed() ? '<button class="small" data-cbcopia="1" title="Rellena las filas vacías con los valores de «Emisiones por producto» (misma instalación y código NC)">Copiar de «Emisiones por producto»</button>' : ''}</div>
+      ${ST.msg ? `<p class="hint">${esc(ST.msg)}</p>` : ''}
+      ${LY.length ? `<div class="wrap"><table class="tabla cb-t"><thead><tr><th>Trim.</th><th>DUA</th><th>Part.</th><th>Código NC</th><th>Producto</th><th>Instalación</th><th>Método</th><th>Directas tCO₂/t</th><th>Factor tCO₂/MWh</th><th>Indirectas tCO₂/t</th><th class="num">Electr. MWh/t</th><th>Fuente factor</th><th>Fuente electr.</th><th>Tipo determ.</th><th>Normas</th><th>Precio carbono €/tCO₂</th><th>Periodo de los datos</th><th class="num">Toneladas</th><th class="num">tCO₂</th></tr></thead><tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay importaciones CBAM en ${y}.</p>`}
+      <p class="hint">Una fila por partida de DUA. Escribe las emisiones directas, las indirectas y el factor de electricidad; los MWh/t salen de indirectas ÷ factor. Lo que dejes en blanco se toma de «Emisiones por producto» (el valor gris de cada casilla), y lo que escribas aquí manda sobre eso en el cálculo de la obligación y del informe.</p></section></div>`;
   }
 
   // ---------- 4 · Cálculo de la obligación ----------
@@ -266,6 +292,11 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     }
     ST.msg = res.join(' · '); render();
   }
+  async function copiarEmiDua() {
+    const d0 = D(), LY = lineas(d0).filter((l) => l.y === ano()); let n = 0;
+    await guardar((d) => { d.emiDua ??= {}; LY.forEach((l) => { const b = emisionProd(d, l); if (!b) return; const o = d.emiDua[l.key] ??= {}; let ch = false; CAMPOS_DUA.forEach((k) => { if ((o[k] === undefined || String(o[k]).trim() === '') && b[k] !== undefined && String(b[k]) !== '') { o[k] = String(b[k]); ch = true; } }); if (ch) n++; }); });
+    ST.msg = n ? `Copiados los valores de «Emisiones por producto» en ${n} fila(s) vacías.` : 'No había nada que copiar (falta elegir la instalación o no hay emisión de ese producto).'; render();
+  }
   async function cargarQR(files) {
     const nuevos = { oper: 0, inst: 0, emi: 0 }; let ultimo = null;
     for (const f of [...files].filter((x) => /\.pdf$/i.test(x.name))) {
@@ -316,14 +347,16 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     if (ds.cbcfg) { const [k, a] = ds.cbcfg.split('|'); return void guardar((d) => { d.cfg[k][a] = t.value; }); }
     if (ds.cbcfg2) return void guardar((d) => { d.cfg[ds.cbcfg2] = t.value; });
     if (ds.cbaut) return void guardar((d) => { d.aut[ds.cbaut] = t.value; });
+    if (ds.cbed) { const i = ds.cbed.lastIndexOf('|'), key = ds.cbed.slice(0, i), k = ds.cbed.slice(i + 1); return void guardar((d) => { (d.emiDua ??= {})[key] = { ...(d.emiDua[key] ?? {}), [k]: t.value }; }); }
     if (t.id === 'cbAutIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarAut(fs); }
     if (t.id === 'cbQrIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarQR(fs); }
     if (t.id === 'cbPlIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarPlantilla(fs); }
     return undefined;
   });
   document.addEventListener('click', (ev) => {
-    const b = ev.target.closest?.('[data-cbadd],[data-cbdel],[data-cbau],[data-cbqr],[data-cbpl],[data-cbreleer],[data-cbxls]'); if (!b) return;
+    const b = ev.target.closest?.('[data-cbadd],[data-cbdel],[data-cbcopia],[data-cbau],[data-cbqr],[data-cbpl],[data-cbreleer],[data-cbxls]'); if (!b) return;
     const ds = b.dataset;
+    if (ds.cbcopia) return void copiarEmiDua();
     if (ds.cbau) return void document.getElementById('cbAutIn')?.click();
     if (ds.cbqr) return void document.getElementById('cbQrIn')?.click();
     if (ds.cbpl) return void document.getElementById('cbPlIn')?.click();
@@ -336,7 +369,7 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   document.addEventListener('dragover', (ev) => { if (ev.target.closest?.('[data-cbdrop]')) ev.preventDefault(); });
   document.addEventListener('drop', (ev) => { const z = ev.target.closest?.('[data-cbdrop]'); if (!z || !ed() || !ev.dataTransfer?.files?.length) return; ev.preventDefault(); ev.stopPropagation(); cargarAut([...ev.dataTransfer.files]); }, true);
   return { tabs: {
-    cbamimp: ['Importaciones', 'Partidas de los DUA', vistaImp], cbaminst: ['Operadores e instalaciones', 'Productores y plantas', vistaInst], cbamemi: ['Emisiones por producto', 'tCO₂ por tonelada', vistaEmi],
+    cbamimp: ['Importaciones', 'Partidas de los DUA', vistaImp], cbaminst: ['Operadores e instalaciones', 'Productores y plantas', vistaInst], cbamemi: ['Emisiones por producto', 'tCO₂ por tonelada', vistaEmi], cbamedua: ['Emisiones por DUA', 'Una fila por partida', vistaEmiDua],
     cbamcalc: ['Cálculo de la obligación', 'Certificados e importe', vistaCalc], cbamaut: ['Autorización y certificados', 'Declarante y saldo', vistaAut], cbaminf: ['Informe trimestral', 'QReport y exportación', vistaInf],
     cbamcal: ['Calendario y tareas', 'Plazos y lista de control', vistaCal], cbamdoc: ['Documentos CBAM', 'Justificantes y verificaciones', vistaDoc],
   } };

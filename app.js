@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=528';
+import { crearModulos } from './modulos.js?v=529';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -214,7 +214,7 @@ const GRUPOS = [
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyrfac', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA y Reglamento de facturación: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
   ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
   ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
-  ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
+  ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamedua', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
 ];
 // Pestañas de conciliación: su botón de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
 const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'certret', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
