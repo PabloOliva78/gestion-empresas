@@ -30,7 +30,7 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
   const nf = (v, d = 2) => (v === null || v === undefined || v === '' || Number.isNaN(+v) ? '' : new Intl.NumberFormat('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: 'always' }).format(+v));
   const r2 = (x) => Math.round((Number(x) + (x < 0 ? -1e-9 : 1e-9)) * 100) / 100;
   const num = (s) => { const v = parseFloat(String(s ?? '').replace(/\s/g, '').replace(',', '.')); return Number.isFinite(v) ? v : 0; };
-  const ST = { ano: null, q: '', msg: '' };
+  const ST = { ano: null, q: '', msg: '', visor: null };
   const ano = () => ST.ano ?? Number(S.ejercicio);
   const ed = () => puede();
 
@@ -255,7 +255,33 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
 
   // ---------- 8 · Documentos ----------
   const DOCOLS = [['fecha', 'Fecha', 9], ['tipo', 'Tipo (declaración, verificación, solicitud…)', 18], ['nombre', 'Nombre del documento', 28], ['ruta', 'Enlace o ruta', 36]];
-  function vistaDoc() { if (!S.sel) return sinEmp; const d = D(); return `<div class="inicio cb"><section class="dsec"><h3>Documentos CBAM</h3>${tablaEd(d, 'docs', DOCOLS, 'Añadir documento')}<p class="hint">Referencias a los documentos del CBAM (informes presentados, solicitud de declarante, verificaciones, comunicaciones de los productores) con su enlace o ruta.</p></section></div>`; }
+  // Archivos de «Documentos CBAM»: se guardan en el almacén «documentos» y se ven aquí mismo en un visor
+  const limpioNom = (n) => String(n).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_');
+  async function subirCbam(f) {
+    const path = `${S.sel}/cbam/${crypto.randomUUID()}/${limpioNom(f.name)}`;
+    const { error } = await db.storage.from('documentos').upload(path, f, { upsert: true });
+    return error ? { error: error.message } : { nombre: f.name, path };
+  }
+  async function urlDe(path, seg = 3600) { const { data, error } = await db.storage.from('documentos').createSignedUrl(path, seg); if (error) { alert(error.message); return null; } return data.signedUrl; }
+  async function cargarDocs(files) {
+    const aut = [...files].filter((f) => /solicitud|resoluci[oó]n|autoriza/i.test(f.name) && /\.pdf$/i.test(f.name)), otros = [...files].filter((f) => !aut.includes(f)), men = [];
+    if (aut.length) await cargarAut(aut);
+    for (const f of otros) {
+      const sub = await subirCbam(f); if (sub.error) { men.push(`${f.name}: ${sub.error}`); continue; }
+      await guardar((d) => { (d.docs ??= []).push({ fecha: new Date().toISOString().slice(0, 10), tipo: 'Documento', nombre: f.name, ruta: '', archivo: sub }); });
+      men.push(`${f.name}: guardado`);
+    }
+    if (men.length) { ST.msg = (ST.msg && aut.length ? ST.msg + ' · ' : '') + men.join(' · '); render(); }
+  }
+  function vistaDoc() {
+    if (!S.sel) return sinEmp; const d = D(), con = (d.docs ?? []).map((x, i) => ({ x, i })).filter((o) => o.x.archivo?.path);
+    const filasArch = con.map(({ x, i }) => `<tr><td>${esc(x.fecha ?? '')}</td><td>${esc(x.tipo ?? '')}</td><td>${esc(x.nombre ?? x.archivo.nombre)}</td><td><button class="small primary" data-cbver="${i}">👁 Ver</button> <button class="small" data-cbabrir="${i}" title="Abrir en una pestaña nueva">↗</button>${ed() ? ` <button class="small danger" data-cbquitar="${i}" title="Quitar el archivo (la fila se queda)">✕</button>` : ''}</td></tr>`).join('');
+    return `<div class="inicio cb"><section class="dsec" data-cbdropdoc="1"><h3>Documentos CBAM</h3>
+      <div class="bar"><span class="space"></span>${ed() ? '<button class="primary small" data-cbsub="1">Subir documento (PDF u otro)</button><input type="file" id="cbDocIn" multiple hidden>' : ''}</div>${ST.msg ? `<p class="hint">${esc(ST.msg)}</p>` : '<p class="hint">Suelta aquí los documentos del CBAM. La solicitud y la resolución de declarante autorizado además rellenan «Autorización y certificados».</p>'}
+      ${con.length ? `<h4 class="it-sec">Archivos guardados</h4><div class="wrap"><table class="tabla cb-t"><thead><tr><th>Fecha</th><th>Tipo</th><th>Documento</th><th></th></tr></thead><tbody>${filasArch}</tbody></table></div>` : ''}
+      ${ST.visor ? `<h4 class="it-sec">${esc(ST.visor.nombre)} <button class="small" data-cbcerrar="1">Cerrar visor</button></h4><iframe src="${esc(ST.visor.url)}" style="width:100%;height:80vh;border:0.5px solid #c9d2e3;border-radius:6px" title="Visor de documento"></iframe>` : ''}
+      <h4 class="it-sec">Lista de documentos</h4>${tablaEd(d, 'docs', DOCOLS, 'Añadir documento')}<p class="hint">Referencias a los documentos del CBAM (informes presentados, solicitud de declarante, verificaciones, comunicaciones de los productores) con su enlace o ruta.</p></section></div>`;
+  }
 
   // ---------- acciones ----------
   // Texto del QReport en el orden en que lo escribe el PDF (cada dato junto a su etiqueta); el de los DUA lo ordena por filas y rompe las tablas
@@ -277,6 +303,7 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
       if (!resol && !solic) { res.push(`${f.name}: no parece una solicitud ni una resolución de declarante autorizado.`); continue; }
       let fFirma = ''; // fecha de la firma electrónica de la resolución (campo /M del PDF)
       if (resol) { try { const raw = new TextDecoder('latin1').decode(new Uint8Array(await f.arrayBuffer())), m = [...raw.matchAll(/\/M\s*\(D:(\d{4})(\d{2})(\d{2})/g)].map((x) => `${x[1]}${x[2]}${x[3]}`).sort().pop(); if (m) fFirma = `${m.slice(6)}/${m.slice(4, 6)}/${m.slice(0, 4)}`; } catch { /* sin fecha */ } }
+      const sub = await subirCbam(f); if (sub.error) res.push(`${f.name}: no se pudo guardar el archivo (${sub.error})`);
       const eori = /\b(ES[A-Z]\d{8})\b/.exec(tx)?.[1], nom = /Nombre\s*:\s*(.+?)\s+2\s*\.\s*Solicitud/i.exec(tx)?.[1];
       await guardar((d) => {
         const a = d.aut;
@@ -286,7 +313,9 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
         else if (!a.estado || a.estado === 'No solicitada') a.estado = 'Solicitada';
         (d.docs ??= []);
         const nombre = f.name;
-        if (!d.docs.some((x) => x.nombre === nombre)) d.docs.push({ fecha: resol ? fFirma : (fPres ?? fEntr)?.[1] ?? '', tipo: resol ? 'Resolución de declarante autorizado (OECC)' : 'Solicitud de declarante autorizado', nombre, ruta: '' });
+        const ya = d.docs.find((x) => x.nombre === nombre);
+        if (!ya) d.docs.push({ fecha: resol ? fFirma : (fPres ?? fEntr)?.[1] ?? '', tipo: resol ? 'Resolución de declarante autorizado (OECC)' : 'Solicitud de declarante autorizado', nombre, ruta: '', ...(sub.path ? { archivo: sub } : {}) });
+        else if (sub.path) ya.archivo = sub;
       });
       res.push(`${f.name}: ${resol ? 'resolución leída (autorizado' + (fFirma ? ', firmada el ' + fFirma : '') + ')' : 'solicitud leída' + (appl ? '' : ' (el PDF es una imagen: no se puede leer el número; se obtiene al cargar la resolución)')}.`);
     }
@@ -348,14 +377,19 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     if (ds.cbcfg2) return void guardar((d) => { d.cfg[ds.cbcfg2] = t.value; });
     if (ds.cbaut) return void guardar((d) => { d.aut[ds.cbaut] = t.value; });
     if (ds.cbed) { const i = ds.cbed.lastIndexOf('|'), key = ds.cbed.slice(0, i), k = ds.cbed.slice(i + 1); return void guardar((d) => { (d.emiDua ??= {})[key] = { ...(d.emiDua[key] ?? {}), [k]: t.value }; }); }
+    if (t.id === 'cbDocIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarDocs(fs); }
     if (t.id === 'cbAutIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarAut(fs); }
     if (t.id === 'cbQrIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarQR(fs); }
     if (t.id === 'cbPlIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarPlantilla(fs); }
     return undefined;
   });
   document.addEventListener('click', (ev) => {
-    const b = ev.target.closest?.('[data-cbadd],[data-cbdel],[data-cbcopia],[data-cbau],[data-cbqr],[data-cbpl],[data-cbreleer],[data-cbxls]'); if (!b) return;
+    const b = ev.target.closest?.('[data-cbadd],[data-cbdel],[data-cbsub],[data-cbver],[data-cbabrir],[data-cbquitar],[data-cbcerrar],[data-cbcopia],[data-cbau],[data-cbqr],[data-cbpl],[data-cbreleer],[data-cbxls]'); if (!b) return;
     const ds = b.dataset;
+    if (ds.cbsub) return void document.getElementById('cbDocIn')?.click();
+    if (ds.cbcerrar) { ST.visor = null; return void render(); }
+    if (ds.cbver || ds.cbabrir) { const x = D().docs?.[+(ds.cbver ?? ds.cbabrir)]; if (!x?.archivo?.path) return undefined; return void urlDe(x.archivo.path).then((u) => { if (!u) return; if (ds.cbabrir) window.open(u, '_blank', 'noopener'); else { fetch(u).then((r) => r.blob()).then((b) => { if (ST.visor?.url?.startsWith('blob:')) URL.revokeObjectURL(ST.visor.url); const tipo = /\.pdf$/i.test(x.nombre ?? x.archivo.nombre) ? 'application/pdf' : b.type; ST.visor = { nombre: x.nombre ?? x.archivo.nombre, url: URL.createObjectURL(new Blob([b], { type: tipo })) }; render(); }).catch((e) => alert('No se pudo abrir el archivo: ' + e.message)); } }); }
+    if (ds.cbquitar) { const i = +ds.cbquitar, x = D().docs?.[i]; if (!x?.archivo?.path || !confirm('¿Quitar el archivo guardado? La fila de la lista se queda.')) return undefined; return void db.storage.from('documentos').remove([x.archivo.path]).then(() => { if (ST.visor?.nombre === (x.nombre ?? x.archivo.nombre)) ST.visor = null; return guardar((d) => { delete d.docs[i].archivo; }); }); }
     if (ds.cbcopia) return void copiarEmiDua();
     if (ds.cbau) return void document.getElementById('cbAutIn')?.click();
     if (ds.cbqr) return void document.getElementById('cbQrIn')?.click();
@@ -366,7 +400,8 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     if (ds.cbdel) { const [c, i] = ds.cbdel.split('|'); if (!confirm('¿Borrar esta fila?')) return undefined; return void guardar((d) => { if (c === 'tareas' && !d.tareas) d.tareas = TAREAS0.map((x) => ({ ...x })); (d[c] ??= []).splice(+i, 1); }); }
     return undefined;
   });
-  document.addEventListener('dragover', (ev) => { if (ev.target.closest?.('[data-cbdrop]')) ev.preventDefault(); });
+  document.addEventListener('dragover', (ev) => { if (ev.target.closest?.('[data-cbdrop],[data-cbdropdoc]')) ev.preventDefault(); });
+  document.addEventListener('drop', (ev) => { const z = ev.target.closest?.('[data-cbdropdoc]'); if (!z || !ed() || !ev.dataTransfer?.files?.length) return; ev.preventDefault(); ev.stopPropagation(); cargarDocs([...ev.dataTransfer.files]); }, true);
   document.addEventListener('drop', (ev) => { const z = ev.target.closest?.('[data-cbdrop]'); if (!z || !ed() || !ev.dataTransfer?.files?.length) return; ev.preventDefault(); ev.stopPropagation(); cargarAut([...ev.dataTransfer.files]); }, true);
   return { tabs: {
     cbamimp: ['Importaciones', 'Partidas de los DUA', vistaImp], cbaminst: ['Operadores e instalaciones', 'Productores y plantas', vistaInst], cbamemi: ['Emisiones por producto', 'tCO₂ por tonelada', vistaEmi], cbamedua: ['Emisiones por DUA', 'Una fila por partida', vistaEmiDua],
