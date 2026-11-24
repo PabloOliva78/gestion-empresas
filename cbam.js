@@ -168,7 +168,8 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     if (!S.sel) return sinEmp; const d = D(), a = d.aut, ct = d.cert;
     const compra = ct.filter((c) => /^c/i.test(c.tipo)).reduce((s, c) => s + num(c.cant), 0), sale = ct.filter((c) => /^(e|d)/i.test(c.tipo)).reduce((s, c) => s + num(c.cant), 0);
     const f = (k, t, w = 10) => `<label>${t} ${ed() ? `<input style="width:${w}em" data-cbaut="${k}" value="${esc(a[k] ?? '')}">` : esc(a[k] ?? '')}</label>`;
-    return `<div class="inicio cb"><section class="dsec"><h3>Declarante autorizado y certificados</h3>
+    return `<div class="inicio cb"><section class="dsec" data-cbdrop="1"><h3>Declarante autorizado y certificados</h3>
+      <div class="bar"><span class="space"></span>${ed() ? '<button class="primary small" data-cbau="1">Cargar solicitud o resolución (PDF)</button><input type="file" id="cbAutIn" accept=".pdf" multiple hidden>' : ''}</div>${ST.msg ? `<p class="hint">${esc(ST.msg)}</p>` : '<p class="hint">Suelta aquí (o carga) el justificante de la solicitud y la resolución del Ministerio: se rellenan el estado, el nº y la fecha de la solicitud y la fecha de la autorización.</p>'}
       <div class="cb-form"><label>Estado ${ed() ? `<select data-cbaut="estado">${['No solicitada', 'Solicitada', 'Autorizada', 'Denegada'].map((x) => `<option${x === a.estado ? ' selected' : ''}>${x}</option>`).join('')}</select>` : esc(a.estado)}</label>
         ${f('solicitud', 'Nº de solicitud', 14)}${f('fSolicitud', 'Fecha de solicitud')}${f('numero', 'Nº de autorización', 14)}${f('fAut', 'Fecha de autorización')}${f('vigencia', 'Vigencia hasta')}${f('notas', 'Notas', 24)}</div>
       <h4 class="it-sec">Cuenta de certificados</h4><div class="cb-ks">${kpi('Comprados', nf(compra, 2))}${kpi('Entregados / devueltos', nf(sale, 2))}${kpi('Saldo', nf(compra - sale, 2))}</div>
@@ -240,6 +241,31 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     for (let p = 1; p <= doc.numPages; p++) out.push((await (await doc.getPage(p)).getTextContent()).items.map((i) => i.str).filter((s) => s && s.trim()).join(' | '));
     return out.join('\n');
   }
+  // Solicitud de declarante autorizado y resolución del Ministerio (OECC): rellenan «Autorización y certificados»
+  async function cargarAut(files) {
+    const res = [];
+    for (const f of [...files].filter((x) => /\.pdf$/i.test(x.name))) {
+      let tx = ''; try { tx = (await textoQR(f)).replace(/\s*\|\s*/g, ' ').replace(/\s+/g, ' '); } catch { /* sin texto */ }
+      const appl = /APPL\s*-\s*ES\s*-\s*(\d{4})\s*-\s*(ANV\d+)/i.exec(tx), fPres = /Fecha\s+de\s+presentaci.{1,3}n.{0,30}?:\s*(\d{2}\/\d{2}\/\d{4})/i.exec(tx), fEntr = /Fecha de entrega\s*(\d{2}\/\d{2}\/\d{4})/i.exec(tx);
+      const resol = /conceda?\s+el\s+estado\s+de\s+declarante\s+autorizado/i.test(tx) || /RESUELVO/.test(tx) && /declarante autorizado/i.test(tx), solic = !resol && (!!appl || /solicitud/i.test(f.name));
+      if (!resol && !solic) { res.push(`${f.name}: no parece una solicitud ni una resolución de declarante autorizado.`); continue; }
+      let fFirma = ''; // fecha de la firma electrónica de la resolución (campo /M del PDF)
+      if (resol) { try { const raw = new TextDecoder('latin1').decode(new Uint8Array(await f.arrayBuffer())), m = [...raw.matchAll(/\/M\s*\(D:(\d{4})(\d{2})(\d{2})/g)].map((x) => `${x[1]}${x[2]}${x[3]}`).sort().pop(); if (m) fFirma = `${m.slice(6)}/${m.slice(4, 6)}/${m.slice(0, 4)}`; } catch { /* sin fecha */ } }
+      const eori = /\b(ES[A-Z]\d{8})\b/.exec(tx)?.[1], nom = /Nombre\s*:\s*(.+?)\s+2\s*\.\s*Solicitud/i.exec(tx)?.[1];
+      await guardar((d) => {
+        const a = d.aut;
+        if (appl) a.solicitud = `APPL-ES-${appl[1]}-${appl[2].toUpperCase()}`;
+        if (fPres || fEntr) a.fSolicitud = (fPres ?? fEntr)[1];
+        if (resol) { a.estado = 'Autorizada'; if (fFirma) a.fAut = fFirma; const extra = [eori ? `EORI ${eori}` : '', nom || ''].filter(Boolean).join(' · '); if (extra && !(a.notas ?? '').includes(extra)) a.notas = [a.notas, extra].filter(Boolean).join(' · '); }
+        else if (!a.estado || a.estado === 'No solicitada') a.estado = 'Solicitada';
+        (d.docs ??= []);
+        const nombre = f.name;
+        if (!d.docs.some((x) => x.nombre === nombre)) d.docs.push({ fecha: resol ? fFirma : (fPres ?? fEntr)?.[1] ?? '', tipo: resol ? 'Resolución de declarante autorizado (OECC)' : 'Solicitud de declarante autorizado', nombre, ruta: '' });
+      });
+      res.push(`${f.name}: ${resol ? 'resolución leída (autorizado' + (fFirma ? ', firmada el ' + fFirma : '') + ')' : 'solicitud leída' + (appl ? '' : ' (el PDF es una imagen: no se puede leer el número; se obtiene al cargar la resolución)')}.`);
+    }
+    ST.msg = res.join(' · '); render();
+  }
   async function cargarQR(files) {
     const nuevos = { oper: 0, inst: 0, emi: 0 }; let ultimo = null;
     for (const f of [...files].filter((x) => /\.pdf$/i.test(x.name))) {
@@ -290,13 +316,15 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     if (ds.cbcfg) { const [k, a] = ds.cbcfg.split('|'); return void guardar((d) => { d.cfg[k][a] = t.value; }); }
     if (ds.cbcfg2) return void guardar((d) => { d.cfg[ds.cbcfg2] = t.value; });
     if (ds.cbaut) return void guardar((d) => { d.aut[ds.cbaut] = t.value; });
+    if (t.id === 'cbAutIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarAut(fs); }
     if (t.id === 'cbQrIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarQR(fs); }
     if (t.id === 'cbPlIn' && t.files?.length) { const fs = [...t.files]; t.value = ''; return void cargarPlantilla(fs); }
     return undefined;
   });
   document.addEventListener('click', (ev) => {
-    const b = ev.target.closest?.('[data-cbadd],[data-cbdel],[data-cbqr],[data-cbpl],[data-cbreleer],[data-cbxls]'); if (!b) return;
+    const b = ev.target.closest?.('[data-cbadd],[data-cbdel],[data-cbau],[data-cbqr],[data-cbpl],[data-cbreleer],[data-cbxls]'); if (!b) return;
     const ds = b.dataset;
+    if (ds.cbau) return void document.getElementById('cbAutIn')?.click();
     if (ds.cbqr) return void document.getElementById('cbQrIn')?.click();
     if (ds.cbpl) return void document.getElementById('cbPlIn')?.click();
     if (ds.cbreleer) return void releerDua();
@@ -305,6 +333,8 @@ export function crearCbam({ db, S, esc, render, cargar, empresa, puede, guardarR
     if (ds.cbdel) { const [c, i] = ds.cbdel.split('|'); if (!confirm('¿Borrar esta fila?')) return undefined; return void guardar((d) => { if (c === 'tareas' && !d.tareas) d.tareas = TAREAS0.map((x) => ({ ...x })); (d[c] ??= []).splice(+i, 1); }); }
     return undefined;
   });
+  document.addEventListener('dragover', (ev) => { if (ev.target.closest?.('[data-cbdrop]')) ev.preventDefault(); });
+  document.addEventListener('drop', (ev) => { const z = ev.target.closest?.('[data-cbdrop]'); if (!z || !ed() || !ev.dataTransfer?.files?.length) return; ev.preventDefault(); ev.stopPropagation(); cargarAut([...ev.dataTransfer.files]); }, true);
   return { tabs: {
     cbamimp: ['Importaciones', 'Partidas de los DUA', vistaImp], cbaminst: ['Operadores e instalaciones', 'Productores y plantas', vistaInst], cbamemi: ['Emisiones por producto', 'tCO₂ por tonelada', vistaEmi],
     cbamcalc: ['Cálculo de la obligación', 'Certificados e importe', vistaCalc], cbamaut: ['Autorización y certificados', 'Declarante y saldo', vistaAut], cbaminf: ['Informe trimestral', 'QReport y exportación', vistaInf],
