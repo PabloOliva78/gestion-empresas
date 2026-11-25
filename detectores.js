@@ -55,7 +55,7 @@ export function crearDetector({ S, esc, render, empresa, grande }) {
       // 4) NIF
       const nif = nifN(l.nif);
       if (!nif) { if (Math.abs(base) >= 0.01) add('Sin NIF', 'aviso', l, 'La factura no tiene NIF de cliente o proveedor.'); }
-      else if (nifOk(l.nif) === false && !/^(S\.UE|R\.UE|X\.|E\.)/.test(cod)) add('NIF incorrecto', 'ko', l, `El dígito de control de ${nif} no es válido.`);
+      else if (nifOk(l.nif) === false && !/^(S\.UE|R\.UE|S\.EX|R\.EX|DUA|X\.|E\.)/.test(cod)) add('NIF incorrecto', 'ko', l, `El dígito de control de ${nif} no es válido.`);
       // 5) fechas
       if (l.ff && l.fecha && l.ff !== l.fecha) {
         const dd = (new Date(l.fecha) - new Date(l.ff)) / 86400000;
