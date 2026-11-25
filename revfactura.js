@@ -2,7 +2,7 @@
 // y las reglas del SII (motor por reglas en revfactura-motor.js; informe completo en revfactura-fase.js). La factura NO se guarda ni se sube: solo vive en memoria
 // mientras la pestaña está abierta y se borra al salir de ella (app.js llama a limpiar() cada vez que se dibuja otra pestaña).
 // Solo se recuerdan en este navegador los datos de la empresa para el análisis (prorrata y si es revendedora), nunca la factura.
-import { analizarFactura } from './revfactura-motor.js?v=6';
+import { analizarFactura } from './revfactura-motor.js?v=7';
 import { completarInforme, fmt } from './revfactura-fase.js?v=1';
 import { leerFactura } from './revfactura-lector.js?v=4';
 

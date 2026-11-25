@@ -124,6 +124,17 @@ export function analizarFactura(texto, ctx = {}) {
   const paisTxt = (() => { for (const [c, re] of Object.entries(PAISES)) if (re.test(t1)) return c; return ''; })();
   const paisE = emisor?.pais ?? (paisTxt && !esMia(emisor ?? {}) ? paisTxt : ''), paisR = receptor?.pais ?? '';
   F.paisEmisor = paisE; F.paisReceptor = paisR;
+  // Canarias, Ceuta y Melilla quedan fuera del territorio del IVA español: una entrega de bienes allí es una exportación aunque el cliente tenga NIF español
+  const terrExc = (() => {
+    if (!receptor || esMia(receptor)) return '';
+    const v = T.slice(Math.max(0, receptor.pos - 150), receptor.pos + 450);
+    if (/\bCeuta\b/i.test(v)) return 'Ceuta';
+    if (/\bMelilla\b/i.test(v)) return 'Melilla';
+    if (/\b(Las\s+Palmas|Gran\s+Canaria|Tenerife|Lanzarote|Fuerteventura|La\s+Gomera|El\s+Hierro|La\s+Palma|Canarias)\b/i.test(v)) return 'Canarias';
+    const cp = /(?<![\d.,])(35|38|51|52)\d{3}(?![\d.,])/.exec(v);
+    return cp ? ({ 35: 'Canarias', 38: 'Canarias', 51: 'Ceuta', 52: 'Melilla' })[cp[1]] : '';
+  })();
+  F.terrExc = terrExc;
   const ue = (p) => EU.includes(p === 'GR' ? 'EL' : p), esp = (p) => p === 'ES';
 
   if (nFact > 1) add('aviso', `El PDF parece contener ${nFact} facturas distintas: analiza una por archivo; los importes y fechas de abajo pueden mezclar varias.`, '');
@@ -173,7 +184,10 @@ export function analizarFactura(texto, ctx = {}) {
   const recib = libro === 'Recibidas', emit = libro === 'Emitidas';
   const hayIva = (F.cuota ?? 0) > 0 || (F.tipo ?? 0) > 0;
 
-  if (esp(paisE) && esp(paisR || 'ES')) {
+  if (esp(paisE) && esp(paisR || 'ES') && F.terrExc) {
+    if (F.bienes === 'servicios') { op = 'servicios fuera del territorio IVA'; add('info', `Servicio a un destinatario en ${F.terrExc}: no está sujeto al IVA español por las reglas de localización (no es una exportación de bienes).`, 'arts. 3, 69 y 70 LIVA'); SII.tipoNoExenta = 'N2 (no sujeta por reglas de localización)'; if (hayIva) add('error', 'Un servicio localizado fuera del territorio del IVA español no lleva IVA español.', 'art. 69 LIVA'); }
+    else { op = 'exportación'; add('info', `Entrega de bienes a ${F.terrExc} (fuera del territorio del IVA español, aunque el cliente tenga NIF español): se trata como exportación exenta, con DUA de exportación y sello de salida. Destino detectado por la dirección de la factura: compruébalo.`, 'arts. 3, 21 y 22 LIVA'); SII.causaExenta = 'E2 (art. 21 exportación)'; SII.clave = '02'; SII.casillas303 = 'Casilla 60 (exportaciones y asimiladas)'; if (hayIva) add('error', `Una entrega a ${F.terrExc} es una exportación exenta y no lleva IVA español.`, 'art. 21 LIVA'); }
+  } else if (esp(paisE) && esp(paisR || 'ES')) {
     op = 'interior';
     if (F.isp) { add('info', 'Operación con inversión del sujeto pasivo: el destinatario empresario liquida el IVA. La factura NO debe llevar cuota.', 'art. 84.Uno.2º LIVA'); if (hayIva) add('error', 'Menciona inversión del sujeto pasivo pero lleva cuota de IVA repercutida.', 'art. 84.Uno.2º LIVA'); SII.tipoNoExenta = 'S2 (no exenta con inversión del sujeto pasivo)'; SII.casillas303 = recib ? 'Devengo: 12-13 · Deducción: 28-29 (o 30-31 inversión)' : 'La declara el cliente; tú, base sin cuota'; }
     else if (F.exenta) { add('info', 'Operación exenta: la factura debe citar el precepto de exención y no llevar cuota.', 'arts. 20 a 25 LIVA y art. 6.1.j RD 1619/2012'); if (hayIva) add('error', 'Dice exenta pero lleva cuota de IVA.', 'arts. 20 a 25 LIVA'); SII.causaExenta = 'E1 (art. 20) / E6 (otros): elige según el artículo citado'; }
@@ -239,6 +253,7 @@ export function analizarFactura(texto, ctx = {}) {
       } else if (art === 21) {
         if (recibExt) q('ok', 'Compra a un proveedor de otro país: su exención se rige por su propia ley; aquí no hay IVA español que deducir.');
         else if (!paisR) q('aviso', 'Exportación (art. 21): no se identifica el país del cliente; exige cliente fuera de la UE y DUA de salida.');
+        else if (esp(paisR) && F.terrExc) q('ok', `Exportación a ${F.terrExc} (fuera del territorio del IVA español): correcta si hay DUA de exportación con levante y sello de salida.`);
         else if (esp(paisR)) q('error', 'Cita el art. 21 (exportación) pero el cliente es español: una venta en España no es una exportación.');
         else if (ueR) q('error', 'Cita el art. 21 (exportación) pero el cliente es de la UE: sería entrega intracomunitaria (art. 25), no exportación.');
         else q('ok', 'Exportación a cliente de fuera de la UE: correcta si hay DUA de salida con levante y sello de salida.');

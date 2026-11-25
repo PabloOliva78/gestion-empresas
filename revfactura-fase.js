@@ -2,7 +2,7 @@
 // ISP del art. 84.Uno.2º (móviles, consolas, portátiles, tablets, chips, chatarra, oro, obra), deducibilidad, registro SII con periodo y plazos,
 // albaranes, acciones (rectificativa, correo al proveedor, asiento) y preguntas abiertas. Trabaja sobre el resultado de analizarFactura() y el texto leído.
 // Todo orientativo y en el navegador; los umbrales y supuestos de ISP deben contrastarse con la norma vigente.
-import { num } from './revfactura-motor.js?v=6';
+import { num } from './revfactura-motor.js?v=7';
 
 const r2 = (x) => Math.round((x + (x < 0 ? -1e-9 : 1e-9)) * 100) / 100;
 export const fmt = (v) => Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
