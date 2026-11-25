@@ -723,12 +723,109 @@ export function crearConciliaciones(c) {
     if (t?.dataset?.audi123tipo) { const v = parseFloat(String(t.value).replace(',', '.')); if (v > 0) { lsSet('audi123tipo', v / 100); c.render(); } }
   });
 
+  // ================= IVA de importación diferido: DUA frente a la cuenta 4750.10, el libro soportado y la casilla 77 del 303 =================
+  // Solo las grandes empresas del grupo (todos sus DUA van con el IVA diferido). El DUA se contabiliza al cierre del mes en la 4750.10 (un apunte por DUA, con su número en la descripción)
+  // y se salda el último día del mes con un solo apunte; en el libro soportado el número del DUA va en el número de factura.
+  const RX_DIF = /herogra\s+fertiliz|herogra\s+especiales|hispalense/i;
+  const RXD = /\d\dES\d{6}[A-Z0-9]{8}/i;
+  const ymDe = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+  function calcIvaDif(ym) {
+    const e = empresa(), M = lib('may-mov'), R = lib('fact-R'), ej = ejNum();
+    const nDua = (s) => { const v = String(s ?? '').replace(/,/g, '.'), p = v.split('.'); const n = p.length > 2 ? +(`${p.slice(0, -1).join('')}.${p[p.length - 1]}`) : +v; return Number.isFinite(n) ? n : 0; };
+    const regs = (S.registros ?? []).filter((r) => r.tipo === 'dua' && r.empresa_id === S.sel && r.datos?.num).map((r) => r.datos);
+    const nums = regs.map((r) => String(r.num).replace(/\s/g, '').toUpperCase());
+    const numDe = (txt) => { const t = String(txt ?? '').replace(/\s/g, '').toUpperCase(); return (RXD.exec(t) || [])[0] || nums.find((n) => n && t.includes(n)) || ''; };
+    const filas = new Map(), fila = (n) => { if (!filas.has(n)) filas.set(n, { num: n, cuota: 0, abono: 0, libro: 0, otroMes: '', enReg: false }); return filas.get(n); };
+    const out = { ym, filas: [], avisos: [], sinCuenta: false };
+    // DUA cargados: cuota del IVA diferido por mes de levante
+    regs.forEach((r) => {
+      const m = /(\d\d)-(\d\d)-(\d{4})/.exec(String(r.levante || r.grab || '')), rm = m ? `${m[3]}-${m[2]}` : '';
+      const iva = r.man?.ivaDif ?? r.ivaDif, cu = r2(nDua(iva) || +((r.declarados?.B00 ?? r.calculados?.B00)?.imp) || 0), n = String(r.num).replace(/\s/g, '').toUpperCase();
+      if (rm === ym) { const f = fila(n); f.cuota = cu; f.enReg = true; }
+    });
+    // cuenta 4750.10
+    const CT = ctasEmpresa(e);
+    let saldoFin = null, cargo = 0, abTot = 0, sinNum = 0, otros = 0;
+    if (!CT.c475010 || !M) out.sinCuenta = true;
+    else {
+      const cc = calcCuenta('c475010', M), [a, b] = rngPer(ej, String(+ym.slice(5))), movs = cc.movs;
+      const ant = movs.filter((x) => x.l.ms < b); saldoFin = ant.length ? ant[ant.length - 1].saldo : 0;
+      movs.filter((x) => x.l.ms >= a && x.l.ms < b).forEach((x) => {
+        const d = +x.l.debe || 0, h = +x.l.haber || 0;
+        if (x.tipo === 'DUA' || (x.tipo !== 'S' && h > d && numDe(x.l.desc))) { const n = numDe(x.l.desc); const v = r2(h - d); abTot = r2(abTot + v); if (n) fila(n).abono = r2(fila(n).abono + v); else sinNum = r2(sinNum + v); }
+        else if (x.tipo === 'S') cargo = r2(cargo + d - h);
+        else otros = r2(otros + h - d);
+      });
+    }
+    // libro soportado: DUA, DUARED, DUALCNR y DUALCRED; el IVA diferido (77) va por la fecha de la factura y la deducción por la de registro
+    let libTot = 0, libDedSinRef = 0;
+    (R ?? []).filter((l) => /^DUA/.test(l.codigo || '') && String(l.ff || l.fecha || '').slice(0, 7) === ym).forEach((l) => {
+      const n = numDe(l.factura) || numDe(l.desc), v = +l.cuota || 0; libTot = r2(libTot + v);
+      if (n) fila(n).libro = r2(fila(n).libro + v); else libDedSinRef = r2(libDedSinRef + v);
+    });
+    // casilla 77 del 303 del mes: la calculada con los libros y la presentada
+    let c77 = null, c77p = null; const pp = ym.slice(5);
+    try { c77 = r2(calc303(lib('fact-E') ?? [], R ?? [], ej, pp).c77); } catch { c77 = null; }
+    c77p = pv(ej, '303', pp, 'adu');
+    // DUA con apunte o libro en este mes cuyo levante está en otro mes (o que no están cargados)
+    filas.forEach((f) => {
+      if (!f.enReg) { const r = regs.find((x) => String(x.num).replace(/\s/g, '').toUpperCase() === f.num); if (r) { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(String(r.levante || r.grab || '')); f.otroMes = m ? `${m[3]}-${m[2]}` : '?'; } }
+    });
+    const lista = [...filas.values()].sort((x, y) => x.num.localeCompare(y.num));
+    lista.forEach((f) => {
+      const ap = [];
+      if (!f.enReg && !f.otroMes) ap.push(['wa', 'DUA no cargado en la pestaña DUA']);
+      if (f.otroMes) ap.push(['wa', `El levante es de ${f.otroMes.slice(5)}/${f.otroMes.slice(0, 4)}`]);
+      if (f.enReg && !out.sinCuenta && Math.abs(f.abono) < 0.005) ap.push(['ko', 'Sin apunte en la 4750.10']);
+      else if (f.enReg && !out.sinCuenta && Math.abs(f.cuota - f.abono) > MARGEN) ap.push(['ko', `4750.10 distinta (${money(r2(f.abono - f.cuota))})`]);
+      if (f.enReg && R && Math.abs(f.libro) < 0.005) ap.push(['ko', 'No está en el libro soportado']);
+      else if (f.enReg && R && Math.abs(f.cuota - f.libro) > MARGEN) ap.push(['wa', `Libro distinto (${money(r2(f.libro - f.cuota))})`]);
+      f.ap = ap;
+    });
+    const tCuota = r2(lista.reduce((s, f) => s + f.cuota, 0)), tLib = r2(libTot);
+    Object.assign(out, { filas: lista, tCuota, abTot, tLib, c77, c77p, saldoFin, cargo, sinNum, otros, libDedSinRef, nReg: regs.length });
+    const ok = (a, b) => (a === null || b === null || a === undefined || b === undefined ? null : Math.abs(a - b) <= MARGEN);
+    out.chk = [
+      ['Cuota de los DUA = abonos en la 4750.10', out.sinCuenta ? null : ok(tCuota, abTot)],
+      ['Abonos en la 4750.10 = casilla 77 calculada', out.sinCuenta ? null : ok(abTot, c77)],
+      ['Casilla 77 calculada = presentada', ok(c77, c77p)],
+      ['Saldado el último día = abonos del mes', out.sinCuenta ? null : ok(cargo, abTot)],
+      ['Saldo de la 4750.10 a fin de mes = 0', saldoFin === null ? null : ok(saldoFin, 0)],
+    ];
+    if (sinNum) out.avisos.push(`Hay abonos en la 4750.10 por ${money(sinNum)} sin número de DUA en la descripción.`);
+    if (libDedSinRef) out.avisos.push(`Hay líneas DUA del libro soportado por ${money(libDedSinRef)} sin número de DUA en el número de factura.`);
+    if (!regs.length) out.avisos.push('No hay DUA cargados para esta empresa (pestaña DUA-H1).');
+    if (out.sinCuenta) out.avisos.push(!M ? 'Falta cargar el mayor para comparar con la 4750.10.' : 'Esta empresa no tiene la cuenta 4750.10 configurada.');
+    if (!R) out.avisos.push('Falta cargar el libro de IVA soportado.');
+    return out;
+  }
+  function vistaIvaDif() {
+    if (!S.sel) return sinEmpresa;
+    if (!RX_DIF.test(empresa()?.nombre ?? '')) return '<p class="vacio">El IVA de importación diferido solo aplica a Herogra Fertilizantes, Herogra Especiales e Hispalense, donde todos los DUA van con el IVA diferido.</p>';
+    const ej = ejNum(), meses = Array.from({ length: 12 }, (_, i) => `${ej}-${String(i + 1).padStart(2, '0')}`);
+    let ym = lsGet('ivadifm', ''); if (!meses.includes(ym)) ym = /^\d\d$/.test(S.periodo ?? '') ? `${ej}-${S.periodo}` : `${ej}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const X = calcIvaDif(ym);
+    const pil = (cls, t) => `<span style="font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap;background:${cls === 'ok' ? '#e6f4ea' : cls === 'ko' ? '#fce8e6' : '#fef7e0'};color:${cls === 'ok' ? '#137333' : cls === 'ko' ? '#a50e0e' : '#8a5a00'}">${esc(t)}</span>`;
+    const k = (t, v, s, rojo) => `<div style="background:#f3f5fa;border-radius:8px;padding:10px 12px"><div style="font-size:12px;color:#5b6475">${t}</div><div style="font-size:20px;font-weight:600;margin-top:2px;${rojo ? 'color:#b3261e' : ''}">${v}</div>${s ? `<div style="font-size:12px;color:#5b6475">${s}</div>` : ''}</div>`;
+    const n0 = (v) => (v === null || v === undefined ? '—' : money(v));
+    const sd = X.saldoFin;
+    const cab = `<div class="bar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b>Mes</b> <select data-ivadifm="1">${meses.map((m) => `<option value="${m}"${m === ym ? ' selected' : ''}>${MESES[+m.slice(5) - 1]} ${m.slice(0, 4)}</option>`).join('')}</select></div>`;
+    const kpis = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(13em,1fr));gap:10px;margin-bottom:12px">${k('Cuota IVA de los DUA', n0(X.tCuota), `${X.filas.filter((f) => f.enReg).length} DUA con levante en el mes`)}${k('Abonos 4750.10', X.sinCuenta ? '—' : n0(X.abTot), 'DUA contabilizados al cierre')}${k('Casilla 77 del 303', n0(X.c77), X.c77p === null ? 'sin presentado' : `presentada: ${money(X.c77p)}`)}${k('Saldo 4750.10 a fin de mes', n0(sd), 'debería ser 0', sd !== null && Math.abs(sd) > MARGEN)}</div>`;
+    const filas = X.filas.map((f) => `<tr><td>${esc(f.num)}</td><td class="num">${n0(f.enReg ? f.cuota : null)}</td><td class="num">${X.sinCuenta ? '—' : n0(f.abono)}</td><td class="num">${X.tLib === 0 && !f.libro ? '—' : n0(f.libro)}</td><td>${f.ap.length ? f.ap.map(([c, t]) => pil(c, t)).join(' ') : pil('ok', 'Cuadra')}</td></tr>`).join('');
+    const tabla = `<div class="wrap"><table class="tprs tnom il-t" style="width:100%"><thead><tr><th>DUA</th><th>Cuota DUA</th><th>Abono 4750.10</th><th>Libro soportado</th><th>Estado</th></tr></thead><tbody>${filas || '<tr><td colspan="5">Ningún DUA en este mes.</td></tr>'}<tr class="ttot"><td><b>Total</b></td><td class="num"><b>${n0(X.tCuota)}</b></td><td class="num"><b>${X.sinCuenta ? '—' : n0(X.abTot)}</b></td><td class="num"><b>${n0(X.tLib)}</b></td><td></td></tr></tbody></table></div>`;
+    const chk = `<div style="margin-top:10px;line-height:1.9">${X.chk.map(([t, v]) => `${esc(t)} ${v === null ? pil('wa', 'sin datos') : v ? pil('ok', 'sí') : pil('ko', 'no')}`).join('<br>')}<br>Cargo del último día del mes: <b>${X.sinCuenta ? '—' : money(X.cargo)}</b></div>`;
+    return `<section class="dsec"><h3>IVA de importación diferido · ${esc(empresa().nombre)}</h3>${cab}${kpis}${tabla}${chk}${X.avisos.length ? bloqueAvisos(X.avisos) : ''}
+      <p class="hint">Todos los DUA de esta empresa van con el IVA diferido. El DUA se abona en la 4750.10 al cierre del mes (el número va en la descripción) y se salda el último día del mes. En el libro soportado el número del DUA va en el número de factura; el IVA diferido (77) cuenta por la fecha de la factura. La cuota de cada DUA es la que se lee del PDF en la pestaña DUA-H1.</p></section>`;
+  }
+  document.addEventListener('change', (ev) => { const t = ev.target; if (t?.dataset?.ivadifm) { lsSet('ivadifm', t.value); c.render(); } });
+
   const pendiente = (t) => `<p class="vacio">${t}: esta pestaña de la aplicación antigua todavía no está portada.</p>`;
   const tabs = {
     au111: ['Conciliación 111', 'Mod. 111 vs contabilidad', () => vistaAudi('111')],
     au115: ['Conciliación 115', 'Mod. 115 vs contabilidad', () => vistaAudi('115')],
     au123: ['Conciliación 123', 'Mod. 123 vs contabilidad', () => vistaAudi('123')],
     au303: ['Conciliación 303', 'SII vs contabilidad', () => vistaAudi303()],
+    ivadif: ['IVA importaci?n diferido', 'DUA ? 4750.10 ? libro ? casilla 77', () => vistaIvaDif()],
     conc: ['Conciliación Cuentas - Impuestos', 'Saldo frente a impuesto', () => vistaConc()],
     // una sola pestaña (en Administración) con las tres tablas de las que se emiten certificados
     certret: ['Certificado retenciones', 'Profesionales · alquileres · intereses y dividendos', () => { if (!S.sel) return sinEmpresa; if (!lib('fact-R')) return cargandoTxt; return ['rprof', 'ralq', 'rint'].map(vistaRetRes).join(''); }],
