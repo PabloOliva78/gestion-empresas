@@ -60,7 +60,7 @@ export function crearDetector({ S, esc, render, empresa, grande }) {
       if (l.ff && l.fecha && l.ff !== l.fecha) {
         const dd = (new Date(l.fecha) - new Date(l.ff)) / 86400000;
         if (dd < -31) add('Factura posterior al registro', 'aviso', l, `Fecha de la factura ${fd(l.ff)}, registrada el ${fd(l.fecha)}.`);
-        else if (dd > 366) add('Registro muy posterior', 'aviso', l, `Fecha de la factura ${fd(l.ff)}, registrada el ${fd(l.fecha)} (más de un año de diferencia).`);
+        else if (dd > 1461) add('Registro muy posterior', 'aviso', l, `Fecha de la factura ${fd(l.ff)}, registrada el ${fd(l.fecha)} (más de 4 años: el derecho a deducir puede haber caducado).`);
       }
       // 6) línea repetida: misma factura, NIF, importes, tipo y código
       const k = [nifN(l.nif), facN(l.factura), r2(base), r2(cuota), pct, cod].join('|');
