@@ -101,14 +101,19 @@ export function crearControlesIva({ S, db, esc, render, empresa, puede, grande, 
   const dias = (a, b) => Math.floor((new Date(b) - new Date(a)) / 86400000);
   function calcDev(x, tipo) {
     const ini = x.ini || x.solic || '', venc = ini ? sumaMeses(ini, 6) : '', fin = x.estado === 'Cobrada' ? (x.cobro || hoy()) : hoy();
-    const retraso = venc && x.estado !== 'Denegada' ? Math.max(0, dias(venc, fin)) : 0, imp = num(x.imp);
+    // Si la AEAT está revisando (requerimiento, comprobación), los días de suspensión no cuentan para los intereses de demora
+    let susp = 0;
+    if (venc && x.sd) { const a = x.sd > venc ? x.sd : venc, b = x.sh && x.sh < fin ? x.sh : fin; susp = Math.max(0, dias(a, b)); }
+    const retraso = venc && x.estado !== 'Denegada' ? Math.max(0, dias(venc, fin) - susp) : 0, imp = num(x.imp);
     const interes = r2(imp * (tipo / 100) * retraso / 365);
     let est;
     if (x.estado === 'Denegada') est = ['nd', 'Denegada'];
     else if (!ini) est = ['nd', 'Falta la fecha de inicio del plazo'];
     else if (x.estado === 'Cobrada') est = retraso > 0 ? ['aviso', `Cobrada con ${retraso} días de retraso: reclamar intereses`] : ['ok', 'Cobrada en plazo'];
     else est = retraso > 0 ? ['ko', `Plazo vencido hace ${retraso} días: reclamar intereses`] : ['nd', `Dentro de plazo (${-dias(venc, hoy())} días)`];
-    return { venc, retraso, interes, est };
+    if (susp > 0 && est[0] !== 'nd') est = [est[0], `${est[1]} (descontados ${susp} días de suspensión)`];
+    else if (x.sd && !x.sh && x.estado === 'Pendiente') est = ['aviso', `Intereses detenidos desde ${x.sd}: la AEAT está revisando`];
+    return { venc, retraso, interes, est, susp };
   }
   function sugerenciasDev() {
     const ej = Number(S.ejercicio), e = empresa(), per = e?.tipo === 'GE' ? '12' : '4T', out = [], ya = new Set(itemsDev().map((x) => x.concepto));
@@ -126,14 +131,14 @@ export function crearControlesIva({ S, db, esc, render, empresa, puede, grande, 
     const c = items.map((x) => ({ x, k: calcDev(x, tipo) }));
     const venc = c.filter((y) => y.k.est[0] === 'ko').length, pend = r2(c.filter((y) => y.x.estado === 'Pendiente').reduce((s, y) => s + num(y.x.imp), 0));
     const campo = (i, f, v, tp = 'text', ancho = '') => (ed ? `<input data-dv="${f}" data-i="${i}" type="${tp}" value="${esc(v ?? '')}" style="${ancho}">` : esc(v ?? ''));
-    const filas = c.map(({ x, k }, i) => `<tr><td>${campo(i, 'concepto', x.concepto, 'text', 'min-width:11rem')}</td><td>${campo(i, 'imp', x.imp, 'text', 'width:7rem;text-align:right')}</td><td>${campo(i, 'solic', x.solic, 'date')}</td><td>${campo(i, 'ini', x.ini, 'date')}</td>
+    const filas = c.map(({ x, k }, i) => `<tr><td>${campo(i, 'concepto', x.concepto, 'text', 'min-width:11rem')}</td><td>${campo(i, 'imp', x.imp, 'text', 'width:7rem;text-align:right')}</td><td>${campo(i, 'solic', x.solic, 'date')}</td><td>${campo(i, 'ini', x.ini, 'date')}</td><td>${campo(i, 'sd', x.sd, 'date')}</td><td>${campo(i, 'sh', x.sh, 'date')}</td>
       <td>${ed ? `<select data-dv="estado" data-i="${i}">${['Pendiente', 'Cobrada', 'Denegada'].map((o) => `<option${o === x.estado ? ' selected' : ''}>${o}</option>`).join('')}</select>` : esc(x.estado)}</td><td>${campo(i, 'cobro', x.cobro, 'date')}</td>
       <td>${esc(fd(k.venc)) || '—'}</td><td style="text-align:right">${k.retraso || ''}</td><td style="text-align:right">${k.interes ? money(k.interes) : ''}</td><td>${ins(k.est[0], k.est[1])}</td>${ed ? `<td><button class="small danger" data-act="m-devdel" data-i="${i}">Quitar</button></td>` : ''}</tr>`).join('');
     return caja(tit, intro, `<p class="dash-s">${venc ? `<span class="d-ko">${venc} devolución(es) con el plazo vencido</span> · ` : ''}Pendiente de cobro: <b>${money(pend)}</b> · ${items.length} devolución(es)</p>
       ${sug.length && ed ? `<p class="dash-s">Sugerencias según lo presentado: ${sug.map((s, i) => `<button class="small" data-act="m-devsug" data-i="${i}">Añadir ${esc(s.concepto)} (${s.imp} €)</button>`).join(' ')}</p>` : ''}
       ${ed ? '<p><button class="btn" data-act="m-devadd">Añadir devolución</button></p>' : ''}
-      ${items.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Concepto</th><th>Importe solicitado</th><th>Fecha de solicitud</th><th>Inicio del plazo de 6 meses</th><th>Estado</th><th>Fecha de cobro</th><th>Vence</th><th>Días de retraso</th><th>Intereses orientativos</th><th>Situación</th>${ed ? '<th></th>' : ''}</tr></thead><tbody>${filas}</tbody></table></div>` : '<p class="vacio">Todavía no hay devoluciones anotadas.</p>'}
-      <p class="dash-s">Tipo de interés de demora (%): ${ed ? `<input data-dv="tipo" value="${esc(String(tipo).replace('.', ','))}" style="width:5rem;text-align:right">` : esc(String(tipo))} <span class="hint">Orientativo: pon el tipo vigente (el último que conozco es 4,0625 %). El plazo de seis meses se cuenta desde el final del plazo de presentación de la declaración, o desde que se presentó si fue después: escribe esa fecha en «Inicio del plazo»; si la dejas vacía se usa la fecha de solicitud.</span></p>`);
+      ${items.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Concepto</th><th>Importe solicitado</th><th>Fecha de solicitud</th><th>Inicio del plazo de 6 meses</th><th>Revisión AEAT: desde</th><th>Revisión AEAT: hasta</th><th>Estado</th><th>Fecha de cobro</th><th>Vence</th><th>Días de retraso</th><th>Intereses orientativos</th><th>Situación</th>${ed ? '<th></th>' : ''}</tr></thead><tbody>${filas}</tbody></table></div>` : '<p class="vacio">Todavía no hay devoluciones anotadas.</p>'}
+      <p class="dash-s">Tipo de interés de demora (%): ${ed ? `<input data-dv="tipo" value="${esc(String(tipo).replace('.', ','))}" style="width:5rem;text-align:right">` : esc(String(tipo))} <span class="hint">Orientativo: pon el tipo vigente (el último que conozco es 4,0625 %). El plazo de seis meses se cuenta desde el final del plazo de presentación de la declaración, o desde que se presentó si fue después: escribe esa fecha en «Inicio del plazo»; si la dejas vacía se usa la fecha de solicitud. Si la AEAT te está revisando (requerimiento o comprobación), pon en «Revisión AEAT» desde cuándo y hasta cuándo: esos días se descuentan de los intereses; si la dejas sin «hasta», se cuenta como que sigue abierta.</span></p>`);
   }
   // Un campo de fecha lanza «change» en cuanto lo escrito a mano es una fecha válida (p. ej. al teclear el año): guardar y repintar entonces borraba lo que se estaba escribiendo. Mientras tenga el foco se espera a que salga del campo
   const guardaDev = (t) => {
@@ -175,9 +180,9 @@ export function crearControlesIva({ S, db, esc, render, empresa, puede, grande, 
     acciones: {
       'm-cbrev': (d) => { guardarReg('camblib', S.sel, (x) => { const e = x.e?.[Number(d.i)]; if (e) e.rev = !e.rev; }).then(() => render()); },
       'm-pdmeses': (d) => { mesesAviso = Number(d.n) || 6; render(); },
-      'm-devadd': () => { guardarReg('devol', S.sel, (x) => { (x.items ??= []).push({ concepto: '', imp: '', solic: '', ini: '', estado: 'Pendiente', cobro: '' }); }).then(() => render()); },
+      'm-devadd': () => { guardarReg('devol', S.sel, (x) => { (x.items ??= []).push({ concepto: '', imp: '', solic: '', ini: '', sd: '', sh: '', estado: 'Pendiente', cobro: '' }); }).then(() => render()); },
       'm-devdel': (d) => { if (!confirm('¿Quitar esta devolución del seguimiento?')) return; guardarReg('devol', S.sel, (x) => { x.items = (x.items ?? []).filter((_, j) => j !== Number(d.i)); }).then(() => render()); },
-      'm-devsug': (d) => { const s = sugerenciasDev()[Number(d.i)]; if (!s) return; guardarReg('devol', S.sel, (x) => { (x.items ??= []).push({ concepto: s.concepto, imp: s.imp, solic: '', ini: '', estado: 'Pendiente', cobro: '' }); }).then(() => render()); },
+      'm-devsug': (d) => { const s = sugerenciasDev()[Number(d.i)]; if (!s) return; guardarReg('devol', S.sel, (x) => { (x.items ??= []).push({ concepto: s.concepto, imp: s.imp, solic: '', ini: '', sd: '', sh: '', estado: 'Pendiente', cobro: '' }); }).then(() => render()); },
     },
     registrarCambios,
     _t: { calcDev, periodoDe },
