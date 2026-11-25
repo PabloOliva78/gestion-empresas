@@ -135,14 +135,16 @@ export function crearControlesIva({ S, db, esc, render, empresa, puede, grande, 
       ${items.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Concepto</th><th>Importe solicitado</th><th>Fecha de solicitud</th><th>Inicio del plazo de 6 meses</th><th>Estado</th><th>Fecha de cobro</th><th>Vence</th><th>Días de retraso</th><th>Intereses orientativos</th><th>Situación</th>${ed ? '<th></th>' : ''}</tr></thead><tbody>${filas}</tbody></table></div>` : '<p class="vacio">Todavía no hay devoluciones anotadas.</p>'}
       <p class="dash-s">Tipo de interés de demora (%): ${ed ? `<input data-dv="tipo" value="${esc(String(tipo).replace('.', ','))}" style="width:5rem;text-align:right">` : esc(String(tipo))} <span class="hint">Orientativo: pon el tipo vigente (el último que conozco es 4,0625 %). El plazo de seis meses se cuenta desde el final del plazo de presentación de la declaración, o desde que se presentó si fue después: escribe esa fecha en «Inicio del plazo»; si la dejas vacía se usa la fecha de solicitud.</span></p>`);
   }
-  document.addEventListener('change', (ev) => {
-    const t = ev.target; if (!t?.dataset?.dv) return;
+  // Un campo de fecha lanza «change» en cuanto lo escrito a mano es una fecha válida (p. ej. al teclear el año): guardar y repintar entonces borraba lo que se estaba escribiendo. Mientras tenga el foco se espera a que salga del campo
+  const guardaDev = (t) => {
     const f = t.dataset.dv, i = Number(t.dataset.i);
     guardarReg('devol', S.sel, (d) => {
       if (f === 'tipo') { d.tipo = num(t.value) || TIPO_DEMORA; return; }
       d.items ??= []; if (d.items[i]) d.items[i][f] = t.value;
     }).then((err) => { if (err) alert(`No se ha podido guardar: ${err}`); render(); });
-  });
+  };
+  document.addEventListener('change', (ev) => { const t = ev.target; if (!t?.dataset?.dv) return; if (t.type === 'date' && document.activeElement === t) return; guardaDev(t); });
+  document.addEventListener('focusout', (ev) => { const t = ev.target; if (t?.dataset?.dv && t.type === 'date' && t.value !== String(itemsDev()[Number(t.dataset.i)]?.[t.dataset.dv] ?? '')) guardaDev(t); });
 
   // =====================================================================================
   // 21 · Facturas simplificadas
