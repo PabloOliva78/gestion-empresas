@@ -128,6 +128,7 @@ export function analizarFactura(texto, ctx = {}) {
   const terrExc = (() => {
     if (!receptor || esMia(receptor)) return '';
     const v = T.slice(Math.max(0, receptor.pos - 150), receptor.pos + 450);
+    if (/\bESX\b|Espa[ñn]a\s*[-–]\s*Canarias/i.test(v)) return 'Canarias';
     if (/\bCeuta\b/i.test(v)) return 'Ceuta';
     if (/\bMelilla\b/i.test(v)) return 'Melilla';
     if (/\b(Las\s+Palmas|Gran\s+Canaria|Tenerife|Lanzarote|Fuerteventura|La\s+Gomera|El\s+Hierro|La\s+Palma|Canarias)\b/i.test(v)) return 'Canarias';
