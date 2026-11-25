@@ -1643,3 +1643,6 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .exp-pop .exp-bt { display: flex; gap: 6px; justify-content: flex-end; }
 .exp-pop .exp-err { color: var(--danger, #c62828); }
 @media print { .exp-b:not(.on) { display: none; } .exp-pop { display: none; } }
+
+/* DUA: encabezados en crema */
+.dsec table.dua-t.dua-fix thead th { background: #fbf3dc !important; color: #4a3d1a; }

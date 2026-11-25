@@ -1,5 +1,5 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=535';
+﻿import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { crearModulos } from './modulos.js?v=536';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -11,7 +11,7 @@ import { crearExplicaciones } from './explicaciones.js?v=2';
 import { activarSubrayadoManual } from './subrayadoman.js?v=5';
 import { activarExportar, activarAvisoSesion } from './herramientas.js?v=6';
 
-// La sesión vive solo en la pestaña (sessionStorage): al abrir una nueva sesión del navegador vuelve a pedir usuario y contraseña
+// La sesiÃ³n vive solo en la pestaÃ±a (sessionStorage): al abrir una nueva sesiÃ³n del navegador vuelve a pedir usuario y contraseÃ±a
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true } });
 // ...y se cierra tras 10 minutos sin tocar nada
 const INACTIVIDAD_MS = 10 * 60 * 1000;
@@ -33,24 +33,24 @@ const S = {
   perfil: null, empresas: [], obligaciones: [], conciliaciones: [], registros: [], usuarios: [], asign: [],
   tab: 'ini', filtro: { area: '', estado: '' },
   ejercicio: new Date().getFullYear(), periodo: '', // periodo '' = todo el ejercicio
-  sel: '', menu: false, grp: -1, cargando: false, // empresa elegida ('' = todas) y grupo de pestañas abierto
+  sel: '', menu: false, grp: -1, cargando: false, // empresa elegida ('' = todas) y grupo de pestaÃ±as abierto
 };
 let uidActual = null;
-S.zooms = (() => { try { return JSON.parse(localStorage.getItem('zoom-pestanas') || '{}') || {}; } catch { return {}; } })(); // tamaño de cada pestaña y de sus tablas
-// «Ajustar a pantalla» por pestaña: 'ancho' (que quepa en ancho) o 'pantalla' (en ancho y alto, sin barras); se recalcula al abrir la pestaña, al cargar datos y al cambiar el tamaño de la ventana
+S.zooms = (() => { try { return JSON.parse(localStorage.getItem('zoom-pestanas') || '{}') || {}; } catch { return {}; } })(); // tamaÃ±o de cada pestaÃ±a y de sus tablas
+// Â«Ajustar a pantallaÂ» por pestaÃ±a: 'ancho' (que quepa en ancho) o 'pantalla' (en ancho y alto, sin barras); se recalcula al abrir la pestaÃ±a, al cargar datos y al cambiar el tamaÃ±o de la ventana
 S.ajustes = (() => { try { return JSON.parse(localStorage.getItem('zoom-ajuste') || '{}') || {}; } catch { return {}; } })();
-S.zAuto = {}; // último zoom calculado para cada pestaña con ajuste (para que no parpadee al redibujar)
+S.zAuto = {}; // Ãºltimo zoom calculado para cada pestaÃ±a con ajuste (para que no parpadee al redibujar)
 const zoomDe = () => (S.ajustes[S.tab] && S.zAuto[S.tab] ? S.zAuto[S.tab] : Math.min(2, Math.max(0.5, Number(S.zooms[S.tab]) || 1)));
-// ancho y tamaño del texto de los formularios de los modelos (111, 115, 303, 349, 583…), de cada pestaña
+// ancho y tamaÃ±o del texto de los formularios de los modelos (111, 115, 303, 349, 583â€¦), de cada pestaÃ±a
 S.formas = (() => { try { return JSON.parse(localStorage.getItem('forma-modelos') || '{}') || {}; } catch { return {}; } })();
 const formaDe = () => {
-  const f = S.formas[S.tab] ?? {}, c = (k) => (Number(f[k]) > 0 ? Math.round(Number(f[k])) : undefined); // c1, c2, c3: ancho de las columnas de casillas (arrastrando el borde con el ratón)
+  const f = S.formas[S.tab] ?? {}, c = (k) => (Number(f[k]) > 0 ? Math.round(Number(f[k])) : undefined); // c1, c2, c3: ancho de las columnas de casillas (arrastrando el borde con el ratÃ³n)
   return { w: Math.min(2600, Math.max(500, Number(f.w) || 1200)), t: Math.min(2, Math.max(0.6, Number(f.t) || 1)), c1: c('c1'), c2: c('c2'), c3: c('c3') };
 };
 const formaVars = () => { const f = formaDe(); return `--f-w:${f.w}px;--f-t:${f.t}${[1, 2, 3].map((n) => (f[`c${n}`] ? `;--fc${n}:${f[`c${n}`]}px` : '')).join('')}`; };
 activarRedimension(root, () => S.tab);
-activarExportar(); activarAvisoSesion(INACTIVIDAD_MS); // herramientas del armazón: exportar la pestaña abierta y aviso de sesión a punto de caducar
-activarAlineacion(root); activarImprimir(root); activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratón
+activarExportar(); activarAvisoSesion(INACTIVIDAD_MS); // herramientas del armazÃ³n: exportar la pestaÃ±a abierta y aviso de sesiÃ³n a punto de caducar
+activarAlineacion(root); activarImprimir(root); activarCajas(root, () => S.tab); // ancho de los cuadros blancos de cada apartado, arrastrando su borde derecho // columnas de todas las tablas redimensionables con el ratÃ³n
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -58,7 +58,7 @@ const puedeEditar = () => ['admin', 'gestor'].includes(S.perfil?.rol);
 const esAdmin = () => S.perfil?.rol === 'admin';
 const hoy = () => new Date().toISOString().slice(0, 10);
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '');
-const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? '—';
+const empNombre = (id) => S.empresas.find((e) => e.id === id)?.nombre ?? 'â€”';
 // Logos en logos/<CIF>.jpg; si no existe el archivo, la imagen se oculta.
 const logoHtml = (e, cls = 'logo') => (e?.datos?.logo
   ? `<img class="${cls}" src="${esc(e.datos.logo)}" alt="">` : e?.cif
@@ -66,20 +66,20 @@ const logoHtml = (e, cls = 'logo') => (e?.datos?.logo
 
 // Orden y nombre con que se muestran las empresas en el desplegable (se reconocen por el nombre guardado)
 const ORDEN_EMP = [['HEROGRA FERTILIZANTES S.A.', /herogra\s+fertiliz/i], ['HEROGRA ESPECIALES', /herogra\s+especiales/i], ['HISPALENSE DE LIQUIDOS S.L', /hispalense/i],
-  ['MAXLOGTRANS S.L.', /maxlogtrans/i], ['LYS DEL SUR S.L.', /lys\s*del\s*sur|lysur/i], ['GESUFER S.L.', /gesufer|gesti[oó]n unificada/i], ['FERTINOVA S.L.', /fertinova/i],
+  ['MAXLOGTRANS S.L.', /maxlogtrans/i], ['LYS DEL SUR S.L.', /lys\s*del\s*sur|lysur/i], ['GESUFER S.L.', /gesufer|gesti[oÃ³]n unificada/i], ['FERTINOVA S.L.', /fertinova/i],
   ['PRODUFER S.L.', /produfer/i], ['FERTICRONOS S.L.', /ferticronos/i], ['TECNOPLUS SOLUBLES S.L.', /tecnoplus/i], ['BISAR AGROINNOVATION S.L.', /bisar/i],
-  ['MOTRILEÑA DE LIQUIDOS S.L.', /motrile/i], ['FARM CHEMICALS FGA S.L.', /farm\s*chemicals/i], ['PASEO DE CENES S.L.', /paseo|cenes/i]];
-// si el nombre guardado no encaja con el patrón, se reconoce por la sigla (mismo orden que ORDEN_EMP)
+  ['MOTRILEÃ‘A DE LIQUIDOS S.L.', /motrile/i], ['FARM CHEMICALS FGA S.L.', /farm\s*chemicals/i], ['PASEO DE CENES S.L.', /paseo|cenes/i]];
+// si el nombre guardado no encaja con el patrÃ³n, se reconoce por la sigla (mismo orden que ORDEN_EMP)
 const ORDEN_SIG = ['HER', 'ESP', 'HIS', 'MAX', 'LYS', 'GRU', 'FER', 'PDF', 'FTC', 'TCP', 'BSR', 'MOT', 'FCH', 'PAS'];
 const idxEmp = (e) => { const i = ORDEN_EMP.findIndex(([, re]) => re.test(e?.nombre ?? '')); return i >= 0 ? i : ORDEN_SIG.indexOf(String(e?.siglas ?? '').toUpperCase()); };
 const etiquetaEmp = (e) => { const i = idxEmp(e); return i < 0 ? e.nombre : `${i + 1}.- ${ORDEN_EMP[i][0]}`; };
-const nombreEmp = (e) => { const i = idxEmp(e); return i < 0 ? (e?.nombre ?? '') : ORDEN_EMP[i][0]; }; // nombre de la empresa tal como se ve en la aplicación (sin el número)
+const nombreEmp = (e) => { const i = idxEmp(e); return i < 0 ? (e?.nombre ?? '') : ORDEN_EMP[i][0]; }; // nombre de la empresa tal como se ve en la aplicaciÃ³n (sin el nÃºmero)
 
 function empresaSelector() {
   const e = S.empresas.find((x) => x.id === S.sel);
   const lista = [...S.empresas].sort((a, b) => (idxEmp(a) < 0 ? 99 : idxEmp(a)) - (idxEmp(b) < 0 ? 99 : idxEmp(b)));
   const item = (x) => `<button class="sel-op${x?.id === S.sel || (!x && !S.sel) ? ' on' : ''}" data-sel="${x ? x.id : ''}"><span><b>${esc(x ? etiquetaEmp(x) : 'Todas las empresas')}</b></span></button>`;
-  return `<div class="sel"><button class="sel-btn" data-act="menu"><span>${esc(e ? etiquetaEmp(e) : 'Todas las empresas')}</span> ▾</button>
+  return `<div class="sel"><button class="sel-btn" data-act="menu"><span>${esc(e ? etiquetaEmp(e) : 'Todas las empresas')}</span> â–¾</button>
     ${S.menu ? `<div class="sel-menu">${item(null)}${lista.map(item).join('')}</div>` : ''}</div>`;
 }
 
@@ -87,9 +87,9 @@ const opts = (obj, sel) => Object.entries(obj)
   .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
 
 // ---------- Datos ----------
-// La base devuelve como mucho 1.000 filas por consulta: los registros se piden por tandas (ordenados por id) hasta traerlos todos; si no, lo último que se guarda puede no aparecer
+// La base devuelve como mucho 1.000 filas por consulta: los registros se piden por tandas (ordenados por id) hasta traerlos todos; si no, lo Ãºltimo que se guarda puede no aparecer
 const baseRegistros = (cols) => db.from('registros').select(cols).not('tipo', 'in', '(fact-E,fact-R,fact-prov,fact-cli,fact-tprov,sii-E,sii-R,may-mov,m592-mov,a22src,intra)').not('tipo', 'like', 'sii-raw-%');
-// Incremental: solo se bajan los registros nuevos o modificados (cacheregistros.js); si la caché falla se cargan todos como antes
+// Incremental: solo se bajan los registros nuevos o modificados (cacheregistros.js); si la cachÃ© falla se cargan todos como antes
 const pedirRegistros = () => cargarRegistros(uidActual, baseRegistros, pedirRegistrosTodos);
 async function pedirRegistrosTodos() {
   const out = [];
@@ -108,7 +108,7 @@ async function cargar() {
     db.from('empresas').select('*').order('nombre'),
     db.from('obligaciones').select('*').order('vencimiento', { nullsFirst: false }),
     db.from('conciliaciones').select('*'),
-    // las facturas (libros de IVA y SII) pesan mucho: se piden aparte, solo al abrir su pestaña
+    // las facturas (libros de IVA y SII) pesan mucho: se piden aparte, solo al abrir su pestaÃ±a
     pedirRegistros(),
   ]);
   S.empresas = e.data ?? [];
@@ -134,7 +134,7 @@ async function run(promesa) {
   return true;
 }
 
-// ---------- Arranque / sesión ----------
+// ---------- Arranque / sesiÃ³n ----------
 async function boot() {
   const { data: { session } } = await db.auth.getSession();
   uidActual = session?.user?.id ?? null;
@@ -143,7 +143,7 @@ async function boot() {
   if (error || !perfil) return renderLogin('No se pudo cargar el perfil.');
   S.perfil = perfil;
   if (!perfil.activo) return renderPendiente();
-  S.cargando = true; render(); // se enseña ya la pantalla y los datos llegan después
+  S.cargando = true; render(); // se enseÃ±a ya la pantalla y los datos llegan despuÃ©s
   await cargar();
   if (!S.sel) S.sel = S.empresas.find((e) => /herogra\s+fertiliz/i.test(e.nombre ?? ''))?.id ?? ''; // al arrancar, siempre Herogra Fertilizantes
   S.cargando = false; render();
@@ -153,18 +153,18 @@ async function boot() {
 db.auth.onAuthStateChange((ev, session) => {
   const uid = session?.user?.id ?? null;
   if (ev === 'SIGNED_IN' && uid) { try { const u = localStorage.getItem('cache-uid'); if (u && u !== uid) limpiarCache(); localStorage.setItem('cache-uid', uid); } catch { /* sin almacenamiento */ } } // otro usuario: se borra lo guardado del anterior
-  if (ev === 'SIGNED_OUT' || (ev === 'SIGNED_IN' && uid !== uidActual)) { M.limpiarAvisoD365?.(true); setTimeout(boot, 0); } // sesión nueva: sin avisos de la anterior
+  if (ev === 'SIGNED_OUT' || (ev === 'SIGNED_IN' && uid !== uidActual)) { M.limpiarAvisoD365?.(true); setTimeout(boot, 0); } // sesiÃ³n nueva: sin avisos de la anterior
 });
 
 // ---------- Pantallas ----------
-// el correo se recuerda en este equipo; la contraseña nunca (y la sesión vive solo en la pestaña: cada pestaña nueva la pide)
+// el correo se recuerda en este equipo; la contraseÃ±a nunca (y la sesiÃ³n vive solo en la pestaÃ±a: cada pestaÃ±a nueva la pide)
 const correoGuardado = () => { try { return localStorage.getItem('login-correo') || ''; } catch { return ''; } };
 function renderLogin(msg = '') {
   root.innerHTML = `<main class="login"><form id="f" class="card">
-    <img class="login-logo" src="logos/po-asesoria.svg?v=1" alt="Asesoría PO">
-    <h1>Gestión fiscal, contable y laboral</h1>
+    <img class="login-logo" src="logos/po-asesoria.svg?v=1" alt="AsesorÃ­a PO">
+    <h1>GestiÃ³n fiscal, contable y laboral</h1>
     <label>Correo<input name="email" type="email" required autocomplete="username" value="${esc(correoGuardado())}"></label>
-    <label>Contraseña<input name="password" type="password" required autocomplete="current-password" data-lpignore="true" data-1p-ignore="true"></label>
+    <label>ContraseÃ±a<input name="password" type="password" required autocomplete="current-password" data-lpignore="true" data-1p-ignore="true"></label>
     <p class="err" id="msg">${esc(msg)}</p>
     <button class="primary">Entrar</button>
     <button type="button" id="reg" class="link">Solicitar acceso (crear cuenta)</button>
@@ -175,75 +175,75 @@ function renderLogin(msg = '') {
     ev.preventDefault();
     m.textContent = ''; let error = null;
     try { ({ error } = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value })); } catch (e) { error = e; }
-    // solo «incorrectos» si Supabase contesta que los datos no valen; un fallo de red, un límite de intentos o un error del servidor se dicen tal cual
-    if (error) m.textContent = error.status === 400 || /invalid login credentials/i.test(error.message || '') ? 'Correo o contraseña incorrectos.' : error.status === 429 ? 'Demasiados intentos seguidos: espera unos minutos y vuelve a probar.' : `No se pudo conectar con el servidor (${error.message || 'sin respuesta'}). Revisa la conexión y prueba de nuevo.`;
+    // solo Â«incorrectosÂ» si Supabase contesta que los datos no valen; un fallo de red, un lÃ­mite de intentos o un error del servidor se dicen tal cual
+    if (error) m.textContent = error.status === 400 || /invalid login credentials/i.test(error.message || '') ? 'Correo o contraseÃ±a incorrectos.' : error.status === 429 ? 'Demasiados intentos seguidos: espera unos minutos y vuelve a probar.' : `No se pudo conectar con el servidor (${error.message || 'sin respuesta'}). Revisa la conexiÃ³n y prueba de nuevo.`;
     else { try { localStorage.setItem('login-correo', f.email.value.trim()); } catch { /* sin almacenamiento */ } }
   };
   if (f.email.value) f.password.focus(); else f.email.focus();
   root.querySelector('#reg').onclick = async () => {
     if (!f.reportValidity()) return;
-    if (f.password.value.length < 8) { m.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
+    if (f.password.value.length < 8) { m.textContent = 'La contraseÃ±a debe tener al menos 8 caracteres.'; return; }
     const { error } = await db.auth.signUp({ email: f.email.value, password: f.password.value });
     m.textContent = error ? error.message
-      : 'Cuenta creada. Un administrador debe activarla (revise su correo si se pide confirmación).';
+      : 'Cuenta creada. Un administrador debe activarla (revise su correo si se pide confirmaciÃ³n).';
   };
 }
 
 function renderPendiente() {
-  root.innerHTML = `<main class="login"><div class="card"><h1>Cuenta pendiente de activación</h1>
+  root.innerHTML = `<main class="login"><div class="card"><h1>Cuenta pendiente de activaciÃ³n</h1>
     <p>Su cuenta (${esc(S.perfil.email)}) existe, pero un administrador debe activarla y asignarle empresas.</p>
     <button id="out">Salir</button></div></main>`;
   root.querySelector('#out').onclick = () => { limpiarCache(); try { localStorage.removeItem('cache-uid'); } catch { /* sin almacenamiento */ } db.auth.signOut(); };
 }
 
-// Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
+// PestaÃ±as agrupadas como en la aplicaciÃ³n de impuestos: id â†’ [tÃ­tulo, subtÃ­tulo, vista, soloAdmin]
 const GRUPOS = [
-  // [título, pestañas, logo, subtítulo del panel]
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'cierre', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'umbr','otros'],
+  // [tÃ­tulo, pestaÃ±as, logo, subtÃ­tulo del panel]
+  ['1.- INFORMACIÃ“N TRIBUTARIA', ['cmg', 'cierre', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'umbr','otros'],
     'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
-  ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
+  ['2.- INFORMACIÃ“N REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
-  ['3.- INFORMACIÓN EMPRESA', ['asi', 'rev', 'chk', 'opemp', 'ficha'], 'emp', 'Entrada de apuntes, archivos cargados, checking de lo declarado y opciones de las empresas.'],
+  ['3.- INFORMACIÃ“N EMPRESA', ['asi', 'rev', 'chk', 'opemp', 'ficha'], 'emp', 'Entrada de apuntes, archivos cargados, checking de lo declarado y opciones de las empresas.'],
   ['4.- MODELOS TRIBUTARIOS', ['mod111', 'mod115', 'mod123', 'mod200', 'mod202', 'mod303', 'mod349', 'mod347', 'mod583', 'mod592', 'moda22', 'mod180', 'mod190', 'mod193', 'mod232', 'mod390', 'mod390c','modintra'],
     'aeat', 'Retenciones, IVA, sociedades, Intrastat y el resto de modelos.'],
   ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c475010', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420', 'c6310'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 631, 640 y 642.'],
-  ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
-  ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
-  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'vies', 'camblib', 'plazoded', 'simpl', 'devol', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'explic'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
-  ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
-  ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyrfac', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA y Reglamento de facturación: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
-  ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
-  ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
+  ['6.- SII â€“ SUMINISTRO INMEDIATO INFORMACIÃ“N', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
+  ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situaciÃ³n, pÃ©rdidas y ganancias y tipo efectivo.'],
+  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'vies', 'camblib', 'plazoded', 'simpl', 'devol', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'explic'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cÃ¡lculo del Impuesto sobre Sociedades.'],
+  ['9.- INFORMACIÃ“N SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'NÃ³minas, Seguridad Social y obligaciones laborales.'],
+  ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyrfac', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA y Reglamento de facturaciÃ³n: lo mÃ¡s importante, exenciones, revisiÃ³n de las facturas emitidas y recibidas y consulta.'],
+  ['11.- ADMINISTRACIÃ“N', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
+  ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su paÃ­s, y seguimiento de las transacciones pendientes de proveedores.'],
   ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamedua', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
 ];
-// Pestañas de conciliación: su botón de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
+// PestaÃ±as de conciliaciÃ³n: su botÃ³n de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
 const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'certret', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
 const TABS = {
   calf: ['Calendario Fiscal', 'Plazos y domiciliaciones', () => vistaObligaciones()],
-  chkf: ['Checking Fiscal', 'Obligaciones, plazos y límites', () => vistaObligaciones({ area: 'fiscal' })],
-  rmobl: ['Plazos registrales', 'Libros y depósito de cuentas', () => vistaObligaciones({ area: 'mercantil' })],
+  chkf: ['Checking Fiscal', 'Obligaciones, plazos y lÃ­mites', () => vistaObligaciones({ area: 'fiscal' })],
+  rmobl: ['Plazos registrales', 'Libros y depÃ³sito de cuentas', () => vistaObligaciones({ area: 'mercantil' })],
   ficha: ['Ficha de la empresa', 'Datos y resumen', () => vistaFicha()],
   opemp: ['Opciones Empresa', 'Sigla, tipo, programa, banco y logo', () => vistaEmpresas()],
-  m303: ['303 IVA', '4700 · 4750 · 472 · 477', () => vistaConciliaciones(['4700', '4750', '472', '477'])],
-  m111: ['111 · 115 · 123', 'Retenciones · 4751', () => vistaConciliaciones(['4751'])],
-  m200: ['200 · 202 Sociedades', '4752 · 473 · 474', () => vistaConciliaciones(['4752', '473', '474'])],
-  c47: ['Grupo 47', 'Administraciones Públicas', () => vistaConciliaciones(['47'])],
+  m303: ['303 IVA', '4700 Â· 4750 Â· 472 Â· 477', () => vistaConciliaciones(['4700', '4750', '472', '477'])],
+  m111: ['111 Â· 115 Â· 123', 'Retenciones Â· 4751', () => vistaConciliaciones(['4751'])],
+  m200: ['200 Â· 202 Sociedades', '4752 Â· 473 Â· 474', () => vistaConciliaciones(['4752', '473', '474'])],
+  c47: ['Grupo 47', 'Administraciones PÃºblicas', () => vistaConciliaciones(['47'])],
   c465: ['465', 'Remuneraciones pendientes de pago', () => vistaConciliaciones(['465'])],
   c640: ['640', 'Sueldos y salarios', () => vistaConciliaciones(['640'])],
   c642: ['642', 'Seguridad Social a cargo de la empresa', () => vistaConciliaciones(['642'])],
-  ssconc: ['Nóminas y Seguridad Social', '476 · 465 · 640 · 642', () => vistaConciliaciones(['476', '465', '640', '642'])],
-  ssobl: ['Obligaciones laborales', 'RLC/RNT y nóminas', () => vistaObligaciones({ area: 'laboral' })],
+  ssconc: ['NÃ³minas y Seguridad Social', '476 Â· 465 Â· 640 Â· 642', () => vistaConciliaciones(['476', '465', '640', '642'])],
+  ssobl: ['Obligaciones laborales', 'RLC/RNT y nÃ³minas', () => vistaObligaciones({ area: 'laboral' })],
   concall: ['Todas las conciliaciones', 'Todas las cuentas', () => vistaConciliaciones()],
-  vistas: ['Vistas', 'Menú: bloques arriba o a la izquierda', () => vistaVistas()],
+  vistas: ['Vistas', 'MenÃº: bloques arriba o a la izquierda', () => vistaVistas()],
   usuarios: ['Usuarios y roles', 'Accesos y empresas', () => vistaUsuarios(), true],
 };
 const AREA_TAB = { chkf: 'fiscal', rmobl: 'mercantil', ssobl: 'laboral' };
 
-// Insignias de las fichas del menú: pendientes en rojo, al día en verde.
+// Insignias de las fichas del menÃº: pendientes en rojo, al dÃ­a en verde.
 const pendObl = (area) => {
   const n = S.obligaciones.filter((o) => (!S.sel || o.empresa_id === S.sel) && (!area || o.area === area)
     && o.estado !== 'presentado' && delPeriodo(o)).length;
-  return n ? { t: `${n} pendientes`, c: 'rojo' } : { t: 'Al día', c: 'verde' };
+  return n ? { t: `${n} pendientes`, c: 'rojo' } : { t: 'Al dÃ­a', c: 'verde' };
 };
 const badgeConc = (cuentas) => {
   if (!S.sel) return { t: 'Por empresa' };
@@ -265,10 +265,10 @@ const insignia = (id) => {
   return b ? `<span class="badge ${b.c ?? ''}">${esc(b.t)}</span>` : '';
 };
 const ICONOS = { aeat: 'png', rm: 'png', pgc: 'jpg', sii: 'png', tgss: 'png', emp: 'svg', ef: 'svg', conc: 'svg', ley: 'svg', adm: 'svg' };
-const iconoGrupo = (k) => (k === 'emp' && S.sel ? logoHtml(S.empresas.find((x) => x.id === S.sel), 'gico') // «Información empresa»: el logo de la empresa elegida
+const iconoGrupo = (k) => (k === 'emp' && S.sel ? logoHtml(S.empresas.find((x) => x.id === S.sel), 'gico') // Â«InformaciÃ³n empresaÂ»: el logo de la empresa elegida
   : k ?`<img class="gico" src="logos/grupo-${k}.${ICONOS[k]}?v=11" alt="" onerror="this.remove()">` : '');
 
-// Bloques: píldoras en la barra izquierda (no se despliegan); al pulsar uno, sus pestañas salen en un panel arriba, centrado, donde antes estaba la fila de bloques
+// Bloques: pÃ­ldoras en la barra izquierda (no se despliegan); al pulsar uno, sus pestaÃ±as salen en un panel arriba, centrado, donde antes estaba la fila de bloques
 function gruposVisibles() {
   return GRUPOS.map(([tit, ids, ico, sub], i) => ({ i, tit, ico, sub, ids: ids.filter((id) => (!TABS[id][3] || esAdmin()) && (!TABS[id][4] || TABS[id][4]())) }))
     .filter((g) => g.ids.length);
@@ -277,58 +277,58 @@ function vistaVistas() {
   const v = vistaMenu();
   const op = (k, tit, txt) => `<label class="vistas-chk"><input type="radio" name="vistaMenu" data-vista="${k}"${v === k ? ' checked' : ''}> <b>${tit}</b></label>
     <p class="hint">${txt}</p>`;
-  return `<section class="dsec"><h3>Vista del menú</h3>
-    ${op('c', 'Vista de siempre', 'Los bloques van en la fila de arriba y su panel de pestañas sale debajo.')}
-    ${op('n', 'Vista nueva', 'Los bloques van como píldoras en la barra izquierda y, al pulsar uno, sus pestañas salen arriba, centradas, también como píldoras.')}
-    ${op('d', 'Vista clara', 'Diseño claro: cabecera a todo el ancho con el logo de la empresa, botonera blanca a la izquierda y las pestañas del bloque como tarjetas sobre el contenido.')}
-    <p class="hint">La elección se recuerda en este navegador.</p></section>
+  return `<section class="dsec"><h3>Vista del menÃº</h3>
+    ${op('c', 'Vista de siempre', 'Los bloques van en la fila de arriba y su panel de pestaÃ±as sale debajo.')}
+    ${op('n', 'Vista nueva', 'Los bloques van como pÃ­ldoras en la barra izquierda y, al pulsar uno, sus pestaÃ±as salen arriba, centradas, tambiÃ©n como pÃ­ldoras.')}
+    ${op('d', 'Vista clara', 'DiseÃ±o claro: cabecera a todo el ancho con el logo de la empresa, botonera blanca a la izquierda y las pestaÃ±as del bloque como tarjetas sobre el contenido.')}
+    <p class="hint">La elecciÃ³n se recuerda en este navegador.</p></section>
     <section class="dsec"><h3>Tipo de letra</h3>
     ${LETRAS.map(([id, nombre]) => `<label class="vistas-chk"><input type="radio" name="letraApp" data-letra="${id}"${letraApp() === id ? ' checked' : ''}> <b${id.startsWith('lm-') ? ` class="letra-muestra" style="font-family:'LM-${id.slice(3)}'"` : ''}>${nombre}</b></label>`).join('')}
-    <p class="hint">«Libro Mayor» es letra propia de la aplicación; «Are You Freakin' Serious» es de Misti's Fonts (www.mistifonts.com). Se aplica a toda la aplicación, en cualquier vista; los importes y porcentajes de las tablas se quedan con la letra normal para que se lean bien.</p>
-    <p class="hint">La elección se recuerda en este navegador.</p></section>`;
+    <p class="hint">Â«Libro MayorÂ» es letra propia de la aplicaciÃ³n; Â«Are You Freakin' SeriousÂ» es de Misti's Fonts (www.mistifonts.com). Se aplica a toda la aplicaciÃ³n, en cualquier vista; los importes y porcentajes de las tablas se quedan con la letra normal para que se lean bien.</p>
+    <p class="hint">La elecciÃ³n se recuerda en este navegador.</p></section>`;
 }
-// Tipo de letra (se elige en Administración › Vistas): '' = la normal; 'ayfs' = «Are You Freakin' Serious»; 'lm-…' = «Libro Mayor» (letra propia, 5 variantes)
-const LETRAS = [['', 'Letra normal'], ['lm-redonda', 'Libro Mayor Redonda'], ['lm-fina', 'Libro Mayor Fina'], ['lm-ancha', 'Libro Mayor Ancha'], ['lm-tecnica', 'Libro Mayor Técnica'], ['lm-cursiva', 'Libro Mayor Cursiva'], ['ayfs', "Are You Freakin' Serious"]];
+// Tipo de letra (se elige en AdministraciÃ³n â€º Vistas): '' = la normal; 'ayfs' = Â«Are You Freakin' SeriousÂ»; 'lm-â€¦' = Â«Libro MayorÂ» (letra propia, 5 variantes)
+const LETRAS = [['', 'Letra normal'], ['lm-redonda', 'Libro Mayor Redonda'], ['lm-fina', 'Libro Mayor Fina'], ['lm-ancha', 'Libro Mayor Ancha'], ['lm-tecnica', 'Libro Mayor TÃ©cnica'], ['lm-cursiva', 'Libro Mayor Cursiva'], ['ayfs', "Are You Freakin' Serious"]];
 const letraApp = () => { try { const v = localStorage.getItem('imp-letra'); return LETRAS.some(([id]) => id === v) ? v : ''; } catch { return ''; } };
 const aplicarLetra = () => { const cl = document.body.classList; [...cl].filter((c) => c.startsWith('letra-')).forEach((c) => cl.remove(c)); if (letraApp()) cl.add('letra-' + letraApp()); };
 aplicarLetra();
-// Vista del menú (se elige en Administración › Vistas): 'c' = la de siempre (bloques arriba); 'n' = bloques a la izquierda y pestañas en píldoras arriba; 'd' = como la nueva, con el diseño claro
+// Vista del menÃº (se elige en AdministraciÃ³n â€º Vistas): 'c' = la de siempre (bloques arriba); 'n' = bloques a la izquierda y pestaÃ±as en pÃ­ldoras arriba; 'd' = como la nueva, con el diseÃ±o claro
 const vistaMenu = () => { try { const v = localStorage.getItem('imp-vista'); return ['c', 'n', 'd'].includes(v) ? v : localStorage.getItem('imp-menuNuevo') === '1' ? 'n' : 'c'; } catch { return 'c'; } };
 const menuNuevo = () => vistaMenu() !== 'c';
 const vistaClara = () => vistaMenu() === 'd';
 // Nombres cortos de los bloques en la vista clara (mismo orden que GRUPOS)
-const GRUPOS_CORTO = ['Información tributaria', 'Registro Mercantil', 'Información empresa', 'Modelos tributarios', 'Cuentas contables', 'SII', 'Estados financieros',
-  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'Administración', 'Proveedores y clientes', 'CBAM'];
-// Tamaño de las pestañas (vista nueva): ancho y texto, común a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
+const GRUPOS_CORTO = ['InformaciÃ³n tributaria', 'Registro Mercantil', 'InformaciÃ³n empresa', 'Modelos tributarios', 'Cuentas contables', 'SII', 'Estados financieros',
+  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'AdministraciÃ³n', 'Proveedores y clientes', 'CBAM'];
+// TamaÃ±o de las pestaÃ±as (vista nueva): ancho y texto, comÃºn a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
 let TP = {}; try { TP = JSON.parse(localStorage.getItem('imp-tpill') || '{}') ?? {}; } catch { TP = {}; }
-const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en una sola línea, repartiéndose el ancho
+const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en una sola lÃ­nea, repartiÃ©ndose el ancho
 const tpGuarda = () => { try { localStorage.setItem('imp-tpill', JSON.stringify(TP)); } catch { /* sin almacenamiento */ } };
 function bloquesLat() {
   if (!menuNuevo()) return '';
-  const orden = (g) => (vistaClara() && g.i === 11 ? 9.5 : g.i); // vista clara: «Proveedores y clientes» va antes que «Administración»
+  const orden = (g) => (vistaClara() && g.i === 11 ? 9.5 : g.i); // vista clara: Â«Proveedores y clientesÂ» va antes que Â«AdministraciÃ³nÂ»
   return `<nav class="bl-wrap"><div class="bl-nav">${gruposVisibles().sort((a, b) => orden(a) - orden(b)).map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
       ${iconoGrupo(g.ico)}<span><b>${esc(vistaClara() ? (GRUPOS_CORTO[g.i] ?? g.tit) : g.tit)}</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</div></nav>`;
 }
 function tabsNav() {
   const grupos = gruposVisibles();
-  // vista nueva: las pestañas quedan fijas arriba y siempre visibles (las del bloque pulsado o, si no, las del bloque de la pestaña abierta)
+  // vista nueva: las pestaÃ±as quedan fijas arriba y siempre visibles (las del bloque pulsado o, si no, las del bloque de la pestaÃ±a abierta)
   const abierto = grupos.find((g) => g.i === S.grp) ?? (menuNuevo() ? grupos.find((g) => g.ids.includes(S.tab)) : null);
-  if (!menuNuevo()) { // vista de siempre: fila de bloques arriba y su panel de pestañas debajo
+  if (!menuNuevo()) { // vista de siempre: fila de bloques arriba y su panel de pestaÃ±as debajo
     const nombre = (t) => { const s = t.replace(/^\d+\.-\s*/, ''); return s.charAt(0) + s.slice(1).toLowerCase(); };
     return `<div class="tabs-wrap"><nav class="tabs" style="--ng:${grupos.length}">${grupos.map((g) => `<button class="gpill${g.ids.includes(S.tab) ? ' act' : ''}${S.grp === g.i ? ' abierto' : ''}" data-grp="${g.i}">
-      ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)} ▾</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</nav>
+      ${iconoGrupo(g.ico)}<span><b>${esc(g.tit)} â–¾</b>${g.ids.includes(S.tab) ? `<small>${esc(TABS[S.tab][0])}</small>` : ''}</span></button>`).join('')}</nav>
     ${abierto ? `<div class="gpanel" style="--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}"><div class="gpanel-h"><span class="gpanel-ico">${iconoGrupo(abierto.ico)}</span>
       <div><b>${esc(nombre(abierto.tit))}</b><small>${esc(abierto.sub)}</small></div></div>
       <div class="tiles">${abierto.ids.map((id) => `<button class="tile${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}</button>`).join('')}</div></div>` : ''}</div>`;
   }
-  // vista nueva: las pestañas del bloque abierto salen solas, como píldoras, arriba y centradas (sin panel detrás)
-  const c = abierto ? tpCfg(abierto.i) : null, rz = '<span class="tp-rz w" data-tprz="w" title="Arrastra para cambiar el ancho de todas las pestañas del bloque (doble clic: restablecer)"></span><span class="tp-rz t" data-tprz="t" title="Arrastra para cambiar el tamaño del texto de todas las pestañas del bloque (doble clic: restablecer)"></span>';
+  // vista nueva: las pestaÃ±as del bloque abierto salen solas, como pÃ­ldoras, arriba y centradas (sin panel detrÃ¡s)
+  const c = abierto ? tpCfg(abierto.i) : null, rz = '<span class="tp-rz w" data-tprz="w" title="Arrastra para cambiar el ancho de todas las pestaÃ±as del bloque (doble clic: restablecer)"></span><span class="tp-rz t" data-tprz="t" title="Arrastra para cambiar el tamaÃ±o del texto de todas las pestaÃ±as del bloque (doble clic: restablecer)"></span>';
   return `<div class="tabs-wrap tw-nuevo">${abierto ? `<div class="tpills${abierto.ids.length > 6 ? ' compacto' : ''}${c.w ? ' fijo' : ''}${c.a === 'l' ? ' al-l' : c.a === 'r' ? ' al-r' : ''}" data-g="${abierto.i}" style="${c.w ? `--pw:${c.w}px;` : ''}--pt:${c.t};--emp:${S.sel ? M.colorEmp(S.sel) : '#14286a'}">${abierto.ids.map((id) => `<button class="tpill${id === S.tab ? ' on' : ''}" data-tab="${id}">
         <b>${esc(TABS[id][0])}</b><small>${esc(TABS[id][1])}</small>${insignia(id)}${rz}</button>`).join('')}</div>` : ''}</div>`;
 }
 
-// Años del desplegable de ejercicio: el actual más 1 y los 7 anteriores (y el elegido, si queda fuera).
+// AÃ±os del desplegable de ejercicio: el actual mÃ¡s 1 y los 7 anteriores (y el elegido, si queda fuera).
 function ejercicios() {
   const y = new Date().getFullYear();
   const a = new Set([Number(S.ejercicio)]);
@@ -336,13 +336,13 @@ function ejercicios() {
   return [...a].sort((p, q) => q - p);
 }
 
-// Periodos que tiene cada empresa: sus 12 meses (grandes) o sus 4 trimestres (pymes); todas tienen además el anual (valor vacío). Sin empresa elegida salen meses y trimestres.
+// Periodos que tiene cada empresa: sus 12 meses (grandes) o sus 4 trimestres (pymes); todas tienen ademÃ¡s el anual (valor vacÃ­o). Sin empresa elegida salen meses y trimestres.
 const MESES_N = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MM12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 const periodosDe = (e) => (!e ? [...MM12, '1T', '2T', '3T', '4T'] : e.tipo === 'PYME' ? ['1T', '2T', '3T', '4T'] : MM12);
-const etiquetaPeriodo = (p) => (/^\d\d$/.test(p) ? `${p} · ${MESES_N[+p - 1]}` : `${p[0]}º trimestre (${p})`);
+const etiquetaPeriodo = (p) => (/^\d\d$/.test(p) ? `${p} Â· ${MESES_N[+p - 1]}` : `${p[0]}Âº trimestre (${p})`);
 
-// El tipo de empresa (GE mensual / PYME trimestral) puede cambiar de un ejercicio a otro: si hay un registro «tipoej» de ese ejercicio manda; si no, vale el de la ficha (tipoBase)
+// El tipo de empresa (GE mensual / PYME trimestral) puede cambiar de un ejercicio a otro: si hay un registro Â«tipoejÂ» de ese ejercicio manda; si no, vale el de la ficha (tipoBase)
 function aplicarTipoEjercicio() {
   const ej = Number(S.ejercicio);
   S.empresas.forEach((e) => {
@@ -351,8 +351,8 @@ function aplicarTipoEjercicio() {
     e.tipo = t === 'GE' || t === 'PYME' ? t : e.tipoBase;
   });
 }
-// Bloque 6 (SII): cada tabla va en su globo; las columnas de diferencias y las filas de TOTAL toman la vista nueva (amarillo, borde fino) y los ceros salen como «-».
-// Se marca desde aquí, sobre lo ya dibujado, para que valga igual en las siete pestañas del bloque.
+// Bloque 6 (SII): cada tabla va en su globo; las columnas de diferencias y las filas de TOTAL toman la vista nueva (amarillo, borde fino) y los ceros salen como Â«-Â».
+// Se marca desde aquÃ­, sobre lo ya dibujado, para que valga igual en las siete pestaÃ±as del bloque.
 const CONC8_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall']);
 const SII_TABS = new Set(['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo', 'cssoc']);
 function aplicarVistaSii() {
@@ -372,8 +372,8 @@ function aplicarVistaSii() {
     tabla.querySelectorAll('td.num').forEach((td) => { if (!td.children.length && td.textContent.trim() === '0,00') td.textContent = '-'; });
   });
 }
-// Escribir sin que nada te lo quite: si la pantalla se redibuja (p. ej. al terminar de guardar otro campo) mientras estás escribiendo, el campo
-// vuelve con lo escrito, el cursor donde estaba y sin seleccionarse entero (que era lo que hacía que lo siguiente que tecleabas lo borrara).
+// Escribir sin que nada te lo quite: si la pantalla se redibuja (p. ej. al terminar de guardar otro campo) mientras estÃ¡s escribiendo, el campo
+// vuelve con lo escrito, el cursor donde estaba y sin seleccionarse entero (que era lo que hacÃ­a que lo siguiente que tecleabas lo borrara).
 const CAMPO_TXT = 'input:not([type=file]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea';
 const clavesCampo = (el) => [...el.attributes].filter((a) => a.name.startsWith('data-')).map((a) => [a.name, a.value]);
 const mismosCampos = (k) => [...root.querySelectorAll(k.tag)].filter((x) => x.id === k.id && x.name === k.name && k.attrs.every(([nm, v]) => x.getAttribute(nm) === v));
@@ -381,7 +381,7 @@ function guardarCampoActivo() {
   const ae = document.activeElement;
   if (!ae || !root.contains(ae) || !ae.matches?.(CAMPO_TXT) || ae.readOnly || ae.disabled) return null;
   const k = { tag: ae.tagName.toLowerCase(), id: ae.id, name: ae.name, attrs: clavesCampo(ae) };
-  let ini = null, fin = null; try { ini = ae.selectionStart; fin = ae.selectionEnd; } catch { /* tipo sin selección */ }
+  let ini = null, fin = null; try { ini = ae.selectionStart; fin = ae.selectionEnd; } catch { /* tipo sin selecciÃ³n */ }
   return { ...k, idx: mismosCampos(k).indexOf(ae), valor: ae.value, ini, fin };
 }
 function devolverCampoActivo(g) {
@@ -390,31 +390,31 @@ function devolverCampoActivo(g) {
   if (!el || el.readOnly || el.disabled) return false;
   if (el.value !== g.valor) el.value = g.valor;
   el.focus({ preventScroll: true });
-  try { if (g.ini !== null) el.setSelectionRange(g.ini, g.fin); } catch { /* tipo sin selección */ }
+  try { if (g.ini !== null) el.setSelectionRange(g.ini, g.fin); } catch { /* tipo sin selecciÃ³n */ }
   return true;
 }
 function render() {
   const campoActivo = guardarCampoActivo();
   aplicarTipoEjercicio();
   if (S.tab !== 'ini') M.limpiarAvisoD365?.(); // el aviso de lo recogido de D365 se quita al salir de Inicio
-  if (S.tab !== 'leyfac') M.limpiarRevFactura?.(); // la factura de «Revisión factura AEAT» se borra en cuanto se sale de la pestaña
+  if (S.tab !== 'leyfac') M.limpiarRevFactura?.(); // la factura de Â«RevisiÃ³n factura AEATÂ» se borra en cuanto se sale de la pestaÃ±a
   if (!TABS[S.tab] || (TABS[S.tab][3] && !esAdmin())) S.tab = 'ini';
   const e = S.empresas.find((x) => x.id === S.sel);
   if (S.periodo && !periodosDe(e).includes(S.periodo)) S.periodo = ''; // el periodo elegido tiene que ser de esta empresa (meses o trimestres)
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   const scrollTablas = [...root.querySelectorAll('.wrap')].map((w) => [w.scrollLeft, w.scrollTop]); // al redibujar, las tablas anchas no vuelven al principio
   const clara = vistaClara(); // vista clara: la cabecera va arriba a todo el ancho (fuera de la zona principal) y lleva el logo de la empresa delante del de PO
-  const version = new URL(import.meta.url).searchParams.get('v') ?? '—';
+  const version = new URL(import.meta.url).searchParams.get('v') ?? 'â€”';
   const cabHtml = `<header class="doc"><div class="doc-l">${clara
-    ? `${e ? logoHtml(e, 'logo-aside logo-emp') : ''}<img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO Asesoría"><b class="logo-txt"><small>Asesoría</small>Fiscal<br>y contable</b>
-        <div><p class="doc-sub">Empresa · NIF</p><p class="doc-emp">${e ? esc(nombreEmp(e)) : 'Todas las empresas'}</p>
-        <p class="doc-per">${e ? esc(e.cif) : ''}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>`
-    : `<img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO Asesoría"><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
+    ? `${e ? logoHtml(e, 'logo-aside logo-emp') : ''}<img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO AsesorÃ­a"><b class="logo-txt"><small>AsesorÃ­a</small>Fiscal<br>y contable</b>
+        <div><p class="doc-sub">Empresa Â· NIF</p><p class="doc-emp">${e ? esc(nombreEmp(e)) : 'Todas las empresas'}</p>
+        <p class="doc-per">${e ? esc(e.cif) : ''}${S.cargando ? ' Â· <span>Cargando datosâ€¦</span>' : ''}</p></div>`
+    : `<img class="logo-prog" src="logos/po-icono.svg?v=1" alt="PO AsesorÃ­a"><b class="logo-txt">FISCAL<br>Y CONTABLE</b>
         <div>
-        <p class="doc-emp">${e ? `${esc(e.nombre)} · NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
-        <p class="doc-sub">Inicio · grupos de pestañas</p>
-        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} · ${esc(per)}${S.cargando ? ' · <span>Cargando datos…</span>' : ''}</p></div>`}</div>
-        ${clara ? '<h2>CONCILIACIÓN FISCAL - CONTABLE</h2>' : '<h2>CONCILIACIÓN FISCAL – CONTABILIDAD – AUDITORÍA</h2>'}
+        <p class="doc-emp">${e ? `${esc(e.nombre)} Â· NIF ${esc(e.cif)}` : 'Todas las empresas'}</p>
+        <p class="doc-sub">Inicio Â· grupos de pestaÃ±as</p>
+        <p class="doc-per">Ejercicio ${esc(S.ejercicio)} Â· ${esc(per)}${S.cargando ? ' Â· <span>Cargando datosâ€¦</span>' : ''}</p></div>`}</div>
+        ${clara ? '<h2>CONCILIACIÃ“N FISCAL - CONTABLE</h2>' : '<h2>CONCILIACIÃ“N FISCAL â€“ CONTABILIDAD â€“ AUDITORÃA</h2>'}
         <div class="doc-r"><div class="doc-sel no-print">
           <div class="two">
             <label>Ejercicio<select data-glob="ejercicio">${ejercicios().map((y) =>
@@ -425,24 +425,24 @@ function render() {
   const usuario = S.perfil.email || S.perfil.nombre || '';
   root.innerHTML = `<div class="layout${clara ? ' v-clara' : ''}">${clara ? cabHtml : ''}
     <aside class="lat${menuNuevo() ? ' lat-nuevo' : ''}" style="--emp:${S.sel ? M.colorEmp(S.sel) : '#0071e3'}">
-      <div>${clara ? '<h1>Conciliación fiscal-contable</h1>' : `${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÓN FISCAL – CONTABLE</h1>`}</div>
+      <div>${clara ? '<h1>ConciliaciÃ³n fiscal-contable</h1>' : `${e ? logoHtml(e, 'logo-aside') : ''}<h1>CONCILIACIÃ“N FISCAL â€“ CONTABLE</h1>`}</div>
       ${bloquesLat()}
       ${puedeEditar() ? `<input type="file" id="archIn" multiple hidden>
         <input type="file" id="carpetaIn" webkitdirectory multiple hidden>
         <span class="hint" id="pdfEstado"></span>` : ''}
       <div class="lat-ctl">
-      <div class="zoom-c no-print" title="Tamaño de esta pestaña y de sus tablas (cada pestaña guarda el suyo)"><span>Tamaño pestaña</span><button data-zoom="-" title="Reducir">−</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
-      <div class="zoom-c no-print" title="Ajusta esta pestaña a la pantalla (un solo zoom para toda la pestaña, que se recuerda). Vuelve a pulsarlo para quitarlo."><span>Ajustar a pantalla</span><button data-zoom="ancho" class="${S.ajustes[S.tab] === 'ancho' ? 'on' : ''}" title="Que quepa en ancho">↔ Ancho</button><button data-zoom="pantalla" class="${S.ajustes[S.tab] === 'pantalla' ? 'on' : ''}" title="Que quepa en ancho y en alto, sin barras">⤢ Pantalla</button></div>
+      <div class="zoom-c no-print" title="TamaÃ±o de esta pestaÃ±a y de sus tablas (cada pestaÃ±a guarda el suyo)"><span>TamaÃ±o pestaÃ±a</span><button data-zoom="-" title="Reducir">âˆ’</button><button data-zoom="0" title="Volver al 100 %">${Math.round(zoomDe() * 100)} %</button><button data-zoom="+" title="Aumentar">+</button></div>
+      <div class="zoom-c no-print" title="Ajusta esta pestaÃ±a a la pantalla (un solo zoom para toda la pestaÃ±a, que se recuerda). Vuelve a pulsarlo para quitarlo."><span>Ajustar a pantalla</span><button data-zoom="ancho" class="${S.ajustes[S.tab] === 'ancho' ? 'on' : ''}" title="Que quepa en ancho">â†” Ancho</button><button data-zoom="pantalla" class="${S.ajustes[S.tab] === 'pantalla' ? 'on' : ''}" title="Que quepa en ancho y en alto, sin barras">â¤¢ Pantalla</button></div>
       ${menuNuevo() ? (() => { const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab)), a = g ? (tpCfg(g.i).a ?? 'c') : 'c';
-    return `<div class="zoom-c no-print" title="Alineación del texto de las píldoras de las pestañas (todas las del bloque)"><span>Texto pestañas</span>${[['l', 'Izquierda', '⇤'], ['c', 'Centro', '↔'], ['r', 'Derecha', '⇥']].map(([k, n, s]) => `<button data-talin="${k}" title="${n}"${a === k ? ' class="on"' : ''}>${s}</button>`).join('')}</div>`; })() : ''}
-      ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="Más estrecho">−</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="Más ancho">+</button></div>
-      <div class="zoom-c no-print" title="Tamaño del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto más pequeño">−</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto más grande">+</button></div>` : ''}
+    return `<div class="zoom-c no-print" title="AlineaciÃ³n del texto de las pÃ­ldoras de las pestaÃ±as (todas las del bloque)"><span>Texto pestaÃ±as</span>${[['l', 'Izquierda', 'â‡¤'], ['c', 'Centro', 'â†”'], ['r', 'Derecha', 'â‡¥']].map(([k, n, s]) => `<button data-talin="${k}" title="${n}"${a === k ? ' class="on"' : ''}>${s}</button>`).join('')}</div>`; })() : ''}
+      ${/^mod/.test(S.tab) ? `<div class="zoom-c no-print" title="Ancho del formulario del modelo"><span>Ancho modelo</span><button data-forma="w-" title="MÃ¡s estrecho">âˆ’</button><button data-forma="w0" title="Volver a 1200 px">${formaDe().w} px</button><button data-forma="w+" title="MÃ¡s ancho">+</button></div>
+      <div class="zoom-c no-print" title="TamaÃ±o del texto del formulario del modelo"><span>Texto modelo</span><button data-forma="t-" title="Texto mÃ¡s pequeÃ±o">âˆ’</button><button data-forma="t0" title="Volver al 100 %">${Math.round(formaDe().t * 100)} %</button><button data-forma="t+" title="Texto mÃ¡s grande">+</button></div>` : ''}
       <div id="progSub" class="prog-sub no-print">${progHtml()}</div>
-      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaña abierta">⬇ Exportar a Excel</button> ${CONC_TABS.has(S.tab) ? '<button class="small" data-exportar="pdf" data-apaisado="1" title="Imprime el resumen en A4 apaisado, ajustado a una sola hoja. Para PDF elige «Guardar como PDF» como destino">Imprimir / PDF apaisado (1 hoja)</button>' : '<button class="small" data-exportar="pdf" title="Abre la impresión: elige «Guardar como PDF»">Imprimir / PDF</button>'}</div>
+      <div class="exp-c no-print"><button class="small" data-exportar="xlsx" title="Exporta a Excel las tablas de la pestaÃ±a abierta">â¬‡ Exportar a Excel</button> ${CONC_TABS.has(S.tab) ? '<button class="small" data-exportar="pdf" data-apaisado="1" title="Imprime el resumen en A4 apaisado, ajustado a una sola hoja. Para PDF elige Â«Guardar como PDFÂ» como destino">Imprimir / PDF apaisado (1 hoja)</button>' : '<button class="small" data-exportar="pdf" title="Abre la impresiÃ³n: elige Â«Guardar como PDFÂ»">Imprimir / PDF</button>'}</div>
       </div>
-      ${clara ? `<div class="lat-pie"><span class="pie-av">${esc(usuario.replace(/[^a-záéíóúñ]/gi, '').slice(0, 2).toUpperCase())}</span><span class="pie-tx"><b title="${esc(usuario)}">${esc(usuario)}</b><small>${ROLES[S.perfil.rol]}</small><small>Versión ${version}</small></span>
+      ${clara ? `<div class="lat-pie"><span class="pie-av">${esc(usuario.replace(/[^a-zÃ¡Ã©Ã­Ã³ÃºÃ±]/gi, '').slice(0, 2).toUpperCase())}</span><span class="pie-tx"><b title="${esc(usuario)}">${esc(usuario)}</b><small>${ROLES[S.perfil.rol]}</small><small>VersiÃ³n ${version}</small></span>
         <button id="out" class="small">Salir</button></div>`
-    : `<div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">Versión ${version}</span>
+    : `<div class="lat-pie">${esc(S.perfil.nombre || S.perfil.email)}<br><span class="chip">${ROLES[S.perfil.rol]}</span><br><span class="hint" style="color:#b9c4dc;font-size:.72rem">VersiÃ³n ${version}</span>
         <button id="out" class="small">Salir</button></div>`}
     </aside>
     <main class="princ">
@@ -452,7 +452,7 @@ function render() {
     </main></div>`;
   root.querySelectorAll('.wrap').forEach((w, i) => { if (scrollTablas[i]) { w.scrollLeft = scrollTablas[i][0]; w.scrollTop = scrollTablas[i][1]; } });
   const cab = root.querySelector('header.doc');
-  if (cab) root.querySelector('.layout').style.setProperty('--hh', `${cab.offsetHeight}px`); // la cabecera queda fija y las pestañas se pegan debajo
+  if (cab) root.querySelector('.layout').style.setProperty('--hh', `${cab.offsetHeight}px`); // la cabecera queda fija y las pestaÃ±as se pegan debajo
   alinearPanel();
   ajustarInicio();
   ajustarZoom();
@@ -460,7 +460,7 @@ function render() {
   if (!devolverCampoActivo(campoActivo)) restaurarFoco();
 }
 
-// Ajustar a pantalla: mide la pestaña a tamaño 100 % y busca el zoom con el que cabe (en ancho, o en ancho y alto). Es un solo zoom para toda la pestaña.
+// Ajustar a pantalla: mide la pestaÃ±a a tamaÃ±o 100 % y busca el zoom con el que cabe (en ancho, o en ancho y alto). Es un solo zoom para toda la pestaÃ±a.
 function ajustarZoom() {
   const modo = S.ajustes[S.tab], v = root.querySelector('.vista');
   if (!modo || !v) return;
@@ -523,7 +523,7 @@ function celdaVecina(inp, dr, dc) {
     if (x) return x;
   }
 }
-const todoSel = (i) => i.selectionStart === 0 && i.selectionEnd === i.value.length; // al entrar en una celda se selecciona todo: así las flechas laterales también pasan a la vecina
+const todoSel = (i) => i.selectionStart === 0 && i.selectionEnd === i.value.length; // al entrar en una celda se selecciona todo: asÃ­ las flechas laterales tambiÃ©n pasan a la vecina
 root.addEventListener('keydown', (ev) => {
   const i = ev.target;
   if (!i?.matches?.('td.in input') || ev.ctrlKey || ev.altKey || ev.metaKey) return;
@@ -538,22 +538,22 @@ root.addEventListener('keydown', (ev) => {
   if (dest) { dest.focus(); dest.select?.(); }
 });
 
-// Números de las tablas (todas las pestañas): los importes van a la derecha, con separador de miles y decimales; los porcentajes, centrados y sin ceros decimales (21,00 → 21; los recargos 5,2 · 1,4 · 0,5 se quedan).
-// Columna de importes = la que tiene algún número con coma decimal; no se tocan las de números sin decimales (años, cuentas, n.º de facturas) ni las tablas campo/valor.
-const N_DEC = /^[-−+]?\s?(\d{1,3}(\.\d{3})+|\d+),\d+(\s?€)?$/; // importe con coma decimal: 1.234,5 · 1234,50 €
-const N_ENT = /^[-−+]?\s?(\d{1,3}(\.\d{3})+|\d+)(\s?€)?$/; // entero: 1234 · 1.234
-const N_PUNTO = /^[-−+]?\d+\.\d{1,2}$/; // decimal con punto, sin formato: 1234.5
-const N_VACIO = /^[-–—]?$/;
-const N_PCT = /^[-−+]?\s?\d+(,\d+)?\s?%?$/; // porcentaje: 21,00 · 5,2 % · 84
-const N_CAB_PCT = /%|porcentaje|^(tipos?|tipo (iva|irpf|re|ret\.?|retenci[oó]n|recargo)|recargo|coef\.?|coeficiente)$/i;
+// NÃºmeros de las tablas (todas las pestaÃ±as): los importes van a la derecha, con separador de miles y decimales; los porcentajes, centrados y sin ceros decimales (21,00 â†’ 21; los recargos 5,2 Â· 1,4 Â· 0,5 se quedan).
+// Columna de importes = la que tiene algÃºn nÃºmero con coma decimal; no se tocan las de nÃºmeros sin decimales (aÃ±os, cuentas, n.Âº de facturas) ni las tablas campo/valor.
+const N_DEC = /^[-âˆ’+]?\s?(\d{1,3}(\.\d{3})+|\d+),\d+(\s?â‚¬)?$/; // importe con coma decimal: 1.234,5 Â· 1234,50 â‚¬
+const N_ENT = /^[-âˆ’+]?\s?(\d{1,3}(\.\d{3})+|\d+)(\s?â‚¬)?$/; // entero: 1234 Â· 1.234
+const N_PUNTO = /^[-âˆ’+]?\d+\.\d{1,2}$/; // decimal con punto, sin formato: 1234.5
+const N_VACIO = /^[-â€“â€”]?$/;
+const N_PCT = /^[-âˆ’+]?\s?\d+(,\d+)?\s?%?$/; // porcentaje: 21,00 Â· 5,2 % Â· 84
+const N_CAB_PCT = /%|porcentaje|^(tipos?|tipo (iva|irpf|re|ret\.?|retenci[oÃ³]n|recargo)|recargo|coef\.?|coeficiente)$/i;
 function numFormato(t) {
-  const euro = /€/.test(t), neg = /^[-−]/.test(t);
-  let s = t.replace(/[€\s+−-]/g, '');
+  const euro = /â‚¬/.test(t), neg = /^[-âˆ’]/.test(t);
+  let s = t.replace(/[â‚¬\s+âˆ’-]/g, '');
   s = N_PUNTO.test(t) ? s : s.replace(/\./g, '').replace(',', '.');
   const dec = (s.split('.')[1] ?? '').length, v = Number(s);
   if (!Number.isFinite(v)) return t;
   const f = new Intl.NumberFormat('es-ES', { useGrouping: 'always', minimumFractionDigits: 2, maximumFractionDigits: Math.max(2, dec) }).format(v);
-  return `${neg && v ? '-' : ''}${f}${euro ? ' €' : ''}`;
+  return `${neg && v ? '-' : ''}${f}${euro ? ' â‚¬' : ''}`;
 }
 const pctFormato = (t) => t.replace(/,(\d*?)0+(?=\s?%?$)/, (m, d) => (d ? `,${d}` : '')); // quita los ceros decimales del final
 const soloTexto = (c) => c.childNodes.length === 1 && c.firstChild.nodeType === 3; // solo se reescribe la celda que es texto puro
@@ -586,12 +586,12 @@ function alinearNumeros(raiz) {
     }); });
   });
 }
-// Se repasa cada vez que cambia el contenido de la pestaña (también cuando una tabla se redibuja sola), una vez por fotograma
+// Se repasa cada vez que cambia el contenido de la pestaÃ±a (tambiÃ©n cuando una tabla se redibuja sola), una vez por fotograma
 let numPend = false;
 new MutationObserver((ms) => {
   if (numPend || !ms.some((m) => m.target === root || m.target.closest?.('.vista'))) return;
   numPend = true;
-  requestAnimationFrame(() => { numPend = false; const v = root.querySelector('.vista'); if (v) { try { alinearNumeros(v); } catch (e) { console.warn('números:', e.message); } } });
+  requestAnimationFrame(() => { numPend = false; const v = root.querySelector('.vista'); if (v) { try { alinearNumeros(v); } catch (e) { console.warn('nÃºmeros:', e.message); } } });
 }).observe(root, { childList: true, subtree: true });
 
 function refrescarTabs() {
@@ -602,7 +602,7 @@ function refrescarTabs() {
   alinearPanel();
 }
 
-// El panel de pestañas sale arriba, centrado en la pantalla (donde antes estaba la fila de bloques)
+// El panel de pestaÃ±as sale arriba, centrado en la pantalla (donde antes estaba la fila de bloques)
 function alinearPanel() {
   const p = root.querySelector('.gpanel'), pill = root.querySelector('.gpill.abierto'), wrap = root.querySelector('.tabs-wrap');
   if (wrap) { const h = () => document.documentElement?.style?.setProperty('--tabsH', `${wrap.offsetHeight}px`); h(); window.addEventListener?.('resize', h, { once: true }); }
@@ -622,10 +622,10 @@ function vistaFicha() {
   const conc = S.conciliaciones.filter((c) => c.empresa_id === e.id && c.ejercicio === Number(S.ejercicio));
   const desc = conc.filter((c) => estadoConc(c) === 'Descuadre').length;
   return `<div class="ficha"><div>${logoHtml(e, 'logo-ficha')}</div><dl>
-    <dt>Razón social</dt><dd>${esc(e.nombre)}</dd><dt>CIF</dt><dd>${esc(e.cif)}</dd>
+    <dt>RazÃ³n social</dt><dd>${esc(e.nombre)}</dd><dt>CIF</dt><dd>${esc(e.cif)}</dd>
     <dt>Siglas</dt><dd>${esc(e.siglas)}</dd><dt>Tipo</dt><dd>${esc(e.tipo)}</dd>
-    <dt>Obligaciones pendientes</dt><dd>${pend}${venc ? ` · <span class="rojo">${venc} vencidas</span>` : ''}</dd>
-    <dt>Conciliaciones ${esc(S.ejercicio)}</dt><dd>${conc.length}${desc ? ` · <span class="rojo">${desc} con descuadre</span>` : ''}</dd>
+    <dt>Obligaciones pendientes</dt><dd>${pend}${venc ? ` Â· <span class="rojo">${venc} vencidas</span>` : ''}</dd>
+    <dt>Conciliaciones ${esc(S.ejercicio)}</dt><dd>${conc.length}${desc ? ` Â· <span class="rojo">${desc} con descuadre</span>` : ''}</dd>
     <dt>Notas</dt><dd>${esc(e.notas)}</dd></dl>
     ${puedeEditar() ? `<button class="primary" data-act="edit-emp" data-id="${e.id}">Editar ficha</button>` : ''}</div>`;
 }
@@ -647,7 +647,7 @@ function vistaObligaciones({ area = '' } = {}) {
     return `<tr class="${vencida ? 'vencida' : o.estado === 'presentado' ? 'fila-ok' : ''}">
       <td>${esc(empNombre(o.empresa_id))}</td><td>${AREAS[o.area]}</td>
       <td>${esc(o.nombre)}<br><small>${esc(o.notas)}</small></td><td>${esc(o.periodo)}</td>
-      <td>${fmt(o.vencimiento)}${vencida ? ' ⚠' : ''}</td>
+      <td>${fmt(o.vencimiento)}${vencida ? ' âš ' : ''}</td>
       <td>${puedeEditar()
         ? `<select data-estado="${o.id}">${opts(ESTADOS, o.estado)}</select>`
         : ESTADOS[o.estado]}</td>
@@ -656,12 +656,12 @@ function vistaObligaciones({ area = '' } = {}) {
            <button class="small danger" data-act="del-obl" data-id="${o.id}">Borrar</button>` : ''}</td></tr>`;
   }).join('');
   return `<div class="bar">
-    ${area ? '' : `<label>Área<select data-filtro="area"><option value="">Todas</option>${opts(AREAS, f.area)}</select></label>`}
+    ${area ? '' : `<label>Ãrea<select data-filtro="area"><option value="">Todas</option>${opts(AREAS, f.area)}</select></label>`}
     <label>Estado<select data-filtro="estado"><option value="">Todos</option>${opts(ESTADOS, f.estado)}</select></label>
     <span class="space"></span>
-    ${puedeEditar() && S.empresas.length ? `<button data-act="calendario">Calendario estándar</button>
-      <button class="primary" data-act="new-obl">Nueva obligación</button>` : ''}</div>
-    ${lista.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Área</th><th>Obligación</th>
+    ${puedeEditar() && S.empresas.length ? `<button data-act="calendario">Calendario estÃ¡ndar</button>
+      <button class="primary" data-act="new-obl">Nueva obligaciÃ³n</button>` : ''}</div>
+    ${lista.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>Ãrea</th><th>ObligaciÃ³n</th>
       <th>Periodo</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`
       : '<p class="vacio">No hay obligaciones que mostrar.</p>'}`;
 }
@@ -699,16 +699,16 @@ function vistaEmpresas() {
   const ed = puedeEditar();
   const cel = (e, campo, v, ph = '') => (ed ? `<input class="emp-in" data-empf="${e.id}|${campo}" value="${esc(v ?? '')}" placeholder="${ph}">` : esc(v ?? ''));
   const sel = (e, campo, ops, v) => (ed ? `<select data-empf="${e.id}|${campo}">${Object.entries(ops).map(([k, t]) => `<option value="${k}"${k === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>` : esc(ops[v] ?? v ?? ''));
-  const TIPOS = { '': '—', GE: 'Gran empresa (mensual)', PYME: 'Pyme (trimestral)' };
+  const TIPOS = { '': 'â€”', GE: 'Gran empresa (mensual)', PYME: 'Pyme (trimestral)' };
   const filas = [...S.empresas].sort((a, b) => (idxEmp(a) < 0 ? 99 : idxEmp(a)) - (idxEmp(b) < 0 ? 99 : idxEmp(b))).map((e) => `<tr><td><div class="emp">${logoHtml(e)}${esc(etiquetaEmp(e))}</div></td><td>${esc(e.cif)}</td>
     <td>${cel(e, 'siglas', e.siglas, 'Sigla')}</td><td>${sel(e, 'tipo', TIPOS, e.tipoBase ?? e.tipo ?? '')}</td><td>${sel(e, 'programa', PROGRAMAS, programaDe(e))}</td><td>${cel(e, 'banco', e.datos?.banco, 'Banco')}</td>
     <td class="acciones">${ed ? `<label class="small lbl-btn" title="Cambiar el logo">Logo<input type="file" accept="image/*" data-emplogo="${e.id}" hidden></label>${e.datos?.logo ? `<button class="small" data-act="emp-logodel" data-id="${e.id}" title="Quitar el logo cambiado">sin logo</button>` : ''}` : ''}</td>
-    <td class="acciones">${ed ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}" title="Borrar">✕</button>` : ''}</td></tr>`).join('');
+    <td class="acciones">${ed ? `<button class="small" data-act="edit-emp" data-id="${e.id}">Editar</button>` : ''}${esAdmin() ? `<button class="small danger" data-act="del-emp" data-id="${e.id}" title="Borrar">âœ•</button>` : ''}</td></tr>`).join('');
   return `<div class="bar"><span class="space"></span>
     ${ed ? '<button class="primary" data-act="new-emp">Nueva empresa</button>' : ''}</div>
     ${S.empresas.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Empresa</th><th>NIF</th><th>Sigla</th><th>Tipo</th><th>Programa</th><th>Banco</th><th>Logo</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>
-      <p class="hint">La sigla es la que usan los asientos de liquidación (HER, ESP…). Programa contable: D365, y Business Central en Fertinova (su libro de IVA trae ventas y compras en un solo archivo y se reparte solo al cargarlo en Facturas emitidas o recibidas).</p>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
+      <p class="hint">La sigla es la que usan los asientos de liquidaciÃ³n (HER, ESPâ€¦). Programa contable: D365, y Business Central en Fertinova (su libro de IVA trae ventas y compras en un solo archivo y se reparte solo al cargarlo en Facturas emitidas o recibidas).</p>` : '<p class="vacio">No hay empresas asignadas.</p>'}`;
 }
 
 function vistaUsuarios() {
@@ -767,7 +767,7 @@ function formEmpresa(e = {}) {
     { name: 'nombre', label: 'Nombre', value: e.nombre, required: true },
     { name: 'cif', label: 'CIF', value: e.cif },
     { name: 'siglas', label: 'Siglas', value: e.siglas },
-    { name: 'tipo', label: 'Tipo de empresa', type: 'select', options: { '': '—', GE: 'GE', PYME: 'PYME' }, value: e.tipoBase ?? e.tipo ?? '' },
+    { name: 'tipo', label: 'Tipo de empresa', type: 'select', options: { '': 'â€”', GE: 'GE', PYME: 'PYME' }, value: e.tipoBase ?? e.tipo ?? '' },
     { name: 'notas', label: 'Notas', type: 'textarea', value: e.notas },
   ], async (v) => {
     const datos = { nombre: v.nombre, cif: nul(v.cif), siglas: nul(v.siglas.toUpperCase()), tipo: nul(v.tipo), notas: nul(v.notas) };
@@ -779,10 +779,10 @@ function formEmpresa(e = {}) {
 }
 
 function formObligacion(o = {}) {
-  openForm(o.id ? 'Editar obligación' : 'Nueva obligación', [
+  openForm(o.id ? 'Editar obligaciÃ³n' : 'Nueva obligaciÃ³n', [
     { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: o.empresa_id || S.sel },
-    { name: 'area', label: 'Área', type: 'select', options: AREAS, value: o.area },
-    { name: 'nombre', label: 'Obligación (p. ej. Modelo 303, TC1, Cierre mensual)', value: o.nombre, required: true },
+    { name: 'area', label: 'Ãrea', type: 'select', options: AREAS, value: o.area },
+    { name: 'nombre', label: 'ObligaciÃ³n (p. ej. Modelo 303, TC1, Cierre mensual)', value: o.nombre, required: true },
     { name: 'periodo', label: 'Periodo (p. ej. 2026-T1)', value: o.periodo },
     { name: 'vencimiento', label: 'Vencimiento', type: 'date', value: o.vencimiento },
     { name: 'estado', label: 'Estado', type: 'select', options: ESTADOS, value: o.estado },
@@ -801,15 +801,15 @@ function formUsuario() {
   openForm('Nuevo usuario', [
     { name: 'nombre', label: 'Nombre', required: true },
     { name: 'email', label: 'Correo', type: 'email', required: true },
-    { name: 'password', label: 'Contraseña inicial (mín. 8)', type: 'password', required: true, minlength: 8 },
+    { name: 'password', label: 'ContraseÃ±a inicial (mÃ­n. 8)', type: 'password', required: true, minlength: 8 },
     { name: 'rol', label: 'Rol', type: 'select', options: ROLES, value: 'gestor' },
   ], async (v) => {
-    // Cliente auxiliar sin sesión persistente para no desconectar al admin.
+    // Cliente auxiliar sin sesiÃ³n persistente para no desconectar al admin.
     const aux = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
       { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
     const { data, error } = await aux.auth.signUp({ email: v.email, password: v.password, options: { data: { nombre: v.nombre } } });
     if (error) return error.message;
-    if (!data.user || data.user.identities?.length === 0) return 'Ese correo ya está registrado.';
+    if (!data.user || data.user.identities?.length === 0) return 'Ese correo ya estÃ¡ registrado.';
     const { error: e2 } = await db.from('profiles').update({ rol: v.rol, activo: true }).eq('id', data.user.id);
     if (e2) return e2.message;
     await cargar(); render();
@@ -849,10 +849,10 @@ const PLANTILLAS = [
   ['4751', 'HP acreedora por retenciones practicadas', 'Modelos 111 / 115 / 123'],
   ['4752', 'HP acreedora por Impuesto sobre Sociedades', 'Modelo 200 / 202'],
   ['473', 'HP retenciones y pagos a cuenta', 'Modelo 200'],
-  ['474', 'Activos / pasivos por impuesto diferido', 'Cálculo fiscal'],
+  ['474', 'Activos / pasivos por impuesto diferido', 'CÃ¡lculo fiscal'],
   ['476', 'Organismos de la Seguridad Social acreedores', 'RLC / RNT (Seguros Sociales)'],
-  ['465', 'Remuneraciones pendientes de pago', 'Nóminas (líquido a percibir)'],
-  ['640', 'Sueldos y salarios', 'Resumen de nóminas / Modelo 190'],
+  ['465', 'Remuneraciones pendientes de pago', 'NÃ³minas (lÃ­quido a percibir)'],
+  ['640', 'Sueldos y salarios', 'Resumen de nÃ³minas / Modelo 190'],
   ['642', 'Seguridad Social a cargo de la empresa', 'RLC / RNT (cuota empresa)'],
 ];
 const eur = (n) => new Intl.NumberFormat('es-ES', { useGrouping: 'always', style: 'currency', currency: 'EUR' }).format(n ?? 0);
@@ -873,10 +873,10 @@ function vistaConciliaciones(cuentas) {
     const est = estadoConc(c);
     return `<tr class="${est === 'Descuadre' ? 'vencida' : est === 'Cuadra' ? 'fila-ok' : ''}">
       <td>${esc(c.periodo)}</td><td><b>${esc(c.cuenta)}</b></td>
-      <td>${esc(c.concepto)}<br><small>${esc(c.fuente)}${c.notas ? ' · ' + esc(c.notas) : ''}</small></td>
+      <td>${esc(c.concepto)}<br><small>${esc(c.fuente)}${c.notas ? ' Â· ' + esc(c.notas) : ''}</small></td>
       <td class="num">${eur(c.saldo_contable)}</td><td class="num">${eur(c.importe_oficial)}</td>
       <td class="num">${eur(c.diferencia)}</td>
-      <td>${est === 'Cuadra' ? '<span class="ok">✔ Cuadra</span>' : est}</td>
+      <td>${est === 'Cuadra' ? '<span class="ok">âœ” Cuadra</span>' : est}</td>
       <td class="acciones">${puedeEditar()
         ? `<button class="small" data-act="edit-conc" data-id="${c.id}">Editar</button>
            <button class="small danger" data-act="del-conc" data-id="${c.id}">Borrar</button>` : ''}</td></tr>`;
@@ -884,7 +884,7 @@ function vistaConciliaciones(cuentas) {
   return `<div class="bar">
     <span class="space"></span>
     ${lista.length ? `<span class="chip">${desc ? desc + ' con descuadre' : 'Todo cuadra'}</span>` : ''}
-    ${puedeEditar() && f.empresa ? '<button class="primary" data-act="new-conc">Nueva conciliación</button>' : ''}</div>
+    ${puedeEditar() && f.empresa ? '<button class="primary" data-act="new-conc">Nueva conciliaciÃ³n</button>' : ''}</div>
     ${lista.length ? `<div class="wrap"><table class="tabla"><thead><tr><th>Periodo</th><th>Cuenta</th><th>Concepto</th>
       <th class="num">Saldo contable</th><th class="num">Importe oficial</th><th class="num">Diferencia</th><th>Estado</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>`
@@ -893,17 +893,17 @@ function vistaConciliaciones(cuentas) {
 
 function formConciliacion(c = {}) {
   const plantillas = { '': 'Personalizada' };
-  PLANTILLAS.forEach((p, i) => { plantillas['p' + i] = `${p[0]} · ${p[1]}`; });
-  openForm(c.id ? 'Editar conciliación' : 'Nueva conciliación', [
+  PLANTILLAS.forEach((p, i) => { plantillas['p' + i] = `${p[0]} Â· ${p[1]}`; });
+  openForm(c.id ? 'Editar conciliaciÃ³n' : 'Nueva conciliaciÃ³n', [
     { name: 'plantilla', label: 'Cuenta (plantilla)', type: 'select', options: plantillas, value: '' },
     { name: 'periodo', label: 'Periodo', type: 'select', options: PERIODOS, value: c.periodo },
     { name: 'cuenta', label: 'Cuenta (si es personalizada)', value: c.cuenta },
     { name: 'concepto', label: 'Concepto (si es personalizada)', value: c.concepto },
     { name: 'fuente', label: 'Documento oficial', value: c.fuente },
-    { name: 'saldo', label: 'Saldo contable (€)', type: 'number', step: '0.01', value: c.saldo_contable ?? 0 },
-    { name: 'oficial', label: 'Importe del documento oficial (€)', type: 'number', step: '0.01', value: c.importe_oficial ?? 0 },
+    { name: 'saldo', label: 'Saldo contable (â‚¬)', type: 'number', step: '0.01', value: c.saldo_contable ?? 0 },
+    { name: 'oficial', label: 'Importe del documento oficial (â‚¬)', type: 'number', step: '0.01', value: c.importe_oficial ?? 0 },
     { name: 'justificada', label: 'Diferencia justificada', type: 'select',
-      options: { no: 'No', si: 'Sí (explicada en notas)' }, value: c.justificada ? 'si' : 'no' },
+      options: { no: 'No', si: 'SÃ­ (explicada en notas)' }, value: c.justificada ? 'si' : 'no' },
     { name: 'notas', label: 'Notas', type: 'textarea', value: c.notas },
   ], async (v) => {
     const p = v.plantilla ? PLANTILLAS[Number(v.plantilla.slice(1))] : null;
@@ -923,7 +923,7 @@ function formConciliacion(c = {}) {
   });
 }
 
-// Fechas orientativas para año natural; no ajusta fines de semana ni festivos. Revisar.
+// Fechas orientativas para aÃ±o natural; no ajusta fines de semana ni festivos. Revisar.
 function calendarioEstandar(ej) {
   const y1 = ej + 1;
   const o = [];
@@ -937,10 +937,10 @@ function calendarioEstandar(ej) {
     ['fiscal', 'Modelo 390 Resumen anual IVA', `${ej}`, `${y1}-01-30`],
     ['fiscal', 'Modelo 347 Operaciones con terceros', `${ej}`, `${y1}-02-28`],
     ['fiscal', 'Modelo 200 Impuesto sobre Sociedades', `${ej}`, `${y1}-07-25`],
-    ['contable', 'Formulación de cuentas anuales', `${ej}`, `${y1}-03-31`],
-    ['contable', 'Aprobación de cuentas por la Junta', `${ej}`, `${y1}-06-30`],
-    ['mercantil', 'Legalización de libros contables', `${ej}`, `${y1}-04-30`],
-    ['mercantil', 'Depósito de cuentas anuales en el Registro Mercantil', `${ej}`, `${y1}-07-30`],
+    ['contable', 'FormulaciÃ³n de cuentas anuales', `${ej}`, `${y1}-03-31`],
+    ['contable', 'AprobaciÃ³n de cuentas por la Junta', `${ej}`, `${y1}-06-30`],
+    ['mercantil', 'LegalizaciÃ³n de libros contables', `${ej}`, `${y1}-04-30`],
+    ['mercantil', 'DepÃ³sito de cuentas anuales en el Registro Mercantil', `${ej}`, `${y1}-07-30`],
   );
   for (let m = 1; m <= 12; m++) {
     o.push(['laboral', 'Seguros Sociales (RLC/RNT)', `${ej}-${pad(m)}`, `${ej}-${pad(m)}-${pad(new Date(ej, m, 0).getDate())}`]);
@@ -949,12 +949,12 @@ function calendarioEstandar(ej) {
 }
 
 function formCalendario() {
-  openForm('Calendario estándar de obligaciones', [
+  openForm('Calendario estÃ¡ndar de obligaciones', [
     { name: 'empresa_id', label: 'Empresa', type: 'select', options: empOpts(), value: S.sel },
-    { name: 'ejercicio', label: 'Ejercicio (año natural)', type: 'number', value: S.ejercicio, required: true },
+    { name: 'ejercicio', label: 'Ejercicio (aÃ±o natural)', type: 'number', value: S.ejercicio, required: true },
   ], async (v) => {
     const ej = parseInt(v.ejercicio, 10);
-    if (!ej) return 'Ejercicio no válido.';
+    if (!ej) return 'Ejercicio no vÃ¡lido.';
     const existentes = new Set(S.obligaciones.filter((o) => o.empresa_id === v.empresa_id).map((o) => `${o.nombre}|${o.periodo}`));
     const filas = calendarioEstandar(ej)
       .filter(([, nombre, periodo]) => !existentes.has(`${nombre}|${periodo}`))
@@ -966,23 +966,23 @@ function formCalendario() {
   });
 }
 
-// Bloques 1 y 2 (ver modulos.js): se añaden a las pestañas ya definidas.
+// Bloques 1 y 2 (ver modulos.js): se aÃ±aden a las pestaÃ±as ya definidas.
 const M = crearModulos({ db, S, esc, opts, openForm, fmt, render, cargar, eur, empNombre, PERIODOS, logoHtml, idxEmp, nombreEmp });
 Object.assign(TABS, M.tabs);
-Object.assign(TABS, crearCopia({ db, S, esc, render }).tabs); // Copia de seguridad (bloque 11): pestaña nueva, solo administradores
-Object.assign(TABS, crearTareas({ esc, render }).tabs); // Tareas programadas (bloque 11): pestaña nueva, solo administradores
-// Explicaciones por línea (💬) en las conciliaciones y dossier PDF con todas ellas
-activarSubrayadoManual({ S, db }); // artículos de la ley en columnas y subrayado propio
+Object.assign(TABS, crearCopia({ db, S, esc, render }).tabs); // Copia de seguridad (bloque 11): pestaÃ±a nueva, solo administradores
+Object.assign(TABS, crearTareas({ esc, render }).tabs); // Tareas programadas (bloque 11): pestaÃ±a nueva, solo administradores
+// Explicaciones por lÃ­nea (ðŸ’¬) en las conciliaciones y dossier PDF con todas ellas
+activarSubrayadoManual({ S, db }); // artÃ­culos de la ley en columnas y subrayado propio
 Object.assign(TABS, crearExplicaciones({ S, db, esc, render, root, TABS, conc: CONC_TABS, dossierTabs: () => GRUPOS.find((g) => g[0].startsWith('8.'))[1].filter((id) => id !== 'explic'), puede: puedeEditar, esAdmin }).tabs);
-Object.assign(TABS, crearHistorial({ db, S, esc, render, empNombre }).tabs); // Historial de cambios (bloque 11): pestaña nueva, solo administradores
+Object.assign(TABS, crearHistorial({ db, S, esc, render, empNombre }).tabs); // Historial de cambios (bloque 11): pestaÃ±a nueva, solo administradores
 
-// Buscador de pestañas (Ctrl+K)
+// Buscador de pestaÃ±as (Ctrl+K)
 function paleta() {
   const d = document.createElement('dialog');
-  d.innerHTML = '<form class="form"><h3>Buscar pestaña</h3><input id="q" placeholder="p. ej. IBI, 111, socios…" autocomplete="off"><div class="pal"></div></form>';
+  d.innerHTML = '<form class="form"><h3>Buscar pestaÃ±a</h3><input id="q" placeholder="p. ej. IBI, 111, sociosâ€¦" autocomplete="off"><div class="pal"></div></form>';
   document.body.append(d);
   const q = d.querySelector('#q'), lista = d.querySelector('.pal');
-  const sinAcento = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const sinAcento = (s) => s.normalize('NFD').replace(/[Ì€-Í¯]/g, '').toLowerCase();
   const pinta = () => {
     const f = sinAcento(q.value);
     const r = Object.entries(TABS).filter(([id, t]) => (!t[3] || esAdmin()) && (!f || sinAcento(`${t[0]} ${t[1]} ${id}`).includes(f))).slice(0, 12);
@@ -1016,7 +1016,7 @@ root.addEventListener('click', (ev) => {
   if (ir && !ev.target.closest('button')) { S.tab = ir.dataset.ir; S.grp = -1; return render(); }
   const t = ev.target.closest('button');
   if (!t) return;
-  if (t.dataset.talin !== undefined) { // alineación del texto de las píldoras del bloque abierto
+  if (t.dataset.talin !== undefined) { // alineaciÃ³n del texto de las pÃ­ldoras del bloque abierto
     const gs = gruposVisibles(), g = gs.find((x) => x.i === S.grp) ?? gs.find((x) => x.ids.includes(S.tab));
     if (g) { (TP[g.i] ??= {}).a = t.dataset.talin; tpGuarda(); render(); }
     return;
@@ -1027,7 +1027,7 @@ root.addEventListener('click', (ev) => {
     return render();
   }
   if (t.dataset.zoom !== undefined) {
-    if (S.ajustes[S.tab]) { delete S.ajustes[S.tab]; delete S.zAuto[S.tab]; try { localStorage.setItem('zoom-ajuste', JSON.stringify(S.ajustes)); } catch { /* sin almacenamiento */ } } // tocar − / + / % quita el ajuste automático
+    if (S.ajustes[S.tab]) { delete S.ajustes[S.tab]; delete S.zAuto[S.tab]; try { localStorage.setItem('zoom-ajuste', JSON.stringify(S.ajustes)); } catch { /* sin almacenamiento */ } } // tocar âˆ’ / + / % quita el ajuste automÃ¡tico
     const z = t.dataset.zoom === '0' ? 1 : zoomDe() + (t.dataset.zoom === '+' ? 0.1 : -0.1), v = Math.min(2, Math.max(0.5, Math.round(z * 10) / 10));
     if (v === 1) delete S.zooms[S.tab]; else S.zooms[S.tab] = v;
     try { localStorage.setItem('zoom-pestanas', JSON.stringify(S.zooms)); } catch { /* sin almacenamiento */ }
@@ -1051,16 +1051,16 @@ root.addEventListener('click', (ev) => {
     'new-emp': () => formEmpresa(),
     'edit-emp': () => formEmpresa(S.empresas.find((e) => e.id === id)),
     'emp-logodel': () => { const e = S.empresas.find((x) => x.id === id); const { logo, ...resto } = e?.datos ?? {}; return e && guardarEmpDatos(e, resto); },
-    'del-emp': () => confirm('¿Borrar la empresa y TODAS sus obligaciones?') && run(db.from('empresas').delete().eq('id', id)),
+    'del-emp': () => confirm('Â¿Borrar la empresa y TODAS sus obligaciones?') && run(db.from('empresas').delete().eq('id', id)),
     'new-obl': () => formObligacion({ area: AREA_TAB[S.tab] }),
     'edit-obl': () => formObligacion(S.obligaciones.find((o) => o.id === id)),
-    'del-obl': () => confirm('¿Borrar la obligación?') && run(db.from('obligaciones').delete().eq('id', id)),
+    'del-obl': () => confirm('Â¿Borrar la obligaciÃ³n?') && run(db.from('obligaciones').delete().eq('id', id)),
     calendario: () => formCalendario(),
     inicio: () => { S.tab = 'ini'; S.grp = -1; render(); },
     buscar: () => paleta(),
     'new-conc': () => formConciliacion({ periodo: S.periodo || '1T' }),
     'edit-conc': () => formConciliacion(S.conciliaciones.find((c) => c.id === id)),
-    'del-conc': () => confirm('¿Borrar la conciliación?') && run(db.from('conciliaciones').delete().eq('id', id)),
+    'del-conc': () => confirm('Â¿Borrar la conciliaciÃ³n?') && run(db.from('conciliaciones').delete().eq('id', id)),
     'new-user': () => formUsuario(),
     asig: () => formAsignar(id),
   };
@@ -1073,7 +1073,7 @@ const PROG = { total: 0, hecho: 0, activo: false, n: 0 };
 function progHtml() {
   if (!PROG.activo) return '';
   const pc = PROG.total ? Math.round((PROG.hecho / PROG.total) * 100) : 100;
-  return `<div class="prog-t">${PROG.hecho >= PROG.total ? '✔ Archivos procesados' : `Procesando ${Math.min(PROG.hecho + 1, PROG.total)} de ${PROG.total}`} · <b>${pc} %</b></div><div class="prog-b"><i style="width:${pc}%"></i></div>`;
+  return `<div class="prog-t">${PROG.hecho >= PROG.total ? 'âœ” Archivos procesados' : `Procesando ${Math.min(PROG.hecho + 1, PROG.total)} de ${PROG.total}`} Â· <b>${pc} %</b></div><div class="prog-b"><i style="width:${pc}%"></i></div>`;
 }
 const pintarProg = () => { const el = document.getElementById('progSub'); if (el) el.innerHTML = progHtml(); };
 async function conProgreso(fn, files) {
@@ -1154,8 +1154,8 @@ root.addEventListener('input', (ev) => {
 });
 
 // Soltar PDF sobre la franja punteada de datos censales
-// Menú de bloques: al pasar el ratón por un bloque se abre su panel (superpuesto, sin mover nada); al salir se cierra
-// Pestañas de la vista nueva: arrastrar el borde derecho cambia el ancho y el inferior el tamaño del texto, de todas las pestañas del bloque
+// MenÃº de bloques: al pasar el ratÃ³n por un bloque se abre su panel (superpuesto, sin mover nada); al salir se cierra
+// PestaÃ±as de la vista nueva: arrastrar el borde derecho cambia el ancho y el inferior el tamaÃ±o del texto, de todas las pestaÃ±as del bloque
 let tpArr = null, tpUlt = 0;
 root.addEventListener('mousedown', (ev) => {
   const h = ev.target.closest?.('[data-tprz]'); if (!h) return;
@@ -1171,12 +1171,12 @@ document.addEventListener('mousemove', (ev) => {
   a.el.style.setProperty('--pt', tpCfg(a.i).t);
 });
 document.addEventListener('mouseup', () => { if (!tpArr) return; tpArr = null; tpUlt = Date.now(); tpGuarda(); alinearPanel(); });
-root.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-tprz]') || Date.now() - tpUlt < 350) { ev.stopImmediatePropagation(); ev.preventDefault(); } }, true); // soltar tras arrastrar no abre la pestaña
+root.addEventListener('click', (ev) => { if (ev.target.closest?.('[data-tprz]') || Date.now() - tpUlt < 350) { ev.stopImmediatePropagation(); ev.preventDefault(); } }, true); // soltar tras arrastrar no abre la pestaÃ±a
 root.addEventListener('dblclick', (ev) => {
   const h = ev.target.closest?.('[data-tprz]'); if (!h) return;
   const i = Number(h.closest('.tpills').dataset.g); if (TP[i]) { delete TP[i][h.dataset.tprz]; tpGuarda(); } refrescarTabs();
 });
-// Vista de siempre: al pasar el ratón por un bloque se abre su panel; en la vista nueva (píldoras a la izquierda) solo se abre al pulsar
+// Vista de siempre: al pasar el ratÃ³n por un bloque se abre su panel; en la vista nueva (pÃ­ldoras a la izquierda) solo se abre al pulsar
 let cierraGrp;
 root.addEventListener('mouseover', (ev) => {
   if (menuNuevo()) return;
@@ -1188,7 +1188,7 @@ root.addEventListener('mouseout', (ev) => {
   if (menuNuevo() || S.grp < 0 || !ev.target.closest?.('.tabs-wrap') || ev.relatedTarget?.closest?.('.tabs-wrap')) return;
   cierraGrp = setTimeout(() => { S.grp = -1; refrescarTabs(); }, 250);
 });
-// Ctrl+V sobre el recuadro de Entrada Información: captura de pantalla o texto copiado de Excel
+// Ctrl+V sobre el recuadro de Entrada InformaciÃ³n: captura de pantalla o texto copiado de Excel
 root.addEventListener('paste', (ev) => { if (ev.target.closest?.('[data-asipega]')) M.asiPegar(ev); });
 root.addEventListener('dragover', (ev) => { const dz = ev.target.closest('.dropzone'); if (dz) { ev.preventDefault(); dz.classList.add('over'); } });
 root.addEventListener('dragleave', (ev) => ev.target.closest?.('.dropzone')?.classList.remove('over'));
@@ -1200,7 +1200,7 @@ root.addEventListener('drop', (ev) => {
   return void (dz.dataset.kind ? conProgreso((a) => M.subirComo(dz.dataset.kind, a), fs) : conProgreso(M.cargarPdfs, fs));
 });
 
-// Ancho de las columnas de casillas de los formularios de los modelos: se arrastra el borde derecho de la columna (en la separación entre casillas); doble clic = anchos originales
+// Ancho de las columnas de casillas de los formularios de los modelos: se arrastra el borde derecho de la columna (en la separaciÃ³n entre casillas); doble clic = anchos originales
 const colForma = (ev) => {
   const row = ev.target.closest?.('.f-row'); if (!row || row.classList.contains('l1')) return null;
   for (const n of [1, 2, 3]) {
