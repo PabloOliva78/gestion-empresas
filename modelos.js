@@ -585,7 +585,7 @@ export function crearModelos(c) {
   const MES_MAY = MES_L.map((m) => m.toUpperCase());
   const nf2 = (v) => Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const guion = (v) => (Math.abs(v) < 0.005 ? '-' : eur(v));
-  let intraMes = 0, intraF = {}, intraFich = [];
+  let intraMes = 0, intraF = {}, intraFich = [], intraVuelta = null;
   const intraCur = () => big('intra', () => ({ rows: [], serv: [], cfg: {}, exp: {} }));
   const datosIntra = () => {
     const cur = intraCur(); if (!cur) return null; const d = cur.datos;
@@ -727,7 +727,7 @@ export function crearModelos(c) {
     const mSel = intraMes, idx = mSel ? idx0.filter(([o]) => o.mes === mSel) : idx0;
     const nMes = (m) => idx0.filter(([o]) => o.mes === m).length;
     const subtabs = `<span class="it-subtabs no-print"><button class="small${mSel ? '' : ' primary'}" data-act="m-intrames" data-m="0">Todos (${idx0.length})</button>${MES_L.map((t, i) => (nMes(i + 1) ? `<button class="small${mSel === i + 1 ? ' primary' : ''}" data-act="m-intrames" data-m="${i + 1}">${t.slice(0, 3)} (${nMes(i + 1)})</button>` : '')).join('')}</span>`;
-    const filtros = `<div class="fc-cab no-print it-fil">Buscar: ${[['fac', 'Nº factura'], ['nif', 'CIF / NIF'], ['pais', 'País'], ['flujo', 'Flujo'], ['imp', 'Importe']].map(([k, t]) => `<label>${t} <input data-intrafil="${k}" value="${esc(intraF[k] || '')}" size="${k === 'flujo' ? 11 : 12}"></label>`).join(' ')} <span class="it-nfil hint"></span></div>`;
+    const filtros = `<div class="fc-cab no-print it-fil">Buscar: ${[['fac', 'Nº factura'], ['nif', 'CIF / NIF'], ['pais', 'País'], ['flujo', 'Flujo'], ['imp', 'Importe']].map(([k, t]) => `<label>${t} <input data-intrafil="${k}" value="${esc(intraF[k] || '')}" size="${k === 'flujo' ? 11 : 12}"></label>`).join(' ')} <span class="it-nfil hint"></span>${intraVuelta && intraVuelta.sel === S.sel ? ' <button class="small primary" data-act="m-intravolver">← Volver a la conciliación 349 - Intrastat</button>' : ''}</div>`;
     const celda = (v, i, j) => { const t = v instanceof Date ? fdmy(fechaUtc(v)) : (v == null ? '' : String(v)); return `<td><input class="facin" data-intracel="${i}|${j}" value="${esc(t)}" size="${Math.max(4, Math.min(28, t.length + 1))}"${dis}></td>`; };
     const lineas = D.rows.length ? `<div class="wrap" style="max-height:520px;overflow:auto"><table class="tabla"><thead><tr><th></th>${INTRA_COLS.map((c) => `<th>${c}</th>`).join('')}<th class="gris">Año</th><th class="gris">Mes</th><th class="gris">Flujo</th><th class="gris">Estado miembro</th><th class="gris">Servicio</th><th class="gris">NC exportar</th><th class="gris">NIF exportar</th><th class="gris">Incluir</th><th class="gris">Valor facturado (€)</th><th class="gris">Avisos</th><th class="gris">Flujo conciliación</th><th class="gris">Importe conciliación (€)</th></tr></thead><tbody>
       ${idx.map(([o, i]) => `<tr data-ffac="${esc(String(o.r[13] || '')).toUpperCase()}" data-fnif="${esc(`${o.r[10] || ''} ${o.nifExp || ''}`).toUpperCase()}" data-fpais="${esc(`${o.r[2] || ''} ${o.em || ''}`).toUpperCase()}" data-fflujo="${esc(`${o.flujo} ${o.flujoConc}`).toUpperCase()}" data-fimp="${esc([o.r[8], o.r[9], o.valor, o.impConc].map((v) => `${v ?? ''} ${typeof v === 'number' ? nf2(v) : ''}`).join(' '))}"><td>${ed ? `<button class="small" data-act="m-intradel" data-i="${i}" title="Quitar esta línea">✖</button>` : ''}</td>${INTRA_COLS.map((_, j) => celda(j === 0 ? (o.fecha ? fdmy(o.fecha) : o.r[0]) : o.r[j], i, j)).join('')}
@@ -778,6 +778,14 @@ export function crearModelos(c) {
     const a = ev.target.closest?.('[data-gofac]'); if (!a) return;
     ev.preventDefault(); ev.stopPropagation();
     document.dispatchEvent(new CustomEvent('ir-factura', { detail: { s: a.dataset.gofac, fac: a.dataset.fac, dest: a.dataset.dest || '' } }));
+  }, true);
+  // el importe «Intrastat €» abre la pestaña Intrastat en ese mes, filtrada por la factura; allí hay un botón para volver
+  document.addEventListener('click', (ev) => {
+    const a = ev.target.closest?.('[data-gointra]'); if (!a) return;
+    ev.preventDefault(); ev.stopPropagation();
+    intraVuelta = { tab: S.tab, mes: +a.dataset.gointra, sel: S.sel };
+    intraMes = intraVuelta.mes; intraF = { fac: a.dataset.fac || '' }; S.tab = 'modintra'; S.grp = -1; render();
+    setTimeout(() => document.querySelector('.it-fil')?.scrollIntoView({ block: 'start' }), 120);
   }, true);
   function vistaIntraConc() {
     if (!S.sel) return sinEmpresa;
@@ -858,6 +866,9 @@ export function crearModelos(c) {
       let sel = intraConcMes || intraMes || 0; if (!MS.some((x) => x.m === sel)) sel = (MS.find((x) => x.B.some((b) => b.nKo)) || MS[MS.length - 1]).m;
       const tabsM = `<div class="it-subtabs it-conctabs no-print" style="margin:0 0 8px">${MS.map((x) => { const k = x.B.reduce((s, b) => s + b.nKo, 0); return `<button class="small${x.m === sel ? ' primary' : ''} ${k ? 'mes-ko' : 'mes-ok'}" data-act="m-intraconcmes" data-m="${x.m}">${MES_L[x.m - 1].slice(0, 3)} ${k ? `· ${k} ✖` : '✓'}</button>`; }).join('')}</div>`;
       const B = MS.find((x) => x.m === sel).B;
+      const lnkIt = (x) => { const v = r2(x.it + x.itn); if (!x.nIt) return guion(v);
+        const o = O.find((y) => y.anio === ej && y.mes === sel && (kf(y.r[13]) || '(sin nº de factura)') === x.fac), fac = String(o?.r[13] ?? '').trim();
+        return `<a href="#" class="lnk-fac" data-gointra="${sel}" data-fac="${esc(fac)}" title="Ver en el Intrastat las líneas de esta factura">${guion(v)}</a>`; };
       const itE = r2(O.filter((o) => o.anio === ej && o.mes === sel && o.flujoConc === 'Expedición').reduce((s, o) => s + o.impConc, 0)), itI = r2(O.filter((o) => o.anio === ej && o.mes === sel && o.flujoConc === 'Introducción').reduce((s, o) => s + o.impConc, 0));
       const e349 = r2(rep.filter((l) => mesDe(l) === sel && bienE(l)).reduce((s, l) => s + (+l.base || 0), 0)), a349 = r2(sop.filter((l) => mesDe(l) === sel && bienA(l)).reduce((s, l) => s + (+l.base || 0), 0));
       const ok = (v) => Math.abs(v) <= Math.max(tol, 0.01);
@@ -882,14 +893,14 @@ export function crearModelos(c) {
         if (/^Abono/.test(t)) return `Genera en Dynamics el abono de ${im} € (llegada si es de emitidas, expedición si es de recibidas) con el nº ${x.fac}`;
         if (/^Solo en Intrastat/.test(t)) return `Línea Intrastat de ${im} € sin factura de bienes en el 349: revisa el nº de factura de la línea o el código del libro (R.UE / S.UE)`;
         return `Diferencia de ${im} €: ajusta el importe de la línea Intrastat (${nf2(r2(x.it + x.itn))}) al de la factura en el 349 (${nf2(r2(x.m + x.mn))})`; };
-      const grupos = MOT.filter(([k]) => G[k]).map(([k, t, acc]) => `<div style="border:1px solid #c9a0a0;border-radius:4px;margin:10px 0;padding:6px 8px;background:#fff"><h4 style="margin:0 0 2px">${t} · ${G[k].length} factura(s)</h4><div style="margin:0 0 6px;color:#333">→ ${acc}</div><table class="aud mov it-t it-conc"><thead><tr><th>Flujo</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>Intrastat €</th><th>349 €</th><th>Diferencia</th><th>Qué hacer</th></tr></thead><tbody>${G[k].map(({ fl, x }) => `<tr class="cf-ko"><td>${fl === 'Expedición' ? 'Expedición (E)' : 'Introducción (A)'}</td><td>${lnkFac(fl, x.fac)}</td><td>${esc(x.nif)}</td><td>${esc(x.nom)}</td><td class="n">${guion(r2(x.it + x.itn))}</td><td class="n">${guion(r2(x.m + x.mn))}</td><td class="n">${guion(x.d)}</td><td>${esc(queHacer(x))}</td></tr>`).join('')}</tbody></table></div>`).join('');
+      const grupos = MOT.filter(([k]) => G[k]).map(([k, t, acc]) => `<div style="border:1px solid #c9a0a0;border-radius:4px;margin:10px 0;padding:6px 8px;background:#fff"><h4 style="margin:0 0 2px">${t} · ${G[k].length} factura(s)</h4><div style="margin:0 0 6px;color:#333">→ ${acc}</div><table class="aud mov it-t it-conc"><thead><tr><th>Flujo</th><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>Intrastat €</th><th>349 €</th><th>Diferencia</th><th>Qué hacer</th></tr></thead><tbody>${G[k].map(({ fl, x }) => `<tr class="cf-ko"><td>${fl === 'Expedición' ? 'Expedición (E)' : 'Introducción (A)'}</td><td>${lnkFac(fl, x.fac)}</td><td>${esc(x.nif)}</td><td>${esc(x.nom)}</td><td class="n">${lnkIt(x)}</td><td class="n">${guion(r2(x.m + x.mn))}</td><td class="n">${guion(x.d)}</td><td>${esc(queHacer(x))}</td></tr>`).join('')}</tbody></table></div>`).join('');
       const listo = filas.every((f) => f.includes('cf-ok')) && !grupos;
       const tablaGrupos = grupos ? `<h4 style="margin:10px 0 4px">Facturas a revisar, por motivo</h4>${grupos}` : '';
       const control = `<h4 style="margin:6px 0 4px">Control antes de presentar · 349 · Intrastat · ${MES_L[sel - 1]} ${ej} · ${listo ? '<b style="color:#0a6">✓ listo para presentar</b>' : '<span class="dif-ko">✖ revisar antes de presentar</span>'}</h4>
         <table class="aud mov it-t it-conc"><thead><tr><th>Operaciones</th><th>Fuente</th><th>Importe €</th><th>Frente a</th><th>Importe €</th><th>Diferencia</th><th>Estado / qué hacer</th></tr></thead><tbody>${filas.join('')}</tbody></table>${tablaGrupos}`;
       const bloques = B.map(({ fl, F, nKo }) => { const t = (k) => r2(F.reduce((s, x) => s + x[k], 0));
         return `<h4 style="margin:10px 0 4px">${fl === 'Expedición' ? 'EXPEDICIONES (E) · 349 clave E (entregas de bienes)' : 'INTRODUCCIONES (I) · 349 clave A (adquisiciones de bienes)'} · ${nKo ? `<span class="dif-ko">${nKo} factura(s) a revisar</span>` : '<b style="color:#0a6">todo cuadra</b>'}</h4>${F.length ? `<table class="aud mov it-t it-conc"><thead><tr><th>Nº factura</th><th>NIF</th><th>Nombre</th><th>Líneas Intrastat</th><th>Intrastat €</th><th>Líneas 349</th><th>349 positivas €</th><th>349 negativas €</th><th>Diferencia</th><th>Estado</th><th>Qué hacer</th></tr></thead><tbody>
-          ${F.map((x) => `<tr class="${x.est[0] === 'ok' ? 'cf-ok' : 'cf-ko'}"><td>${lnkFac(fl, x.fac)}</td><td>${esc(x.nif)}</td><td>${esc(x.nom)}</td><td class="c">${x.nIt || '-'}</td><td class="n">${guion(r2(x.it + x.itn))}</td><td class="c">${x.nM || '-'}</td><td class="n">${guion(x.m)}</td><td class="n">${guion(x.mn)}</td><td class="n">${guion(x.d)}</td><td>${x.est[0] === 'ok' ? '✓ ' : '✖ '}${esc(x.est[1])}</td><td>${x.est[0] === 'ok' ? '' : esc(queHacer(x))}</td></tr>`).join('')}
+          ${F.map((x) => `<tr class="${x.est[0] === 'ok' ? 'cf-ok' : 'cf-ko'}"><td>${lnkFac(fl, x.fac)}</td><td>${esc(x.nif)}</td><td>${esc(x.nom)}</td><td class="c">${x.nIt || '-'}</td><td class="n">${lnkIt(x)}</td><td class="c">${x.nM || '-'}</td><td class="n">${guion(x.m)}</td><td class="n">${guion(x.mn)}</td><td class="n">${guion(x.d)}</td><td>${x.est[0] === 'ok' ? '✓ ' : '✖ '}${esc(x.est[1])}</td><td>${x.est[0] === 'ok' ? '' : esc(queHacer(x))}</td></tr>`).join('')}
           <tr class="tot200"><td colspan="3">TOTAL</td><td></td><td class="n">${nf2(r2(t('it') + t('itn')))}</td><td></td><td class="n">${nf2(t('m'))}</td><td class="n">${nf2(t('mn'))}</td><td class="n">${nf2(t('d'))}</td><td></td><td></td></tr></tbody></table>` : '<p class="leyenda">Sin operaciones en el mes.</p>'}`; });
       const sinFac = O.some((o) => o.anio === ej && o.mes === sel && o.incluir === 1 && !String(o.r[13] ?? '').trim());
       concFac = `<section class="block"><h3 class="bt">Conciliación por nº de factura · fichero Intrastat vs modelo 349 · ${MES_L[sel - 1]} ${ej}</h3>${tabsM}${control}
@@ -916,6 +927,7 @@ export function crearModelos(c) {
     },
     'm-intraservdel': async (d) => { const D = datosIntra(); if (!D) return; D.serv.splice(+d.i, 1); await guardarIntra(D); render(); },
     'm-intrames': (d) => { intraMes = +d.m; render(); },
+    'm-intravolver': () => { const v = intraVuelta; if (!v) return; intraVuelta = null; intraF = {}; intraConcMes = v.mes; S.tab = v.tab; S.grp = -1; render(); },
     'm-intradel': async (d) => { const D = datosIntra(); if (!D) return; D.rows.splice(+d.i, 1); await guardarIntra(D); render(); },
     'm-intrapega': () => intraAnadirFilas(String(document.getElementById('intraPega')?.value ?? '').split(/\r?\n/).map((l) => l.split('\t'))),
     'm-intravaciar': async () => {
