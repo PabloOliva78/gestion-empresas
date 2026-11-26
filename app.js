@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=540';
+import { crearModulos } from './modulos.js?v=559';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -403,6 +403,7 @@ function render() {
   if (S.periodo && !periodosDe(e).includes(S.periodo)) S.periodo = ''; // el periodo elegido tiene que ser de esta empresa (meses o trimestres)
   const per = S.periodo ? (PERIODOS[S.periodo] ?? S.periodo) : 'Todo el ejercicio';
   const scrollTablas = [...root.querySelectorAll('.wrap')].map((w) => [w.scrollLeft, w.scrollTop]); // al redibujar, las tablas anchas no vuelven al principio
+  const listas = ['#fcTabla', '.tercero-tabla'].map((q) => { const x = root.querySelector(q); return x ? [q, x.scrollLeft, x.scrollTop, S.tab, S.sel] : null; }).filter(Boolean); // listas con desplazamiento propio (Emitidas, Recibidas, Proveedores, Clientes)
   const clara = vistaClara(); // vista clara: la cabecera va arriba a todo el ancho (fuera de la zona principal) y lleva el logo de la empresa delante del de PO
   const version = new URL(import.meta.url).searchParams.get('v') ?? '—';
   const cabHtml = `<header class="doc"><div class="doc-l">${clara
@@ -458,6 +459,8 @@ function render() {
   ajustarZoom();
   aplicarVistaSii();
   if (!devolverCampoActivo(campoActivo)) restaurarFoco();
+  // se vuelve a la misma altura de la lista (si es la misma pestaña y empresa); se hace al final, después de ajustar tamaños y devolver el cursor
+  listas.forEach(([q, x, y, tab, sel]) => { const el = tab === S.tab && sel === S.sel && root.querySelector(q); if (el) { el.scrollLeft = x; el.scrollTop = y; } });
 }
 
 // Ajustar a pantalla: mide la pestaña a tamaño 100 % y busca el zoom con el que cabe (en ancho, o en ancho y alto). Es un solo zoom para toda la pestaña.

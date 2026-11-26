@@ -1116,9 +1116,11 @@ export function crearModulos(c) {
       // Libro del mes que deja la tarea semanal de D365 (D365_<SIGLA>_<Repercutido|Soportado>_<AAAA-MM>.xlsx): cada semana trae el mes acumulado,
       // así que primero se quitan las líneas que aportó la carga anterior de ese mismo archivo (facturas corregidas o anuladas) y luego se añaden las nuevas: nunca se duplican.
       const marcasNsl = new Set(); // las R.NAC.NS marcadas «NS localización» a mano se conservan al recargar el archivo
-      if (/^D365_[^_]+_(Repercutido|Soportado)_\d{4}-\d{2}/i.test(f.name)) for (const t of ['fact-E', 'fact-R']) (await quitarDatosArchivo(t, f.name, empresaId)).forEach((q) => { if (q.nsl) marcasNsl.add(`${q.factura}|${q.nif}`); });
+      const editadas = new Map(); // líneas corregidas a mano (columna a columna): se vuelven a aplicar sobre las líneas del archivo recargado
+      if (/^D365_[^_]+_(Repercutido|Soportado)_\d{4}-\d{2}/i.test(f.name)) for (const t of ['fact-E', 'fact-R']) (await quitarDatosArchivo(t, f.name, empresaId)).forEach((q) => { if (q.nsl) marcasNsl.add(`${q.factura}|${q.nif}`); if (q.ed && q.orig) editadas.set(q.orig, q); });
+      const conEdicion = (l) => { const q = editadas.get(claveOrig(l)); if (!q) return l; const n = { ...l, ed: q.ed, orig: q.orig }; for (const [k, v] of Object.entries(q.ed)) { if (v === null) delete n[k]; else n[k] = v; } if (q.sentido) n.sentido = q.sentido; return n; };
       for (const s of ['E', 'R']) {
-        const x = lib.filter((l) => l.sentido === s).map((l) => ({ ...l, src: f.name, ...(s === 'E' && l.codigo === 'R.NAC.NS' && marcasNsl.has(`${l.factura}|${l.nif}`) ? { nsl: true } : {}) }));
+        const x = lib.filter((l) => l.sentido === s).map((l) => conEdicion({ ...l, src: f.name, ...(s === 'E' && l.codigo === 'R.NAC.NS' && marcasNsl.has(`${l.factura}|${l.nif}`) ? { nsl: true } : {}) }));
         if (x.length) { await guardarGrande('fact-' + s, empresaId, x, (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|')); partes.push(`${x.length} ${s === 'E' ? 'repercutidas' : 'soportadas'}`); }
       }
       if (!lote) { // en un lote se hace una sola vez al final, con todos los archivos
@@ -1397,7 +1399,10 @@ export function crearModulos(c) {
     try { return lineasFc(s, datos); } finally { fcCod = g.cod; fcPais = g.pais; fcF.pais = g.fpais; if (k !== 'cod' && k !== 'pais') fcF[k] = g.f; }
   }
   function opcionesFc(s, datos) {
-    const L = (k) => sinFiltroFc(s, datos, k);
+    // si el filtro k está vacío, «todas menos k» es lo mismo que la selección actual: se calcula una sola vez (antes se repasaba el libro entero siete veces en cada redibujado)
+    let todo = null;
+    const vacio = (k) => (k === 'cod' ? !fcCod : k === 'pais' ? !fcPais && !fcF.pais : !fcF[k]);
+    const L = (k) => (vacio(k) ? (todo ??= lineasFc(s, datos)) : sinFiltroFc(s, datos, k));
     const uniq = (f, fn) => [...new Set(f.map(fn).filter((v) => v !== '' && v != null))];
     const nums = (c, k) => [...new Set(L(k).map((l) => Math.round((Number(l[c]) || 0) * 100)))].sort((a, b) => a - b).map((v) => fnum(v / 100));
     const cnt = (f, fn) => { const m = new Map(); f.forEach((l) => { const q = fn(l); m.set(q, (m.get(q) || 0) + 1); }); return m; };
@@ -1446,9 +1451,13 @@ export function crearModulos(c) {
     else if (['base', 'cuota', 'pct'].includes(campo)) nl[campo] = parseES(valor);
     else if (campo === 'nif' || campo === 'codigo') nl[campo] = valor.trim().toUpperCase();
     else nl[campo] = valor.trim();
-    await reemplazarGrande(tipo, S.sel, arr.map((x, j) => (j === +i ? nl : x)));
-    render();
+    const k = campo === 'fecha2' ? 'ff' : campo;
+    if (nl[k] === l[k]) return; // sin cambios: no se guarda ni se redibuja
+    // se recuerda qué se ha corregido a mano (y cómo venía la línea) para que no se pierda al volver a cargar el mismo archivo de D365
+    nl.orig = l.orig ?? claveOrig(l); nl.ed = { ...(l.ed ?? {}), [k]: nl[k] ?? null };
+    await reemplazarGrande(tipo, S.sel, arr.map((x, j) => (j === +i ? nl : x))); // ya redibuja al momento; no se vuelve a redibujar al acabar de guardar (borraba lo que se estaba escribiendo y subía la lista)
   }
+  const claveOrig = (l) => [l.factura, l.nif, l.ff, l.base, l.cuota, l.codigo, l.asiento].join('|');
   // SII: cada campo de la consulta es editable y cada registro se puede quitar
   async function editarSii(clave, valor) {
     const [s, i, campo] = clave.split('|'), tipo = `sii-${s}`, arr = GR.get(`${tipo}|${S.sel}`), l = arr?.[+i];
@@ -1458,8 +1467,8 @@ export function crearModulos(c) {
     else if (['base', 'cuota', 'deducible'].includes(campo)) nl[campo] = parseES(valor);
     else if (campo === 'nif') nl.nif = valor.trim().toUpperCase();
     else nl[campo] = valor.trim();
+    if (nl[campo] === l[campo]) return;
     await reemplazarGrande(tipo, S.sel, arr.map((x, j) => (j === +i ? nl : x)));
-    render();
   }
   // quita las siglas del país a los NIF de países fuera de la UE de las facturas del periodo elegido (el NIF original se guarda en nifOrig para no perder las columnas de la descarga)
   async function quitarSiglasSii(s) {
@@ -1530,7 +1539,9 @@ export function crearModulos(c) {
     // los guardados del mismo libro van de uno en uno (si hay otro esperando, guardará lo último): dos a la vez se bloquean entre sí en la base de datos
     let q = colaGr.get(k); if (!q) { q = { p: Promise.resolve(), pend: null }; colaGr.set(k, q); }
     if (q.pend) return q.pend;
+    avisoGuardado(+1);
     q.pend = q.p.then(async () => {
+      await new Promise((r) => setTimeout(r, 1200)); // varios cambios seguidos se suben en un solo guardado
       q.pend = null;
       const fl = GR.get(k) ?? filas;
       let ex = existente;
@@ -1548,10 +1559,23 @@ export function crearModulos(c) {
       MCTRL.registrarCambios(tipo, empresaId, antesR, fl);
       return true;
     });
-    q.p = q.pend.catch(() => {});
+    q.p = q.pend.then((ok) => avisoGuardado(-1, ok === false), () => avisoGuardado(-1, true));
     return q.pend;
   }
   const colaGr = new Map();
+  // aviso pequeño de «Guardando… / Guardado» y advertencia si se intenta cerrar la página con cambios sin subir
+  let sinGuardar = 0, tAviso = 0;
+  function avisoGuardado(d, fallo) {
+    sinGuardar = Math.max(0, sinGuardar + d);
+    let el = document.getElementById('avisoGuardado');
+    if (!el) { el = document.createElement('div'); el.id = 'avisoGuardado'; el.className = 'no-print'; el.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:9999;padding:6px 12px;border-radius:999px;font:600 13px system-ui,sans-serif;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25)'; document.body.appendChild(el); }
+    clearTimeout(tAviso);
+    el.style.display = '';
+    el.style.background = sinGuardar ? '#8a6d00' : fallo ? '#a4161a' : '#1a7f37';
+    el.textContent = sinGuardar ? 'Guardando… no cierres la página' : fallo ? 'No se ha guardado' : '✓ Guardado';
+    if (!sinGuardar) tAviso = setTimeout(() => { el.style.display = 'none'; }, fallo ? 6000 : 2000);
+  }
+  window.addEventListener('beforeunload', (ev) => { if (sinGuardar) { ev.preventDefault(); ev.returnValue = ''; } });
 
   // ± signo · → pasar al otro libro · ✕ línea · ✕ factura
   async function opFc(s, op, key) {
