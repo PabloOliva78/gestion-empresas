@@ -18,30 +18,6 @@ export function crearModelos2(c) {
   const etq = (p) => (/T$/.test(p) ? `${p[0]}T (${MES_L[(+p[0] - 1) * 3].slice(0, 3)}-${MES_L[+p[0] * 3 - 1].slice(0, 3)})` : MES_L[+p - 1]);
   const enPer = (l, ej, p) => { const f = String(l.fecha ?? ''); if (f.slice(0, 4) !== String(ej)) return false; const m = +f.slice(5, 7); return /T$/.test(p) ? Math.ceil(m / 3) === +p[0] : m === +p; };
 
-  // ---------- Cabecera de la ficha (como la de las pestañas de resumen de la antigua) ----------
-  const ficha = (mod, extra) => `<div class="ficha"><div><dt>Empresa:</dt><dd class="nom">${esc(empresa().nombre)}</dd></div>
-    ${empresa().cif ? `<div><dt>NIF:</dt><dd>${esc(empresa().cif)}</dd></div>` : ''}<div><dt>Modelo:</dt><dd>${mod}</dd></div><div><dt>Ejercicio:</dt><dd>${ejercicio()}</dd></div>${extra}</div>`;
-  const filaAncha = (cls, txt) => (cls === 'gap' ? '<tr class="gap"><td colspan="29"></td></tr>'
-    : `<tr class="${cls}"><td>${esc(txt)}</td><td></td><td></td>${Array.from({ length: 13 }, (_, i) => `<td class="bi${i === 12 ? ' ejer' : ''}"></td><td class="ci${i === 12 ? ' ejer' : ''}"></td>`).join('')}</tr>`);
-  const cuadro = (ejTit, pers, cab3, h2a, h2b, F, D, extraCls = '') => {
-    const h1 = `<tr><th rowspan="2" class="c390">${cab3[0]}</th><th rowspan="2">${cab3[1]}</th><th rowspan="2">${cab3[2]}</th>${pers.map((p, i) => `<th colspan="2" class="mes${D.n[i] ? '' : ' vacio'}">${etq(p)} - ${ejTit}</th>`).join('')}<th colspan="2" class="mes ejer">EJERCICIO ${ejTit}</th></tr>`;
-    const h2 = `<tr>${pers.concat(['']).map((_, i) => `<th class="bi${i === pers.length ? ' ejer' : ''}">${h2a}</th><th class="ci${i === pers.length ? ' ejer' : ''}">${h2b}</th>`).join('')}</tr>`;
-    const body = F.map((r) => {
-      if (r.sec) return filaAncha('sec', r.sec);
-      if (r.cab) return filaAncha('cab', r.txt);
-      const vals = pers.map((_, i) => (D.n[i] ? r.g(D.m[i]) : null));
-      let tb = 0, tc = 0; vals.forEach((v) => { if (v) { tb += v.base || 0; tc += v.cuota || 0; } });
-      if (r.anual) tc = r.anual();
-      const soloCuota = vals.every((v) => !v || v.base === null);
-      const cel = (v, k) => (v === null ? `<td class="n ${k}">-</td>` : `<td class="n ${k}">${k === 'bi' ? (v.base === null ? '' : r.cnt ? (v.base ? String(v.base) : '-') : guion(v.base)) : (v.cuota === null ? '' : guion(v.cuota))}</td>`);
-      const cls = (r.sub ? 'sub' : r.verde ? 'verde' : r.cmp || r.vacia ? 'cmp' : '') + (r.gini ? ' gini' : '') + (r.gfin ? ' gfin' : '');
-      const tBase = r.cmp ? '' : r.cnt ? String(r.anualN ?? '-') : soloCuota ? '' : guion(r2(tb));
-      return `<tr class="${cls}"><td>${esc(r.txt)}</td><td class="c ref">${esc(r.cod ?? r.nif ?? '')}</td><td class="n ref">${D.A ? esc(r.clave ?? '') : r.tipo === null || r.tipo === undefined ? '' : nf.format(r.tipo)}</td>${vals.map((v) => cel(v, 'bi') + cel(v, 'ci')).join('')}
-        <td class="n bi ejer">${tBase}</td><td class="n ci ejer">${r.cnt ? '' : guion(r2(tc))}</td></tr>${r.sub ? filaAncha('gap', '') : ''}`;
-    }).join('');
-    return `<div class="scroll390"><table class="t390${extraCls}"><thead>${h1}${h2}</thead><tbody>${body}</tbody></table></div>`;
-  };
-
   // ================= 390 · catálogo de códigos de impuesto, mes a mes =================
   const CAT390 = [
     { sec: 'IVA DEVENGADO' },
@@ -136,7 +112,9 @@ export function crearModelos2(c) {
   const ajustar390 = (caja) => {
     const tb = caja.querySelector('table'), ancho = caja.clientWidth; if (!tb || !ancho || caja.dataset.fit === String(ancho)) return;
     caja.dataset.fit = String(ancho); tb.style.zoom = '';
-    const k = (ancho - 1) / tb.offsetWidth; if (k < 1) tb.style.zoom = String(Math.max(0.5, Math.floor(k * 1000) / 1000));
+    let k = Math.min(1, (ancho - 1) / tb.offsetWidth);
+    // al encoger, el navegador redondea anchos: se comprueba y, si aún sobra, se ajusta un poco más
+    for (let i = 0; i < 3 && k < 1; i++) { k = Math.max(0.5, Math.floor(k * 1000) / 1000); tb.style.zoom = String(k); if (caja.scrollWidth <= caja.clientWidth) break; k *= (caja.clientWidth - 1) / caja.scrollWidth; }
   };
   if (window.ResizeObserver) {
     const ro = new ResizeObserver((es) => requestAnimationFrame(() => es.forEach((x) => ajustar390(x.target)))), vistas = new WeakSet();
@@ -287,6 +265,28 @@ export function crearModelos2(c) {
     F.push({ txt: `Comprobación: ${D.A.cmp} de cada ${esTrim() ? 'trimestre' : 'mes'}`, cmp: true, g: (x) => ({ base: null, cuota: x.cmp }) });
     return F;
   }
+  // 180 · 190 · 193: perceptor, NIF y clave en su globo y un globo por mes (o trimestre) más el del año
+  function tablaAnual(D, F, k) {
+    const trim = D.pers.length === 4, hueco = '<td class="hueco"></td>', th = '<th class="hueco" rowspan="2"></th>';
+    const cols = D.pers.map((p, i) => ({ t: trim ? T390[i] : MES_L[i] })).concat([{ t: `Año ${D.ej}`, ano: true }]);
+    const num = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '<span class="cero">-</span>' : money(v));
+    const par = (g, base, cuota) => `${hueco}<td class="n bi${g.ano ? ' ano' : ''}">${base}</td><td class="n g2${g.ano ? ' ano' : ''}">${cuota}</td>`;
+    const cuerpo = F.map((r) => {
+      if (r.sec || r.cab) return `<tr class="${r.sec ? 'sec' : 'grupo'}">${hueco}<td class="con">${esc(r.sec ?? r.txt)}</td><td class="cod"></td><td class="pct"></td>${cols.map((g) => par(g, '', '')).join('')}${hueco}</tr>`;
+      const vals = D.pers.map((_, i) => (D.n[i] ? r.g(D.m[i]) : null));
+      let tb = 0, tc = 0; vals.forEach((v) => { if (v) { tb += v.base || 0; tc += v.cuota || 0; } });
+      if (r.anual) tc = r.anual();
+      const soloCuota = vals.every((v) => !v || v.base === null);
+      const meses = vals.map((v, i) => (v === null ? par(cols[i], num(null), num(null))
+        : par(cols[i], v.base === null ? '' : r.cnt ? (v.base ? String(v.base) : num(null)) : num(v.base), v.cuota === null ? '' : num(v.cuota)))).join('');
+      const ano = par(cols[cols.length - 1], r.cmp ? '' : r.cnt ? String(r.anualN ?? '-') : soloCuota ? '' : num(r2(tb)), r.cnt ? '' : num(r2(tc)));
+      const cls = r.verde ? 'res' : r.sub ? 'sub' : r.cmp || r.vacia ? 'cmp' : '';
+      return `<tr class="${cls}">${hueco}<td class="con">${esc(r.txt)}</td><td class="cod">${esc(r.nif ?? '')}</td><td class="n pct">${esc(r.clave ?? '')}</td>${meses}${ano}${hueco}</tr>`;
+    }).join('');
+    return `<div class="v390-t globo ancha"><table><thead>
+      <tr>${th}<th class="grp con"><span>Modelo ${k}</span></th><th class="grp resto" colspan="2"><span></span></th>${cols.map((g) => `${th}<th class="grp${g.ano ? ' ano' : ''}" colspan="2"><span>${esc(g.t)}</span></th>`).join('')}${th}</tr>
+      <tr><th class="con">Perceptor</th><th class="cod">NIF</th><th class="n pct">Clave</th>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base</th><th class="n g2${g.ano ? ' ano' : ''}">Retención</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  }
   function vistaAnual(k) {
     if (!S.sel) return sinEmpresa;
     const R = grande('fact-R');
@@ -296,9 +296,15 @@ export function crearModelos2(c) {
     const tot = F.find((r) => r.verde), cmp = F.find((r) => r.cmp);
     const desc = D.pers.filter((p, i) => D.n[i] && Math.abs(tot.g(D.m[i]).cuota - cmp.g(D.m[i]).cuota) > 0.01).map((p) => etq(p).toLowerCase());
     if (desc.length) D.avisos.unshift(`El total no cuadra con la ${D.A.cmp} en: ${desc.join(', ')}`);
-    return `${avisos(D.avisos)}<p class="hint">Resumen del ejercicio mes a mes y por perceptor, con los mismos datos que los ${D.A.mod} mensuales. ${esc(D.A.nota)}</p>
-      <section class="block m390">${ficha(k, `<div><dt>Perceptores:</dt><dd>${new Set(D.todas.map((l) => l.nif || l.nombre)).size}</dd></div>`)}
-      ${cuadro(D.ej, D.pers, ['Perceptor', 'NIF', 'Clave'], 'Base ret.', 'Retención', F, D, ' tanual')}</section>`;
+    // mismo diseño que el 390: cabecera, tarjetas y un globo por periodo
+    const trim = D.pers.length === 4, anual = (r, campo) => r2(D.pers.reduce((s, _, i) => s + (D.n[i] ? r.g(D.m[i])[campo] || 0 : 0), 0));
+    const nPer = F.find((r) => r.cnt).anualN, tarjeta = (t, v) => `<div class="v390-k"><span>${t}</span><b>${v}</b></div>`;
+    return `<div class="v390">
+      <div class="v390-cab"><div><h4>${esc(D.A.tit)}</h4><p>${esc(nombreEmp(empresa()))}${empresa().cif ? ` · ${esc(empresa().cif)}` : ''} · ejercicio ${D.ej} · ${D.n.filter((x) => x).length} de ${D.pers.length} ${trim ? 'trimestres' : 'meses'} con datos</p></div></div>
+      <div class="v390-kk">${tarjeta('Base de retenciones', money(anual(tot, 'base')))}${tarjeta('Retenciones', money(anual(tot, 'cuota')))}${tarjeta(D.usarNom ? 'Perceptores (sin nóminas)' : 'Perceptores', nPer)}</div>
+      ${avisos(D.avisos)}
+      ${tablaAnual(D, F, k)}
+      <p class="hint">Resumen del ejercicio ${trim ? 'trimestre a trimestre' : 'mes a mes'} y por perceptor, con los mismos datos que los ${D.A.mod} de cada ${trim ? 'trimestre' : 'mes'}. ${esc(D.A.nota)}</p></div>`;
   }
 
   // ================= 349 · copia de la pestaña de la antigua: fichero .txt, resumen, relación de operadores y facturas incluidas =================

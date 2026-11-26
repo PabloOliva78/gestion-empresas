@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=566';
+import { crearModulos } from './modulos.js?v=567';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -470,7 +470,7 @@ function ajustarZoom() {
   v.style.zoom = 1; v.style.setProperty('--z', 1);
   const vr = v.getBoundingClientRect();
   let need = v.scrollWidth;
-  v.querySelectorAll('.wrap, .scroll390, table').forEach((e) => { const r = e.getBoundingClientRect(); need = Math.max(need, Math.ceil(r.left - vr.left + Math.max(e.scrollWidth, r.width))); });
+  v.querySelectorAll('.wrap, .scroll390, table').forEach((e) => { if (e.closest('.v390-t.ancha')) return; /* esa tabla ya se ajusta sola al ancho */ const r = e.getBoundingClientRect(); need = Math.max(need, Math.ceil(r.left - vr.left + Math.max(e.scrollWidth, r.width))); });
   let z = Math.min(1, v.clientWidth / Math.max(need, 1));
   if (modo === 'pantalla') {
     const libre = innerHeight - vr.top - 8, alto = Math.max(v.scrollHeight, 1);

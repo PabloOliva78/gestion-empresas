@@ -1710,3 +1710,5 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .v390 .v390-t.globo.ancha table td.con{width:11rem;min-width:11rem;max-width:11rem;white-space:normal;line-height:1.2}
 .v390 .v390-t.globo.ancha table td.cod,.v390 .v390-t.globo.ancha table td.pct{white-space:nowrap}
 .v390 .v390-t.globo.ancha th.grp.con span{padding-left:4px}
+/* 180 · 190 · 193: fila con el código dentro de cada bloque */
+.v390 .v390-t tr.grupo td{background:#f7f9fc;font-weight:600}
