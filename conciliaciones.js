@@ -772,12 +772,16 @@ export function crearConciliaciones(c) {
       if (!f.enReg) { const r = regs.find((x) => String(x.num).replace(/\s/g, '').toUpperCase() === f.num); if (r) { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(String(r.levante || r.grab || '')); f.otroMes = m ? `${m[3]}-${m[2]}` : '?'; } }
     });
     const lista = [...filas.values()].sort((x, y) => x.num.localeCompare(y.num));
+    // la 4750.10 se da por buena por el total del mes: no hace falta un apunte por DUA ni su número en la descripción (cada DUA se comprueba en el libro de recibidas)
+    const porTotal = !out.sinCuenta && abTot > MARGEN && Math.abs(r2(lista.reduce((s, f) => s + f.cuota, 0)) - abTot) <= MARGEN;
     lista.forEach((f) => {
       const ap = [];
       if (!f.enReg && !f.otroMes) ap.push(['wa', 'DUA no cargado en la pestaña DUA']);
       if (f.otroMes) ap.push(['wa', `El levante es de ${f.otroMes.slice(5)}/${f.otroMes.slice(0, 4)}`]);
-      if (f.enReg && !out.sinCuenta && Math.abs(f.abono) < 0.005) ap.push(['ko', 'Sin apunte en la 4750.10']);
-      else if (f.enReg && !out.sinCuenta && Math.abs(f.cuota - f.abono) > MARGEN) ap.push(['ko', `4750.10 distinta (${money(r2(f.abono - f.cuota))})`]);
+      f.porTotal = porTotal && f.enReg && Math.abs(f.cuota - f.abono) > MARGEN;
+      if (!porTotal && f.enReg && !out.sinCuenta && Math.abs(f.abono) < 0.005) ap.push(['ko', 'Sin apunte en la 4750.10']);
+      else if (!porTotal && f.enReg && !out.sinCuenta && Math.abs(f.cuota - f.abono) > MARGEN) ap.push(['ko', `4750.10 distinta (${money(r2(f.abono - f.cuota))})`]);
+      if (f.enReg && !R) ap.push(['wa', 'Falta el libro soportado']);
       if (f.enReg && R && Math.abs(f.libro) < 0.005) ap.push(['ko', 'No está en el libro soportado']);
       else if (f.enReg && R && Math.abs(f.cuota - f.libro) > MARGEN) ap.push(['wa', `Libro distinto (${money(r2(f.libro - f.cuota))})`]);
       f.ap = ap;
@@ -792,7 +796,7 @@ export function crearConciliaciones(c) {
       ['Saldado el último día = abonos del mes', out.sinCuenta ? null : ok(cargo, abTot)],
       ['Saldo de la 4750.10 a fin de mes = 0', saldoFin === null ? null : ok(saldoFin, 0)],
     ];
-    if (sinNum) out.avisos.push(`Hay abonos en la 4750.10 por ${money(sinNum)} sin número de DUA en la descripción.`);
+    if (sinNum && !porTotal) out.avisos.push(`Hay abonos en la 4750.10 por ${money(sinNum)} sin número de DUA en la descripción.`);
     if (libDedSinRef) out.avisos.push(`Hay líneas DUA del libro soportado por ${money(libDedSinRef)} sin número de DUA en el número de factura.`);
     if (!regs.length) out.avisos.push('No hay DUA cargados para esta empresa (pestaña DUA-H1).');
     if (out.sinCuenta) out.avisos.push(!M ? 'Falta cargar el mayor para comparar con la 4750.10.' : 'Esta empresa no tiene la cuenta 4750.10 configurada.');
@@ -811,11 +815,11 @@ export function crearConciliaciones(c) {
     const sd = X.saldoFin;
     const cab = `<div class="bar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b>Mes</b> <select data-ivadifm="1">${meses.map((m) => `<option value="${m}"${m === ym ? ' selected' : ''}>${MESES[+m.slice(5) - 1]} ${m.slice(0, 4)}</option>`).join('')}</select></div>`;
     const kpis = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(13em,1fr));gap:10px;margin-bottom:12px">${k('Cuota IVA de los DUA', n0(X.tCuota), `${X.filas.filter((f) => f.enReg).length} DUA con levante en el mes`)}${k('Abonos 4750.10', X.sinCuenta ? '—' : n0(X.abTot), 'DUA contabilizados al cierre')}${k('Casilla 77 del 303', n0(X.c77), X.c77p === null ? 'sin presentado' : `presentada: ${money(X.c77p)}`)}${k('Saldo 4750.10 a fin de mes', n0(sd), 'debería ser 0', sd !== null && Math.abs(sd) > MARGEN)}</div>`;
-    const filas = X.filas.map((f) => `<tr><td>${esc(f.num)}</td><td class="num">${n0(f.enReg ? f.cuota : null)}</td><td class="num">${X.sinCuenta ? '—' : n0(f.abono)}</td><td class="num">${X.tLib === 0 && !f.libro ? '—' : n0(f.libro)}</td><td>${f.ap.length ? f.ap.map(([c, t]) => pil(c, t)).join(' ') : pil('ok', 'Cuadra')}</td></tr>`).join('');
+    const filas = X.filas.map((f) => `<tr><td>${esc(f.num)}</td><td class="num">${n0(f.enReg ? f.cuota : null)}</td><td class="num">${X.sinCuenta ? '—' : f.porTotal ? '<span class="hint">por total</span>' : n0(f.abono)}</td><td class="num">${X.tLib === 0 && !f.libro ? '—' : n0(f.libro)}</td><td>${f.ap.length ? f.ap.map(([c, t]) => pil(c, t)).join(' ') : pil('ok', f.porTotal ? 'Cuadra (4750.10 por total)' : 'Cuadra')}</td></tr>`).join('');
     const tabla = `<div class="wrap"><table class="tprs tnom il-t" style="width:100%"><thead><tr><th>DUA</th><th>Cuota DUA</th><th>Abono 4750.10</th><th>Libro soportado</th><th>Estado</th></tr></thead><tbody>${filas || '<tr><td colspan="5">Ningún DUA en este mes.</td></tr>'}<tr class="ttot"><td><b>Total</b></td><td class="num"><b>${n0(X.tCuota)}</b></td><td class="num"><b>${X.sinCuenta ? '—' : n0(X.abTot)}</b></td><td class="num"><b>${n0(X.tLib)}</b></td><td></td></tr></tbody></table></div>`;
     const chk = `<div style="margin-top:10px;line-height:1.9">${X.chk.map(([t, v]) => `${esc(t)} ${v === null ? pil('wa', 'sin datos') : v ? pil('ok', 'sí') : pil('ko', 'no')}`).join('<br>')}<br>Cargo del último día del mes: <b>${X.sinCuenta ? '—' : money(X.cargo)}</b></div>`;
     return `<section class="dsec"><h3>IVA de importación diferido · ${esc(empresa().nombre)}</h3>${cab}${kpis}${tabla}${chk}${X.avisos.length ? bloqueAvisos(X.avisos) : ''}
-      <p class="hint">Todos los DUA de esta empresa van con el IVA diferido. El DUA se abona en la 4750.10 al cierre del mes (el número va en la descripción) y se salda el último día del mes. En el libro soportado el número del DUA va en el número de factura; el IVA diferido (77) cuenta por la fecha de la factura. La cuota de cada DUA es la que se lee del PDF en la pestaña DUA-H1.</p></section>`;
+      <p class="hint">Todos los DUA de esta empresa van con el IVA diferido. El DUA se abona en la 4750.10 al cierre del mes y se salda el último día del mes; basta con que el total de los abonos del mes coincida con la suma de los DUA. Cada DUA se comprueba en el libro soportado (recibidas): en él el número del DUA va en el número de factura; el IVA diferido (77) cuenta por la fecha de la factura. La cuota de cada DUA es la que se lee del PDF en la pestaña DUA-H1.</p></section>`;
   }
   document.addEventListener('change', (ev) => { const t = ev.target; if (t?.dataset?.ivadifm) { lsSet('ivadifm', t.value); c.render(); } });
 
