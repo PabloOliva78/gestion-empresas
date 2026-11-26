@@ -130,8 +130,8 @@ export function crearModelos2(c) {
     return F;
   }
   // Vista del 390: cabecera, tres totales y la tabla por bloques; a elegir el año completo, por trimestres o por meses (los cálculos son los de siempre)
-  let ver390 = (() => { try { return localStorage.getItem('ver-390') || 'ano'; } catch { return 'ano'; } })();
-  document.addEventListener('click', (ev) => { const b = ev.target.closest?.('[data-ver390]'); if (!b) return; ver390 = b.dataset.ver390; try { localStorage.setItem('ver-390', ver390); } catch { /* sin almacenamiento */ } render(); });
+  let ver390 = (() => { try { return localStorage.getItem('ver390') || 'mes'; } catch { return 'mes'; } })();
+  document.addEventListener('click', (ev) => { const b = ev.target.closest?.('[data-ver390]'); if (!b) return; ver390 = b.dataset.ver390; try { localStorage.setItem('ver390', ver390); } catch { /* sin almacenamiento */ } render(); });
   const T390 = ['1T', '2T', '3T', '4T'];
   function tabla390(D, F, ver) {
     const trim = D.pers.length === 4, todos = D.pers.map((_, i) => i);
