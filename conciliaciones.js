@@ -829,7 +829,7 @@ export function crearConciliaciones(c) {
     au115: ['Conciliación 115', 'Mod. 115 vs contabilidad', () => vistaAudi('115')],
     au123: ['Conciliación 123', 'Mod. 123 vs contabilidad', () => vistaAudi('123')],
     au303: ['Conciliación 303', 'SII vs contabilidad', () => vistaAudi303()],
-    ivadif: ['IVA importaci?n diferido', 'DUA ? 4750.10 ? libro ? casilla 77', () => vistaIvaDif()],
+    ivadif: ['IVA importación diferido', 'DUA · 4750.10 · libro · casilla 77', () => vistaIvaDif()],
     conc: ['Conciliación Cuentas - Impuestos', 'Saldo frente a impuesto', () => vistaConc()],
     // una sola pestaña (en Administración) con las tres tablas de las que se emiten certificados
     certret: ['Certificado retenciones', 'Profesionales · alquileres · intereses y dividendos', () => { if (!S.sel) return sinEmpresa; if (!lib('fact-R')) return cargandoTxt; return ['rprof', 'ralq', 'rint'].map(vistaRetRes).join(''); }],
