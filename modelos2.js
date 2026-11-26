@@ -147,8 +147,8 @@ export function crearModelos2(c) {
     const num = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '<span class="cero">-</span>' : money(v));
     const cols = grupos.concat([{ t: `Año ${D.ej}`, idx: todos, ano: true }]);
     const dif = F.find((r) => r.txt === 'DIFERENCIA IVA DEVENGADO − IVA DEDUCIBLE');
-    // en Meses y Trimestres cada periodo va dentro de su propio «globo», separado de los demás por una columna hueca
-    const gl = grupos.length > 0, hueco = gl ? '<td class="hueco"></td>' : '';
+    // Concepto/Código/% y cada periodo van dentro de su propio «globo», separados por una columna hueca
+    const hueco = '<td class="hueco"></td>';
     const celdas = (r) => cols.map((g) => {
       const v = val(r, g.idx), cl = g.ano ? ' ano' : '';
       const cuota = v === null ? null : g.ano && r.anual ? r.anual() : v.cuota;
@@ -160,14 +160,14 @@ export function crearModelos2(c) {
     }).join('');
     const vacias = cols.map((g) => `${hueco}<td class="bi${g.ano ? ' ano' : ''}"></td><td class="g2${g.ano ? ' ano' : ''}"></td>`).join('');
     const cuerpo = F.map((r) => {
-      if (r.sec) return `<tr class="sec"><td class="con">${esc(r.sec)}</td><td colspan="2"></td>${vacias}${hueco}</tr>`;
+      if (r.sec) return `<tr class="sec">${hueco}<td class="con">${esc(r.sec)}</td><td colspan="2" class="pct"></td>${vacias}${hueco}</tr>`;
       const cls = r.verde ? (r === dif ? 'res' : 'tot') : r.sub ? 'sub' : r.cmp ? 'cmp' : r.gini ? 'gini' : '';
-      return `<tr class="${cls}"><td class="con">${esc(r.txt)}</td><td class="cod">${esc(r.cod ?? '')}</td><td class="n pct">${r.tipo === null || r.tipo === undefined ? '' : nf.format(r.tipo)}</td>${celdas(r)}${hueco}</tr>`;
+      return `<tr class="${cls}">${hueco}<td class="con">${esc(r.txt)}</td><td class="cod">${esc(r.cod ?? '')}</td><td class="n pct">${r.tipo === null || r.tipo === undefined ? '' : nf.format(r.tipo)}</td>${celdas(r)}${hueco}</tr>`;
     }).join('');
-    const th = gl ? '<th class="hueco" rowspan="2"></th>' : '';
-    return `<div class="v390-t${gl ? ' ancha globo' : ''}"><table><thead>
-      <tr><th class="con" rowspan="2">Concepto</th><th class="cod" rowspan="2">Código</th><th class="n pct" rowspan="2">%</th>${cols.map((g) => `${th}<th class="grp${g.ano ? ' ano' : ''}" colspan="2"><span>${esc(g.t)}</span></th>`).join('')}${th}</tr>
-      <tr>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base imponible</th><th class="n g2${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+    const th = '<th class="hueco" rowspan="2"></th>';
+    return `<div class="v390-t globo${grupos.length ? ' ancha' : ''}"><table><thead>
+      <tr>${th}<th class="grp con"><span>Modelo 390</span></th><th class="grp resto" colspan="2"><span></span></th>${cols.map((g) => `${th}<th class="grp${g.ano ? ' ano' : ''}" colspan="2"><span>${esc(g.t)}</span></th>`).join('')}${th}</tr>
+      <tr><th class="con">Concepto</th><th class="cod">Código</th><th class="n pct">%</th>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base imponible</th><th class="n g2${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   }
   function vista390() {
     if (!S.sel) return sinEmpresa;

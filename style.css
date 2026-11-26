@@ -1688,3 +1688,14 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .v390 .v390-t.globo th.g2,.v390 .v390-t.globo td.g2{border-right:2px solid #0071e3}
 .v390 .v390-t.globo tbody tr:last-child td.bi{border-bottom:2px solid #0071e3;border-bottom-left-radius:14px}
 .v390 .v390-t.globo tbody tr:last-child td.g2{border-bottom:2px solid #0071e3;border-bottom-right-radius:14px}
+/* 390 · globo de Concepto/Código/% y mismo borde arriba y abajo en las líneas de totales */
+.v390 .v390-t.globo th.grp.con span{border-radius:14px 0 0 0;text-align:left;padding-left:.6rem}
+.v390 .v390-t.globo th.grp.resto span{border-radius:0 14px 0 0}
+.v390 .v390-t.globo th.con,.v390 .v390-t.globo td.con{border-left:2px solid #0071e3}
+.v390 .v390-t.globo th.pct,.v390 .v390-t.globo td.pct{border-right:2px solid #0071e3}
+.v390 .v390-t.globo tbody tr:last-child td.con{border-bottom:2px solid #0071e3;border-bottom-left-radius:14px}
+.v390 .v390-t.globo tbody tr:last-child td.cod{border-bottom:2px solid #0071e3}
+.v390 .v390-t.globo tbody tr:last-child td.pct{border-bottom:2px solid #0071e3;border-bottom-right-radius:14px}
+.v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res) td,.v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res) td.hueco{border-top:2px solid #0071e3;border-bottom:2px solid #0071e3}
+.v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res)+tr:is(.sub,.tot,.res) td,.v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res)+tr:is(.sub,.tot,.res) td.hueco{border-top:0}
+.v390 .v390-t.globo table tbody tr:not(.sub,.tot,.res):has(+tr:is(.sub,.tot,.res)) td:not(.hueco){border-bottom:0}
