@@ -1677,3 +1677,14 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .v390 .v390-t tr.res td{background:#dcebfd;color:#0b3a7a;font-weight:700;font-size:.95rem}
 .v390 .v390-t tr.cmp td{font-style:italic;color:#555}
 @media (max-width:900px){.v390 .v390-kk{grid-template-columns:1fr}.v390 .v390-t td.con{min-width:11rem;width:11rem;max-width:11rem;font-size:.78rem}.v390 .v390-t.ancha table{width:100%}}
+
+/* 390 · Meses y Trimestres: un globo por periodo (de la cabecera a la última fila) */
+.v390 .v390-t.globo{padding-bottom:10px}
+.v390 .v390-t.globo table td.hueco,.v390 .v390-t.globo table th.hueco{width:10px;min-width:10px;padding:0;border:0;background:#fff}
+.v390 .v390-t.globo th.grp{padding:0;border:0;background:#fff}
+.v390 .v390-t.globo th.grp span{display:block;height:1.9rem;line-height:1.9rem;background:#0071e3;color:#fff;border-radius:14px 14px 0 0;text-transform:uppercase}
+.v390 .v390-t.globo th.grp.ano span{background:#0b4a99}
+.v390 .v390-t.globo th.bi,.v390 .v390-t.globo td.bi{border-left:2px solid #0071e3}
+.v390 .v390-t.globo th.g2,.v390 .v390-t.globo td.g2{border-right:2px solid #0071e3}
+.v390 .v390-t.globo tbody tr:last-child td.bi{border-bottom:2px solid #0071e3;border-bottom-left-radius:14px}
+.v390 .v390-t.globo tbody tr:last-child td.g2{border-bottom:2px solid #0071e3;border-bottom-right-radius:14px}

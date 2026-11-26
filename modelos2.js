@@ -135,7 +135,7 @@ export function crearModelos2(c) {
   const T390 = ['1T', '2T', '3T', '4T'];
   function tabla390(D, F, ver) {
     const trim = D.pers.length === 4, todos = D.pers.map((_, i) => i);
-    const grupos = ver === 'mes' && !trim ? D.pers.map((p, i) => ({ t: MES_L[i].slice(0, 3), idx: [i] }))
+    const grupos = ver === 'mes' && !trim ? D.pers.map((p, i) => ({ t: MES_L[i], idx: [i] }))
       : ver === 'trim' ? T390.map((q, k) => ({ t: q, idx: trim ? [k] : [k * 3, k * 3 + 1, k * 3 + 2] })) : [];
     // valor de una fila en un grupo de periodos: se suma, salvo los saldos (compensaciones pendientes), que son los del principio o el final
     const val = (r, idx) => {
@@ -147,24 +147,27 @@ export function crearModelos2(c) {
     const num = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '<span class="cero">-</span>' : money(v));
     const cols = grupos.concat([{ t: `Año ${D.ej}`, idx: todos, ano: true }]);
     const dif = F.find((r) => r.txt === 'DIFERENCIA IVA DEVENGADO − IVA DEDUCIBLE');
+    // en Meses y Trimestres cada periodo va dentro de su propio «globo», separado de los demás por una columna hueca
+    const gl = grupos.length > 0, hueco = gl ? '<td class="hueco"></td>' : '';
     const celdas = (r) => cols.map((g) => {
       const v = val(r, g.idx), cl = g.ano ? ' ano' : '';
       const cuota = v === null ? null : g.ano && r.anual ? r.anual() : v.cuota;
       if (r.cmp) { // comprobación contra el 303: marca si cuadra con la diferencia calculada por códigos
         const d = v === null ? null : r2((val(dif, g.idx)?.cuota ?? 0) - cuota);
-        return `<td class="n bi${cl}"></td><td class="n${cl}">${v === null ? num(null) : Math.abs(d) <= 0.01 ? `<span class="d-ok">✓ ${money(cuota)}</span>` : `<span class="d-ko" title="Diferencia con el cálculo por códigos: ${money(d)}">✖ ${money(cuota)}</span>`}</td>`;
+        return `${hueco}<td class="n bi${cl}"></td><td class="n g2${cl}">${v === null ? num(null) : Math.abs(d) <= 0.01 ? `<span class="d-ok">✓ ${money(cuota)}</span>` : `<span class="d-ko" title="Diferencia con el cálculo por códigos: ${money(d)}">✖ ${money(cuota)}</span>`}</td>`;
       }
-      return `<td class="n bi${cl}">${v === null ? num(null) : v.base === null ? '' : num(v.base)}</td><td class="n${cl}">${num(cuota)}</td>`;
+      return `${hueco}<td class="n bi${cl}">${v === null ? num(null) : v.base === null ? '' : num(v.base)}</td><td class="n g2${cl}">${num(cuota)}</td>`;
     }).join('');
-    const ancho = 3 + cols.length * 2;
+    const vacias = cols.map((g) => `${hueco}<td class="bi${g.ano ? ' ano' : ''}"></td><td class="g2${g.ano ? ' ano' : ''}"></td>`).join('');
     const cuerpo = F.map((r) => {
-      if (r.sec) return `<tr class="sec"><td class="con">${esc(r.sec)}</td><td colspan="${ancho - 1}"></td></tr>`;
+      if (r.sec) return `<tr class="sec"><td class="con">${esc(r.sec)}</td><td colspan="2"></td>${vacias}${hueco}</tr>`;
       const cls = r.verde ? (r === dif ? 'res' : 'tot') : r.sub ? 'sub' : r.cmp ? 'cmp' : r.gini ? 'gini' : '';
-      return `<tr class="${cls}"><td class="con">${esc(r.txt)}</td><td class="cod">${esc(r.cod ?? '')}</td><td class="n pct">${r.tipo === null || r.tipo === undefined ? '' : nf.format(r.tipo)}</td>${celdas(r)}</tr>`;
+      return `<tr class="${cls}"><td class="con">${esc(r.txt)}</td><td class="cod">${esc(r.cod ?? '')}</td><td class="n pct">${r.tipo === null || r.tipo === undefined ? '' : nf.format(r.tipo)}</td>${celdas(r)}${hueco}</tr>`;
     }).join('');
-    return `<div class="v390-t${grupos.length ? ' ancha' : ''}"><table><thead>
-      <tr><th class="con" rowspan="2">Concepto</th><th class="cod" rowspan="2">Código</th><th class="n pct" rowspan="2">%</th>${cols.map((g) => `<th class="grp${g.ano ? ' ano' : ''}" colspan="2">${esc(g.t)}</th>`).join('')}</tr>
-      <tr>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base imponible</th><th class="n${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+    const th = gl ? '<th class="hueco" rowspan="2"></th>' : '';
+    return `<div class="v390-t${gl ? ' ancha globo' : ''}"><table><thead>
+      <tr><th class="con" rowspan="2">Concepto</th><th class="cod" rowspan="2">Código</th><th class="n pct" rowspan="2">%</th>${cols.map((g) => `${th}<th class="grp${g.ano ? ' ano' : ''}" colspan="2"><span>${esc(g.t)}</span></th>`).join('')}${th}</tr>
+      <tr>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base imponible</th><th class="n g2${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   }
   function vista390() {
     if (!S.sel) return sinEmpresa;
