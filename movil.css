@@ -1,0 +1,80 @@
+/* Versión para móvil y tablet. TODO va bajo html.movil (lo pone movil.js en pantallas táctiles pequeñas): en el ordenador nada de esto se aplica. */
+#movMenu, #movVelo { display: none; }
+@media screen {
+  html.movil, html.movil body { overflow-x: hidden; max-width: 100%; }
+  html.movil { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+  /* ---------- menú lateral plegable ---------- */
+  html.movil .layout, html.movil .layout.v-clara { display: block !important; min-height: 100vh; }
+  html.movil .layout > .lat { position: fixed !important; top: 0 !important; bottom: 0; left: 0; width: min(320px, 86vw) !important; height: auto !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch; z-index: 1200; transform: translateX(-105%); transition: transform .2s ease; padding-bottom: 90px !important; }
+  html.movil.menu-abierto .layout > .lat { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.35); }
+  html.movil.con-menu #movMenu { display: flex; position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 1300; width: 56px; height: 56px; align-items: center; justify-content: center; border-radius: 50%; border: 0; background: #0071e3; color: #fff; font-size: 24px; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+  html.movil.menu-abierto #movVelo { display: block; position: fixed; inset: 0; z-index: 1100; background: rgba(10, 20, 45, .45); }
+  html.movil .lat .zoom-c, html.movil .tp-rz { display: none !important; } /* ajustes de tamaño pensados para el ratón */
+
+  /* ---------- cabecera ---------- */
+  html.movil header.doc { position: static !important; display: flex !important; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; min-height: 0 !important; padding: .6rem .7rem !important; width: auto !important; }
+  html.movil header.doc h2 { display: none; }
+  html.movil header.doc .doc-l { flex: 1 1 100%; min-width: 0; }
+  html.movil header.doc .doc-l > div { min-width: 0; }
+  html.movil header.doc .doc-l p { white-space: normal !important; overflow-wrap: anywhere; }
+  html.movil header.doc .doc-r { flex: 1 1 100%; justify-content: flex-start; flex-wrap: wrap; min-width: 0; }
+  html.movil header.doc .doc-r > div:not(.doc-sel), html.movil header.doc img.logo-hg { display: none !important; }
+  html.movil header.doc .doc-r > .doc-sel { display: flex !important; flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: .5rem; width: 100%; text-align: left; }
+  html.movil header.doc .doc-sel .two { display: flex; gap: .5rem; flex: 1 1 260px; }
+  html.movil header.doc .doc-sel .two label { flex: 1; min-width: 0; }
+  html.movil header.doc .doc-sel .lbl { flex: 1 1 240px; min-width: 0; }
+  html.movil header.doc .doc-sel select, html.movil header.doc .sel, html.movil header.doc .sel-btn { width: 100%; min-width: 0; }
+  html.movil header.doc .sel-menu { max-height: 65vh; overflow-y: auto; width: 100%; z-index: 1000; }
+
+  /* ---------- bloques y pestañas ---------- */
+  html.movil .princ { padding-bottom: 90px; width: 100%; min-width: 0; }
+  html.movil .tabs-wrap { position: static !important; top: auto !important; max-width: 100%; }
+  html.movil .tabs-wrap > nav.tabs { display: flex !important; flex-wrap: nowrap; overflow-x: auto; gap: .5rem; padding: .5rem .6rem; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+  html.movil .tabs-wrap > nav.tabs > .gpill { flex: 0 0 132px; height: auto !important; min-height: 84px; width: auto !important; border-radius: 16px !important; scroll-snap-align: start; padding: .4rem !important; }
+  html.movil .tabs-wrap > nav.tabs > .gpill .gico { max-height: 28px; }
+  html.movil .gpanel { position: static !important; width: auto !important; max-width: none !important; margin: 0 .6rem .6rem !important; max-height: none; }
+  html.movil .gpanel .tiles { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; gap: .5rem; }
+  html.movil .gpanel .tile { width: auto !important; min-width: 0; }
+  html.movil .tpills { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; justify-content: flex-start !important; gap: .4rem; padding: .5rem .6rem; -webkit-overflow-scrolling: touch; }
+  html.movil .tpills > .tpill { flex: 0 0 auto !important; width: auto !important; max-width: 220px; min-height: 44px; }
+
+  /* ---------- contenido de las pestañas (a tamaño real; las tablas se deslizan) ---------- */
+  html.movil .vista { zoom: 1 !important; --z: 1 !important; max-width: 100%; min-width: 0; padding-left: .6rem !important; padding-right: .6rem !important; }
+  html.movil .vista :is(section, .block, .dsec, .cg-card, .it-subtabs, form, fieldset) { max-width: 100%; min-width: 0; }
+  html.movil .vista :is(section, .block, .dsec, .cg-card) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  html.movil .vista :is(.wrap, .scroll390, .cg-sc, .cg-fila) { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  html.movil .vista > table, html.movil .vista > div > table { display: block; max-width: 100%; overflow-x: auto; }
+  html.movil .vista .inicio { --ini: 13px !important; }
+  html.movil .vista .inicio > *, html.movil .vista [style*="grid-template-columns"] { min-width: 0; }
+
+  /* ---------- botones y casillas para el dedo ---------- */
+  html.movil button, html.movil select, html.movil input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]) { min-height: 38px; }
+  html.movil input:not([type=checkbox]):not([type=radio]):not([type=range]), html.movil select, html.movil textarea { font-size: 16px !important; } /* menos de 16 px hace que el iPhone amplíe la pantalla al escribir */
+  html.movil input[type=checkbox], html.movil input[type=radio] { width: 20px; height: 20px; }
+  html.movil .vista textarea, html.movil .vista .dropzone { max-width: 100%; box-sizing: border-box; }
+  html.movil .exp-pop { max-width: 92vw; }
+
+  /* ---------- teléfono ---------- */
+  html.tel .vista .inicio, html.tel .vista .inicio :is(.dash, .dash-grid, .dash-cols) { grid-template-columns: minmax(0, 1fr) !important; }
+  html.tel .vista [style*="grid-template-columns"] { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important; }
+  html.tel .gpanel .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  /* la primera columna de las tablas queda fija al deslizar (salvo las tablas por globos, que tienen su propio diseño) */
+  html.tel .vista .wrap table:not(.v390 table) tr > :is(td, th):first-child:not([colspan]) { position: sticky; left: 0; z-index: 2; background-color: var(--card, #fff); box-shadow: 1px 0 0 #d5dbe6; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  html.tel .v390 .v390-kk { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media screen {
+  html.movil .tpills > .tpill { font-size: .8rem; padding: .35rem .8rem !important; }
+  html.movil .tpills > .tpill .badge { font-size: .7rem; }
+}
+@media screen {
+  html.tel .vista .wrap table:not(.v390 table) { overflow: visible !important; } /* si la tabla recorta, la primera columna no puede quedarse fija */
+}
+@media screen {
+  html.tel .vista .rg-split { grid-template-columns: minmax(0, 1fr) !important; }
+  html.tel .vista .rg-izq { position: static !important; min-width: 0; }
+}
+@media screen {
+  html.tel .vista .ttp { max-width: 100%; overflow-x: auto; }
+  html.tel .vista .tt-seg { flex-wrap: wrap; max-width: 100%; }
+}

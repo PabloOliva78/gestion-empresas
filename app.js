@@ -296,7 +296,8 @@ const aplicarLetra = () => { const cl = document.body.classList; [...cl].filter(
 aplicarLetra();
 // Vista del menú (se elige en Administración › Vistas): 'c' = la de siempre (bloques arriba); 'n' = bloques a la izquierda y pestañas en píldoras arriba; 'd' = como la nueva, con el diseño claro
 const vistaMenu = () => { try { const v = localStorage.getItem('imp-vista'); return ['c', 'n', 'd'].includes(v) ? v : localStorage.getItem('imp-menuNuevo') === '1' ? 'n' : 'c'; } catch { return 'c'; } };
-const menuNuevo = () => vistaMenu() !== 'c';
+// en móvil y tablet (clase «movil», ver movil.js) los bloques van siempre en el menú lateral, aunque en el ordenador se use la vista de siempre
+const menuNuevo = () => vistaMenu() !== 'c' || document.documentElement.classList.contains('movil');
 const vistaClara = () => vistaMenu() === 'd';
 // Nombres cortos de los bloques en la vista clara (mismo orden que GRUPOS)
 const GRUPOS_CORTO = ['Información tributaria', 'Registro Mercantil', 'Información empresa', 'Modelos tributarios', 'Cuentas contables', 'SII', 'Estados financieros',
