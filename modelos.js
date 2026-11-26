@@ -665,13 +665,27 @@ export function crearModelos(c) {
     });
   }  async function intraAnadirFilas(filas) {
     const bc = intraDeBC(filas, empresa()); if (bc) filas = bc;
-    const D = datosIntra(); if (!D) return; let n = 0;
+    const D = datosIntra(); if (!D) return; const nuevas = [];
     filas.forEach((r) => {
       if (!r || !r.some((v) => v !== null && v !== '')) return; if (String(r[0] ?? '').trim().toLowerCase() === 'fecha') return; // cabecera
       const f = fechaUtc(r[0]); if (!f) return;
-      const fila = INTRA_COLS.map((_, j) => { const v = r[j]; return v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v); }); fila[0] = fdmy(f); D.rows.push(fila); n++;
+      const fila = INTRA_COLS.map((_, j) => { const v = r[j]; return v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v); }); fila[0] = fdmy(f); nuevas.push(fila);
     });
-    await guardarIntra(D); aviso(`${n} línea(s) Intrastat añadidas`);
+    const añadir = intraSinRepetir(D.rows, nuevas), rep = nuevas.length - añadir.length;
+    if (añadir.length) { D.rows.push(...añadir); await guardarIntra(D); }
+    aviso(`${añadir.length} línea(s) Intrastat añadidas${rep ? ` · ya cargadas, no se repiten: ${rep}` : ''}`);
+  }
+  // Líneas de «nuevas» que todavía no están en «rows». Se compara por contenido (da igual que el número venga de Excel o pegado como texto) y por número de veces,
+  // así dos líneas iguales del mismo archivo (mismas mercancías y factura) se conservan.
+  function intraSinRepetir(rows, nuevas) {
+    const firma = (r) => JSON.stringify(INTRA_COLS.map((_, j) => {
+      if (j === 0) { const f = fechaUtc(r[0]); return f ? fdmy(f) : String(r[0] ?? '').trim(); }
+      if (j >= 7 && j <= 9) { const n = intraNum(r[j]); return n === null ? '' : n.toFixed(3); }
+      const t = String(r[j] ?? '').trim().replace(/\s+/g, ' ').toUpperCase(); return /^\d+$/.test(t) && j >= 3 && j <= 5 ? String(+t) : t;
+    }));
+    const tengo = new Map(); rows.forEach((r) => { const k = firma(r); tengo.set(k, (tengo.get(k) || 0) + 1); });
+    const vistas = new Map();
+    return nuevas.filter((r) => { const k = firma(r), n = (vistas.get(k) || 0) + 1; vistas.set(k, n); return n > (tengo.get(k) || 0); });
   }
   async function cargarIntra(files) {
     for (const f of files) { const sh = await hojasExcel(f); if (sh[0]) await intraAnadirFilas(sh[0].rows); }
@@ -684,8 +698,6 @@ export function crearModelos(c) {
     const { data, error: e0 } = await db.from('registros').select('id,datos').eq('empresa_id', empId).eq('tipo', 'intra').maybeSingle();
     if (e0) throw new Error(e0.message);
     const d = data?.datos ?? { rows: [], serv: [], cfg: {}, exp: {} }, rows = d.rows ?? [];
-    const firma = (r) => JSON.stringify(INTRA_COLS.map((_, j) => String(r[j] ?? '').trim()));
-    const tengo = new Map(); rows.forEach((r) => { const k = firma(r); tengo.set(k, (tengo.get(k) || 0) + 1); });
     // el Excel de D365 trae la cabecera y alguna columna más («Es válido»): las columnas se buscan por su nombre; sin cabecera, por posición
     const hd = filas.find((r) => r && String(r[0] ?? '').trim().toLowerCase() === 'fecha'), nm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const pos = INTRA_COLS.map((c, j) => { const i = hd ? hd.findIndex((x) => nm(x) === nm(c)) : j; return i; });
@@ -695,8 +707,7 @@ export function crearModelos(c) {
       const rr0 = porNombre.map((i) => (i >= 0 ? r[i] : undefined)), f = fechaUtc(rr0[0]); if (!f) return;
       const fila = rr0.map((v) => (v instanceof Date ? fdmy(fechaUtc(v)) : (v === undefined ? null : v))); fila[0] = fdmy(f); nuevas.push(fila);
     });
-    const vistas = new Map(), añadir = [];
-    nuevas.forEach((fila) => { const k = firma(fila), c = (vistas.get(k) || 0) + 1; vistas.set(k, c); if (c > (tengo.get(k) || 0)) añadir.push(fila); });
+    const añadir = intraSinRepetir(rows, nuevas);
     if (!nuevas.length) throw new Error('no he encontrado líneas Intrastat (fecha, dirección, país…)');
     if (!añadir.length) return { leidas: nuevas.length, nuevas: 0 };
     const datos = { ...d, rows: [...rows, ...añadir] };
@@ -762,7 +773,7 @@ export function crearModelos(c) {
       <p class="hint">Distribuciones = Expedición, Llegadas = Introducción. País ISO3 → ISO2. Servicios (Categoría con «${esc(C.txtServ)}») se excluyen; producto sin NC toma el NC por defecto. Avisos: ✖ = error que hay que corregir antes de presentar; • = informativo. El 349 se calcula desde los libros registro (R.UE y S.UE.NR/RD/SR).</p>
       ${cfg}<p class="hint no-print">La conciliación con el modelo 349 está en Conciliaciones → Conciliación 349 - Intrastat.</p></section>
       <section class="block"><h3 class="bt">Descarga de Dynamics (13 columnas + nº de factura) ${oblIntE(empresa()) ? '<button class="small no-print" data-act="m-intradyn" title="Abre la página de Intrastat de Dynamics 365 de esta empresa en otra pestaña">↗ Abrir Intrastat en Dynamics</button>' : ''}</h3>${avisoDia4}
-      ${ed ? `<div class="dropzone" data-kind="intra" tabindex="0" role="button"><b>Suelta aquí el Excel o CSV de Dynamics</b> o haz clic para elegirlo (se añade a lo que hay)
+      ${ed ? `<div class="dropzone" data-kind="intra" tabindex="0" role="button"><b>Suelta aquí el Excel o CSV de Dynamics</b> o haz clic para elegirlo (se añade a lo que hay; las líneas ya cargadas no se repiten)
         <input type="file" data-dzkind="intra" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden></div>
       <div class="no-print" style="margin:8px 0"><textarea id="intraPega" rows="3" style="width:100%;font-size:11px" placeholder="…o pega aquí las filas copiadas de Excel (13 columnas más el nº de factura opcional: ${INTRA_COLS.join(', ')})"></textarea>
         <button class="small" data-act="m-intrapega">Añadir lo pegado</button> <button class="small" data-act="m-intraadd" title="Añade una fila en blanco al final de la tabla para rellenarla a mano">＋ Añadir línea a mano</button><button class="small" data-act="m-intravaciar">Vaciar las líneas de ${ej}</button>${mSel ? ` <button class="small" data-act="m-intravaciarmes" data-m="${mSel}">Vaciar las líneas de ${MES_L[mSel - 1].toLowerCase()}</button>` : ''} ${subtabs}</div>` : `<div class="no-print">${subtabs}</div>`}
