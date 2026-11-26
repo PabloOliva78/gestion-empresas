@@ -123,26 +123,70 @@ export function crearModelos2(c) {
     F.push({ sec: 'LIQUIDACIÓN (casillas del 303 de cada mes)' });
     cas('66', 'Atribuible a la Administración del Estado');
     cas('77', 'IVA a la importación liquidado por la Aduana pendiente de ingreso');
-    cas('110', 'Cuotas a compensar pendientes de periodos previos', { anual: () => (conDatos.length ? r2(conDatos[0].R?.c110 ?? 0) : 0) });
+    cas('110', 'Cuotas a compensar pendientes de periodos previos', { saldo: 'ini', anual: () => (conDatos.length ? r2(conDatos[0].R?.c110 ?? 0) : 0) });
     cas('78', 'Cuotas a compensar de periodos previos aplicadas en este periodo');
-    cas('87', 'Cuotas a compensar de periodos previos pendientes para periodos posteriores', { anual: () => (conDatos.length ? r2(conDatos[conDatos.length - 1].R?.c87 ?? 0) : 0) });
+    cas('87', 'Cuotas a compensar de periodos previos pendientes para periodos posteriores', { saldo: 'fin', anual: () => (conDatos.length ? r2(conDatos[conDatos.length - 1].R?.c87 ?? 0) : 0) });
     cas('69', 'Resultado', { sub: true });
     return F;
+  }
+  // Vista del 390: cabecera, tres totales y la tabla por bloques; a elegir el año completo, por trimestres o por meses (los cálculos son los de siempre)
+  let ver390 = (() => { try { return localStorage.getItem('ver-390') || 'ano'; } catch { return 'ano'; } })();
+  document.addEventListener('click', (ev) => { const b = ev.target.closest?.('[data-ver390]'); if (!b) return; ver390 = b.dataset.ver390; try { localStorage.setItem('ver-390', ver390); } catch { /* sin almacenamiento */ } render(); });
+  const T390 = ['1T', '2T', '3T', '4T'];
+  function tabla390(D, F, ver) {
+    const trim = D.pers.length === 4, todos = D.pers.map((_, i) => i);
+    const grupos = ver === 'mes' && !trim ? D.pers.map((p, i) => ({ t: MES_L[i].slice(0, 3), idx: [i] }))
+      : ver === 'trim' ? T390.map((q, k) => ({ t: q, idx: trim ? [k] : [k * 3, k * 3 + 1, k * 3 + 2] })) : [];
+    // valor de una fila en un grupo de periodos: se suma, salvo los saldos (compensaciones pendientes), que son los del principio o el final
+    const val = (r, idx) => {
+      const L = idx.filter((i) => D.n[i]); if (!L.length) return null;
+      if (r.saldo) return r.g(D.m[r.saldo === 'ini' ? L[0] : L[L.length - 1]]);
+      let b = null, q = 0; L.forEach((i) => { const v = r.g(D.m[i]); if (v.base !== null && v.base !== undefined) b = (b ?? 0) + (v.base || 0); q += v.cuota || 0; });
+      return { base: b === null ? null : r2(b), cuota: r2(q) };
+    };
+    const num = (v) => (v === null || v === undefined || Math.abs(v) < 0.005 ? '<span class="cero">-</span>' : money(v));
+    const cols = grupos.concat([{ t: `Año ${D.ej}`, idx: todos, ano: true }]);
+    const dif = F.find((r) => r.txt === 'DIFERENCIA IVA DEVENGADO − IVA DEDUCIBLE');
+    const celdas = (r) => cols.map((g) => {
+      const v = val(r, g.idx), cl = g.ano ? ' ano' : '';
+      const cuota = v === null ? null : g.ano && r.anual ? r.anual() : v.cuota;
+      if (r.cmp) { // comprobación contra el 303: marca si cuadra con la diferencia calculada por códigos
+        const d = v === null ? null : r2((val(dif, g.idx)?.cuota ?? 0) - cuota);
+        return `<td class="n bi${cl}"></td><td class="n${cl}">${v === null ? num(null) : Math.abs(d) <= 0.01 ? `<span class="d-ok">✓ ${money(cuota)}</span>` : `<span class="d-ko" title="Diferencia con el cálculo por códigos: ${money(d)}">✖ ${money(cuota)}</span>`}</td>`;
+      }
+      return `<td class="n bi${cl}">${v === null ? num(null) : v.base === null ? '' : num(v.base)}</td><td class="n${cl}">${num(cuota)}</td>`;
+    }).join('');
+    const ancho = 3 + cols.length * 2;
+    const cuerpo = F.map((r) => {
+      if (r.sec) return `<tr class="sec"><td class="con">${esc(r.sec)}</td><td colspan="${ancho - 1}"></td></tr>`;
+      const cls = r.verde ? (r === dif ? 'res' : 'tot') : r.sub ? 'sub' : r.cmp ? 'cmp' : r.gini ? 'gini' : '';
+      return `<tr class="${cls}"><td class="con">${esc(r.txt)}</td><td class="cod">${esc(r.cod ?? '')}</td><td class="n pct">${r.tipo === null || r.tipo === undefined ? '' : nf.format(r.tipo)}</td>${celdas(r)}</tr>`;
+    }).join('');
+    return `<div class="v390-t${grupos.length ? ' ancha' : ''}"><table><thead>
+      <tr><th class="con" rowspan="2">Concepto</th><th class="cod" rowspan="2">Código</th><th class="n pct" rowspan="2">%</th>${cols.map((g) => `<th class="grp${g.ano ? ' ano' : ''}" colspan="2">${esc(g.t)}</th>`).join('')}</tr>
+      <tr>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base imponible</th><th class="n${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   }
   function vista390() {
     if (!S.sel) return sinEmpresa;
     const E = grande('fact-E'), R = grande('fact-R');
     if (!E || !R) return cargandoTxt;
     if (!E.length && !R.length) return '<p class="vacio">Sin datos: carga los libros de IVA con los botones EMITIDAS y RECIBIDAS.</p>';
-    const D = calc390(E, R), F = filas390(D);
+    const D = calc390(E, R), F = filas390(D), trim = D.pers.length === 4;
     const dif = F.find((r) => r.txt === 'DIFERENCIA IVA DEVENGADO − IVA DEDUCIBLE');
     const desc = D.pers.filter((p, i) => D.n[i] && Math.abs(dif.g(D.m[i]).cuota - (D.m[i].R?.c46 ?? 0)) > 0.01).map((p) => etq(p).toLowerCase());
     if (desc.length) D.avisos.unshift(`La diferencia por códigos no cuadra con el resultado del 303 (casilla 46) en: ${desc.join(', ')}. Suele deberse a reclasificaciones hechas a mano o a códigos fuera del catálogo`);
-    return `${avisos(D.avisos)}<p class="hint">Listado del ejercicio por los códigos de impuestos de tu catálogo, mes a mes, con los mismos grupos y totales. La fila de comprobación muestra el resultado del 303 de cada mes para que veas que cuadra.</p>
-      <section class="block m390">${ficha('390', `<div><dt>Meses con datos:</dt><dd>${D.n.filter((x) => x).length} de ${D.pers.length}</dd></div>`)}
-      ${cuadro(D.ej, D.pers, ['Concepto', 'Código', '%'], 'Base imp.', 'Cuota imp.', F, D)}</section>`;
+    const anual = (txt) => { const r = F.find((x) => x.txt === txt); return r ? r2(D.pers.reduce((s, _, i) => s + (D.n[i] ? r.g(D.m[i]).cuota : 0), 0)) : 0; };
+    const ver = trim && ver390 === 'mes' ? 'trim' : ver390;
+    const tarjeta = (t, v) => `<div class="v390-k"><span>${t}</span><b>${money(v)}</b></div>`;
+    const resultado = anual('DIFERENCIA IVA DEVENGADO − IVA DEDUCIBLE');
+    return `<div class="v390">
+      <div class="v390-cab"><div><h4>Modelo 390 · resumen anual del IVA</h4><p>${esc(nombreEmp(empresa()))}${empresa().cif ? ` · ${esc(empresa().cif)}` : ''} · ejercicio ${D.ej} · ${D.n.filter((x) => x).length} de ${D.pers.length} ${trim ? 'trimestres' : 'meses'} con datos</p></div>
+        <div class="v390-ver no-print">${[['ano', 'Año'], ['trim', 'Trimestres'], ...(trim ? [] : [['mes', 'Meses']])].map(([k, t]) => `<button class="small${k === ver ? ' on' : ''}" data-ver390="${k}">${t}</button>`).join('')}</div></div>
+      <div class="v390-kk">${tarjeta('IVA devengado', anual('TOTAL IVA DEVENGADO'))}${tarjeta('IVA deducible', anual('TOTAL IVA DEDUCIBLE'))}${tarjeta('Resultado (devengado − deducible)', resultado)}</div>
+      ${avisos(D.avisos)}
+      ${tabla390(D, F, ver)}
+      <p class="hint">Listado del ejercicio por los códigos de impuestos de tu catálogo, con los mismos grupos y totales. La última fila de la liquidación y la de comprobación vienen de los 303 de cada ${trim ? 'trimestre' : 'mes'}: ✓ indica que el 303 coincide con el cálculo por códigos.</p></div>`;
   }
-
   // ================= 180 · 190 · 193: resumen anual por perceptor, mes a mes =================
   const ANUALES = {
     190: { tit: 'Modelo 190 · Resumen anual de retenciones del trabajo y actividades económicas', mod: '111', cmp: 'casilla 28 del 111',
