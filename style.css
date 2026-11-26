@@ -1680,7 +1680,7 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 
 /* 390 · Meses y Trimestres: un globo por periodo (de la cabecera a la última fila) */
 .v390 .v390-t.globo{padding-bottom:10px}
-.v390 .v390-t.globo table td.hueco,.v390 .v390-t.globo table th.hueco{width:10px;min-width:10px;padding:0;border:0;background:#fff}
+.v390 .v390-t.globo table td.hueco,.v390 .v390-t.globo table th.hueco{width:var(--hueco390,10px);min-width:var(--hueco390,10px);max-width:var(--hueco390,10px);padding:0;border:0;background:#fff}
 .v390 .v390-t.globo th.grp{padding:0;border:0;background:#fff}
 .v390 .v390-t.globo th.grp span{display:block;height:1.9rem;line-height:1.9rem;background:#0071e3;color:#fff;border-radius:14px 14px 0 0;text-transform:uppercase}
 .v390 .v390-t.globo th.grp.ano span{background:#0b4a99}
@@ -1705,10 +1705,14 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 /* las columnas huecas entre globos no llevan ninguna linea */
 .v390 .v390-t.globo table tr td.hueco,.v390 .v390-t.globo table tr th.hueco{border:0 !important;background:#fff !important}
 /* 390 · Meses y Trimestres compactos: hueco fino, menos margen y Concepto estrecho para que todo entre en el ancho */
-.v390 .v390-t.globo.ancha table td.hueco,.v390 .v390-t.globo.ancha table th.hueco{width:3px;min-width:3px}
+.v390 .v390-t.globo.ancha table td.hueco,.v390 .v390-t.globo.ancha table th.hueco{width:var(--hueco390,3px);min-width:var(--hueco390,3px);max-width:var(--hueco390,3px)}
 .v390 .v390-t.globo.ancha table td:not(.hueco),.v390 .v390-t.globo.ancha table th:not(.hueco):not(.grp){padding-left:4px;padding-right:4px}
 .v390 .v390-t.globo.ancha table td.con{width:11rem;min-width:11rem;max-width:11rem;white-space:normal;line-height:1.2}
 .v390 .v390-t.globo.ancha table td.cod,.v390 .v390-t.globo.ancha table td.pct{white-space:nowrap}
 .v390 .v390-t.globo.ancha th.grp.con span{padding-left:4px}
 /* 180 · 190 · 193: fila con el código dentro de cada bloque */
 .v390 .v390-t tr.grupo td{background:#f7f9fc;font-weight:600}
+/* control de separacion entre globos */
+.v390 .v390-sep{display:flex;align-items:center;gap:.5rem;margin-left:auto;font-size:.85rem;color:#555}
+.v390 .v390-sep input{width:9rem;margin:0;padding:0;border:0;background:transparent;accent-color:#0071e3}
+.v390 .v390-sep b{min-width:1.6rem;text-align:right;font-variant-numeric:tabular-nums;color:#1d1d1f}

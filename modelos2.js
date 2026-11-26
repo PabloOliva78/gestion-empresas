@@ -121,6 +121,19 @@ export function crearModelos2(c) {
     new MutationObserver(() => { const c = document.querySelector('.v390-t.ancha'); if (c && !vistas.has(c)) { vistas.add(c); ro.disconnect(); ro.observe(c); ajustar390(c); } })
       .observe(document.body, { childList: true, subtree: true });
   }
+  // separación entre globos (390 · 180 · 190 · 193): la elige el usuario con el deslizador y se recuerda en este navegador
+  const SEP_DEF = 3, SEP_K = 'hueco390';
+  const sepGuardada = () => { try { const v = localStorage.getItem(SEP_K); return v === null ? null : Math.min(30, Math.max(0, +v || 0)); } catch { return null; } };
+  let sep = sepGuardada();
+  if (sep !== null) document.documentElement.style.setProperty('--hueco390', `${sep}px`);
+  const ctlSep = () => `<label class="v390-sep no-print" title="Ancho del espacio entre los globos">Separación <input type="range" min="0" max="30" step="1" value="${sep ?? SEP_DEF}" data-hueco390><b data-hueco390v>${sep ?? SEP_DEF}</b></label>`;
+  document.addEventListener('input', (ev) => {
+    if (ev.target.dataset?.hueco390 === undefined) return;
+    sep = +ev.target.value; try { localStorage.setItem(SEP_K, String(sep)); } catch { /* sin almacenamiento */ }
+    document.documentElement.style.setProperty('--hueco390', `${sep}px`);
+    ev.target.parentElement.querySelector('[data-hueco390v]').textContent = sep;
+    const c = document.querySelector('.v390-t.ancha'); if (c) { delete c.dataset.fit; ajustar390(c); }
+  });
   const T390 = ['1T', '2T', '3T', '4T'];
   function tabla390(D, F, ver) {
     const trim = D.pers.length === 4, todos = D.pers.map((_, i) => i);
@@ -173,7 +186,7 @@ export function crearModelos2(c) {
     const resultado = anual('DIFERENCIA IVA DEVENGADO − IVA DEDUCIBLE');
     return `<div class="v390">
       <div class="v390-cab"><div><h4>Modelo 390 · resumen anual del IVA</h4><p>${esc(nombreEmp(empresa()))}${empresa().cif ? ` · ${esc(empresa().cif)}` : ''} · ejercicio ${D.ej} · ${D.n.filter((x) => x).length} de ${D.pers.length} ${trim ? 'trimestres' : 'meses'} con datos</p></div>
-        <div class="v390-ver no-print">${[['ano', 'Año'], ['trim', 'Trimestres'], ...(trim ? [] : [['mes', 'Meses']])].map(([k, t]) => `<button class="small${k === ver ? ' on' : ''}" data-ver390="${k}">${t}</button>`).join('')}</div></div>
+        ${ctlSep()}<div class="v390-ver no-print">${[['ano', 'Año'], ['trim', 'Trimestres'], ...(trim ? [] : [['mes', 'Meses']])].map(([k, t]) => `<button class="small${k === ver ? ' on' : ''}" data-ver390="${k}">${t}</button>`).join('')}</div></div>
       <div class="v390-kk">${tarjeta('IVA devengado', anual('TOTAL IVA DEVENGADO'))}${tarjeta('IVA deducible', anual('TOTAL IVA DEDUCIBLE'))}${tarjeta('Resultado (devengado − deducible)', resultado)}</div>
       ${avisos(D.avisos)}
       ${tabla390(D, F, ver)}
@@ -300,7 +313,7 @@ export function crearModelos2(c) {
     const trim = D.pers.length === 4, anual = (r, campo) => r2(D.pers.reduce((s, _, i) => s + (D.n[i] ? r.g(D.m[i])[campo] || 0 : 0), 0));
     const nPer = F.find((r) => r.cnt).anualN, tarjeta = (t, v) => `<div class="v390-k"><span>${t}</span><b>${v}</b></div>`;
     return `<div class="v390">
-      <div class="v390-cab"><div><h4>${esc(D.A.tit)}</h4><p>${esc(nombreEmp(empresa()))}${empresa().cif ? ` · ${esc(empresa().cif)}` : ''} · ejercicio ${D.ej} · ${D.n.filter((x) => x).length} de ${D.pers.length} ${trim ? 'trimestres' : 'meses'} con datos</p></div></div>
+      <div class="v390-cab"><div><h4>${esc(D.A.tit)}</h4><p>${esc(nombreEmp(empresa()))}${empresa().cif ? ` · ${esc(empresa().cif)}` : ''} · ejercicio ${D.ej} · ${D.n.filter((x) => x).length} de ${D.pers.length} ${trim ? 'trimestres' : 'meses'} con datos</p></div>${ctlSep()}</div>
       <div class="v390-kk">${tarjeta('Base de retenciones', money(anual(tot, 'base')))}${tarjeta('Retenciones', money(anual(tot, 'cuota')))}${tarjeta(D.usarNom ? 'Perceptores (sin nóminas)' : 'Perceptores', nPer)}</div>
       ${avisos(D.avisos)}
       ${tablaAnual(D, F, k)}
