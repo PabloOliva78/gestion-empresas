@@ -1699,3 +1699,6 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res) td,.v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res) td.hueco{border-top:2px solid #0071e3;border-bottom:2px solid #0071e3}
 .v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res)+tr:is(.sub,.tot,.res) td,.v390 .v390-t.globo table tbody tr:is(.sub,.tot,.res)+tr:is(.sub,.tot,.res) td.hueco{border-top:0}
 .v390 .v390-t.globo table tbody tr:not(.sub,.tot,.res):has(+tr:is(.sub,.tot,.res)) td:not(.hueco){border-bottom:0}
+/* 390 · el borde de cada globo continúa por la fila de títulos (el tema pinta en crema los bordes de las cabeceras) */
+.v390 .v390-t.globo table thead tr:nth-child(2) th.con,.v390 .v390-t.globo table thead tr:nth-child(2) th.bi{border-left:2px solid #0071e3 !important}
+.v390 .v390-t.globo table thead tr:nth-child(2) th.pct,.v390 .v390-t.globo table thead tr:nth-child(2) th.g2{border-right:2px solid #0071e3 !important}
