@@ -924,6 +924,27 @@ export function crearModelos(c) {
       ${concFac}`;
   }
 
+  // totales Intrastat frente al 349 de unos meses para el Expediente de cierre (mismo cálculo que el resumen mensual). null mientras se cargan los datos
+  function intraResumen(meses) {
+    const D = datosIntra(), rep = grande('fact-E'), sop = grande('fact-R');
+    if (!D || !rep || !sop) return null;
+    const ej = ejercicio(), O = calcIntra(D, rep, sop), tol = +D.cfg.tol || 0, out = [];
+    const mesDe = (l) => { const f = fechaUtc(l.fecha); return f && f.getUTCFullYear() === ej ? f.getUTCMonth() + 1 : 0; };
+    meses.forEach((m) => {
+      const it = (fl) => r2(O.filter((o) => o.anio === ej && o.mes === m && o.flujoConc === fl).reduce((s, o) => s + o.impConc, 0));
+      const servE = D.serv.reduce((s, fac) => s + rep.filter((l) => String(l.factura || '').trim() === String(fac || '').trim() && l.codigo === 'R.UE' && mesDe(l) === m).reduce((a, l) => a + (+l.base || 0), 0), 0);
+      const servIt = O.filter((o) => o.anio === ej && o.mes === m && o.flujo === 'Expedición' && o.servicio === 'Sí').reduce((s, o) => s + (intraNum(o.r[8]) || 0), 0);
+      const e349 = r2(rep.filter((l) => mesDe(l) === m && l.codigo === 'R.UE').reduce((s, l) => s + (+l.base || 0), 0) - servE - servIt);
+      const i349 = r2(sop.filter((l) => mesDe(l) === m && COD_AIB.includes(l.codigo)).reduce((s, l) => s + (+l.base || 0), 0));
+      [['expediciones', it('Expedición'), e349], ['introducciones', it('Introducción'), i349]].forEach(([n, a, b]) => {
+        if (!D.rows.length || (!a && !b)) return;
+        const d = r2(a - b), ok = Math.abs(d) <= tol;
+        out.push({ control: `Intrastat – 349 · ${n}`, per: String(m).padStart(2, '0'), na: 'Intrastat', a, nb: '349 (bienes)', b, d, st: ok ? 'ok' : 'ko', txt: ok ? 'Cuadra' : 'Revisar' });
+      });
+    });
+    return out;
+  }
+
   // ================= Eventos propios =================
   const acciones = {
     'm-intraconcmes': (d) => { intraConcMes = +d.m; render(); },
@@ -1296,5 +1317,5 @@ export function crearModelos(c) {
       return n ? { t: `${n} líneas ${ej}`, c: 'amar' } : { t: 'Sin datos' };
     },
   };
-  return { tabs, kinds, acciones, adif, badges, intraIngesta, oblIntE, intraImportes, importe592, importe583 };
+  return { tabs, kinds, acciones, adif, badges, intraIngesta, intraResumen, oblIntE, intraImportes, importe592, importe583 };
 }

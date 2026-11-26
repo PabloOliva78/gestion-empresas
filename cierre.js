@@ -108,5 +108,6 @@ export function crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, 
     else if (b.dataset.cierreAct === 'limpiar') { E.resumen.clear(); E.error = ''; render(); }
   });
 
-  return { tabs: { cierre: ['Cierre del mes', 'Lista de comprobación y semáforo', vista] } };
+  const cargando = (emp) => E.cargando.has(clave(emp.id));
+  return { tabs: { cierre: ['Cierre del mes', 'Lista de comprobación y semáforo', vista] }, resumir, comprobar, cargando }; // el Expediente de cierre usa las mismas comprobaciones
 }

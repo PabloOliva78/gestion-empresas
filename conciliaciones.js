@@ -845,5 +845,32 @@ export function crearConciliaciones(c) {
     conc: guard(() => { if (!S.sel) return { t: 'Por empresa' }; const M = lib('may-mov'); return { t: M && M.length ? 'Con extracto' : 'Sin extracto' }; }),
     rsop: guard(() => (S.sel ? { t: rresChip('rsop') } : null)),
   };
-  return { tabs, badges };
+  // resumen de un periodo para el Expediente de cierre: las mismas cifras que las pestañas de conciliación. null mientras se cargan los libros
+  function resumenPeriodo(per) {
+    const libros = ['fact-E', 'fact-R', 'sii-E', 'sii-R', 'may-mov'].map(lib);
+    if (libros.some((L) => !L)) return null;
+    const out = [], tri = /T$/.test(per), meses = tri ? [1, 2, 3].map((k) => (+per[0] - 1) * 3 + k) : [+per], ej = ejNum();
+    const fila = (control, p, na, a, nb, b, margen, sin) => {
+      const d = r2((a || 0) - (b || 0)), ok = Math.abs(d) <= margen;
+      out.push({ control, per: p, na, a: sin ? null : a, nb, b, d: sin ? null : d, st: sin ? 'wa' : ok ? 'ok' : 'ko', txt: sin ? 'Sin presentado' : ok ? 'Cuadra' : 'Descuadre' });
+    };
+    ['111', '115', '123'].forEach((m) => {
+      const f = calcAudi(m).filas.find((x) => x.per === per); if (!f) return;
+      const cols = m === '111' ? [['2', 'retenciones del trabajo', 'retN'], ['4', 'retenciones profesionales', 'retP']] : [['2', 'retenciones', 'ret']];
+      cols.forEach(([j, t, col]) => { const a = f[`c${j}`], b = f[`k${j}`]; if (a || b) fila(`${m} · ${t}`, per, `Modelo ${m}`, a, 'Contabilidad', b, MARGEN_RET, pv(ej, m, per, col) === null); });
+    });
+    const f3 = calcAudi303().filas.find((x) => x.per === per);
+    if (f3) {
+      if (f3.e.s.c || f3.e.k.c) fila('303 · IVA repercutido (cuota)', per, 'SII', f3.e.s.c, 'Libro sin autorepercutidas', f3.e.k.c, MARGEN);
+      if (f3.r.s.c || f3.r.t.c) fila('303 · IVA soportado (cuota)', per, 'SII', f3.r.s.c, 'Libro', f3.r.t.c, MARGEN);
+    }
+    if (RX_DIF.test(empresa()?.nombre ?? '')) meses.forEach((m) => {
+      const mm = String(m).padStart(2, '0'), X = calcIvaDif(`${ej}-${mm}`);
+      if (!X.tCuota && !X.abTot) return;
+      const d = r2(X.tCuota - X.abTot), mal = X.filas.filter((f) => f.ap.length).length;
+      out.push({ control: 'IVA importación diferido', per: mm, na: 'Cuota de los DUA', a: X.tCuota, nb: 'Abonos 4750.10', b: X.sinCuenta ? null : X.abTot, d: X.sinCuenta ? null : d, st: X.sinCuenta ? 'wa' : !mal && Math.abs(d) <= MARGEN ? 'ok' : 'ko', txt: X.sinCuenta ? 'Sin la 4750.10' : mal ? `${mal} DUA a revisar` : Math.abs(d) <= MARGEN ? 'Cuadra' : 'Descuadre' });
+    });
+    return out;
+  }
+  return { tabs, badges, resumenPeriodo };
 }

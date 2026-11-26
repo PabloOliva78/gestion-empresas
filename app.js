@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=572';
+import { crearModulos } from './modulos.js?v=573';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -199,7 +199,7 @@ function renderPendiente() {
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
   // [título, pestañas, logo, subtítulo del panel]
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'cierre', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'notif', 'iloc', 'dua', 'chkf', 'umbr','otros'],
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'cierre', 'exped', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'avisopl', 'notif', 'iloc', 'dua', 'chkf', 'umbr','otros'],
     'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],

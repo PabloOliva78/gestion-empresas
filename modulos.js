@@ -6,10 +6,12 @@ import { clasificar, nifDe, lineasPagina, leerCenso, leerActividades, leerObliga
 
 import { CAB_SII } from './siicab.js?v=1';
 import { crearRegistral } from './registral.js?v=15';
-import { crearModelos } from './modelos.js?v=386';
+import { crearModelos } from './modelos.js?v=387';
 import { crearModelos2 } from './modelos2.js?v=13';
 import { crearModelos3 } from './modelos3.js?v=6';
-import { crearCierre } from './cierre.js?v=4';
+import { crearCierre } from './cierre.js?v=5';
+import { crearExpediente } from './expediente.js?v=1';
+import { crearAvisoPlazos } from './avisoplazos.js?v=1';
 import { crearSiiPlazo } from './sii-plazo.js?v=2';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearUmbrales } from './umbrales.js?v=1';
@@ -26,7 +28,7 @@ import { paisDeSiglas, datalistPaises, NOMBRE_PAIS } from './paises.js?v=3';
 import { leerRegistro } from './cachelibros.js?v=1';
 import { abrirD365, precalentarD365, listarLibrosD365, bajarLibroD365 } from './d365.js?v=8';
 import { leer200 } from './pdf200.js?v=1';
-import { crearConciliaciones } from './conciliaciones.js?v=29';
+import { crearConciliaciones } from './conciliaciones.js?v=30';
 import { crearEstados } from './estados.js?v=4';
 import { crearLeyIva } from './leyiva.js?v=14';
 import { crearReglFac } from './reglfac.js?v=4';
@@ -5921,6 +5923,11 @@ export function crearModulos(c) {
   const obDelMes = (e, ej, mm) => obligaciones(e, ej, presIndex()).filter((o) => (o.mod === '583' ? 9 : o.mod === '200' ? 5 : o.mod === '232' ? 9 : colMes(o.per)) + 1 === +mm);
   const M11 = crearCierre({ db, S, esc, render, empOrden, obDelMes, estadoOb, hoyUtc, conciliar: conciliarSiiCompleta, rangoPeriodo, empresa });
   Object.assign(tabs, M11.tabs);
+  // Expediente de cierre y aviso de plazos por correo: pestañas nuevas
+  const MEXP = crearExpediente({ S, esc, render, empresa, obDelMes, estadoOb, hoyUtc, cierre: M11, resumenConc: M8.resumenPeriodo, resumenIntra: M4.intraResumen, tituloTab: (id) => tabs[id]?.[0] ?? id ?? '' });
+  Object.assign(tabs, MEXP.tabs);
+  const MAVI = crearAvisoPlazos({ db, S, esc, render, eventosCal, hoyUtc });
+  Object.assign(tabs, MAVI.tabs);
   const M12 = crearSiiPlazo({ db, S, esc, render, empresa }); // Plazo SII de 4 días (bloque 6): pestaña nueva que solo lee
   Object.assign(tabs, M12.tabs);
   const M13 = crearModelo347({ S, esc, render, empresa, grande, normNif }); // Modelo 347 (bloque 4): pestaña nueva que solo lee los libros
