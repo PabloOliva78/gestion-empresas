@@ -132,6 +132,17 @@ export function crearModelos2(c) {
   // Vista del 390: cabecera, tres totales y la tabla por bloques; a elegir el año completo, por trimestres o por meses (los cálculos son los de siempre)
   let ver390 = (() => { try { return localStorage.getItem('ver390') || 'mes'; } catch { return 'mes'; } })();
   document.addEventListener('click', (ev) => { const b = ev.target.closest?.('[data-ver390]'); if (!b) return; ver390 = b.dataset.ver390; try { localStorage.setItem('ver390', ver390); } catch { /* sin almacenamiento */ } render(); });
+  // Meses y Trimestres: la tabla se encoge lo justo para que entren todos los periodos en el ancho de la pantalla (mínimo 50 %)
+  const ajustar390 = (caja) => {
+    const tb = caja.querySelector('table'), ancho = caja.clientWidth; if (!tb || !ancho || caja.dataset.fit === String(ancho)) return;
+    caja.dataset.fit = String(ancho); tb.style.zoom = '';
+    const k = (ancho - 1) / tb.offsetWidth; if (k < 1) tb.style.zoom = String(Math.max(0.5, Math.floor(k * 1000) / 1000));
+  };
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver((es) => requestAnimationFrame(() => es.forEach((x) => ajustar390(x.target)))), vistas = new WeakSet();
+    new MutationObserver(() => { const c = document.querySelector('.v390-t.ancha'); if (c && !vistas.has(c)) { vistas.add(c); ro.disconnect(); ro.observe(c); ajustar390(c); } })
+      .observe(document.body, { childList: true, subtree: true });
+  }
   const T390 = ['1T', '2T', '3T', '4T'];
   function tabla390(D, F, ver) {
     const trim = D.pers.length === 4, todos = D.pers.map((_, i) => i);
@@ -167,7 +178,7 @@ export function crearModelos2(c) {
     const th = '<th class="hueco" rowspan="2"></th>';
     return `<div class="v390-t globo${grupos.length ? ' ancha' : ''}"><table><thead>
       <tr>${th}<th class="grp con"><span>Modelo 390</span></th><th class="grp resto" colspan="2"><span></span></th>${cols.map((g) => `${th}<th class="grp${g.ano ? ' ano' : ''}" colspan="2"><span>${esc(g.t)}</span></th>`).join('')}${th}</tr>
-      <tr><th class="con">Concepto</th><th class="cod">Código</th><th class="n pct">%</th>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">Base imponible</th><th class="n g2${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+      <tr><th class="con">Concepto</th><th class="cod">Código</th><th class="n pct">%</th>${cols.map((g) => `<th class="n bi${g.ano ? ' ano' : ''}">${grupos.length ? 'Base' : 'Base imponible'}</th><th class="n g2${g.ano ? ' ano' : ''}">Cuota</th>`).join('')}</tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   }
   function vista390() {
     if (!S.sel) return sinEmpresa;

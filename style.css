@@ -1704,3 +1704,9 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .v390 .v390-t.globo table thead tr:nth-child(2) th.pct,.v390 .v390-t.globo table thead tr:nth-child(2) th.g2{border-right:2px solid #0071e3 !important}
 /* las columnas huecas entre globos no llevan ninguna linea */
 .v390 .v390-t.globo table tr td.hueco,.v390 .v390-t.globo table tr th.hueco{border:0 !important;background:#fff !important}
+/* 390 · Meses y Trimestres compactos: hueco fino, menos margen y Concepto estrecho para que todo entre en el ancho */
+.v390 .v390-t.globo.ancha table td.hueco,.v390 .v390-t.globo.ancha table th.hueco{width:3px;min-width:3px}
+.v390 .v390-t.globo.ancha table td:not(.hueco),.v390 .v390-t.globo.ancha table th:not(.hueco):not(.grp){padding-left:4px;padding-right:4px}
+.v390 .v390-t.globo.ancha table td.con{width:11rem;min-width:11rem;max-width:11rem;white-space:normal;line-height:1.2}
+.v390 .v390-t.globo.ancha table td.cod,.v390 .v390-t.globo.ancha table td.pct{white-space:nowrap}
+.v390 .v390-t.globo.ancha th.grp.con span{padding-left:4px}
