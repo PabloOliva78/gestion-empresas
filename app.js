@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=573';
+import { crearModulos } from './modulos.js?v=574';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -8,6 +8,7 @@ import { crearHistorial } from './historial.js?v=1';
 import { crearCopia } from './copia.js?v=1';
 import { crearTareas } from './tareas.js?v=1';
 import { crearExplicaciones } from './explicaciones.js?v=2';
+import { crearReglas } from './reglas.js?v=1';
 import { activarSubrayadoManual } from './subrayadoman.js?v=5';
 import { activarExportar, activarAvisoSesion } from './herramientas.js?v=6';
 
@@ -215,6 +216,7 @@ const GRUPOS = [
   ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
   ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
   ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamedua', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
+  ['14.- ASISTENTE', ['reqres', 'simfis', 'espejo', 'reglas'], 'conc', 'Contestador de requerimientos, simulador fiscal, espejo del grupo y reglas aprendidas de tus explicaciones.'],
 ];
 // Pestañas de conciliación: su botón de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
 const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'certret', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
@@ -977,6 +979,7 @@ Object.assign(TABS, crearTareas({ esc, render }).tabs); // Tareas programadas (b
 // Explicaciones por línea (💬) en las conciliaciones y dossier PDF con todas ellas
 activarSubrayadoManual({ S, db }); // artículos de la ley en columnas y subrayado propio
 Object.assign(TABS, crearExplicaciones({ S, db, esc, render, root, TABS, conc: CONC_TABS, dossierTabs: () => GRUPOS.find((g) => g[0].startsWith('8.'))[1].filter((id) => id !== 'explic'), puede: puedeEditar, esAdmin }).tabs);
+Object.assign(TABS, crearReglas({ S, db, esc, render, empresa: () => S.empresas.find((e) => e.id === S.sel), puede: puedeEditar, tituloTab: (id) => TABS[id]?.[0] ?? id, esConciliacion: (id) => CONC_TABS.has(id) }).tabs);
 Object.assign(TABS, crearHistorial({ db, S, esc, render, empNombre }).tabs); // Historial de cambios (bloque 11): pestaña nueva, solo administradores
 
 // Buscador de pestañas (Ctrl+K)

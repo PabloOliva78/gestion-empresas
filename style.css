@@ -1716,3 +1716,7 @@ tr:hover > td > .exp-b, .exp-b.on { opacity: 1; }
 .v390 .v390-sep{display:flex;align-items:center;gap:.5rem;margin-left:auto;font-size:.85rem;color:#555}
 .v390 .v390-sep input{width:9rem;margin:0;padding:0;border:0;background:transparent;accent-color:#0071e3}
 .v390 .v390-sep b{min-width:1.6rem;text-align:right;font-variant-numeric:tabular-nums;color:#1d1d1f}
+
+/* Bloque 14 · Asistente (y etiquetas) */
+.as-p{display:inline-block;padding:1px 8px;border-radius:9px;font-size:.78rem}.as-ok{background:#e6f4ea;color:#137333}.as-ko{background:#fce8e6;color:#a50e0e}.as-wa{background:#fef7e0;color:#8a5a00}.as-nd{background:#eef0f4;color:#445}
+.as-card{border:1px solid #d5dbe6;border-radius:10px;padding:6px 14px;margin:8px 0}

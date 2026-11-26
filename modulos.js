@@ -12,6 +12,9 @@ import { crearModelos3 } from './modelos3.js?v=6';
 import { crearCierre } from './cierre.js?v=5';
 import { crearExpediente } from './expediente.js?v=1';
 import { crearAvisoPlazos } from './avisoplazos.js?v=1';
+import { crearRequerim } from './requerim.js?v=1';
+import { crearSimulador } from './simulador.js?v=1';
+import { crearEspejo } from './espejo.js?v=1';
 import { crearSiiPlazo } from './sii-plazo.js?v=2';
 import { crearModelo347 } from './modelo347.js?v=2';
 import { crearUmbrales } from './umbrales.js?v=1';
@@ -5952,6 +5955,8 @@ export function crearModulos(c) {
   Object.assign(tabs, M16.tabs);
   const M17 = crearTransProv({ S, esc, render, empresa, puede, grande, reemplazarGrande }); // Bloque 12 · Transacciones de proveedores: seguimiento de partidas pendientes
   Object.assign(tabs, M17.tabs);
+  // Bloque 14 · Asistente: pestañas nuevas que no cambian ningún dato
+  [crearRequerim({ db, S, esc, render, empresa, grande, leerPdf: (f) => leerPdf(f), esHabil }), crearSimulador({ S, esc, render, empresa, grande, c303: (...a) => c303(...a), plazoMod }), crearEspejo({ db, S, esc, render, empOrden })].forEach((m) => Object.assign(tabs, m.tabs));
   // Pastillas del bloque 5: saldo acumulado de la cuenta a final del periodo elegido (con las mismas líneas quitadas, corregidas y manuales que la pestaña)
   const memoSaldoCta = new Map();
   function saldoCtaPeriodo(k) {
