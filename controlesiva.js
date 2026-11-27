@@ -175,7 +175,6 @@ export function crearControlesIva({ S, db, esc, render, empresa, puede, grande, 
       camblib: ['Cambios en libros', 'Facturas cambiadas en periodos con el 303 ya presentado', vistaCambios],
       plazoded: ['Plazo de deducción', 'Facturas recibidas registradas con mucho retraso (límite de 4 años)', vistaPlazo],
       devol: ['Devoluciones pendientes', 'Seguimiento de devoluciones solicitadas a la AEAT e intereses de demora', vistaDev],
-      simpl: ['Facturas simplificadas', 'Simplificadas (F2) por encima de 400 € o 3.000 €', vistaSimpl],
     },
     acciones: {
       'm-cbrev': (d) => { guardarReg('camblib', S.sel, (x) => { const e = x.e?.[Number(d.i)]; if (e) e.rev = !e.rev; }).then(() => render()); },

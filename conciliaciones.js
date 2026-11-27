@@ -832,8 +832,7 @@ export function crearConciliaciones(c) {
     ivadif: ['IVA importación diferido', 'DUA · 4750.10 · libro · casilla 77', () => vistaIvaDif()],
     conc: ['Conciliación Cuentas - Impuestos', 'Saldo frente a impuesto', () => vistaConc()],
     // una sola pestaña (en Administración) con las tres tablas de las que se emiten certificados
-    certret: ['Certificado retenciones', 'Profesionales · alquileres · intereses y dividendos', () => { if (!S.sel) return sinEmpresa; if (!lib('fact-R')) return cargandoTxt; return ['rprof', 'ralq', 'rint'].map(vistaRetRes).join(''); }],
-    rsop: [RRES.rsop.tit, RRES.rsop.ts, () => vistaRetRes('rsop')],
+    certret: ['Certificado retenciones', 'Profesionales · alquileres · intereses y dividendos · soportadas', () => { if (!S.sel) return sinEmpresa; if (!lib('fact-R')) return cargandoTxt; return ['rprof', 'ralq', 'rint', 'rsop'].map(vistaRetRes).join(''); }],
     adif: ['Análisis Diferencias', 'Causa y origen por modelo', () => vistaAdif()],
   };
   const guard = (f) => () => { try { return f(); } catch { return null; } };

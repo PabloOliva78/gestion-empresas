@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { crearModulos } from './modulos.js?v=574';
+import { crearModulos } from './modulos.js?v=575';
 import { limpiarCache as limpiarLibros } from './cachelibros.js?v=1';
 import { cargarRegistros, limpiarCacheRegistros } from './cacheregistros.js?v=1';
 const limpiarCache = () => { limpiarLibros(); limpiarCacheRegistros(); };
@@ -200,7 +200,7 @@ function renderPendiente() {
 // Pestañas agrupadas como en la aplicación de impuestos: id → [título, subtítulo, vista, soloAdmin]
 const GRUPOS = [
   // [título, pestañas, logo, subtítulo del panel]
-  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'cierre', 'exped', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'lt', 'venc', 'calf', 'avisopl', 'notif', 'iloc', 'dua', 'chkf', 'umbr','otros'],
+  ['1.- INFORMACIÓN TRIBUTARIA', ['cmg', 'it', 'r111', 'r115', 'r123', 'pres', 'liq', 'venc', 'calf', 'avisopl', 'iloc', 'dua', 'chkf', 'umbr','otros'],
     'aeat', 'Modelos presentados, liquidaciones, pagos y calendario.'],
   ['2.- INFORMACIÓN REGISTRO MERCANTIL', ['dreg', 'trl', 'acc', 'rmca', 'rmesc', 'rmactas', 'rmsocios', 'rmlibros', 'rmobl'],
     'rm', 'Datos registrales, titularidad, cuentas depositadas, actas, socios y libros.'],
@@ -210,13 +210,13 @@ const GRUPOS = [
   ['5.- CUENTAS CONTABLES', ['c4650','c4700', 'c4709', 'c473001', 'c473002', 'c473003', 'c473004', 'c4730', 'c4745', 'c4750', 'c475010', 'c47511', 'c47512', 'c47513', 'c47514', 'c4752', 'c4760', 'c6400', 'c6420', 'c6310'], 'pgc', 'Extracto y resumen por periodo de cada cuenta: 465, 47x, 631, 640 y 642.'],
   ['6.- SII – SUMINISTRO INMEDIATO INFORMACIÓN', ['siie', 'siir', 'concsiie', 'concsiir', 'fe', 'fr', 'siiplazo'], 'sii', 'Facturas emitidas y recibidas frente al SII de la AEAT.'],
   ['7.- ESTADOS FINANCIEROS', ['ca', 'bss', 'bsit', 'pyg', 'tef'], 'ef', 'Cuentas anuales, balance de sumas y saldos, balance de situación, pérdidas y ganancias y tipo efectivo.'],
-  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'vies', 'camblib', 'plazoded', 'simpl', 'devol', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'explic'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
+  ['8.- CONCILIACIONES FISCALES', ['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'cva', 'conc', 'adif', 'cis', 'concall', 'explic'], 'conc', 'Conciliaciones de los modelos y de las cuentas con los impuestos, retenciones y cálculo del Impuesto sobre Sociedades.'],
   ['9.- INFORMACIÓN SEGURIDAD SOCIAL', ['nom', 'nommes', 'cssoc', 'cnom', 'ssobl'], 'tgss', 'Nóminas, Seguridad Social y obligaciones laborales.'],
   ['10.- EXENCIONES Y LEYES', ['leyiva', 'leyrfac', 'leyexen', 'leyrev', 'leyfac', 'leyask'], 'ley', 'Ley 37/1992 del IVA y Reglamento de facturación: lo más importante, exenciones, revisión de las facturas emitidas y recibidas y consulta.'],
-  ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret'], 'adm', 'Usuarios, roles y acceso a las empresas, y certificados de retenciones.'],
-  ['12.- PROVEEDORES - CLIENTES', ['prov', 'tprov', 'cli'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
+  ['11.- ADMINISTRACIÓN', ['vistas', 'usuarios', 'envio', 'hist', 'copia', 'tareas', 'certret', 'chklib', 'lt'], 'adm', 'Usuarios, roles y acceso a las empresas, certificados de retenciones, errores en los libros y liquidaciones tributarias.'],
+  ['12.- PROVEEDORES', ['cli', 'prov', 'tprov'], 'conc', 'Listados de proveedores y clientes del ERP con su país, y seguimiento de las transacciones pendientes de proveedores.'],
   ['13.- CBAM', ['cbamimp', 'cbaminst', 'cbamemi', 'cbamedua', 'cbamcalc', 'cbamaut', 'cbaminf', 'cbamcal', 'cbamdoc'], 'conc', 'Mecanismo de Ajuste en Frontera por Carbono: importaciones de los DUA, operadores e instalaciones, emisiones, certificados e informe trimestral.'],
-  ['14.- ASISTENTE', ['reqres', 'simfis', 'espejo', 'reglas'], 'conc', 'Contestador de requerimientos, simulador fiscal, espejo del grupo y reglas aprendidas de tus explicaciones.'],
+  ['ASISTENTE', ['cierre', 'exped', 'notif', 'reqres', 'vies', 'camblib', 'plazoded', 'devol', 'simfis', 'espejo', 'reglas'], 'conc', 'Cierre y expediente, notificaciones y requerimientos, controles de IVA, simulador, espejo del grupo y reglas aprendidas.'],
 ];
 // Pestañas de conciliación: su botón de imprimir saca el resumen en A4 apaisado, ajustado a una hoja
 const CONC_TABS = new Set(['au111', 'au115', 'au123', 'au303', 'ivadif', 'c349i', 'c202', 'c200', 'c592', 'c583', 'c232', 'cruce', 'c631', 'chklib', 'cva', 'conc', 'rsop', 'adif', 'cis', 'concall', 'certret', 'concsiie', 'concsiir', 'cssoc', 'm303', 'm111', 'm200', 'c47', 'c465', 'c640', 'c642', 'ssconc']);
@@ -301,7 +301,7 @@ const menuNuevo = () => vistaMenu() !== 'c' || document.documentElement.classLis
 const vistaClara = () => vistaMenu() === 'd';
 // Nombres cortos de los bloques en la vista clara (mismo orden que GRUPOS)
 const GRUPOS_CORTO = ['Información tributaria', 'Registro Mercantil', 'Información empresa', 'Modelos tributarios', 'Cuentas contables', 'SII', 'Estados financieros',
-  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'Administración', 'Proveedores y clientes', 'CBAM'];
+  'Conciliaciones fiscales', 'Seguridad Social', 'Exenciones y leyes', 'Administración', 'Proveedores', 'CBAM', 'Asistente'];
 // Tamaño de las pestañas (vista nueva): ancho y texto, común a todas las del bloque; se cambia arrastrando el borde derecho (ancho) o el inferior (texto) y se recuerda en este navegador
 let TP = {}; try { TP = JSON.parse(localStorage.getItem('imp-tpill') || '{}') ?? {}; } catch { TP = {}; }
 const tpCfg = (i) => ({ w: null, t: 1, ...(TP[i] ?? {}) }); // w null = todas en una sola línea, repartiéndose el ancho
@@ -979,7 +979,7 @@ Object.assign(TABS, crearCopia({ db, S, esc, render }).tabs); // Copia de seguri
 Object.assign(TABS, crearTareas({ esc, render }).tabs); // Tareas programadas (bloque 11): pestaña nueva, solo administradores
 // Explicaciones por línea (💬) en las conciliaciones y dossier PDF con todas ellas
 activarSubrayadoManual({ S, db }); // artículos de la ley en columnas y subrayado propio
-Object.assign(TABS, crearExplicaciones({ S, db, esc, render, root, TABS, conc: CONC_TABS, dossierTabs: () => GRUPOS.find((g) => g[0].startsWith('8.'))[1].filter((id) => id !== 'explic'), puede: puedeEditar, esAdmin }).tabs);
+Object.assign(TABS, crearExplicaciones({ S, db, esc, render, root, TABS, conc: CONC_TABS, dossierTabs: () => [...GRUPOS.find((g) => g[0].startsWith('8.'))[1].filter((id) => id !== 'explic'), 'chklib', 'vies', 'camblib', 'plazoded', 'devol'], puede: puedeEditar, esAdmin }).tabs);
 Object.assign(TABS, crearReglas({ S, db, esc, render, empresa: () => S.empresas.find((e) => e.id === S.sel), puede: puedeEditar, tituloTab: (id) => TABS[id]?.[0] ?? id, esConciliacion: (id) => CONC_TABS.has(id) }).tabs);
 Object.assign(TABS, crearHistorial({ db, S, esc, render, empNombre }).tabs); // Historial de cambios (bloque 11): pestaña nueva, solo administradores
 
